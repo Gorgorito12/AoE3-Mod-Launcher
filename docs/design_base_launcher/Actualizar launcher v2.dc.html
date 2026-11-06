@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t77" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t77" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">77</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Actualización del launcher, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Es un diálogo global, así que va en neutros: barra de título #0b1422 con la transparencia del usuario, resplandor azul en vez de la imagen de un mod y «Descargar» en el azul de acción global (#2f7fe0). Sigue midiendo 540 de ancho y su alto se ajusta al contenido. Cambios respecto a hoy: el título ya no se repite en la barra y debajo; las versiones van en chips (la tuya → la nueva) con el tamaño de la descarga; la barra vacía y «Listo para descargar» no aparecen hasta que empieza la descarga; mientras descarga solo queda «Cancelar», porque el botón principal desactivado no hacía nada; al llegar al 100 % se ve «Comprobando la descarga» mientras se verifica el archivo, que hoy sigue diciendo «Descargando»; el aviso de poco espacio va dentro del diálogo en vez de en otra ventana; y en los errores se quita «Cancelar», que hacía lo mismo que «Cerrar», y se añade «Reintentar» cuando falla la descarga. Las novedades se muestran con formato y solo en el idioma del jugador; hoy salen el Markdown tal cual y los dos idiomas. Si la nota es solo un enlace, se muestra un botón. Además, «Reiniciar ahora» espera si estás en una partida (77l) y avisa si hay una descarga en curso (77m); y si la actualización ya está descargada, la píldora dice «Reiniciar para actualizar» y el diálogo abre directamente en «Lista para instalar» (77k). Prueba: en 77a pulsa «Descargar»; en 77f, «Reintentar».</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <sc-for list="{{ cases }}" as="c" hint-placeholder-count="10">
+      <div id="{{ c.id }}" style="display:flex;flex-direction:column;gap:10px;width:540px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#{{ c.id }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ c.id }}</a><span>{{ c.note }}</span></div><dc-import name="ActualizarLauncher" caso="{{ c.caso }}" solo-enlace="{{ c.link }}" poco-espacio="{{ c.disk }}" transparencia="{{ tr }}" hint-size="540px,520px"></dc-import></div>
+    </sc-for>
+    <div id="77k" style="display:flex;flex-direction:column;gap:10px;width:540px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#77k" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">77k</a><span>La píldora de la barra superior que abre este diálogo. Hoy es dorada; pasa al azul fijo de actualización (#55ACEE), con la forma del chip «Conectado» (28 de alto, radio 14), y sigue apareciendo en cada arranque hasta que actualices. Arriba, con una versión nueva. Abajo, cuando ya está descargada: dice «Reiniciar para actualizar» y abre el diálogo en «Lista para instalar» (77e), sin volver a descargar 170 MB.</span></div>
+      <div style="height:56px;box-sizing:border-box;border-radius:10px;padding:0 16px;display:flex;align-items:center;justify-content:flex-end;gap:12px;background:radial-gradient(420px 160px at 90% 0%, rgba(47,127,224,.2), transparent 70%), #0f1c2e;box-shadow:0 8px 26px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,255,255,.08)">
+        <span style="cursor:pointer;flex:none;white-space:nowrap;height:28px;padding:0 12px;border-radius:14px;background:rgba(85,172,238,.14);box-shadow:inset 0 0 0 1px rgba(85,172,238,.45);display:flex;align-items:center;gap:7px;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#9fd2f6" style-hover="background:rgba(85,172,238,.22)"><span style="font:700 12px/1 'Segoe UI',system-ui,sans-serif">↑</span>Actualizar launcher</span>
+        <span style="flex:none;white-space:nowrap;height:28px;padding:0 12px;border-radius:14px;background:rgba(79,214,138,.12);box-shadow:inset 0 0 0 1px rgba(79,214,138,.35);display:flex;align-items:center;gap:7px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#7fe0a8"><span style="width:7px;height:7px;border-radius:4px;background:#4fd68a"></span>Conectado</span>
+        <span style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:15px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff">G</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">gorgorito_12</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">1383 ELO · 1v1</span></span></span>
+      </div>
+      <div style="height:56px;box-sizing:border-box;border-radius:10px;padding:0 16px;display:flex;align-items:center;justify-content:flex-end;gap:12px;background:radial-gradient(420px 160px at 90% 0%, rgba(47,127,224,.2), transparent 70%), #0f1c2e;box-shadow:0 8px 26px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,255,255,.08)">
+        <span style="cursor:pointer;flex:none;white-space:nowrap;height:28px;padding:0 12px;border-radius:14px;background:rgba(85,172,238,.14);box-shadow:inset 0 0 0 1px rgba(85,172,238,.45);display:flex;align-items:center;gap:7px;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#9fd2f6" style-hover="background:rgba(85,172,238,.22)"><span style="font:700 12px/1 'Segoe UI',system-ui,sans-serif">↻</span>Reiniciar para actualizar</span>
+        <span style="flex:none;white-space:nowrap;height:28px;padding:0 12px;border-radius:14px;background:rgba(79,214,138,.12);box-shadow:inset 0 0 0 1px rgba(79,214,138,.35);display:flex;align-items:center;gap:7px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#7fe0a8"><span style="width:7px;height:7px;border-radius:4px;background:#4fd68a"></span>Conectado</span>
+        <span style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:15px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff">G</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">gorgorito_12</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">1383 ELO · 1v1</span></span></span>
+      </div>
+    </div>
+    <sc-for list="{{ cases2 }}" as="c" hint-placeholder-count="2">
+      <div id="{{ c.id }}" style="display:flex;flex-direction:column;gap:10px;width:540px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#{{ c.id }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ c.id }}</a><span>{{ c.note }}</span></div><dc-import name="ActualizarLauncher" caso="Lista" juego="{{ c.game }}" descarga="{{ c.dl }}" transparencia="{{ tr }}" hint-size="540px,420px"></dc-import></div>
+    </sc-for>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      tr: this.props.transparencia ?? 'Media',
+      cases2: [
+        { id: '77l', game: true, dl: false, note: 'Estás en una partida: «Reiniciar ahora» espera a que termine, porque el launcher tiene que seguir abierto para enviar el resultado.' },
+        { id: '77m', game: false, dl: true, note: 'Hay una descarga de mod en curso: aviso que no bloquea.' }
+      ],
+      cases: [
+        { id: '77a', caso: 'Hay versión nueva', link: false, disk: false, note: 'Hay una versión nueva. Novedades de la v1.0.16e, solo en español y con formato. Pulsa «Descargar».' },
+        { id: '77b', caso: 'Hay versión nueva', link: true, disk: true, note: 'La nota de la versión es solo un enlace, y no hay espacio suficiente: aviso en ámbar que no bloquea.' },
+        { id: '77c', caso: 'Descargando', link: false, disk: false, note: 'Descargando: porcentaje, MB, velocidad y tiempo restante. Solo «Cancelar».' },
+        { id: '77d', caso: 'Comprobando', link: false, disk: false, note: 'Al llegar al 100 %, mientras se comprueba el archivo.' },
+        { id: '77e', caso: 'Lista', link: false, disk: false, note: 'Lista para instalar. «Más tarde» deja la píldora de la barra superior (77k).' },
+        { id: '77f', caso: 'Fallo de descarga', link: false, disk: false, note: 'La descarga se cortó. «Reintentar» es nuevo.' },
+        { id: '77g', caso: 'Carpeta bloqueada', link: false, disk: false, note: 'Windows no dejó guardar la descarga. Se nombra la carpeta.' },
+        { id: '77h', caso: 'Fallo de comprobación', link: false, disk: false, note: 'El archivo no pasó la comprobación y se borró. Reintentar no ayuda, así que no se ofrece.' },
+        { id: '77i', caso: 'Fallo al reiniciar', link: false, disk: false, note: 'Se descargó, pero no se pudo reiniciar.' },
+        { id: '77j', caso: 'Nombre del archivo', link: false, disk: false, note: 'El .exe tiene otro nombre: se nombran el actual y el esperado.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

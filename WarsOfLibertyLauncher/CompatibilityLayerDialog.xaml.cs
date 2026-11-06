@@ -62,7 +62,7 @@ public partial class CompatibilityLayerDialog : Window
         {
             // The shell "properties" verb opens the same dialog as right-click →
             // Properties, where the Compatibility tab lives. Needs UseShellExecute.
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = _exePath,
                 UseShellExecute = true,

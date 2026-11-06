@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using WarsOfLibertyLauncher.Models;
 
+using WarsOfLibertyLauncher.Models.Multiplayer;
+
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
 /// <summary>
@@ -92,6 +94,42 @@ internal static class OwnDeckView
             }
         }
         return labels;
+    }
+
+    /// <summary>
+    /// A deck against what the community brings with that civilization (95g): the share of shared
+    /// decks carrying each of the player's cards, and the cards they often bring that this deck
+    /// does not.
+    ///
+    /// <para>Nothing under <see cref="DeckStatsView.MinDecksForPercent"/> decks, and nothing for a
+    /// card in <see cref="DeckStatsView.TailMaxPlayers"/> decks or fewer: the same two refusals the
+    /// Statistics page makes, so the two can never disagree about what a share may be stated on.</para>
+    /// </summary>
+    internal static (int Decks, IReadOnlyDictionary<string, int> Shares, IReadOnlyList<(string Card, int Percent)> Others)
+        CompareWithCommunity(IEnumerable<string> ownCards, string? civ, IReadOnlyList<DeckCardEntry>? rows, int othersShown = 3)
+    {
+        var shares = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var entries = (rows ?? Array.Empty<DeckCardEntry>())
+            .Where(r => string.Equals(r.Civ, civ, StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrWhiteSpace(r.Card))
+            .ToList();
+        if (entries.Count == 0) return (0, shares, Array.Empty<(string, int)>());
+
+        int decks = entries.Max(e => e.Players);
+        if (decks < DeckStatsView.MinDecksForPercent) return (decks, shares, Array.Empty<(string, int)>());
+
+        var own = new HashSet<string>(ownCards, StringComparer.OrdinalIgnoreCase);
+        var others = new List<(string Card, int Percent)>();
+        foreach (var entry in entries.OrderByDescending(e => e.Players)
+                     .ThenBy(e => e.Card, StringComparer.Ordinal))
+        {
+            if (entry.Players <= DeckStatsView.TailMaxPlayers) continue;
+            int percent = DeckStatsView.Percent(entry.Players, decks);
+            if (own.Contains(entry.Card)) shares[entry.Card] = percent;
+            else if (others.Count < othersShown) others.Add((entry.Card, percent));
+        }
+
+        return (decks, shares, others);
     }
 
     /// <summary>

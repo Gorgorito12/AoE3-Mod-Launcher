@@ -191,17 +191,18 @@ public class EloPreviewTests
                 var solo = AllText(cards[0]);
                 // The viewer is on a streak of 2 (as on the ranking): the plain figure, with the "i"
                 // that says what ends a streak.
-                Assert.True(Tagged(cards[0], "StreakInfo"));
+                Assert.Contains(solo, t => t == Strings.Get("MpProfileStreakNow"));
                 Assert.Contains(solo, t => t.StartsWith("M\u00e1ximo:"));
                 Assert.Contains(solo, t => t.StartsWith("M\u00ednimo:"));
-                Assert.Contains(solo, t => t == Strings.Get("MpProfileLongestWin"));
+                Assert.Contains(solo, t => t == Strings.Get("MpProfileStreakLong"));
                 // The rated record, moved here from the ranking table (2026-10-28): 15-11 is 58 %.
                 Assert.Contains(solo, t => t == "R\u00e9cord: 15\u201311 \u00b7 58 % de 26 decididas");
 
                 var team = AllText(cards[1]);
                 Assert.Contains(team, t => t == "1534?");
-                Assert.Contains(team, t => t == "Posicionamiento 2/5");
-                Assert.Contains(team, t => t == "Faltan 3 partidas puntuadas para entrar en la tabla.");
+                Assert.Contains(team, t => t == "ELO provisional hasta que termines el posicionamiento");
+                Assert.Contains(team, t => t == "2/5");
+                Assert.Contains(team, t => t == "Te quedan 3 partidas para tener ELO en Equipos.");
                 Assert.True(Tagged(cards[1], "PlacementSegments"));
                 Assert.DoesNotContain(team, t => t.StartsWith("M\u00e1ximo:"));
                 // A placement card shows its results as segments, not as a record line.
@@ -244,9 +245,9 @@ public class EloPreviewTests
                 Assert.Equal(2, cards.Count);
                 var solo = AllText(cards[0]);
                 Assert.Contains(solo, t => t == "1490?");
-                Assert.Contains(solo, t => t == "Posicionamiento 6/10");
+                Assert.Contains(solo, t => t == "6/10");
                 Assert.DoesNotContain(solo, t => t.StartsWith("M\u00e1ximo:"));
-                Assert.DoesNotContain(solo, t => t == Strings.Get("MpProfileStreak"));
+                Assert.DoesNotContain(solo, t => t == Strings.Get("MpProfileStreakNow"));
 
                 Assert.Contains(AllText(cards[1]),
                     t => t.StartsWith("Todav\u00eda no jugaste partidas puntuadas en equipos."));
@@ -272,7 +273,6 @@ public class EloPreviewTests
             Assert.Empty(ModeCards(body));
             var texts = AllText(TaggedBorder(body, "ProfileHeader"));
             Assert.Contains(texts, t => t == Strings.Get("MpProfileNoMatchesYou"));
-            Assert.Contains(texts, t => t == Strings.Get("MpDash"));
             Assert.DoesNotContain(texts, t => t.Contains("1500"));
             Assert.Contains(AllText(TaggedBorder(body, MultiplayerTab.HeadToHeadCardTag)),
                 t => t == Strings.Get("MpH2HEmptyYou"));
@@ -327,7 +327,7 @@ public class EloPreviewTests
                 var body = ProfileOf(tab, sample);
                 var solo = AllText(ModeCards(body)[0]);
                 Assert.Contains(solo, t => t == "Record: 15\u201311 \u00b7 58% of 26 decided");
-                Assert.DoesNotContain(solo, t => t == Strings.Get("MpProfileStreak"));
+                Assert.DoesNotContain(solo, t => t == Strings.Get("MpProfileStreakNow"));
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -639,7 +639,7 @@ public class EloPreviewTests
                 var mismatch = Card(2);
                 var mismatchText = AllText(mismatch);
                 Assert.True(Tagged(mismatch, "UnratedTag"));
-                Assert.Contains(mismatchText, t => t == "NO PUNTUADA");
+                Assert.Contains(mismatchText, t => t == "NO CONTÓ");
                 Assert.Contains(mismatchText, t => t == "Gorgorito12 y Luis contra Pedro y Sara \u00B7 2v2");
                 Assert.Contains(mismatchText, t => t == "Los equipos del juego no coincidieron con los de la sala.");
                 Assert.Contains(mismatchText, t => t == Strings.Get("MpDash"));

@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Threading.Tasks;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
@@ -60,7 +61,15 @@ public partial class PublishModDialog : Window
     private readonly Border[] _railDiscs;
     private readonly TextBlock[] _railGlyphs;
     private readonly TextBlock[] _railLabels;
-    private readonly Border[] _railLines;
+    private readonly Button[] _railSteps;
+    private readonly FrameworkElement[] _railDots;
+    private readonly HashSet<int> _visited = new() { 1 };
+    private readonly List<StackPanel> _cards = new();
+    private readonly List<TextBox> _fields = new();
+    private bool _published;
+
+    // The answer of "Check on GitHub", until the repository or the tag changes.
+    private GitHubReleaseDownloader.ReleaseCheck? _releaseCheck;
 
     /// <summary>
     /// Every "optional" mark. They are set together because they all say the same word:
@@ -98,6 +107,7 @@ public partial class PublishModDialog : Window
     public PublishModDialog()
     {
         InitializeComponent();
+        Controls.ModDialogChrome.AttachGlobal(this);
 
         _stepPanels = new[] { Step1Panel, Step2Panel, Step3Panel, Step4Panel, Step5Panel, Step6Panel };
         _stepTitles = new[] { Step1Title, Step2Title, Step3Title, Step4Title, Step5Title, Step6Title };
@@ -105,7 +115,14 @@ public partial class PublishModDialog : Window
         _railDiscs  = new[] { RailDisc1,  RailDisc2,  RailDisc3,  RailDisc4,  RailDisc5,  RailDisc6  };
         _railGlyphs = new[] { RailGlyph1, RailGlyph2, RailGlyph3, RailGlyph4, RailGlyph5, RailGlyph6 };
         _railLabels = new[] { RailLabel1, RailLabel2, RailLabel3, RailLabel4, RailLabel5, RailLabel6 };
-        _railLines  = new[] { RailLine1,  RailLine2,  RailLine3,  RailLine4,  RailLine5  };
+        _railSteps  = new[] { RailStep1,  RailStep2,  RailStep3,  RailStep4,  RailStep5,  RailStep6  };
+        _railDots   = new FrameworkElement[] { RailDot1, RailDot2, RailDot3, RailDot4, RailDot5, RailDot6 };
+        for (int i = 0; i < _railSteps.Length; i++)
+        {
+            int step = i + 1;
+            _railSteps[i].Click += (_, _) => GoTo(step);
+        }
+        CollectCardsAndFields((DependencyObject)Content);
         _optionalMarks = new[]
         {
             OptAuthor, OptSubtitle, OptAccent, OptIcon, OptBanner, OptArguments,
@@ -113,7 +130,10 @@ public partial class PublishModDialog : Window
             OptTranslationsRepo, OptDescriptionEs, OptWebsite, OptLinks,
         };
 
-        CancelButton.Click += (_, _) => { DialogResult = false; Close(); };
+        // Close, not DialogResult: OnClosing is what asks before throwing the form away.
+        CancelButton.Click += (_, _) => Close();
+        Closing += OnClosing;
+        SizeChanged += (_, _) => ApplyWindowScale();
         BackButton.Click += (_, _) => GoTo(_currentStep - 1);
         NextButton.Click += OnNextClicked;
 
@@ -122,12 +142,32 @@ public partial class PublishModDialog : Window
         CopyJsonButton.Click += (_, _) => CopyJson();
         NextStepsLink.Click += (_, _) => SafeUrl.TryOpen(ModdingGuideUrl);
         NextStepsScriptLink.Click += (_, _) => SafeUrl.TryOpen(PackagingScriptUrl);
-        HowItWorksButton.Click += (_, _) => ToggleFold(IntroPanel);
-        Step3AdvancedToggle.Click += (_, _) => ToggleFold(Step3AdvancedBlock);
-        GhAdvancedToggle.Click += (_, _) => ToggleFold(GhAdvancedBlock);
+        HowItWorksButton.Click += (_, _) =>
+        {
+            ToggleFold(IntroPanel);
+            HowItWorksButton.Background = IntroPanel.Visibility == Visibility.Visible
+                ? new SolidColorBrush(Color.FromRgb(0x23, 0x3A, 0x5C))
+                : BrushOf("WindowSecondary");
+        };
+        GuideButton.Click += (_, _) => SafeUrl.TryOpen(ModdingGuideUrl);
+        WireFold(Step3AdvancedToggle, Step3AdvancedBlock, Step3AdvancedSummary);
+        WireFold(GhAdvancedToggle, GhAdvancedBlock, GhAdvancedSummary);
+        WireFold(PayFoldToggle, PayFoldBlock, Grp4PayloadNote);
+        WireFold(TrFoldToggle, TrFoldBlock, TrFoldSummary);
         // The marker is the answer to the question above it, so the field follows the tick.
-        MarkerNeededCheck.Click += (_, _) => MarkerBlock.Visibility =
-            MarkerNeededCheck.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        MarkerNeededCheck.Click += (_, _) =>
+        {
+            MarkerBlock.Visibility = MarkerNeededCheck.IsChecked == true
+                ? Visibility.Visible : Visibility.Collapsed;
+            RefreshCardLines();
+        };
+        CheckReleaseButton.Click += async (_, _) => await CheckReleaseAsync();
+        FieldSourceRepo.TextChanged += (_, _) => ForgetReleaseCheck();
+        FieldApprovedTag.TextChanged += (_, _) => ForgetReleaseCheck();
+        AddLinkButton.Click += (_, _) => AddLink("discord", "");
+        foreach (var field in new[] { FieldId, FieldDisplayName, FieldProbeFile, FieldExecutable,
+                     FieldDescriptionEn, FieldDescriptionEs, FieldIcon, FieldAccent })
+            field.TextChanged += (_, _) => RefreshRail();
         // The compiled-table question only applies to an isolated CLONE of the player's game;
         // NativeInstallService refuses the flag for InPlaceOverlay, so the wizard must not offer
         // it there either. Wired before the SelectedIndex below so the first selection applies it.
@@ -256,6 +296,7 @@ public partial class PublishModDialog : Window
         if (step < 1) step = 1;
         if (step > StepCount)
         {
+            _published = true;
             DialogResult = true;
             Close();
             return;
@@ -266,7 +307,11 @@ public partial class PublishModDialog : Window
         for (int i = 0; i < _stepPanels.Length; i++)
             _stepPanels[i].Visibility = (i == step - 1) ? Visibility.Visible : Visibility.Collapsed;
 
-        HeaderStep.Text = string.Format(StepIndicatorFormat, step, StepCount);
+        _visited.Add(step);
+        StepOfText.Text = string.Format(StepIndicatorFormat, step, StepCount).ToUpper(Strings.Culture);
+        // "How it works" sits under the step's own heading, on whichever step it was opened.
+        ((Panel)IntroPanel.Parent).Children.Remove(IntroPanel);
+        _stepPanels[step - 1].Children.Insert(2, IntroPanel);
         RefreshRail();
 
         // Step 1 has nothing behind it, so Back is not DRAWN. It used to be painted and
@@ -274,7 +319,12 @@ public partial class PublishModDialog : Window
         BackButton.Visibility = step > 1 ? Visibility.Visible : Visibility.Collapsed;
         NextButton.Content = step == StepCount ? OpenPrLabel : NextLabel;
 
-        if (step == 4) RefreshMechanismSubforms();
+        if (step == 4)
+        {
+            RefreshMechanismSubforms();
+            RefreshFoldSummaries();
+        }
+        RefreshCardLines();
         if (step == 6)
         {
             JsonPreview.Text = GenerateJson();
@@ -294,6 +344,7 @@ public partial class PublishModDialog : Window
         if (_currentStep == StepCount)
         {
             OpenCatalogPr();
+            _published = true;
             DialogResult = true;
             Close();
             return;
@@ -302,43 +353,267 @@ public partial class PublishModDialog : Window
     }
 
     /// <summary>
-    /// Paints the six-node rail: blue for where you are, a green tick for what is behind
-    /// you, an empty ring for what is left. "Step 1 of 6" in the caption said where you
-    /// were and nothing about what was still to come.
+    /// Paints the list of steps: blue for where you are, a green tick for a step you have been
+    /// through with nothing missing, an amber dot for one you have been through that still lacks
+    /// something. The identity above it follows what has been typed.
     /// </summary>
     private void RefreshRail()
     {
-        bool Done(int step) => step < _furthestStep && step != _currentStep;
+        var missing = MissingFields();
 
-        var action = BrushOf("MpAction");
-        var okFill = BrushOf("MpOkBg");
-        var ok = BrushOf("MpOk");
-        var ring = BrushOf("MpRimMedium");
-        var bright = BrushOf("FgBright");
-        var ghost = BrushOf("UiTextGhost");
-        var heading = BrushOf("MpTextHeading");
-        var muted = BrushOf("MpTextMuted");
-        var seam = BrushOf("UiRimSeam");
-        var seamLit = BrushOf("MpRimStrong");
-
-        for (int i = 0; i < _railDiscs.Length; i++)
+        for (int i = 0; i < _railSteps.Length; i++)
         {
             int step = i + 1;
             bool current = step == _currentStep;
-            bool done = Done(step);
+            bool visited = _visited.Contains(step);
+            bool lacks = missing.Any(m => m.Step == step);
+            bool done = visited && !current && step < StepCount && !lacks;
 
-            _railDiscs[i].Background = current ? action : done ? okFill : Brushes.Transparent;
-            _railDiscs[i].BorderBrush = current ? action : done ? okFill : ring;
+            _railSteps[i].Background = current
+                ? new SolidColorBrush(Color.FromRgb(0x23, 0x3A, 0x5C))
+                : Brushes.Transparent;
+            _railDiscs[i].Background = current ? BrushOf("MpAction") : Brushes.Transparent;
+            _railDiscs[i].BorderBrush = current ? BrushOf("MpAction")
+                : done ? new SolidColorBrush(Color.FromArgb(0xB3, 0x4F, 0xD6, 0x8A))
+                : BrushOf("WindowFieldRim");
             _railGlyphs[i].Text = done ? "\u2713" : step.ToString(CultureInfo.InvariantCulture);
-            _railGlyphs[i].Foreground = current ? bright : done ? ok : ghost;
-            _railLabels[i].Foreground = current ? heading : done ? muted : ghost;
+            _railGlyphs[i].Foreground = current ? Brushes.White
+                : done ? BrushOf("WindowSafeTick") : BrushOf("WindowMuted");
+            _railLabels[i].Foreground = current ? Brushes.White
+                : visited ? BrushOf("UiBodyText") : BrushOf("WindowMuted");
             _railLabels[i].FontWeight = current ? FontWeights.SemiBold : FontWeights.Medium;
+            _railDots[i].Visibility = visited && lacks ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        // A gap lights up only once BOTH of its ends are behind you, which is what makes
-        // the finished run read as one line instead of six unrelated ticks.
-        for (int i = 0; i < _railLines.Length; i++)
-            _railLines[i].Background = Done(i + 1) && Done(i + 2) ? seamLit : seam;
+        var name = FieldDisplayName.Text.Trim();
+        var id = FieldId.Text.Trim();
+        RailModName.Text = name.Length > 0 ? name : Strings.Get("PublishRailNoName");
+        RailModPath.Text = id.Length > 0 ? $"mods/{id}" : Strings.Get("PublishRailNoId");
+        RailInitial.Text = name.Length > 0 ? char.ToUpperInvariant(name[0]).ToString() : "?";
+
+        var accent = TryAccent() ?? Color.FromRgb(0x2F, 0x7F, 0xE0);
+        RailSwatch.Background = new SolidColorBrush(accent);
+        var light = (.2126 * accent.R + .7152 * accent.G + .0722 * accent.B) / 255 > .6;
+        RailInitial.Foreground = light ? new SolidColorBrush(Color.FromRgb(0x0F, 0x1C, 0x2E)) : Brushes.White;
+        AccentSwatch.Background = TryAccent() is { } typed ? new SolidColorBrush(typed) : Brushes.Transparent;
+
+        RefreshBlock();
+    }
+
+    private Color? TryAccent()
+    {
+        var text = FieldAccent.Text.Trim();
+        return AccentRegex.IsMatch(text) ? (Color)ColorConverter.ConvertFromString(text) : null;
+    }
+
+    /// <summary>The PR needs a folder name and a name to show. Everything else is the review's
+    /// to ask for, and does not stop anybody here.</summary>
+    private void RefreshBlock()
+    {
+        string? reason = null;
+        if (_currentStep == StepCount)
+        {
+            if (!IdRegex.IsMatch(FieldId.Text.Trim())) reason = Strings.Get("PublishBlockId");
+            else if (string.IsNullOrWhiteSpace(FieldDisplayName.Text)) reason = Strings.Get("PublishBlockName");
+        }
+        BlockText.Text = reason ?? "";
+        BlockText.Visibility = reason != null ? Visibility.Visible : Visibility.Collapsed;
+        NextButton.IsEnabled = reason == null;
+    }
+
+    private void CollectCardsAndFields(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is StackPanel { Tag: "card" } card) _cards.Add(card);
+            if (child is TextBox box && !ReferenceEquals(box, JsonPreview)) _fields.Add(box);
+            CollectCardsAndFields(child);
+        }
+    }
+
+    /// <summary>A line between rows, never under the last one showing. Which one that is depends
+    /// on the answers: the marker row and the compiled-tables question come and go.</summary>
+    private void RefreshCardLines()
+    {
+        foreach (var card in _cards)
+        {
+            var rows = card.Children.OfType<Border>().Where(r => r.Visibility != Visibility.Collapsed).ToList();
+            for (int i = 0; i < rows.Count; i++)
+                rows[i].BorderThickness = new Thickness(0, 0, 0, i < rows.Count - 1 ? 1 : 0);
+        }
+    }
+
+    private void WireFold(Button toggle, FrameworkElement block, FrameworkElement summary)
+    {
+        toggle.Click += (_, _) =>
+        {
+            ToggleFold(block);
+            var open = block.Visibility == Visibility.Visible;
+            summary.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
+            toggle.Content = Strings.Get(open ? "PublishFoldHide" : "PublishFoldShow");
+            RefreshCardLines();
+        };
+    }
+
+    private void RefreshFoldSummaries()
+    {
+        var filled = Strings.Get("PublishFoldFilled");
+        Grp4PayloadNote.Text = FieldPayloadUrls.Text.Trim().Length + FieldPayloadSha256.Text.Trim().Length > 0
+            ? filled : Strings.Get("PublishGrpPayloadNote");
+        TrFoldSummary.Text = FieldTranslationsRepo.Text.Trim().Length + FieldTranslationsCovered.Text.Trim().Length > 0
+            ? filled : Strings.Get("PublishTrSummary");
+    }
+
+    /// <summary>The title and the list follow the window, as the settings page does.</summary>
+    private void ApplyWindowScale()
+    {
+        var scale = (double)FindResource("DialogTitleSize") / 22;
+        var size = Math.Clamp(ActualWidth * .015 * scale, 22 * scale, 30 * scale);
+        foreach (var title in _stepTitles) title.FontSize = size;
+        StepRail.MinWidth = Math.Clamp(ActualWidth * .15, 220, 280);
+    }
+
+    private bool HasTyped() => _fields.Any(f => !string.IsNullOrWhiteSpace(f.Text));
+
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_published || !IsVisible || !HasTyped()) return;
+        if (!ThemedConfirmDialog.Ask(this, Strings.Get("PublishCloseTitle"), Strings.Get("PublishCloseBody"),
+                Strings.Get("PublishCloseConfirm"), Strings.Get("PublishCloseKeep"),
+                ConfirmTone.Warning, defaultIsCancel: true))
+            e.Cancel = true;
+    }
+
+    private void ForgetReleaseCheck()
+    {
+        _releaseCheck = null;
+        CheckResult.Visibility = Visibility.Collapsed;
+        RefreshRail();
+    }
+
+    private async Task CheckReleaseAsync()
+    {
+        var repo = FieldSourceRepo.Text.Trim();
+        var tag = FieldApprovedTag.Text.Trim();
+        if (!SourceRepoRegex.IsMatch(repo) || tag.Length == 0) return;
+
+        CheckReleaseButton.IsEnabled = false;
+        CheckReleaseButton.Content = Strings.Get("PublishCheckBusy");
+        var (check, zip) = await new GitHubReleaseDownloader().CheckReleaseAsync(repo, tag);
+        CheckReleaseButton.IsEnabled = true;
+        CheckReleaseButton.Content = Strings.Get("PublishCheckButton");
+
+        _releaseCheck = check;
+        var ok = check == GitHubReleaseDownloader.ReleaseCheck.Ready;
+        CheckResultText.Text = check switch
+        {
+            GitHubReleaseDownloader.ReleaseCheck.Ready => Strings.Format("PublishCheckOk", tag, zip ?? ""),
+            GitHubReleaseDownloader.ReleaseCheck.NoZip => Strings.Format("PublishCheckNoZip", tag),
+            GitHubReleaseDownloader.ReleaseCheck.NoRelease => Strings.Format("PublishCheckNoRelease", tag, repo),
+            _ => Strings.Get("PublishCheckUnreachable"),
+        };
+        CheckResult.Background = BrushOf(ok ? "WindowSafeFill" : "WindowNoticeFill");
+        CheckResult.BorderBrush = ok
+            ? new SolidColorBrush(Color.FromArgb(0x66, 0x4F, 0xD6, 0x8A))
+            : BrushOf("WindowNoticeRim");
+        CheckResultText.Foreground = ok
+            ? new SolidColorBrush(Color.FromRgb(0x8F, 0xE0, 0xB0))
+            : BrushOf("WindowNoticeTitle");
+        CheckResult.Visibility = Visibility.Visible;
+        RefreshRail();
+    }
+
+    // -- Links: the rows write the same "type|url" lines ReadFormInput has always read.
+
+    private static readonly string[] LinkTypes = { "discord", "moddb", "forum", "wiki", "video", "other" };
+
+    private sealed record LinkRow(FrameworkElement Root, ComboBox Type, TextBox Url, TextBlock Error);
+
+    private readonly List<LinkRow> _links = new();
+
+    internal void AddLink(string type, string url)
+    {
+        if (_links.Count >= ModLink.MaxLinks) return;
+
+        var combo = new ComboBox { Style = (Style)FindResource("WzCombo") };
+        foreach (var t in LinkTypes)
+            combo.Items.Add(new ComboBoxItem { Content = Strings.Get($"PublishLink_{t}"), Tag = t });
+        combo.SelectedIndex = Math.Max(0, Array.IndexOf(LinkTypes, type));
+
+        var box = new TextBox { Style = (Style)FindResource("WzInputMono"), Text = url };
+        var remove = new Button
+        {
+            Style = (Style)FindResource("WindowSecondaryButton"),
+            MinWidth = 0,
+            Width = 34,
+            Height = 34,
+            Padding = new Thickness(0),
+            Content = "\u2715",
+        };
+        var line = new Grid();
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        box.Margin = new Thickness(8, 0, 8, 0);
+        Grid.SetColumn(box, 1);
+        Grid.SetColumn(remove, 2);
+        line.Children.Add(combo);
+        line.Children.Add(box);
+        line.Children.Add(remove);
+
+        var error = new TextBlock
+        {
+            Style = (Style)FindResource("WzError"),
+            Margin = new Thickness(178, 5, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Text = Strings.Get("PublishLinkError"),
+        };
+        var root = new StackPanel { Margin = new Thickness(0, _links.Count > 0 ? 8 : 0, 0, 0) };
+        root.Children.Add(line);
+        root.Children.Add(error);
+
+        var row = new LinkRow(root, combo, box, error);
+        _links.Add(row);
+        LinksList.Children.Add(root);
+
+        combo.SelectionChanged += (_, _) => SyncLinks();
+        box.TextChanged += (_, _) => SyncLinks();
+        remove.Click += (_, _) =>
+        {
+            _links.Remove(row);
+            LinksList.Children.Remove(root);
+            SyncLinks();
+        };
+        SyncLinks();
+    }
+
+    private void SyncLinks()
+    {
+        var lines = new List<string>();
+        foreach (var link in _links)
+        {
+            var url = link.Url.Text.Trim();
+            link.Error.Visibility = url.Length > 0 && !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                ? Visibility.Visible : Visibility.Collapsed;
+            if (url.Length > 0) lines.Add($"{SelectedTag(link.Type)}|{url}");
+        }
+        FieldLinks.Text = string.Join("\n", lines);
+        AddLinkButton.Visibility = _links.Count < ModLink.MaxLinks ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary><c>--preview-dialog=publish:n</c>: the prototype's mod, on step n.</summary>
+    internal void FillPreview(int step)
+    {
+        FieldId.Text = "napoleonic-era";
+        FieldDisplayName.Text = "Napoleonic Era";
+        FieldAccent.Text = "#3f6fb5";
+        FieldIcon.Text = "icon.png";
+        FieldDefaultFolder.Text = "AoE3 - Napoleonic Era";
+        FieldSourceRepo.Text = "kaiser/napoleonic-era";
+        FieldApprovedTag.Text = "v1.0.0";
+        AddLink("discord", "https://discord.gg/napoleonic");
+        for (int i = 1; i < step; i++) _visited.Add(i);
+        GoTo(step);
     }
 
     private Brush BrushOf(string key) => (Brush)FindResource(key);
@@ -373,76 +648,54 @@ public partial class PublishModDialog : Window
     /// what make a mod installable and recognisable, which is a review question rather than
     /// a schema one.</para>
     /// </summary>
-    private void RefreshMissing()
+    private List<(int Step, string Label)> MissingFields()
     {
-        var missing = new List<(int Step, string Label, bool Required)>();
+        var missing = new List<(int Step, string Label)>();
         if (string.IsNullOrWhiteSpace(FieldProbeFile.Text))
-            missing.Add((3, Strings.Get("PublishMissingProbe"), true));
+            missing.Add((3, Strings.Get("PublishMissingProbe")));
         if (string.IsNullOrWhiteSpace(FieldExecutable.Text))
-            missing.Add((3, Strings.Get("PublishMissingExecutable"), true));
+            missing.Add((3, Strings.Get("PublishMissingExecutable")));
         if (string.IsNullOrWhiteSpace(FieldDescriptionEn.Text)
             && string.IsNullOrWhiteSpace(FieldDescriptionEs.Text))
-            missing.Add((5, Strings.Get("PublishMissingDescription"), true));
+            missing.Add((5, Strings.Get("PublishMissingDescription")));
         if (string.IsNullOrWhiteSpace(FieldIcon.Text))
-            missing.Add((2, Strings.Get("PublishMissingIcon"), false));
-
-        MissingPills.Children.Clear();
-        if (missing.Count == 0)
-        {
-            MissingCard.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        MissingCard.Visibility = Visibility.Visible;
-        MissingTitle.Text = missing.Count == 1
-            ? Strings.Get("PublishMissingTitleOne")
-            : Strings.Format("PublishMissingTitleMany", missing.Count);
-        MissingFootnote.Text = Strings.Get("PublishMissingFootnote");
-        foreach (var m in missing)
-            MissingPills.Children.Add(BuildMissingPill(m.Step, m.Label, m.Required));
+            missing.Add((2, Strings.Get("PublishMissingIcon")));
+        if (_releaseCheck == GitHubReleaseDownloader.ReleaseCheck.NoZip)
+            missing.Add((4, Strings.Get("PublishMissingZip")));
+        if (_releaseCheck == GitHubReleaseDownloader.ReleaseCheck.NoRelease)
+            missing.Add((4, Strings.Get("PublishMissingRelease")));
+        return missing;
     }
 
-    /// <summary>
-    /// One gap, saying which step to go back to. Amber for what review will actually ask
-    /// for; a neutral rim for what merely helps (the icon), so the two are told apart at a
-    /// glance instead of four identical alarms.
-    /// </summary>
-    private Border BuildMissingPill(int step, string label, bool required)
+    private void RefreshMissing()
     {
-        var stepText = new TextBlock
-        {
-            Text = Strings.Format("PublishMissingStepFormat", step),
-            FontFamily = (FontFamily)FindResource("MonoFont"),
-            FontSize = (double)FindResource("SetGroupLabelSize"),
-            FontWeight = FontWeights.Medium,
-            Foreground = required ? BrushOf("MpCautionTextAlt") : BrushOf("UiTextDim"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 6, 0),
-        };
-        var labelText = new TextBlock
-        {
-            Text = label,
-            FontSize = (double)FindResource("SetMonoSize"),
-            FontFamily = (FontFamily)FindResource("BodyFont"),
-            FontWeight = FontWeights.Medium,
-            Foreground = required ? BrushOf("MpCautionText") : BrushOf("MpTextMuted"),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        var missing = MissingFields();
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        row.Children.Add(stepText);
-        row.Children.Add(labelText);
+        MissingPills.Children.Clear();
+        var any = missing.Count > 0;
+        MissingCard.BorderBrush = new SolidColorBrush(any
+            ? Color.FromArgb(0x8C, 0xF4, 0x90, 0x0C)
+            : Color.FromArgb(0x80, 0x4F, 0xD6, 0x8A));
+        MissingTitle.Foreground = any
+            ? BrushOf("WindowNoticeTitle")
+            : new SolidColorBrush(Color.FromRgb(0x8F, 0xE0, 0xB0));
+        MissingTitle.Text = !any ? Strings.Get("PublishMissingNone")
+            : missing.Count == 1 ? Strings.Get("PublishMissingTitleOne")
+            : Strings.Format("PublishMissingTitleMany", missing.Count);
+        MissingFootnote.Text = Strings.Get(any ? "PublishMissingFootnote" : "PublishMissingNoneHint");
+        MissingPills.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var m in missing)
+            MissingPills.Children.Add(BuildMissingPill(m.Step, m.Label));
+    }
 
-        var pill = new Border
+    private Button BuildMissingPill(int step, string label)
+    {
+        var pill = new Button
         {
             Style = (Style)FindResource("WzMissingPill"),
-            Child = row,
+            Content = Strings.Format("PublishMissingPill", step, label),
         };
-        if (!required)
-        {
-            pill.Background = BrushOf("MpActivityOwnRow");
-            pill.BorderBrush = BrushOf("MpRimField");
-        }
+        pill.Click += (_, _) => GoTo(step);
         return pill;
     }
 
@@ -957,7 +1210,10 @@ public partial class PublishModDialog : Window
     {
         try
         {
-            Clipboard.SetText(JsonPreview.Text);
+            if (!Services.HarnessMode.Block("copy mod.json")) Clipboard.SetText(JsonPreview.Text);
+            CopyJsonButton.Content = Strings.Get("PublishCopiedJson");
+            _ = Task.Delay(1400).ContinueWith(_ => Dispatcher.Invoke(() =>
+                CopyJsonButton.Content = Strings.Get("PublishCopyJson")));
         }
         catch
         {
@@ -986,7 +1242,7 @@ public partial class PublishModDialog : Window
 
         try
         {
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = url,
                 UseShellExecute = true,
@@ -1007,6 +1263,7 @@ public partial class PublishModDialog : Window
     private void ApplyDefaultLabels()
     {
         TitleBarControl.Title = Strings.Get("PublishWizardTitle");
+        Title = TitleBarControl.Title;
         CancelButton.Content = Strings.Get("PublishWizardCancel");
         BackButton.Content = Strings.Get("PublishWizardBack");
         NextLabel = Strings.Get("PublishWizardNext");
@@ -1052,6 +1309,7 @@ public partial class PublishModDialog : Window
         Grp3Recognise.Text = Strings.Get("PublishGrpRecognise");
         Grp3Launch.Text = Strings.Get("PublishGrpLaunch");
         Grp3PlayerData.Text = Strings.Get("PublishGrpPlayerData");
+        LblInstallType.Text = Strings.Get("PublishFieldInstallTypeLabel");
         HintInstallType.Text = Strings.Get("PublishFieldInstallTypeHint");
         InstallOptUhc.Content = Strings.Get("PublishInstallOptUhc");
         InstallOptAdditive.Content = Strings.Get("PublishInstallOptAdditive");
@@ -1073,7 +1331,8 @@ public partial class PublishModDialog : Window
         LblUserDataFolder.Text = Strings.Get("PublishFieldUserDataFolder");
         HintUserDataFolder.Text = Strings.Get("PublishFieldUserDataFolderHint");
         Step3AdvancedSummary.Text = Strings.Get("PublishAdvancedSummary3");
-        Step3AdvancedToggle.Content = Strings.Get("PublishAdvancedToggle");
+        Step3AdvancedToggle.Content = Strings.Get("PublishFoldShow");
+        Grp3Advanced.Text = Strings.Get("PublishGrpAdvanced");
         LblInstallProductGuid.Text = Strings.Get("PublishFieldProductGuid");
         HintInstallProductGuid.Text = Strings.Get("PublishFieldProductGuidHint");
 
@@ -1088,11 +1347,17 @@ public partial class PublishModDialog : Window
         HintSourceRepo.Text = Strings.Get("PublishFieldSourceRepoHint");
         LblApprovedTag.Text = Strings.Get("PublishFieldApprovedTag");
         HintApprovedTag.Text = Strings.Get("PublishFieldApprovedTagHint");
-        FieldDeltaPatches.Content = Strings.Get("PublishFieldDeltaPatches");
+        LblDeltaPatches.Text = Strings.Get("PublishFieldDeltaPatches");
         HintDeltaPatches.Text = Strings.Get("PublishFieldDeltaPatchesHint");
         UpdateDeletionNote.Text = Strings.Get("PublishUpdateDeletionNote");
         GhAdvancedSummary.Text = Strings.Get("PublishAdvancedSummaryGh");
-        GhAdvancedToggle.Content = Strings.Get("PublishAdvancedToggle");
+        GhAdvancedToggle.Content = Strings.Get("PublishFoldShow");
+        Grp4GhAdvanced.Text = Strings.Get("PublishGrpGhAdvanced");
+        Grp4GitHub.Text = "GITHUB";
+        Grp4Wol.Text = "WOL PATCHER";
+        LblCheckRelease.Text = Strings.Get("PublishCheckLabel");
+        HintCheckRelease.Text = Strings.Get("PublishCheckHint");
+        CheckReleaseButton.Content = Strings.Get("PublishCheckButton");
         LblGhExternalUrl.Text = Strings.Get("PublishFieldGhExternalUrl");
         HintGhExternalUrl.Text = Strings.Get("PublishFieldGhExternalUrlHint");
         LblGhExternalSha.Text = Strings.Get("PublishFieldGhExternalSha");
@@ -1110,6 +1375,9 @@ public partial class PublishModDialog : Window
         // apart.
         HintWolPayloadSha256.Text = Strings.Get("PublishFieldWolPayloadSha256Hint");
         Grp4Payload.Text = Strings.Get("PublishGrpPayload");
+        PayFoldToggle.Content = Strings.Get("PublishFoldShow");
+        TrFoldToggle.Content = Strings.Get("PublishFoldShow");
+        TrFoldSummary.Text = Strings.Get("PublishTrSummary");
         Grp4PayloadNote.Text = Strings.Get("PublishGrpPayloadNote");
         LblPayloadUrls.Text = Strings.Get("PublishFieldPayloadUrls");
         HintPayloadUrls.Text = Strings.Get("PublishFieldPayloadUrlsHint");
@@ -1130,6 +1398,10 @@ public partial class PublishModDialog : Window
         HintWebsite.Text = Strings.Get("PublishFieldWebsiteHint");
         LblLinks.Text = Strings.Get("PublishFieldLinks");
         HintLinks.Text = Strings.Get("PublishFieldLinksHint");
+        AddLinkButton.Content = Strings.Get("PublishAddLink");
+        Grp5Description.Text = Strings.Get("PublishGrpDescription");
+        Grp5Links.Text = Strings.Get("PublishGrpLinks");
+        GuideButton.Content = Strings.Get("PublishGuide");
 
         // --- Step 6 ---
         JsonHeaderLabel.Text = Strings.Get("PublishJsonHeader");

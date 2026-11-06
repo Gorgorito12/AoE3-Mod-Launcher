@@ -242,8 +242,7 @@ public partial class LauncherSettingsDialog : Window
         SetTip(TextScaleCombo, "DlgSettingsTextScaleTip");
         BuildTextScaleItems();
 
-        TabOrderLabel.Text = Strings.Get("DlgLauncherSettingsTabOrderLabel");  // now the group label
-        TabOrderHint.Text = Strings.Get("DlgLauncherSettingsTabOrderHint");
+        ApplyAppearanceStrings();
 
         LanguageLabel.Text = Strings.Get("DlgLauncherSettingsLanguageLabel");
         // Theme picker removed — see LauncherSettingsDialog.xaml comment.
@@ -475,6 +474,8 @@ public partial class LauncherSettingsDialog : Window
         }
         if (LanguageCombo.SelectedItem == null)
             LanguageCombo.SelectedIndex = 0;
+        LanguageEsOption.IsChecked = (LanguageCombo.SelectedItem as ComboBoxItem)?.Tag as string == "es";
+        LanguageEnOption.IsChecked = LanguageEsOption.IsChecked != true;
 
         // "Run in background" master toggle: on when auto-start is registered. The
         // REGISTRY is the source of truth here, not the config — which is why the
@@ -557,7 +558,7 @@ public partial class LauncherSettingsDialog : Window
         // value and render the reorderable rows.
         _tabOrder.Clear();
         _tabOrder.AddRange(_config.GetTopTabOrder());
-        RenderTabOrderList();
+        LoadAppearance();
 
         // Catalog source: map the three-way config ("" / "none" / repo)
         // back into the radio buttons + text box.
@@ -887,6 +888,7 @@ public partial class LauncherSettingsDialog : Window
             ["recordReminder"] = B(RecordReminderCheck),
             ["textScale"] = T(TextScaleCombo),
             ["tabOrder"] = string.Join(",", _tabOrder),
+            ["appearance"] = AppearanceKey(),
             ["autoCheck"] = B(AutoCheckCheck),
             ["openPostUpdate"] = B(OpenPostUpdateCheck),
             ["autoUpdateMods"] = B(AutoUpdateCheck),
@@ -964,7 +966,7 @@ public partial class LauncherSettingsDialog : Window
             // leaving the reader to infer it from an empty strip.
             UnsavedIndicator.Visibility = Visibility.Visible;
             UnsavedIndicatorDot.Visibility = Visibility.Collapsed;
-            UnsavedText.Foreground = (System.Windows.Media.Brush)FindResource("MpTextMuted");
+            UnsavedText.Foreground = (System.Windows.Media.Brush)FindResource("UiMutedText");
             UnsavedText.Text = Strings.Get("DlgSettingsAppliesInstantly");
             // With nothing pending there is nothing to discard, so the one button left
             // says what it does: close. Save is hidden rather than disabled - a disabled
@@ -1187,6 +1189,45 @@ public partial class LauncherSettingsDialog : Window
     /// stored, so a mod that has never been checked simply reports nothing rather than
     /// claiming to be current.</para>
     /// </summary>
+    /// <summary>Opens the settings of a mod, which is the launcher's business: it may not be the
+    /// one on screen.</summary>
+    public Action<ModProfile>? OpenModSettings { get; set; }
+
+    /// <summary>Opens the update window, and starts it when the argument says so.</summary>
+    public Action<bool>? OpenLauncherUpdate { get; set; }
+
+    /// <summary>Null hides the banner: nothing is pending.</summary>
+    public void ShowLauncherUpdate(string? latestTag)
+    {
+        LauncherUpdateBanner.Visibility = latestTag == null ? Visibility.Collapsed : Visibility.Visible;
+        if (latestTag == null) return;
+        LauncherUpdateTitle.Text = Strings.Format("DlgSettingsLauncherUpdateTitle", latestTag);
+        LauncherUpdateHint.Text = Strings.Get("DlgSettingsLauncherUpdateHint");
+        LauncherUpdateNotesBtn.Content = Strings.Get("DlgSettingsLauncherUpdateNotes");
+        LauncherUpdateRestartBtn.Content = Strings.Get("DlgSettingsLauncherUpdateRestart");
+    }
+
+    private void LauncherUpdateNotesBtn_Click(object sender, RoutedEventArgs e) => OpenLauncherUpdate?.Invoke(false);
+
+    private void LauncherUpdateRestartBtn_Click(object sender, RoutedEventArgs e) => OpenLauncherUpdate?.Invoke(true);
+
+    /// <summary>Added after the row is on screen: it hashes files, and the list must not wait.</summary>
+    private async Task PaintFingerprintAsync(string installPath, WrapPanel head, TextBlock touched)
+    {
+        var state = await ModFingerprintCheck.CheckAsync(installPath);
+        if (state == ModFingerprintState.Unknown) return;
+        bool ok = state == ModFingerprintState.Ok;
+        head.Children.Add(Controls.ModChips.Status(
+            Strings.Get(ok ? "DlgSettingsModsFingerprintOk" : "DlgSettingsModsFingerprintDifferent"),
+            ok ? "#4FD68A" : "#F4900C"));
+        touched.Visibility = ok ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private static bool IsBehind(ModState state)
+        => !string.IsNullOrWhiteSpace(state.LastKnownVersion)
+           && !string.IsNullOrWhiteSpace(state.LastKnownLatestVersion)
+           && !string.Equals(state.LastKnownVersion, state.LastKnownLatestVersion, StringComparison.OrdinalIgnoreCase);
+
     private void RenderInstalledMods()
     {
         InstalledModsList.Children.Clear();
@@ -1202,6 +1243,10 @@ public partial class LauncherSettingsDialog : Window
 
         InstalledModsCount.Text = rows.Count.ToString();
         InstalledModsEmptyRow.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        var updates = rows.Count(r => IsBehind(r.State));
+        TabModsCountText.Text = updates.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        TabModsCount.Visibility = updates > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         for (int i = 0; i < rows.Count; i++)
         {
@@ -1228,12 +1273,27 @@ public partial class LauncherSettingsDialog : Window
             Grid.SetColumn(disc, 0);
             grid.Children.Add(disc);
 
-            var text = new StackPanel { Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
-            text.Children.Add(new TextBlock
+            var head = new WrapPanel();
+            head.Children.Add(new TextBlock
             {
                 Text = profile.DisplayName,
                 Style = (Style)Application.Current.FindResource("SetRowTitle"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
             });
+            if (IsBehind(st))
+                head.Children.Add(Controls.ModChips.Status(Strings.Get("DlgSettingsModsUpdateChip"), "#55ACEE"));
+
+            var text = new StackPanel { Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
+            text.Children.Add(head);
+            var touched = new TextBlock
+            {
+                Text = Strings.Get("DlgSettingsModsFingerprintHint"),
+                Style = (Style)Application.Current.FindResource("SetRowDesc"),
+                Margin = new Thickness(0, 4, 0, 0),
+                Visibility = Visibility.Collapsed,
+            };
+            text.Children.Add(touched);
             if (!string.IsNullOrWhiteSpace(st.LastKnownVersion))
             {
                 text.Children.Add(new TextBlock
@@ -1245,30 +1305,16 @@ public partial class LauncherSettingsDialog : Window
             }
             Grid.SetColumn(text, 1);
             grid.Children.Add(text);
+            _ = PaintFingerprintAsync(st.InstallPath, head, touched);
 
-            bool behind = !string.IsNullOrWhiteSpace(st.LastKnownVersion)
-                && !string.IsNullOrWhiteSpace(st.LastKnownLatestVersion)
-                && !string.Equals(st.LastKnownVersion, st.LastKnownLatestVersion, StringComparison.OrdinalIgnoreCase);
-
-            FrameworkElement action;
-            if (behind)
+            var thisMod = profile;
+            var action = new Button
             {
-                action = new Button
-                {
-                    Content = Strings.Get("DlgSettingsModsUpdate"),
-                    Style = (Style)Application.Current.FindResource("SetActionButtonPrimary"),
-                };
-            }
-            else
-            {
-                // Dimmed text, not a disabled button: a disabled button invites a click
-                // that will not come.
-                action = new TextBlock
-                {
-                    Text = Strings.Get("DlgSettingsModsUpToDate"),
-                    Style = (Style)Application.Current.FindResource("SetActionQuiet"),
-                };
-            }
+                Content = Strings.Get("DlgSettingsModsOpen"),
+                Style = (Style)Application.Current.FindResource("ModActionButton"),
+            };
+            System.Windows.Automation.AutomationProperties.SetAutomationId(action, "ModSettings_" + profile.Id);
+            action.Click += (_, _) => OpenModSettings?.Invoke(thisMod);
             Grid.SetColumn(action, 2);
             grid.Children.Add(action);
 
@@ -1368,6 +1414,13 @@ public partial class LauncherSettingsDialog : Window
     /// section alone: it also needs the developer-mode switch on. Deciding both here, in
     /// one place, is what stops the two rules drifting apart.</para>
     /// </summary>
+    /// <summary>For <c>--open-settings=&lt;section&gt;</c>. An unknown name stays on General.</summary>
+    public void ShowSectionNamed(string section)
+    {
+        var known = section.ToLowerInvariant();
+        if (known is SectionInterface or SectionGames or SectionMods or SectionAdvanced) ShowSection(known);
+    }
+
     private void ShowSection(string section)
     {
         _activeSection = section;
@@ -1445,7 +1498,7 @@ public partial class LauncherSettingsDialog : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = LauncherConfig.PrivacyPolicyUrl,
                 UseShellExecute = true,
@@ -1510,7 +1563,7 @@ public partial class LauncherSettingsDialog : Window
         try
         {
             System.IO.Directory.CreateDirectory(AppPaths.DataDir);
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = AppPaths.DataDir,
                 UseShellExecute = true,
@@ -1783,136 +1836,6 @@ public partial class LauncherSettingsDialog : Window
     // -- Top-tab reorder (Interface section) --------------------------------
 
     /// <summary>
-    /// Rebuild the reorderable tab rows from <see cref="_tabOrder"/>.
-    /// Each row: a position number, the tab's display name, and ↑/↓
-    /// buttons (the first row's ↑ and last row's ↓ are disabled). The
-    /// first row carries a small "opens on launch" badge so the
-    /// order→startup link is obvious. Called on load and after every
-    /// move; cheap (3 rows) so a full re-render beats fiddly in-place
-    /// swaps.
-    /// </summary>
-    private void RenderTabOrderList()
-    {
-        // The two list-backed settings (tab order, extra translation repos) live in
-        // fields, not controls, so the routed-event handlers on the content root cannot
-        // see them change. Repainting the footer here covers every mutation, because
-        // every mutation re-renders. At load _openedWith is still null and this is a
-        // no-op, which is what keeps the snapshot from counting itself.
-        RefreshFooter();
-        TabOrderList.Children.Clear();
-
-        for (int i = 0; i < _tabOrder.Count; i++)
-        {
-            string id = _tabOrder[i];
-            bool isFirst = i == 0;
-            bool isLast = i == _tabOrder.Count - 1;
-
-            var row = new Border
-            {
-                Background = (Brush)FindResource("MpSurface"),
-                BorderBrush = (Brush)FindResource("MpRimSoft"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(12, 8, 8, 8),
-                Margin = new Thickness(0, 0, 0, 8),
-            };
-
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // position
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // name
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // up
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // down
-
-            var pos = new TextBlock
-            {
-                Text = (i + 1).ToString() + ".",
-                Foreground = (Brush)FindResource("MpTextMuted"),
-                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
-                FontWeight = FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0),
-            };
-            Grid.SetColumn(pos, 0);
-            grid.Children.Add(pos);
-
-            var nameStack = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            nameStack.Children.Add(new TextBlock
-            {
-                Text = TabDisplayName(id),
-                Foreground = (Brush)FindResource("MpTextPrimary"),
-                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
-                FontWeight = FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-            if (isFirst)
-            {
-                // "opens on launch" badge on whatever sits first.
-                nameStack.Children.Add(new TextBlock
-                {
-                    Text = "  " + Strings.Get("DlgLauncherSettingsTabOrderOpensFirst"),
-                    Foreground = (Brush)FindResource("MpActionText"),
-                    FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                    FontWeight = FontWeights.SemiBold,
-                    VerticalAlignment = VerticalAlignment.Center,
-                });
-            }
-            Grid.SetColumn(nameStack, 1);
-            grid.Children.Add(nameStack);
-
-            var upBtn = new Button
-            {
-                Style = (Style)FindResource("PropertyActionButton"),
-                Content = "↑",
-                MinWidth = 40,
-                Margin = new Thickness(6, 0, 0, 0),
-                IsEnabled = !isFirst,
-                Tag = i,
-            };
-            upBtn.Click += MoveTabUp_Click;
-            Grid.SetColumn(upBtn, 2);
-            grid.Children.Add(upBtn);
-
-            var downBtn = new Button
-            {
-                Style = (Style)FindResource("PropertyActionButton"),
-                Content = "↓",
-                MinWidth = 40,
-                Margin = new Thickness(6, 0, 0, 0),
-                IsEnabled = !isLast,
-                Tag = i,
-            };
-            downBtn.Click += MoveTabDown_Click;
-            Grid.SetColumn(downBtn, 3);
-            grid.Children.Add(downBtn);
-
-            row.Child = grid;
-            TabOrderList.Children.Add(row);
-        }
-    }
-
-    private void MoveTabUp_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: int i } && i > 0)
-        {
-            (_tabOrder[i - 1], _tabOrder[i]) = (_tabOrder[i], _tabOrder[i - 1]);
-            RenderTabOrderList();
-        }
-    }
-
-    private void MoveTabDown_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: int i } && i < _tabOrder.Count - 1)
-        {
-            (_tabOrder[i + 1], _tabOrder[i]) = (_tabOrder[i], _tabOrder[i + 1]);
-            RenderTabOrderList();
-        }
-    }
-
-    /// <summary>
     /// Re-reads the added translation sources from config. The Language tab of a mod's
     /// Properties edits the same lists; without this, this window's working copy would write
     /// the old list back over a source added there.
@@ -1929,12 +1852,12 @@ public partial class LauncherSettingsDialog : Window
     /// <summary>
     /// Rebuilds the added-translation-sources list from <see cref="_extraTxRepos"/> and
     /// <see cref="_extraTxIndexUrls"/> — one row per source with a ✕ remove button. Mirrors
-    /// <see cref="RenderTabOrderList"/> (manual code-behind rows, full re-render on mutate).
+    /// the appearance options (manual code-behind rows, full re-render on mutate).
     /// Shows a muted placeholder when the list is empty.
     /// </summary>
     private void RenderTxRepoList()
     {
-        RefreshFooter();  // see the note in RenderTabOrderList
+        RefreshFooter();  // the same reason as the other rows
         TxRepoList.Children.Clear();
 
         var rows = _extraTxRepos.Select(r => (Text: r, Full: r, IsLink: false))
@@ -2250,11 +2173,7 @@ public partial class LauncherSettingsDialog : Window
         // the offer, or the toggle would register a copy that launches nothing.
         if (wantBackground && !SelfInstallService.CanonicalLooksRunnable())
         {
-            var choice = MessageBox.Show(
-                Strings.Get("DlgSettingsBgInstallPromptBody"),
-                Strings.Get("DlgSettingsBgInstallPromptTitle"),
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (choice == MessageBoxResult.Yes)
+            if (new SelfInstallPromptDialog { Owner = this }.ShowDialog() == true)
             {
                 var (ok, msg) = SelfInstallService.Install();
                 if (!ok)
@@ -2393,6 +2312,7 @@ public partial class LauncherSettingsDialog : Window
         // refresh (ApplyTopTabOrder), and the FIRST entry becomes the
         // tab that opens on the next launch.
         _config.TopTabOrder = _tabOrder.ToArray();
+        WriteAppearance();
 
         // Radmin assistant mode — keep "Auto" as the fallback if for
         // some reason the combo had no selection (shouldn't happen
@@ -2456,7 +2376,7 @@ public partial class LauncherSettingsDialog : Window
         {
             _lastAppliedLanguage = Strings.Language;
             ApplyLanguage();
-            RenderTabOrderList();
+            LoadAppearance();
             RefreshFooter();
         }
     }

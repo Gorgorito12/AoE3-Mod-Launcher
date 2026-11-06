@@ -39,7 +39,7 @@ public static class FileReveal
             {
                 // /select wants ONE quoted absolute path after the comma. A Windows path
                 // cannot contain a quote, so there is nothing here to escape.
-                Process.Start(new ProcessStartInfo
+                Services.HarnessMode.Start(new ProcessStartInfo
                 {
                     FileName = "explorer.exe",
                     Arguments = $"/select,\"{Path.GetFullPath(path)}\"",
@@ -51,7 +51,7 @@ public static class FileReveal
             var folder = Path.GetDirectoryName(path);
             if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return false;
 
-            Process.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true });
+            Services.HarnessMode.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true });
             return true;
         }
         catch (Exception ex)

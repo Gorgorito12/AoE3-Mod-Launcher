@@ -531,6 +531,180 @@ picked **64b** and it is built exactly; 64a is not. 64b's 8 px / 6 px between ca
 Each folder holds a `README.md` (the design contract), zero or more `SPEC-*.md` (per-screen
 detail), an HTML prototype, and a `PROMPT.md` (the text used to kick the work off).
 
+## Where `design_base_launcher/` was deliberately not followed
+
+Screen 68 (Biblioteca unificada):
+
+- **The download pill names one operation.** "2 descargas" cannot happen: the launcher runs one
+  operation at a time. The dropdown keeps its one row.
+- **A copy is named after its folder**, not "Principal" or "Torneo": renaming was removed on purpose,
+  so "Renombrar o quitar en Ajustes" reads "Gestionar en Ajustes".
+- **The sort button is a real menu** (recent, name, status); the prototype only draws its caption.
+- **Uninstall keeps its own window** until screen 79 redoes it, not the veil in 68a.
+- **Only the tabs, the list and the search sit on real blur.** The chips and pills are small enough
+  that their 8-10 px blur cannot be told from their fill, and each would add to the clip.
+- **The chevron of the brand menu and the bell stay in the bar.** Both lead somewhere nothing else
+  does; screen 73 covers the bell.
+- **68b needs the catalog repository:** the proposed `accentColor`s are data in `mod.json`. The
+  normalisation (`ModAccent.Normalize`) is here and runs on whatever the catalog says.
+
+Screen 69 (Ajustes › Interfaz):
+
+- **The text size stays a dropdown with Automatic, 105 and 115 %.** The prototype draws 100, 110 and
+  125 % as a segmented control and defaults to 100, but Automatic is the launcher's default on
+  purpose (CLAUDE.md, "Design handoffs") and it is what keeps a laptop from the smallest type.
+
+Screen 74 (Dónde se instala):
+
+- **The copy box starts unticked.** The prototype draws it ticked, but that is a mock state, and a
+  row that arrives already agreeing to write into the player's profile is not a question. The
+  preview ticks it so the comparison matches.
+- **The hint keeps saying when the settings arrive** ("from the first launch" or "the second"). The
+  prototype's "the first time you open the mod, not when installing" is no longer how it works.
+- **No space line while the mod has no folder.** With no AoE3 the requirement is not known; the
+  prototype prints a fixed "11 GB".
+- **The glass over the image is denser, with no live blur.** `ModDialogChrome` raises `GlassPanel`
+  to .8 when the window has an image, because BASE forbids a live blur behind a panel.
+
+Screen 77 (Actualización del launcher):
+
+- **"Ready" lasts one launcher session.** `CleanupOldVersion` sweeps the staged file at every start,
+  because nothing proves a file left beside the exe is the one that was checked. After a restart the
+  pill says "Update" again and the download runs again.
+- **The pill keeps pulsing:** the handoff does not ask for that to stop.
+
+Screen 78 (Asistente de Radmin):
+
+- **The window closes itself on reaching the network only when the launcher opened it,** as it did.
+- **"Hide while the game runs" was only a suggestion and is not done.**
+
+Screen 73 (Publicar mi mod):
+
+- **Many labels and hints keep the existing text.** The README says the prototype deduced them from
+  their keys, and some are wrong: "Marcador" is a file or folder the mod ships, not "a text in your
+  version of the file", and "Idiomas cubiertos" is a list of covered files.
+- **The hint under the type and the mechanism does not change with the choice.** The existing ones
+  carry the "does it have UHC" test, which the prototype's lose.
+- **The list of what is missing stays the review's** (probe file, executable, description, icon),
+  plus the release check. It is deliberately not the prototype's id, name and repository.
+- **No minimise button:** it is modal, and a modal must not minimise away from its blocked owner.
+- **The release check accepts any `.zip`,** not only the prototype's `<id>-<tag>.zip`, as the
+  launcher does.
+
+Screen 79 (Menú de cuenta y Conectado):
+
+- **"Falta la red" comes from the assistant's probe, every 30 s while Radmin runs.** Where Radmin's
+  log cannot be read, the probe falls back to pinging a peer, so a false alarm is possible.
+
+Screen 71 (Ajustes del mod):
+
+- **No "Renombrar…" in a copy's menu and no custom copy names.** Renaming was removed because a
+  label that disagrees with the folder misleads, so a copy is named after its folder.
+- **No "Argumentos de inicio" row.** The launcher has no such setting to edit.
+- **A list of home cities appears on the METRÓPOLI row** when the player has more than one. The
+  prototype draws one, and a player has one per civilization played.
+- **A backup has no "Borrar" and every row restores the newest.** The launcher has no per-backup
+  restore or delete, and adding them is a separate decision.
+- **Catalog addons that are not downloaded yet keep "Descargar y activar"** rather than a switch, and
+  keep their "Página ↗" link: the switch would promise something that needs a download first.
+- **Statistics rows keep more than the prototype's:** the units of an AI game, and the deck saved
+  with a match. Durations of games against people are absent because no file records them.
+- **The "newer copy" notice compares versions only when both can be ordered.** The prototype compares
+  strings, which gets dates written day first wrong.
+
+Screen 72 (Ajustes del launcher):
+
+- **Kept although the prototype has no row:** "No molestar", "Descargar solo lo que cambió", "Buscar
+  actualizaciones al iniciar", "Abrir la página de novedades" and "Quitar de esta PC". All of them
+  work, and removing them would remove a feature.
+- **Hidden because nothing reads them:** "Canal", "Límite de descarga" and "Mostrar mi ELO".
+- **"HUELLA OK / DISTINTA" compares the three key files with the install's own baseline**
+  (`ModFingerprintCheck`, the same reading version recognition makes, so an applied translation does
+  not count as a touched file). No baseline or an unreadable file shows no chip: nothing is claimed.
+- **Installed mods show no size.** It would mean walking every mod's folder to open a settings page.
+- **"Ajustes del mod…" replaces the row's old "Actualizar"**, as the prototype draws, and the old
+  button had no click handler.
+- **"Reiniciar y actualizar" opens the update window and starts it**, because that window is what
+  checks the download, the hash and the signature.
+
+## Where `design_base_launcher_2/` was deliberately not followed
+
+Screen 97 (Inicio de sesión):
+
+- **The link's 15 minutes are the server's `expires_in`**, with 15 as the fallback; the prototype
+  only states the number.
+- **A refused sign-in has its own text.** The prototype knows "no answer" and "expired", but a server
+  that answers no is neither, so there is a third failure.
+- **The address breaks at `&`.** WPF has no break-anywhere.
+
+Screen 100 (Launcher en este PC):
+
+- **The window keeps sentences the code can back:** what the data folder holds, recordings still
+  waiting to upload, leftover registry keys, and the removal of auto-start and `wol-launcher://`.
+- **The space shortfall is computed**, not a fixed "50 MB".
+
+Screen 101 (Generar parche):
+
+- **The button is enabled once both zips are set**, so the amber mark on a missing tag can be reached.
+- **A path field has no ellipsis:** a `TextBox` cannot trim and its text is what gets read back.
+- **Cancel also removes a patch of that run** that had already finished writing.
+
+Screen 102 (Empaquetar traducción):
+
+- **"Faltan 3 cosas" is written with a digit**, and the mod picker is a `ComboBox` with a template.
+- **The preview shows no flag:** a pack declares a language, not a country.
+
+Screen 99 (Ver una partida):
+
+- **The chat stays read-only** until the server admits a supervisor. Four doors are shut, listed in
+  `.claude/rules/multiplayer.md`, so the window remains a preview offered only under the sample
+  tournaments.
+
+Screen 96 (Partida rápida):
+
+- **It is the room window, not a screen of its own.** Design 87, which the prototype builds on, is
+  not in this repository, so the search was added to the existing room.
+- **The footer shows a spinner**, not the prototype's dot, because it is what says the search is alive.
+  With Radmin not ready it stays beside the amber title, because the search goes on.
+- **Still the existing room header** (and "ANTES DE EMPEZAR", not "PARA QUE CUENTE"): both come from
+  design 87. The search itself matches 96a to 96d. Moving a player to an older room (96b) only adds a
+  chat line and was read in the code, not seen.
+
+Screen 98 (Estadísticas):
+
+- **The heading counts rated matches where the prototype prints the total** under "puntuadas". The
+  server's total carries no rated filter, and the page has shipped that mistake once.
+- **"Sin resultado leído" is worded only for `no_decided_result`.** Any other reason reads
+  "No contaron: <code>", the server's own identifier.
+- **The empty state says "muchas civilizaciones"**, with no count: nothing on this page knows it.
+- **The decks line quotes the real label**, "Compartir mis mazos…", not the prototype's "barajas".
+- **The cards keep their art, against the prototype, by the maintainer's decision:** number, picture
+  and name in Barajas, a small picture in the chips here and in the Profile. A card with no picture
+  shows only its text, never an empty square.
+- **The flags stayed in the tables and the civilization pills** for the same reason, and in the
+  Profile's Civilizations too. They come from the mod's art, so a civilization with none shows no flag.
+- **The cards "Cómo se mide", "Partidas que contaron" and the 2v2/3v3 split are gone**, because the
+  reference has none of them. What they said moved into notes and the activity card, except the
+  split, which no longer appears anywhere.
+- **The sub-tab bar and the search on it are unchanged:** they belong to design 87.
+
+Screen 95 (Perfil):
+
+- **`MinDecidedForPercent` stays 5.** The prototype's note says 6; the code and three other screens
+  say 5, and the note reads the constant.
+- **"Partidas" (recordings on this PC) lost its door here.** The reference has four sections and this
+  was a fifth. Those matches remain in the mod window's STATISTICS section.
+- **There is no "Cargar más partidas".** `GET /matches/history` has no paging, so nothing could load.
+- **The players of a match show no flag and the rating range only for the viewer:** a participant
+  carries a change, not a before and after.
+- **A deck chip shows the card's name only.** Real names often carry the number already ("2
+  Settlers"), so the prototype's "3 Colonos" would double it.
+- **Another mod's deck chip has no count until it is opened:** counting means reading its folder.
+- **The community comparison needs the Statistics page on the same mod.** Its figures are scoped to
+  that page's mod and the Profile does not fetch its own.
+- **The light under the portrait is omitted** and the age's colour is on the ring and the pill: a
+  blurred glow behind the picture would redraw with the badge beside it.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup

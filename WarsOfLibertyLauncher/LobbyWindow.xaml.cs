@@ -93,6 +93,12 @@ public partial class LobbyWindow : Window
     /// <summary>Pencil beside the room name — rename the room (host only).</summary>
     public Action? OnRenameRoom { get; set; }
 
+    /// <summary>"Stop searching" (design 96): the room is only a search, so nothing is asked.</summary>
+    public Action? OnStopQuickMatch { get; set; }
+
+    /// <summary>"Open the assistant" in the search's footer when Radmin is not ready.</summary>
+    public Action? OnQuickRadminHelp { get; set; }
+
     /// <summary>"Clear chat" — wipes the local chat log only.</summary>
     public Action? OnClearChat { get; set; }
 
@@ -222,6 +228,8 @@ public partial class LobbyWindow : Window
         Close();
     }
 
+    private void QuickStopButton_Click(object sender, RoutedEventArgs e) => OnStopQuickMatch?.Invoke();
+    private void QuickRadminButton_Click(object sender, RoutedEventArgs e) => OnQuickRadminHelp?.Invoke();
     private void LeaveRoomButton_Click(object sender, RoutedEventArgs e) => OnLeaveRoom?.Invoke();
     private void ReadyButton_Click(object sender, RoutedEventArgs e) => OnReady?.Invoke();
     private void StartButton_Click(object sender, RoutedEventArgs e) => OnStart?.Invoke();

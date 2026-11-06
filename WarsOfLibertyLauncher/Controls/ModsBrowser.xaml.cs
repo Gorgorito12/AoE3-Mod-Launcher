@@ -1302,7 +1302,7 @@ public partial class ModsBrowser : UserControl
         return button;
     }
 
-    private string DefaultLinkLabel(ModLinkType type) => type switch
+    internal string DefaultLinkLabel(ModLinkType type) => type switch
     {
         ModLinkType.Website => LinkTypeWebsiteLabel,
         ModLinkType.Discord => LinkTypeDiscordLabel,

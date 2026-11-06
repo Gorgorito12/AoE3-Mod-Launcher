@@ -1869,6 +1869,27 @@ public class LauncherConfig
     [JsonPropertyName("textScale")]
     public string TextScale { get; set; } = DefaultTextScale;
 
+    /// <summary>How much of the mod's image shows through the panels:
+    /// <c>solid</c>, <c>mid</c> or <c>max</c>. See <see cref="Services.GlassTheme"/>.</summary>
+    [JsonPropertyName("glassLevel")]
+    public string GlassLevel { get; set; } = Services.GlassTheme.Medium;
+
+    /// <summary>The mod's cover behind the Library; off leaves only the glow of its colour.</summary>
+    [JsonPropertyName("showModImage")]
+    public bool ShowModImage { get; set; } = true;
+
+    /// <summary>The Library takes the selected mod's colour; off keeps the launcher's blue.</summary>
+    [JsonPropertyName("useModColor")]
+    public bool UseModColor { get; set; } = true;
+
+    /// <summary><c>auto</c>, <c>full</c> or <c>low</c>. Auto follows Windows' animation setting.</summary>
+    [JsonPropertyName("effectsMode")]
+    public string EffectsMode { get; set; } = "auto";
+
+    /// <summary><c>auto</c>, <c>open</c> or <c>closed</c>. Auto folds the list below 1400 px.</summary>
+    [JsonPropertyName("modListMode")]
+    public string ModListMode { get; set; } = "auto";
+
     /// <summary>
     /// True once the user has actually picked a text size in Settings. Until then this config
     /// FOLLOWS <see cref="DefaultTextScale"/>, whatever value happens to be sitting in

@@ -4,7 +4,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Launcher settings"
-        Height="600" Width="820"
+        Height="720" Width="1120"
         MinHeight="540" MinWidth="760"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
@@ -87,8 +87,11 @@
         <!-- =========================================================
              HEADER — shared global title bar (close-only sheet).
              ========================================================= -->
+        <Rectangle Grid.RowSpan="3" Fill="{DynamicResource WindowGlowTop}" IsHitTestVisible="False"/>
+        <Rectangle Grid.RowSpan="3" Fill="{DynamicResource WindowGlowBottom}" IsHitTestVisible="False"/>
         <controls:TitleBar Grid.Row="0"
                            x:Name="TitleBarControl"
+                           TitleIcon="pack://application:,,,/Aoe3ModLauncher;component/AppIcon.png"
                            ShowMinimize="True"
                            ShowMaximize="True"
                            ShowClose="True"/>
@@ -129,24 +132,26 @@
                  SHRINK below the reference on a short-labelled language. -->
             <Border Grid.Column="0"
                     MinWidth="{StaticResource SetRailWidth}"
-                    Background="{DynamicResource MpRowHighlight}"
-                    BorderBrush="{DynamicResource MpRimFaint}"
-                    BorderThickness="0,0,1,0">
+                    Margin="16,16,0,16"
+                    CornerRadius="14"
+                    Background="{DynamicResource GlassPanel}"
+                    BorderBrush="{DynamicResource GlassRim}"
+                    BorderThickness="1">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Margin="10,14,10,0">
+                    <StackPanel Grid.Row="0" Margin="8,8,8,0">
                         <!-- Settings search. Chrome-less TextBox inside a Border that
                              owns the inset — one of the two shapes Inputs.xaml
                              documents; mixing them is what once left a placeholder a
                              pixel off its own caret. The placeholder carries the SAME
                              FontSize as the box or the text jumps when you type. -->
-                        <Border Style="{StaticResource SetSearchShell}" Margin="2,0,2,12">
+                        <Border Style="{StaticResource SetSearchShell}" Margin="0,0,0,12">
                             <DockPanel>
-                                <TextBlock Text="&#xE721;"
+                                <TextBlock Text="&#xE721;" RenderTransformOrigin=".5,.5" RenderTransform="-1 0 0 1 0 0"
                                            DockPanel.Dock="Left"
                                            FontFamily="Segoe MDL2 Assets"
                                            FontSize="{DynamicResource SetControlSize}"
@@ -228,9 +233,9 @@
                          answers the first question of any bug report without the
                          user having to find an About box. -->
                     <Border Grid.Row="1"
-                            Margin="12,18,12,14"
-                            Padding="0,14,0,0"
-                            BorderBrush="{DynamicResource MpRimFaint}"
+                            Margin="14,18,14,12"
+                            Padding="0,12,0,0"
+                            BorderBrush="{DynamicResource WindowFooterRule}"
                             BorderThickness="0,1,0,0">
                         <StackPanel>
                             <TextBlock x:Name="RailProductText"
@@ -277,10 +282,11 @@
             <ScrollViewer Grid.Column="1"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <Grid Margin="{StaticResource SetContentPadding}">
+                <Grid Margin="20,20,14,20">
                     <StackPanel>
                     <TextBlock x:Name="SectionTitleText"
-                               Style="{StaticResource SetSectionTitle}"/>
+                               Style="{StaticResource SetSectionTitle}"
+                               Margin="0,0,0,16"/>
                     <!-- Shown INSTEAD of every section when a search matches nothing anywhere.
                          Without it the query simply emptied the page and left the reader looking
                          at a heading over nothing, with no way to tell a search that found no
@@ -331,8 +337,15 @@
                                         <TextBlock x:Name="LanguageLabel" Style="{StaticResource SetRowTitle}"/>
                                         <TextBlock x:Name="LanguageInstantHint" Style="{StaticResource SetRowDesc}"/>
                                     </StackPanel>
+                                    <Border Style="{StaticResource SetSegment}" Grid.Column="1">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton x:Name="LanguageEnOption" GroupName="Language" Content="English" Style="{StaticResource SetSegmentItem}" Checked="LanguageOption_Checked"/>
+                                            <RadioButton x:Name="LanguageEsOption" GroupName="Language" Content="Español" Style="{StaticResource SetSegmentItem}" Checked="LanguageOption_Checked"/>
+                                        </StackPanel>
+                                    </Border>
                                     <ComboBox Grid.Column="1"
                                               x:Name="LanguageCombo"
+                                              Visibility="Collapsed"
                                               Style="{StaticResource SetCompactCombo}">
                                         <ComboBoxItem Content="English" Tag="en"/>
                                         <ComboBoxItem Content="Español" Tag="es"/>
@@ -343,8 +356,7 @@
 
                         <!-- ================= STARTUP ================= -->
                         <TextBlock x:Name="GroupStartupLabel"
-                                   Style="{StaticResource SetGroupLabel}"
-                                   Margin="0,20,0,9"/>
+                                   Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
                                 <Border Style="{StaticResource SetRow}">
@@ -696,7 +708,7 @@
                         <TextBlock x:Name="GroupRankingLabel" Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
-                                <Border Style="{StaticResource SetRow}">
+                                <Border Visibility="Collapsed" Style="{StaticResource SetRow}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -740,8 +752,110 @@
                          which is exactly what the handoff asks of it: "it does not change
                          content, it only inherits the bounded width". -->
                     <StackPanel x:Name="InterfacePanel" Visibility="Collapsed">
-                        <Border Style="{StaticResource SetCard}" Margin="0,4,0,0">
-                            <Border Style="{StaticResource SetActionRowLast}">
+                        <Grid>
+                            <TextBlock x:Name="AppearanceGroupLabel" Style="{StaticResource SetGroupLabel}"
+                                       Margin="4,0,4,10" VerticalAlignment="Bottom"/>
+                            <Button x:Name="ResetAppearanceButton"
+                                    Style="{StaticResource SetActionButtonSm}"
+                                    HorizontalAlignment="Right"
+                                    Margin="0,0,0,8"
+                                    Click="ResetAppearanceButton_Click"/>
+                        </Grid>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                            <Border Style="{StaticResource SetRow}">
+                                <controls:AppearancePreview x:Name="AppearancePreviewPanel"/>
+                            </Border>
+                            <Border Style="{StaticResource SetRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="GlassTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="GlassHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource SetSegment}" Grid.Column="1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="GlassSolidOption" GroupName="Glass" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                                <RadioButton x:Name="GlassMediumOption" GroupName="Glass" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                                <RadioButton x:Name="GlassMaximumOption" GroupName="Glass" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                            </StackPanel>
+                                        </Border>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SetRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="ModImageTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="ModImageHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <ToggleButton x:Name="ShowModImageToggle" Grid.Column="1" Style="{StaticResource SetToggle}" Checked="AppearanceOption_Changed" Unchecked="AppearanceOption_Changed"/>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SetRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="ModColorTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="ModColorHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <ToggleButton x:Name="UseModColorToggle" Grid.Column="1" Style="{StaticResource SetToggle}" Checked="AppearanceOption_Changed" Unchecked="AppearanceOption_Changed"/>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SetRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="EffectsTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="EffectsHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource SetSegment}" Grid.Column="1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="EffectsAutoOption" GroupName="Effects" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                                <RadioButton x:Name="EffectsFullOption" GroupName="Effects" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                                <RadioButton x:Name="EffectsLowOption" GroupName="Effects" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                            </StackPanel>
+                                        </Border>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SetRowLast}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="ModListTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="ModListHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource SetSegment}" Grid.Column="1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="ModListAutoOption" GroupName="ModList" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                                <RadioButton x:Name="ModListOpenOption" GroupName="ModList" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                                <RadioButton x:Name="ModListClosedOption" GroupName="ModList" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                            </StackPanel>
+                                        </Border>
+                                </Grid>
+                            </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock x:Name="TextAndTabsLabel" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                            <Border Style="{StaticResource SetActionRow}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -762,19 +876,25 @@
                                               SelectionChanged="TextScaleCombo_SelectionChanged"/>
                                 </Grid>
                             </Border>
-                        </Border>
-
-                        <TextBlock x:Name="TabOrderLabel" Style="{StaticResource SetGroupLabel}"/>
-                        <Border Style="{StaticResource SetCard}">
                             <Border Style="{StaticResource SetRowLast}">
-                                <StackPanel>
-                                    <TextBlock x:Name="TabOrderHint" Style="{StaticResource SetRowDesc}" Margin="0"/>
-                                    <!-- One row per nav tab (built by RenderTabOrderList):
-                                         position badge + tab name + up/down. -->
-                                    <StackPanel x:Name="TabOrderList"
-                                                Margin="0,10,0,0"/>
-                                </StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="StartTabTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="StartTabHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource SetSegment}" Grid.Column="1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="StartMultiplayerOption" GroupName="StartTab" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                                <RadioButton x:Name="StartLibraryOption" GroupName="StartTab" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                            </StackPanel>
+                                        </Border>
+                                </Grid>
                             </Border>
+                            </StackPanel>
                         </Border>
                     </StackPanel>
 
@@ -793,9 +913,32 @@
                          mean "skip the check".
                          =================================================== -->
                     <StackPanel x:Name="UpdatesPanel" Visibility="Collapsed">
+                        <!-- Design 72: the launcher's own update, above everything about mods. -->
+                        <Border x:Name="LauncherUpdateBanner" Style="{StaticResource SetCard}"
+                                BorderBrush="{DynamicResource MpActionRimSoft}"
+                                Margin="0,8,0,0" Visibility="Collapsed">
+                            <Border Style="{StaticResource SetRowLast}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,24,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="LauncherUpdateTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="LauncherUpdateHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <Button x:Name="LauncherUpdateNotesBtn" Grid.Column="1"
+                                            Style="{StaticResource ModActionButton}"
+                                            Margin="0,0,8,0" Click="LauncherUpdateNotesBtn_Click"/>
+                                    <Button x:Name="LauncherUpdateRestartBtn" Grid.Column="2"
+                                            Style="{StaticResource WindowPrimaryButton}"
+                                            Click="LauncherUpdateRestartBtn_Click"/>
+                                </Grid>
+                            </Border>
+                        </Border>
                         <TextBlock x:Name="UpdatesGroupLabel"
-                                   Style="{StaticResource SetGroupLabel}"
-                                   Margin="0,20,0,9"/>
+                                   Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
                                 <Border Style="{StaticResource SetRow}">
@@ -840,7 +983,7 @@
                                     </Grid>
                                 </Border>
 
-                                <Border Style="{StaticResource SetActionRow}">
+                                <Border Visibility="Collapsed" Style="{StaticResource SetActionRow}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -864,7 +1007,7 @@
                                     </Grid>
                                 </Border>
 
-                                <Border Style="{StaticResource SetActionRow}">
+                                <Border Visibility="Collapsed" Style="{StaticResource SetActionRow}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -915,19 +1058,19 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- INSTALLED MODS. Version comes from the per-mod state the config
-                             already holds; the reference also shows a size and a fingerprint,
-                             and neither exists without walking the disk or hashing files, so
-                             the line ships without them rather than with invented ones. -->
+                        <!-- INSTALLED MODS. Version comes from the per-mod state the config already
+                             holds and the fingerprint chip arrives after the list is painted. The
+                             reference also shows a size, which would mean walking every mod's
+                             folder, so the line ships without it. -->
                         <Grid Margin="0,18,0,9">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" x:Name="InstalledModsLabel"
                                        Style="{StaticResource SetGroupLabel}"
                                        Margin="0"/>
-                            <TextBlock Grid.Column="1" x:Name="InstalledModsCount"
+                            <TextBlock Grid.Column="1" x:Name="InstalledModsCount" Margin="10,0,0,0"
                                        Style="{StaticResource SetMonoValue}"/>
                         </Grid>
                         <Border Style="{StaticResource SetCard}">
@@ -1095,8 +1238,7 @@
                     </StackPanel>
                     <StackPanel x:Name="MaintenancePanel" Visibility="Collapsed">
                         <TextBlock x:Name="MaintenanceGroupLabel"
-                                   Style="{StaticResource SetGroupLabel}"
-                                   Margin="0,20,0,9"/>
+                                   Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
                                 <Border Style="{StaticResource SetActionRow}">
@@ -1557,9 +1699,10 @@
              than print a promise the code did not keep.
              ========================================================= -->
         <Border Grid.Row="2"
-                Background="{DynamicResource MpRowHighlight}"
-                Padding="18,11"
-                BorderBrush="{DynamicResource MpRimSoft}"
+                Background="{DynamicResource WindowFooter}"
+                Height="52"
+                Padding="16,0"
+                BorderBrush="{DynamicResource WindowFooterRule}"
                 BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -1582,9 +1725,7 @@
                              VerticalAlignment="Center"
                              Margin="0,0,12,0"/>
                     <TextBlock x:Name="UnsavedText"
-                               Foreground="{DynamicResource MpCautionText}"
-                               FontSize="{DynamicResource SetDescSize}"
-                               FontWeight="Medium"
+                               FontSize="{DynamicResource SetRowDescSize}"
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis"/>
                 </StackPanel>

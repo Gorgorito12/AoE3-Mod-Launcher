@@ -1056,7 +1056,7 @@ public class UpdateService
             {
                 try
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    Services.HarnessMode.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = dl.PostUpdatePage,
                         UseShellExecute = true
@@ -1663,7 +1663,7 @@ public class UpdateService
     /// paths). Used to re-stamp the manifest baseline after a patch so it matches
     /// exactly what recognition later compares against.
     /// </summary>
-    private static async Task<Dictionary<string, string>> ComputeRecognitionKeyHashesAsync(
+    internal static async Task<Dictionary<string, string>> ComputeRecognitionKeyHashesAsync(
         string installPath, CancellationToken ct)
     {
         var proto = await HashService.ComputeMd5Async(Path.Combine(installPath, ProtoRelativePath), ct);

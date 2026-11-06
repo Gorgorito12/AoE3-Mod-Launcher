@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t76" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t76" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">76</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Exclusión del antivirus, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Mismo chasis que Dónde se instala (74) y Desinstalar (75): franja con la imagen del mod, resplandor de su color y barra de título teñida. Sigue midiendo 560 de ancho y su alto se ajusta al contenido. Se mantiene lo del turno 48: un solo diálogo con dos modos, los pasos numerados, las rutas cortadas en las barras y, en el modo bloqueado, sin casilla ni «Cancelar». Cambios: el escudo usa en los dos modos el naranja fijo de error de la base (#F4900C), porque el rojo queda para lo destructivo; en el modo bloqueado, la etiqueta del archivo también va en naranja. Los botones secundarios son sólidos y «Continuar la instalación» va en el color del mod. Cada ruta lleva su propio «Copiar», porque Windows añade las exclusiones de una en una y «Copiar las dos» pegaba las dos rutas en un campo que solo admite una. «Abrir ↗» pasa al paso 1, que es el que hace por ti, así que los pasos quedan en tres; si Seguridad de Windows no se abre, el texto del paso dice dónde ir. Al final, una línea para quien usa otro antivirus. «Copiar» muestra «✓ Copiado» durante 1,4 s y la casilla se puede marcar.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <div id="76a" style="display:flex;flex-direction:column;gap:10px;width:560px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#76a" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">76a</a><span>Antes de instalar. Wars of Liberty declara AI3\wolai.upl como falso positivo conocido.</span></div><dc-import name="AntivirusDialog" modo="Antes de instalar" transparencia="{{ tr }}" hint-size="560px,720px"></dc-import></div>
+    <div id="76b" style="display:flex;flex-direction:column;gap:10px;width:560px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#76b" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">76b</a><span>Después de que Defender quitó el archivo. Sin casilla ni «Cancelar»: solo «Cerrar».</span></div><dc-import name="AntivirusDialog" modo="Bloqueado" transparencia="{{ tr }}" hint-size="560px,700px"></dc-import></div>
+    <div id="76c" style="display:flex;flex-direction:column;gap:10px;width:560px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#76c" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">76c</a><span>Bloqueado antes de elegir la carpeta del mod: una sola ruta.</span></div><dc-import name="AntivirusDialog" modo="Bloqueado" sin-carpeta="{{ true }}" transparencia="{{ tr }}" hint-size="560px,640px"></dc-import></div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { tr: this.props.transparencia ?? 'Media' };
+  }
+}
+</script>
+</body>
+</html>

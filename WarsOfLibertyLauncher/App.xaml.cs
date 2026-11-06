@@ -250,6 +250,8 @@ public partial class App : System.Windows.Application
         // very person a bundle is for — was destroying their own evidence. A duplicate now
         // APPENDS its one line to the running launcher's log instead.
         Services.DiagnosticLog.Reset();
+        if (Services.HarnessMode.Active)
+            Services.DiagnosticLog.Write($"HARNESS active: data in {Services.AppPaths.DataDir}");
         if (_instanceMutex == null)
             Services.DiagnosticLog.Write("SingleInstance: no mutex (see the previous log); running without the single-instance guard.");
 
@@ -290,13 +292,15 @@ public partial class App : System.Windows.Application
         // AoE3 save folder junctioned to a redirect-mod's folder (e.g. the launcher
         // was killed while King's Return was up), restore the real vanilla folder.
         // A redirect-mod re-applies its junction when it next launches. Best-effort.
-        try { Services.AoE3UserDataRedirect.EnsureDefault(); } catch { /* never block startup */ }
+        if (!Services.HarnessMode.Active)
+            try { Services.AoE3UserDataRedirect.EnsureDefault(); } catch { /* never block startup */ }
 
         // Self-heal the setuppath redirect: if a previous session was killed while a
         // stock-exe replacement mod (e.g. Struggle of Indonesia) was up, the real
         // bin\ folder may still be junctioned to the mod's folder — restore it so the
         // base game / other mods load vanilla content. Best-effort.
-        try { Services.AoE3SetupPathRedirect.EnsureDefault(); } catch { /* never block startup */ }
+        if (!Services.HarnessMode.Active)
+            try { Services.AoE3SetupPathRedirect.EnsureDefault(); } catch { /* never block startup */ }
 
         // Primary instance: stash a cold-start deep link for MainWindow to pick up
         // once its UI/session are ready, and start listening for links forwarded by
@@ -324,7 +328,18 @@ public partial class App : System.Windows.Application
         // invokes the button instead of really clicking it, so a screenshot script cannot
         // reach Settings at all without this.
         OpenSettings = Array.Exists(e.Args, a =>
-            string.Equals(a, "--open-settings", StringComparison.OrdinalIgnoreCase));
+            a.StartsWith("--open-settings", StringComparison.OrdinalIgnoreCase));
+        foreach (var a in e.Args)
+        {
+            if (a.StartsWith("--open-settings=", StringComparison.OrdinalIgnoreCase))
+                OpenSettingsSection = a["--open-settings=".Length..];
+            else if (a.StartsWith("--open-tab=", StringComparison.OrdinalIgnoreCase))
+                OpenTab = a["--open-tab=".Length..];
+            else if (a.StartsWith("--preview-library=", StringComparison.OrdinalIgnoreCase) && Services.HarnessMode.Active)
+                PreviewLibrary = a["--preview-library=".Length..];
+            else if (a.StartsWith("--preview-dialog=", StringComparison.OrdinalIgnoreCase) && Services.HarnessMode.Active)
+                PreviewDialog = a["--preview-dialog=".Length..];
+        }
 
         // The per-mod window, same reason.
         OpenModSettings = Array.Exists(e.Args, a =>
@@ -437,6 +452,7 @@ public partial class App : System.Windows.Application
         // Services/TextScale.cs for why that is not UiScale, and for why the XAML had to
         // move to DynamicResource before it could reach anything.
         ApplyTextScale();
+        ApplyGlassLevel();
 
         // The auto-update's progress window would otherwise BECOME Application.MainWindow -
         // WPF assigns that in the Window CONSTRUCTOR, not at Show() - and under
@@ -549,6 +565,8 @@ public partial class App : System.Windows.Application
         // non-converging layout at startup would sit, with nothing else naming it.
         Services.DiagnosticLog.Time("startup: MainWindow.Show", () =>
         {
+            // A test launch must not take the keyboard from whoever is working on this PC.
+            if (Services.HarnessMode.Active) main.ShowActivated = false;
             using (Services.TrayStartParking.EnterWpfShow(main)) main.Show();
         });
 
@@ -578,6 +596,25 @@ public partial class App : System.Windows.Application
     /// doing all of that twice, once for one string, is how a startup path acquires a
     /// second opinion about the config.</para>
     /// </summary>
+    /// <summary>Read from the raw JSON for the reason <see cref="ApplyTextScale"/> gives: nothing
+    /// may run the config's migrations this early. A missing or bad value is the default.</summary>
+    private static void ApplyGlassLevel()
+    {
+        string? level = null;
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Services.AppPaths.ConfigFile));
+            if (document.RootElement.TryGetProperty("glassLevel", out var value)
+                && value.ValueKind == System.Text.Json.JsonValueKind.String)
+                level = value.GetString();
+        }
+        catch (Exception)
+        {
+            // No config yet, or an unreadable one: the default level.
+        }
+        Services.GlassTheme.Apply(level);
+    }
+
     private static void ApplyTextScale()
     {
         try
@@ -709,10 +746,25 @@ public partial class App : System.Windows.Application
     /// screenshotted) without a real invitation arriving. Inert otherwise.</summary>
     public static bool PreviewToasts { get; private set; }
 
+    /// <summary><c>--preview-library=updating|installing|stopped</c>, in the test harness only: paints
+    /// the Library's download states on the selected mod with nothing being downloaded.</summary>
+    public static string? PreviewLibrary { get; private set; }
+
+    /// <summary><c>--preview-dialog=name:variant</c>, in the test harness only: one state of a
+    /// dialog that otherwise needs a server, a failure or a long wait to reach.</summary>
+    public static string? PreviewDialog { get; private set; }
+
     /// <summary>True when <c>--open-settings</c> was passed: MainWindow opens the
     /// launcher settings window from Loaded, so the screen can be captured by a script.
     /// Inert otherwise.</summary>
     public static bool OpenSettings { get; private set; }
+
+    /// <summary><c>--open-settings=general|interface|games|mods|advanced</c>.</summary>
+    public static string? OpenSettingsSection { get; private set; }
+
+    /// <summary><c>--open-tab=library|workshop|multiplayer</c>: the launcher otherwise opens on
+    /// the first tab of the player's saved order, and two tabs have no other route.</summary>
+    public static string? OpenTab { get; private set; }
 
     /// <summary>True when <c>--open-mod-settings</c> was passed. Same screenshot-script
     /// reason as <see cref="OpenSettings"/>.</summary>
@@ -851,8 +903,9 @@ public partial class App : System.Windows.Application
     // Local\ = per-session single-instance (a deep link fired from a browser runs
     // in the SAME session, so it reaches this instance). Global\ would wrongly
     // block a second Windows user on a shared PC.
-    private const string MutexName = @"Local\WarsOfLibertyLauncher.SingleInstance.v1";
-    private const string PipeName = "WarsOfLibertyLauncher.DeepLink.v1";
+    // The suffix is empty for every launcher a player runs. See Services/HarnessMode.
+    private static string MutexName => @"Local\WarsOfLibertyLauncher.SingleInstance.v1" + Services.HarnessMode.InstanceSuffix;
+    private static string PipeName => "WarsOfLibertyLauncher.DeepLink.v1" + Services.HarnessMode.InstanceSuffix;
     // Pipe sentinel: "bring the running window to the front" (a plain relaunch,
     // no deep link). The underscores make it an invalid lobby id, so it can never
     // collide with a real join payload in DeepLinkPipeLoop.
@@ -1082,6 +1135,9 @@ public partial class App : System.Windows.Application
     private static void OnAnyWindowLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not Window w) return;
+
+        // Loaded runs before WPF's own ShowWindow, so this still decides how the window appears.
+        if (Services.HarnessMode.Active) w.ShowActivated = false;
 
         // -- HiDPI crispness (always on) -- a no-op for a window that already called
         // PrepareBeforeShow, since the values are the same.

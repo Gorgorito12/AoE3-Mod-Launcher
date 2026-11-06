@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}@keyframes siSpin{to{transform:rotate(360deg)}}</style></helmet>
+<section id="t97" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t97" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">97</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Inicio de sesión con Discord, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Es GitHubLoginDialog (el archivo conserva el nombre del proveedor anterior), rehecho como diálogo global: neutros, barra de título #0b1422 con la transparencia del usuario, resplandor azul y «Abrir navegador» en el azul de acción global. Mantiene lo que ya se arregló en 13e y está en main: el enlace entero y seleccionable, el aviso de seguridad antes del botón, la espera en su propia fila y un solo botón sólido. Lo nuevo: el estado mientras el servidor prepara el enlace (hoy los botones salen apagados sin decir por qué), los fallos con su motivo en una caja y «Reintentar» (hoy el mensaje técnico sale en rosa y solo queda «Cerrar»), y el enlace caducado como caso propio. El panel del código (97e) solo existe para un servidor que devuelva user_code; Discord no lo manda.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="5">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px;width:520px">
+        <div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <div style="width:520px;box-sizing:border-box;border-radius:10px;overflow:hidden;color-scheme:dark;box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08);background:radial-gradient(520px 340px at 88% 0%, rgba(47,127,224,.22), transparent 70%), radial-gradient(420px 300px at 0% 100%, rgba(47,127,224,.08), transparent 70%), #0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+          <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ f.barBg }};backdrop-filter:blur({{ f.barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:700 14px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">Inicio de sesión con Discord</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">✕</span></div>
+          <div style="padding:24px 22px 20px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font:700 21px/1.25 'Source Serif 4',Georgia,serif;color:#ffffff;text-wrap:pretty">{{ f.headline }}</span>
+              <span style="font:400 13px/1.55 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty">{{ f.lead }}</span>
+            </div>
+            <sc-if value="{{ f.showCaution }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:8px;background:rgba(244,144,12,.1);box-shadow:inset 0 0 0 1px rgba(244,144,12,.45)"><span style="flex:none;width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#F4900C;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#0f1c2e">!</span><span style="padding-top:1px;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">Comprueba que el enlace empieza por <b style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#ffffff">discord.com</b> y que se abre en un navegador que reconoces. Si no, cópialo y pégalo en el tuyo.</span></div></sc-if>
+            <sc-if value="{{ f.showLink }}" hint-placeholder-val="{{ true }}"><div style="padding:10px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#61779a">ENLACE DE AUTORIZACIÓN</span><div style="flex:1"></div><sc-if value="{{ f.hasUrl }}" hint-placeholder-val="{{ true }}"><span onClick="{{ f.copy }}" style-hover="background:rgba(255,255,255,.14)" style="cursor:pointer;height:22px;box-sizing:border-box;padding:0 9px;border-radius:11px;display:flex;align-items:center;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ f.copyC }}">{{ f.copyT }}</span></sc-if></div>
+              <sc-if value="{{ f.hasUrl }}" hint-placeholder-val="{{ true }}"><span style="font:400 12.5px/1.5 Consolas,ui-monospace,monospace;color:#dce7f5;overflow-wrap:anywhere;user-select:all"><span style="color:#ffffff;font-weight:600">https://discord.com</span>/oauth2/authorize?response_type=code&amp;client_id=1289443820574511&amp;scope=identify&amp;state=8f21c4d0&amp;redirect_uri=https%3A%2F%2Flobby.warsofliberty.net%2Fauth%2Fcallback</span></sc-if>
+              <sc-if value="{{ f.loading }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:6px;padding:2px 0"><span style="width:92%;height:10px;border-radius:5px;background:rgba(255,255,255,.08)"></span><span style="width:64%;height:10px;border-radius:5px;background:rgba(255,255,255,.06)"></span></div></sc-if>
+            </div></sc-if>
+            <sc-if value="{{ f.showCode }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:8px"><span style="font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty">Cuando te lo pida, escribe este código:</span><div style="padding:12px 14px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);display:flex;align-items:center;gap:12px"><span style="flex:1;font:700 30px/1 Consolas,ui-monospace,monospace;letter-spacing:.12em;color:#ffffff;user-select:all">WDJB-MJHT</span><span style-hover="background:#213758" style="cursor:pointer;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Copiar código</span></div></div></sc-if>
+            <sc-if value="{{ f.hasErr }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:rgba(244,144,12,.1);box-shadow:inset 0 0 0 1px rgba(244,144,12,.45)"><span style="flex:none;width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#F4900C;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#0f1c2e">!</span><div style="min-width:0;display:flex;flex-direction:column;gap:5px;padding-top:1px"><span style="font:600 13.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#F5BD76">{{ f.errT }}</span><span style="font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#dcc39a;text-wrap:pretty">{{ f.errS }}</span><sc-if value="{{ f.hasDetail }}" hint-placeholder-val="{{ false }}"><span style="margin-top:3px;font:400 11.5px/1.4 Consolas,ui-monospace,monospace;color:#a8bcd2;overflow-wrap:anywhere">{{ f.detail }}</span></sc-if></div></div></sc-if>
+            <sc-if value="{{ f.hasStatus }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding-top:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)">{{ f.spinner }}<span style="flex:1;font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ f.status }}</span></div></sc-if>
+            <span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">Al iniciar sesión aceptas la <span style="cursor:pointer;font-weight:600;color:#8cbcf5">política de privacidad</span>.</span>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+              <sc-for list="{{ f.btns }}" as="b" hint-placeholder-count="2"><span onClick="{{ b.act }}" title="{{ b.tip }}" style="cursor:{{ b.cur }};min-width:96px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ b.bg }};box-shadow:{{ b.sh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.c }};white-space:nowrap;opacity:{{ b.op }}">{{ b.t }}</span></sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:34px;max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><b>Para Claude Code.</b> GitHubLoginDialog.xaml(.cs) sigue con 520 de ancho y alto al contenido. Mientras <code>StartSignInAsync</code> no vuelve (97a), la caja del enlace lleva dos líneas provisionales y el estado dice «Preparando el enlace…»; «Abrir navegador» y «Copiar» siguen apagados, pero ahora se ve por qué. «Copiar» pasa dentro de la caja del enlace como chip (sustituye a <code>CopyLinkButton</code>; conserva el «Copiado ✓» de 1,4 s de <code>MpSignInCopyLinkDone</code>) y el pie queda con dos botones: «Cancelar» sólido #1a2c48 y «Abrir navegador» azul. El dominio del enlace va en negrita blanca para que la comprobación del aviso sea de un vistazo. En los fallos (<code>LobbyApiException</code> y el catch general), el mensaje deja de salir en <code>Brushes.Salmon</code> sobre <code>StatusText</code>: va en la caja ámbar con un título en lenguaje llano, el detalle técnico debajo en Consolas (lo mismo que hoy se escribe en <code>DiagnosticLog</code>) y, en el pie, «Cerrar» más «Reintentar», que repite <code>OnLoaded</code>. La caducidad del enlace necesita distinguirse del resto de errores: hoy el servidor la devuelve como una <code>LobbyApiException</code> más; hay que mirar su <code>Code</code> (p. ej. <code>expired_token</code>) para mostrar 97d. El panel del código (97e, <code>UserCodeBorder</code>) se queda tal cual para un servidor que mande <code>user_code</code>. La frase de privacidad va en su propia línea, encima de los botones, para que el pie no dependa del largo del texto en cada idioma. Al autorizar no hace falta aviso flotante: la ventana se cierra sola y el chip de cuenta de la barra superior ya pasa a mostrar al jugador conectado. La espera dice cuánto dura el enlace («sirve 10 minutos») si <code>DeviceFlowStart</code> trae <code>expires_in</code>; si no lo trae, se quita la frase antes que inventar el número. Textos nuevos: Preparando el enlace… · El enlace sirve {0} minutos · No se pudo preparar el inicio de sesión · El enlace caducó · Reintentar; los demás son los <code>MpSignIn*</code> que ya existen.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { copied: false, log: '' };
+  componentWillUnmount() { clearTimeout(this.to); }
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const lvl = this.props.transparencia ?? 'Media';
+    const barBg = 'rgba(11,20,34,' + (({ 'Sólida': 1, 'Media': .42, 'Máxima': .3 })[lvl] ?? .42) + ')', barBlur = lvl === 'Sólida' ? '0px' : '10px';
+    const spinner = React.createElement('span', { style: { flex: 'none', width: 14, height: 14, boxSizing: 'border-box', borderRadius: 7, border: '2px solid rgba(130,175,255,.25)', borderTopColor: '#55ACEE', animation: 'siSpin .9s linear infinite' } });
+    const dot = c => React.createElement('span', { style: { flex: 'none', width: 8, height: 8, borderRadius: 4, background: c } });
+    const SEC = { bg: '#1a2c48', sh: 'inset 0 0 0 1px rgba(130,175,255,.22)', c: '#dce7f5' }, PRI = { bg: '#2f7fe0', sh: '0 6px 18px rgba(47,127,224,.35)', c: '#ffffff' };
+    const btn = (t, k, o) => ({ t, ...k, cur: o && o.off ? 'default' : 'pointer', op: o && o.off ? '.45' : '1', act: o && o.act, tip: o && o.tip || '' });
+    const copy = () => { set({ copied: true }); clearTimeout(this.to); this.to = setTimeout(() => this.setState({ copied: false }), 1400); };
+    const build = c => {
+      const k = c.kind, loading = k === 'cargando', err = k === 'error' || k === 'caducado';
+      let headline = 'Autoriza al launcher en Discord', lead = 'Se abre en tu navegador. Cuando pulses «Autorizar», esta ventana se cierra sola y quedas conectado.';
+      let status = 'Esperando tu autorización en el navegador. El enlace sirve 10 minutos.', sp = spinner, btns = [btn('Cancelar', SEC), btn('Abrir navegador', PRI, { act: c.open })];
+      let errT = '', errS = '', detail = '';
+      if (loading) { status = 'Preparando el enlace…'; btns = [btn('Cancelar', SEC), btn('Abrir navegador', PRI, { off: true, tip: 'Disponible cuando el enlace esté listo' })]; }
+      if (k === 'error') { headline = 'No se pudo preparar el inicio de sesión'; lead = 'El servidor de salas no respondió. Comprueba tu conexión y vuelve a intentarlo.'; errT = 'Sin respuesta del servidor'; errS = 'No se pudo pedir el enlace de autorización.'; detail = 'HttpRequestException: No such host is known. || SocketException: No such host is known. (lobby.warsofliberty.net:443)'; btns = [btn('Cerrar', SEC), btn('Reintentar', PRI)]; }
+      if (k === 'caducado') { headline = 'El enlace caducó'; lead = 'Pasaron más de 10 minutos sin autorizar. Pide un enlace nuevo: el anterior ya no sirve.'; errT = 'Enlace caducado'; errS = 'Si ya pulsaste «Autorizar» en el navegador, fue tarde: Discord lo descartó.'; btns = [btn('Cerrar', SEC), btn('Pedir otro enlace', PRI)]; }
+      if (k === 'codigo') { lead = 'Se abre en tu navegador. Escribe el código cuando te lo pida; esta ventana se cierra sola al terminar.'; }
+      return {
+        id: c.id, href: '#' + c.id, label: c.label, barBg, barBlur, headline, lead,
+        showCaution: !err, showLink: !err, hasUrl: !loading, loading, showCode: k === 'codigo',
+        copyT: c.copied ? 'Copiado ✓' : 'Copiar', copyC: c.copied ? '#7fe0a8' : '#dce7f5', copy: c.copy,
+        hasErr: err, errT, errS, hasDetail: !!detail, detail,
+        hasStatus: !err, spinner: sp, status, btns
+      };
+    };
+    const frames = [
+      build({ id: '97a', kind: 'cargando', label: 'Mientras el servidor prepara el enlace (StartSignInAsync): la caja lleva dos líneas provisionales, el estado dice «Preparando el enlace…» y «Abrir navegador» está apagado con su motivo al pasar el ratón. Hoy los botones salen apagados sin explicación.' }),
+      build({ id: '97b', kind: 'esperando', copied: s.copied, copy, open: () => set({ log: 'Se abre el navegador con el enlace.' }), label: 'Interactivo. El enlace listo: entero, seleccionable, con el dominio en negrita para cotejarlo con el aviso, y «Copiar» como chip de la caja (pulsa: «Copiado ✓» 1,4 s). Debajo, la espera con su rueda en su propia fila. Un solo botón sólido: «Abrir navegador».' }),
+      build({ id: '97c', kind: 'error', label: 'El servidor no respondió al pedir el enlace (LobbyApiException o fallo de red): título en lenguaje llano, el detalle técnico debajo en Consolas, y en el pie «Cerrar» y «Reintentar». Hoy el detalle sale en rosa sobre la línea de estado y solo queda «Cerrar».' }),
+      build({ id: '97d', kind: 'caducado', label: 'El enlace caducó sin autorizar: caso propio, separado del error, con «Pedir otro enlace». Hace falta que el servidor lo devuelva con un código reconocible.' }),
+      build({ id: '97e', kind: 'codigo', label: 'Solo si el servidor manda user_code (flujo de código de dispositivo, el de GitHub): el código grande en Consolas con «Copiar código». Discord no lo usa; se mantiene por si cambia el proveedor.' })
+    ];
+    return { frames };
+  }
+}
+</script>
+</body>
+</html>

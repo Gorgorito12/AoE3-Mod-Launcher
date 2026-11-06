@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:560px;box-sizing:border-box;border-radius:10px;overflow:hidden;color-scheme:dark;box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08);background:{{ bg }};display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ barBg }};backdrop-filter:blur({{ barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:{{ icon }}"></span><span style="font:700 14px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">Desinstalar</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">✕</span></div>
+  <div style="padding:24px 22px 20px;display:flex;flex-direction:column;gap:14px">
+    <sc-if value="{{ ok }}" hint-placeholder-val="{{ true }}">
+      <span style="padding:0 2px 4px;font:700 22px/1.25 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 2px 12px rgba(0,0,0,.45);text-wrap:pretty">{{ question }}</span>
+      <div style="border-radius:12px;overflow:hidden;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(200,74,74,.6)">
+        <div style="padding:13px 16px;display:flex;flex-direction:column;gap:6px">
+          <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#f0a6a6">{{ label }}</span>
+          <span style="font:400 13px/1.45 Consolas,ui-monospace,monospace;color:#f0f5fb;overflow-wrap:anywhere">{{ path }}</span>
+          <span style="font:400 12px/1.3 Consolas,ui-monospace,monospace;color:#a8bcd2">{{ counts }}</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:9px;padding:10px 16px;background:rgba(79,214,138,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)"><span style="flex:none;font:700 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#4fd68a">✓</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty">{{ safe }}</span></div>
+      </div>
+      <span style="padding:6px 4px 0;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">TAMBIÉN QUITAR</span>
+      <div style="border-radius:12px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);overflow:hidden">
+        <sc-for list="{{ opts }}" as="o" hint-placeholder-count="2">
+          <div onClick="{{ o.flip }}" style="cursor:pointer;display:grid;grid-template-columns:16px minmax(0,1fr);gap:12px;align-items:start;padding:12px 16px;box-shadow:{{ o.line }}">
+            <span style="width:16px;height:16px;box-sizing:border-box;margin-top:1px;border-radius:4px;display:flex;align-items:center;justify-content:center;background:{{ o.bg }};box-shadow:inset 0 0 0 1px {{ o.ring }};font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ onAcc }}">{{ o.tick }}</span>
+            <div style="min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 13.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ o.t }}</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ o.d }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ refused }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:30px minmax(0,1fr);gap:13px;align-items:start">
+        <span style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(200,74,74,.22);box-shadow:inset 0 0 0 1px rgba(200,74,74,.5);font:700 15px/1 'Segoe UI',system-ui,sans-serif;color:#f0a6a6">!</span>
+        <div style="min-width:0;display:flex;flex-direction:column;gap:7px"><span style="font:700 19px/1.25 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 2px 12px rgba(0,0,0,.45);text-wrap:pretty">{{ rTitle }}</span><span style="font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-shadow:0 1px 8px rgba(0,0,0,.5);text-wrap:pretty">{{ r1 }}<span style="font:400 12.5px/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ rCode }}</span>{{ r2 }}<b style="font-weight:600;color:#ffffff">No se borró nada.</b></span></div>
+      </div>
+      <div style="padding:10px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);font:400 12.5px/1.45 Consolas,ui-monospace,monospace;color:#dce7f5;overflow-wrap:anywhere">{{ path }}</div>
+      <span style="font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">Si la carpeta es otra, usa «Quitar de la lista» en Ajustes del mod › Archivos y vuelve a añadir la correcta.</span>
+    </sc-if>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:6px">
+      <sc-if value="{{ ok }}" hint-placeholder-val="{{ true }}">
+        <span style="cursor:pointer;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cancelar</span>
+        <span style="cursor:pointer;min-width:136px;box-sizing:border-box;height:32px;padding:0 16px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#c84a4a;box-shadow:0 4px 14px rgba(200,74,74,.35);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;white-space:nowrap">Desinstalar</span>
+      </sc-if>
+      <sc-if value="{{ refused }}" hint-placeholder-val="{{ false }}"><span style="cursor:pointer;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cerrar</span></sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:600,&quot;height&quot;:620},&quot;mod&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Wars of Liberty&quot;,&quot;Hundred Days&quot;,&quot;Improvement Mod&quot;],&quot;default&quot;:&quot;Wars of Liberty&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;caso&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Copia en uso&quot;,&quot;Otra copia&quot;,&quot;Única copia&quot;,&quot;Encima de tu AoE3&quot;,&quot;No es el mod&quot;,&quot;Contiene AoE3&quot;,&quot;Nada que desinstalar&quot;],&quot;default&quot;:&quot;Copia en uso&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { sc: true, rg: true, ud: false };
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const M = { 'Wars of Liberty': { id: 'wol', acc: '#c8102e', hero: true }, 'Hundred Days': { id: 'hundred-days', acc: '#8f9a2e', hero: true }, 'Improvement Mod': { id: 'improvement-mod', acc: '#3a8cd9', hero: false } };
+    const name = M[this.props.mod] ? this.props.mod : 'Wars of Liberty', m = M[name], acc = m.acc;
+    const caso = this.props.caso ?? 'Copia en uso';
+    const lvl = this.props.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px' }, 'Media': { bg: 'rgba(10,19,33,.5)', blur: '16px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px' } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px' };
+    const rgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+    const hexA = (h, a) => 'rgba(' + rgb(h).join(',') + ',' + a + ')';
+    const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const Lm = h => { const [r, g, b] = rgb(h); return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b); };
+    const onAcc = 1.05 / (Lm(acc) + 0.05) >= (Lm(acc) + 0.05) / (Lm('#0f1c2e') + 0.05) ? '#ffffff' : '#0f1c2e';
+    const brk = p => p.replace(/\\/g, '\\\u200B');
+    const AOE = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Age Of Empires 3';
+    const C = {
+      'Copia en uso': { path: 'C:\\Program Files (x86)\\Wars of Liberty', q: '¿Desinstalar la copia «Principal» de ' + name + '?', label: 'SE BORRA ESTA CARPETA', counts: '65.057 archivos · 4.130 carpetas', safe: 'Ni Age of Empires III ni tus otras copias se tocan.', ud: true },
+      'Otra copia': { path: 'D:\\Juegos\\WoL Torneo', q: '¿Desinstalar la copia «Torneo» de ' + name + '?', label: 'SE BORRA ESTA CARPETA', counts: '64.980 archivos · 4.122 carpetas', safe: 'Ni Age of Empires III ni tus otras copias se tocan.', ud: false },
+      'Única copia': { path: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Age Of Empires 3\\' + name, q: '¿Desinstalar ' + name + '?', label: 'SE BORRA ESTA CARPETA', counts: '41.326 archivos · 2.871 carpetas', safe: 'Age of Empires III no se toca.', ud: true },
+      'Encima de tu AoE3': { path: AOE + '\\bin', q: '¿Desinstalar ' + name + '?', label: 'SE QUITAN LOS ARCHIVOS DEL MOD', counts: '1.204 archivos del mod', safe: 'La carpeta de Age of Empires III se queda: solo se quitan los archivos del mod.', ud: false },
+      'No es el mod': { refused: true, path: 'D:\\Juegos\\Age Of Empires 3 - copia', t: 'Esta carpeta no parece ' + name, r1: 'Falta ', code: 'art\\zulushield\\', r2: ', que tiene toda instalación de ' + name + '. ' },
+      'Contiene AoE3': { refused: true, path: AOE, t: 'Esta carpeta tiene Age of Empires III', r1: 'Contiene el juego base, y el launcher nunca lo borra. ', code: '', r2: '' },
+      'Nada que desinstalar': { refused: true, path: 'E:\\Mods\\' + name, t: 'No queda nada que desinstalar', r1: 'La carpeta ya no existe o no le queda ningún archivo del mod. ', code: '', r2: '' }
+    };
+    const c = C[caso] || C['Copia en uso'];
+    const box = (on, flip) => ({ flip, bg: on ? acc : 'transparent', ring: on ? acc : 'rgba(130,175,255,.45)', tick: on ? '✓' : '' });
+    const opts = [
+      { t: 'Accesos directos', d: 'Los del Escritorio y el menú Inicio que abren esta copia.', ...box(s.sc, () => set({ sc: !s.sc })) },
+      { t: 'Entrada en Aplicaciones de Windows', d: 'Su línea en Configuración › Aplicaciones.', ...box(s.rg, () => set({ rg: !s.rg })) },
+      ...(c.ud ? [{ t: 'Partidas guardadas y perfiles', d: 'Borra Documentos\\My Games\\' + name + '. Déjalo sin marcar para conservarlos si vuelves a instalarlo.', ...box(s.ud, () => set({ ud: !s.ud })) }] : [])
+    ].map((o, i, a) => ({ ...o, line: i < a.length - 1 ? 'inset 0 -1px 0 rgba(255,255,255,.07)' : 'none' }));
+    return {
+      bg: 'radial-gradient(520px 340px at 88% 0%, ' + hexA(acc, .3) + ', transparent 70%), linear-gradient(180deg, rgba(15,28,46,.28) 0px, rgba(15,28,46,.8) 180px, #0f1c2e 300px)' + (m.hero ? ', url(mods/' + m.id + '/hero.jpg) center top/100% auto no-repeat' : '') + ', #0f1c2e',
+      barBg: 'rgba(' + rgb(acc).map((v, i) => Math.round(v * .22 + [11, 20, 34][i] * .78)).join(',') + ',' + (({ 'Sólida': 1, 'Media': .42, 'Máxima': .3 })[lvl] ?? .42) + ')', barBlur: lvl === 'Sólida' ? '0px' : '10px',
+      icon: 'url(mods/' + m.id + '/icon.png) center/contain no-repeat', G, onAcc,
+      ok: !c.refused, refused: !!c.refused, question: c.q || '', label: c.label || '', path: brk(c.path), counts: c.counts || '', safe: c.safe || '', opts,
+      rTitle: c.t || '', r1: c.r1 || '', rCode: c.code || '', r2: c.r2 || ''
+    };
+  }
+}
+</script>
+</body>
+</html>

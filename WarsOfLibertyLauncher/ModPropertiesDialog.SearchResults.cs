@@ -36,7 +36,7 @@ public partial class ModPropertiesDialog
     /// <summary>One thing the list can offer.</summary>
     internal sealed record SearchTarget(
         FrameworkElement Element,
-        Button Section,
+        Button? Section,
         string TitleKey,
         string Glyph,
         string GroupKey,
@@ -50,10 +50,11 @@ public partial class ModPropertiesDialog
 
     private IReadOnlyList<SearchTarget> SearchTargets() => new[]
     {
-        new SearchTarget(ShareDiagnosticsBtn, TabLocalFilesBtn, "ModPropShareDiagnostics", "⇪",
-            "ModSearchGroupTrouble", DiagStepBlock, 9, IsDiagnostics: true),
-        new SearchTarget(ViewLogsBtn, TabLocalFilesBtn, "ModPropViewLogs", "▤",
-            "ModSearchGroupTrouble", ViewLogsBtn, 7, IsDiagnostics: false),
+        // Both live in the rail, which every section shows, so neither has a section to open.
+        new SearchTarget(RailDiagBox, null, "ModPropShareDiagnostics", "⇪",
+            "ModSearchGroupTrouble", RailDiagCard, 10, IsDiagnostics: true),
+        new SearchTarget(RailLogsBtn, null, "ModPropViewLogs", "▤",
+            "ModSearchGroupTrouble", RailLogsBtn, 7, IsDiagnostics: false),
     };
 
     /// <summary>
@@ -70,7 +71,7 @@ public partial class ModPropertiesDialog
         var hits = new List<SearchHit>();
         foreach (var t in SearchTargets())
         {
-            if (t.Section.Visibility != Visibility.Visible) continue;
+            if (t.Section is { Visibility: not Visibility.Visible }) continue;
             var words = SectionSearch.GetKeywords(t.Element);
             if (!SectionSearch.Matches(words, q)) continue;
             hits.Add(new SearchHit(t, SectionSearch.MatchingKeyword(words, q)));
@@ -236,8 +237,8 @@ public partial class ModPropertiesDialog
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 2, 0, 0),
         };
-        path.Inlines.Add(new Run(
-            SentenceCase(LabelOf(t.Section)?.Text) + " › " + Strings.Get(t.GroupKey)));
+        path.Inlines.Add(new Run((t.Section == null ? "" : SentenceCase(LabelOf(t.Section)?.Text) + " › ")
+            + Strings.Get(t.GroupKey)));
         if (hit.Keyword is { Length: > 0 } word)
         {
             path.Inlines.Add(new Run(" · "));
@@ -351,7 +352,7 @@ public partial class ModPropertiesDialog
     {
         CloseSearchResults();
         var t = hit.Target;
-        if (t.Section.Visibility == Visibility.Visible
+        if (t.Section is { Visibility: Visibility.Visible }
             && !Equals(t.Section.Tag, "active"))
         {
             var section = SearchSections().FirstOrDefault(s => ReferenceEquals(PanelButton(s.Panel), t.Section));

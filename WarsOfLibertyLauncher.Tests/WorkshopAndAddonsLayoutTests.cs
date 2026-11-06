@@ -127,10 +127,10 @@ public class WorkshopAndAddonsLayoutTests
             "ModsBrowserUpdateMechManual",
             "AddonsGroupCatalog", "AddonsGroupCatalogHint",
             "AddonsGroupImported", "AddonsGroupImportedHint",
-            "AddonBadgeActive", "AddonBadgeCosmetic", "AddonBadgeMultiplayerRisk",
+            "AddonBadgeCosmetic", "AddonBadgeMultiplayerRisk",
             "AddonBadgeBlocked", "AddonBadgeInstaller",
             "AddonFileCount", "AddonXmbCount", "AddonDataCount",
-            "AddonInstallerNote", "AddonEnableAnyway", "AddonsFooterNote",
+            "AddonInstallerNote", "AddonEnableAnyway",
         };
 
         var previous = Strings.Language;

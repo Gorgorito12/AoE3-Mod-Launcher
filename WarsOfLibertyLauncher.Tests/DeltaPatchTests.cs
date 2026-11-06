@@ -238,6 +238,69 @@ public class DeltaPatchTests : IDisposable
     // ---------------------------------------------------------------- generator round-trip
 
     [Fact]
+    public async Task GeneratePatchAsync_ACancelLeavesNothingInTheOutputFolder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "patchgen-cancel-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var oldZip = Path.Combine(root, "old.zip");
+            var newZip = Path.Combine(root, "new.zip");
+            foreach (var zipPath in new[] { oldZip, newZip })
+            {
+                using var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+                using var writer = new StreamWriter(zip.CreateEntry("data/a.txt").Open());
+                writer.Write(zipPath);
+            }
+            var output = Path.Combine(root, "out");
+            using var cts = new CancellationTokenSource();
+            var report = new Progress<DeltaPatchService.PatchGenerationProgress>();
+            cts.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                DeltaPatchService.GeneratePatchAsync(oldZip, newZip, "v1", "v2", output, cts.Token, report));
+
+            Assert.Empty(Directory.GetFiles(output));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public async Task GeneratePatchAsync_ReportsEachStageAndRefusesAnEntryOutsideTheFolder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "patchgen-slip-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var good = Path.Combine(root, "good.zip");
+            var bad = Path.Combine(root, "bad.zip");
+            using (var zip = ZipFile.Open(good, ZipArchiveMode.Create))
+            using (var writer = new StreamWriter(zip.CreateEntry("a.txt").Open())) writer.Write("x");
+            using (var zip = ZipFile.Open(bad, ZipArchiveMode.Create))
+            using (var writer = new StreamWriter(zip.CreateEntry("../evil.txt").Open())) writer.Write("x");
+
+            await Assert.ThrowsAsync<IOException>(() =>
+                DeltaPatchService.GeneratePatchAsync(bad, good, "v1", "v2", Path.Combine(root, "out")));
+            Assert.False(File.Exists(Path.Combine(root, "evil.txt")));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData(DeltaPatchService.PatchGenerationPhase.ComparingOld, 0, 10, 0, 1, 0.0)]
+    [InlineData(DeltaPatchService.PatchGenerationPhase.Writing, 10, 10, 0, 1, 1.0)]
+    [InlineData(DeltaPatchService.PatchGenerationPhase.Writing, 10, 10, 0, 2, 0.5)]
+    [InlineData(DeltaPatchService.PatchGenerationPhase.ComparingOld, 0, 10, 1, 2, 0.5)]
+    public void ProgressRunsAcrossBothPatches(
+        DeltaPatchService.PatchGenerationPhase phase, int done, int total, int index, int patches, double expected)
+        => Assert.Equal(expected, new DeltaPatchService.PatchGenerationProgress(phase, done, total).Overall(index, patches), 3);
+
+    [Fact]
+    public void AStageWithNothingToDoCountsAsDone()
+        => Assert.Equal(1.0, new DeltaPatchService.PatchGenerationProgress(
+            DeltaPatchService.PatchGenerationPhase.Writing, 0, 0).Overall(0, 1), 3);
+
+    [Fact]
     public async Task GeneratePatchAsync_ProducesPatchWithOnlyChangedFiles_AndDescriptor()
     {
         var oldDir = NewTempDir();

@@ -37,20 +37,12 @@ public partial class MultiplayerTab
         }
     }
 
-    /// <summary>
-    /// The mode's card, with the banner over it when that ladder has a refund not yet dismissed.
-    /// The card itself is unchanged — the banner sits above it, as 55n draws — so everything that
-    /// finds the card by its tag still finds it.
-    /// </summary>
-    private FrameworkElement WithRefundBanner(Border card, bool team)
+    /// <summary>The notice at the top of the Summary until it is closed (55n).</summary>
+    private FrameworkElement? BuildRefundNotice()
     {
-        var refunds = RefundView.Unseen(_cachedStanding?.Refunds, team);
-        if (refunds.Count == 0) return card;
-
-        var stack = new StackPanel();
-        stack.Children.Add(BuildRefundBanner(refunds, preview: _renderingPreviewProfile));
-        stack.Children.Add(card);
-        return stack;
+        var all = new List<RefundNotice>();
+        foreach (var team in new[] { false, true }) all.AddRange(RefundView.Unseen(_cachedStanding?.Refunds, team));
+        return all.Count == 0 ? null : BuildRefundBanner(all, preview: _renderingPreviewProfile);
     }
 
     private Border BuildRefundBanner(IReadOnlyList<RefundNotice> refunds, bool preview)
@@ -59,58 +51,81 @@ public partial class MultiplayerTab
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var glyph = new TextBlock
+        var glyph = new Border
         {
-            Text = "↺",
-            FontSize = (double)Application.Current.FindResource("MpRefundGlyphSize"),
-            FontWeight = FontWeights.Bold,
-            Foreground = (Brush)Application.Current.FindResource("MpOk"),
-            VerticalAlignment = VerticalAlignment.Center,
+            Width = 34,
+            Height = 34,
+            CornerRadius = new CornerRadius(9),
             Margin = new Thickness(0, 0, 12, 0),
+            Child = new TextBlock
+            {
+                Text = "\u21BA",
+                FontSize = (double)Application.Current.FindResource("MpRefundGlyphSize"),
+                FontWeight = FontWeights.Bold,
+                Foreground = (Brush)Application.Current.FindResource("MpOk"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
         };
-        Grid.SetColumn(glyph, 0);
+        glyph.SetResourceReference(Border.BackgroundProperty, "ProfileGainFill");
         grid.Children.Add(glyph);
 
         var text = new TextBlock
         {
             Text = RefundView.Text(refunds),
-            FontSize = (double)Application.Current.FindResource("MpBodySize"),
-            Foreground = (Brush)Application.Current.FindResource("MpRefundText"),
+            FontSize = (double)Application.Current.FindResource("StatsBodySize"),
+            Foreground = (Brush)Application.Current.FindResource("StatsFigure"),
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 12, 0),
         };
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
 
-        var ok = new Button
-        {
-            Content = Strings.Get("MpRefundDismiss"),
-            Style = (Style)Application.Current.FindResource("SetActionButton"),
-            Width = double.NaN,
-            Height = 28,
-            Padding = new Thickness(12, 0, 12, 0),
-            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-            Margin = new Thickness(12, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        ok.Click += (_, _) => DismissRefunds(refunds, preview);
-        Grid.SetColumn(ok, 2);
-        grid.Children.Add(ok);
+        // What came back, and to which ladder.
+        int points = refunds.Sum(r => r.Points);
+        var worth = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var figure = StatsMono("+" + points, "ProfileRefundFigureSize", "StatsWin", FontWeights.SemiBold);
+        figure.HorizontalAlignment = HorizontalAlignment.Right;
+        worth.Children.Add(figure);
+        var ladder = StatsText("ELO " + ModeName(refunds[0].IsTeam), "StatsDeckCountSize",
+                               "StatsProse", FontWeights.Normal);
+        ladder.HorizontalAlignment = HorizontalAlignment.Right;
+        ladder.Margin = new Thickness(0, 4, 0, 0);
+        worth.Children.Add(ladder);
+        Grid.SetColumn(worth, 2);
+        grid.Children.Add(worth);
 
-        return new Border
+        var close = new Button
+        {
+            Content = "\u2715",
+            Width = 28,
+            Height = 28,
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = TooltipHelper.Wrap(Strings.Get("MpRefundDismiss")),
+        };
+        close.SetResourceReference(FrameworkElement.StyleProperty, "MpIconButton");
+        close.Click += (_, _) => DismissRefunds(refunds, preview);
+        System.Windows.Automation.AutomationProperties.SetName(close, Strings.Get("MpRefundDismiss"));
+        Grid.SetColumn(close, 3);
+        grid.Children.Add(close);
+
+        var banner = new Border
         {
             Child = grid,
             Tag = RefundBannerTag,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(14, 11, 14, 11),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusPanel"),
-            Background = (Brush)Application.Current.FindResource("MpRefundBg"),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRefundRim"),
+            Margin = new Thickness(0, 0, 0, 14),
+            Padding = new Thickness(12, 10, 10, 10),
+            CornerRadius = new CornerRadius(12),
             BorderThickness = new Thickness(1),
         };
+        banner.SetResourceReference(Border.BackgroundProperty, "MpRefundBg");
+        banner.SetResourceReference(Border.BorderBrushProperty, "MpRefundRim");
+        return banner;
     }
-
     /// <summary>
     /// "Got it": the banner goes at once — the refunds are marked on the objects the banner was
     /// built from, so this works the same for the sample profile — and the server is told, except

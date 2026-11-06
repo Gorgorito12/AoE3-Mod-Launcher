@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}select option{background:#12213a;color:#dce7f5}</style></helmet>
+<section id="t74" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t74" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">74</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Dónde se instala, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Es un diálogo de un mod, así que lleva su imagen como franja arriba que se funde con el fondo, el resplandor de su color, su icono en la barra de título y su color en «Instalar» y en la casilla. Sigue midiendo 700 de ancho y su alto se ajusta al contenido. Se mantiene lo del turno 19: las rutas se muestran como raíz, tramo del medio recortado y última carpeta (al pulsar el campo se ve la ruta entera), «↳ dentro de la carpeta de arriba» solo cuando la carpeta del mod va dentro de la de AoE3, y lo que necesita y el espacio que tienes en una sola línea. Novedades: «Instalar» se desactiva con el motivo si falta el AoE3 o no hay espacio, y los botones secundarios son sólidos. En cada diálogo funcionan los «Cambiar…» (el de abajo alterna con D:\Juegos), la casilla y «Buscar en mis discos…».</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <div id="74a" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#74a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">74a</a><span>Normal · Wars of Liberty. AoE3 detectado, el mod dentro de su carpeta y hay espacio.</span></div><dc-import name="DondeInstala" mod="Wars of Liberty" caso="Normal" transparencia="{{ tr }}" hint-size="700px,560px"></dc-import></div>
+    <div id="74b" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#74b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">74b</a><span>Sin espacio · Hundred Days. Línea en ámbar e «Instalar» desactivado. Al cambiar a D: vuelve a caber.</span></div><dc-import name="DondeInstala" mod="Hundred Days" caso="Sin espacio" transparencia="{{ tr }}" hint-size="700px,560px"></dc-import></div>
+    <div id="74c" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#74c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">74c</a><span>AoE3 no encontrado · Improvement Mod, que no tiene imagen: solo el resplandor de su color.</span></div><dc-import name="DondeInstala" mod="Improvement Mod" caso="AoE3 no encontrado" transparencia="{{ tr }}" hint-size="700px,600px"></dc-import></div>
+    <div id="74d" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#74d" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">74d</a><span>Encima de tu AoE3. Sin carpeta de origen: el mod va en tu propia instalación.</span></div><dc-import name="DondeInstala" mod="Wars of Liberty" caso="Encima de tu AoE3" transparencia="{{ tr }}" hint-size="700px,480px"></dc-import></div>
+    <div id="74e" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#74e" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">74e</a><span>Primer mod · Hundred Days. No hay otro mod del que copiar ajustes, así que esa fila no aparece.</span></div><dc-import name="DondeInstala" mod="Hundred Days" caso="Primer mod" transparencia="{{ tr }}" hint-size="700px,460px"></dc-import></div>
+    <div id="74f" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#74f" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">74f</a><span>AoE3 sin abrir nunca. Aviso en ámbar que no bloquea la instalación.</span></div><dc-import name="DondeInstala" mod="Wars of Liberty" caso="AoE3 sin abrir" transparencia="{{ tr }}" hint-size="700px,620px"></dc-import></div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { tr: this.props.transparencia ?? 'Media' };
+  }
+}
+</script>
+</body>
+</html>

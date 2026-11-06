@@ -78,6 +78,7 @@ internal static class AppCompatLayerService
     /// </summary>
     public static bool Remove(string? exePath)
     {
+        if (HarnessMode.Block($"remove compat layer {exePath}")) return false;
         if (string.IsNullOrWhiteSpace(exePath)) return false;
         try
         {

@@ -99,14 +99,6 @@ public partial class MainWindow
 
         // The nav row: 42 high, the tabs flush left with their own 18-px padding.
         MainNav.SetResourceReference(HeightProperty, compact ? "MainNavHeightCompact" : "MainNavHeight");
-        if (compact) MainNavGrid.Margin = new Thickness(0, 0, 12, 0);
-        else MainNavGrid.SetResourceReference(MarginProperty, "MainNavPadding");
-
-        var tabStyle = (Style)FindResource(compact ? "NavTabButtonCompact" : "NavTabButton");
-        TopTabPlay.Style = tabStyle;
-        TopTabMods.Style = tabStyle;
-        TopTabMultiplayer.Style = tabStyle;
-
         // The capsule: 26 high in the 42-px row, 30 in the 54-px one.
         ConnectionChip.SetResourceReference(HeightProperty,
             compact ? "ChromeCapsuleHeightCompact" : "ChromeCapsuleHeight");
@@ -180,7 +172,7 @@ public partial class MainWindow
         {
             Background = (Brush)FindResource("ChromePopupBg"),
             BorderBrush = (Brush)FindResource("MenuBorder"),
-            BorderThickness = new Thickness(2),
+            BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
             Padding = new Thickness(10),
             MinWidth = 240,
@@ -210,77 +202,80 @@ public partial class MainWindow
         popup.Opened += (_, _) =>
             popup.HorizontalOffset = ConnectionChip.ActualWidth - rim.ActualWidth * UiScale.Current;
 
-        // The status, as the capsule says it — a menu that opens without restating what it is
-        // about reads as a list of unrelated commands.
-        var status = new TextBlock
+        var outOfNetwork = _radminOutOfNetwork;
+        var heading = new Grid { Margin = new Thickness(10, 10, 10, 8) };
+        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        heading.Children.Add(new System.Windows.Shapes.Ellipse
         {
-            Text = ConnectionChipStatus.Text,
-            Foreground = (Brush)FindResource("ChromeConnectedText"),
+            Width = 8,
+            Height = 8,
+            Fill = ConnectionChipDot.Fill,
+            Margin = new Thickness(0, 5, 9, 0),
+            VerticalAlignment = VerticalAlignment.Top,
+        });
+        var headingText = new StackPanel();
+        headingText.Children.Add(new TextBlock
+        {
+            Text = Strings.Get(outOfNetwork ? "MpChipHeadNoNetwork" : "MpChipHeadConnected"),
+            Foreground = ConnectionChipStatus.Foreground,
             FontFamily = (FontFamily)FindResource("BodyFont"),
-            FontSize = (double)FindResource("FontSizeCaption"),
+            FontSize = (double)FindResource("DialogBodySize"),
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(8, 4, 8, 2),
-        };
-        content.Children.Add(status);
+            TextWrapping = TextWrapping.Wrap,
+        });
+        if (outOfNetwork)
+        {
+            headingText.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("MpChipNoNetworkBody"),
+                Foreground = (Brush)FindResource("WindowSoftText"),
+                FontFamily = (FontFamily)FindResource("BodyFont"),
+                FontSize = (double)FindResource("SetControlSize"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 6, 0, 0),
+            });
+        }
+        Grid.SetColumn(headingText, 1);
+        heading.Children.Add(headingText);
+        content.Children.Add(heading);
         content.Children.Add(BuildSettingsDivider());
 
-        // Resolved NOW, when the dropdown opens — one adapter walk per click instead of one on
+        // The help leads when it is what the player needs next.
+        var helpFirst = outOfNetwork && MultiplayerView?.IsRadminAssistantAvailable == true;
+        if (helpFirst)
+        {
+            content.Children.Add(BuildHelpRow(popup));
+            content.Children.Add(BuildSettingsDivider());
+        }
+
+        // Resolved NOW, when the dropdown opens: one adapter walk per click instead of one on
         // every Radmin tick. The same gate-free 26.x read the launch injects as OverrideAddress.
         var connectionIp = RadminVpnService.TryGetAdapterIp();
         if (!string.IsNullOrWhiteSpace(connectionIp))
         {
-            var ip = connectionIp!;
-            FrameworkElement? ipRow = null;
-            ipRow = BuildSettingsRow(
-                glyph: "",   // Copy
-                label: Strings.Format("MpChipVpnDetail", ip),
-                subtitle: Strings.Get("MpChipMenuCopyIp"),
-                click: () =>
-                {
-                    try
-                    {
-                        Clipboard.SetText(ip);
-                        SetRowSubtitle(ipRow, Strings.Get("MpRadminCopiedToast"));
-                    }
-                    catch (Exception ex)
-                    {
-                        // The clipboard can be held by another process; that is not worth a
-                        // dialog, and the address is right there on the row to read.
-                        DiagnosticLog.Write($"Connected menu: copying the IP failed: {ex.Message}");
-                    }
-                });
-            content.Children.Add(ipRow);
+            content.Children.Add(BuildIpRow(connectionIp!));
         }
         else
         {
             content.Children.Add(new TextBlock
             {
                 Text = Strings.Get("MpChipMenuNoIp"),
-                Foreground = (Brush)FindResource("ChromeTextDim"),
+                Foreground = (Brush)FindResource("WindowFineText"),
                 FontFamily = (FontFamily)FindResource("BodyFont"),
-                FontSize = (double)FindResource("FontSizeCaption"),
-                Margin = new Thickness(8, 6, 8, 6),
+                FontSize = (double)FindResource("SetRowDescSize"),
+                Margin = new Thickness(10, 9, 10, 9),
             });
         }
 
         // "Never" means never: the setting's own hint says the assistant is off, and a visible
         // way in would make it a lie.
-        if (MultiplayerView?.IsRadminAssistantAvailable == true)
+        if (!helpFirst && MultiplayerView?.IsRadminAssistantAvailable == true)
         {
             content.Children.Add(BuildSettingsDivider());
-            content.Children.Add(BuildSettingsRow(
-                glyph: "",   // Help
-                label: Strings.Get("MpRoomsRadminHelp"),
-                subtitle: Strings.Get("MpRoomsRadminHelpTooltip"),
-                click: () =>
-                {
-                    popup.IsOpen = false;
-                    MultiplayerView?.OpenRadminAssistant();
-                }));
+            content.Children.Add(BuildHelpRow(popup));
         }
 
-        _connectionPopup = popup;
-        ConnectionChipChevron.Text = "▴";
         popup.Closed += (_, _) =>
         {
             ConnectionChipChevron.Text = "▾";
@@ -293,6 +288,68 @@ public partial class MainWindow
         // Single-open invariant across the header's menus + close-on-dialog-open.
         ChromePopups.Track(popup, ConnectionChip);
         popup.IsOpen = true;
+    }
+
+    private FrameworkElement BuildHelpRow(System.Windows.Controls.Primitives.Popup popup) => BuildSettingsRow(
+        glyph: "\uE897",   // Help
+        label: Strings.Get("MpRoomsRadminHelp"),
+        subtitle: Strings.Get("MpRoomsRadminHelpTooltip"),
+        click: () =>
+        {
+            popup.IsOpen = false;
+            MultiplayerView?.OpenRadminAssistant();
+        });
+
+    /// <summary>The address on a row of its own, with "Copy" where the click lands and the
+    /// answer in the same place, because the clipboard write itself shows nothing.</summary>
+    private FrameworkElement BuildIpRow(string ip)
+    {
+        var action = new TextBlock
+        {
+            Text = Strings.Get("MpChipCopy"),
+            Foreground = (Brush)FindResource("UiInfoText"),
+            FontFamily = (FontFamily)FindResource("BodyFont"),
+            FontSize = (double)FindResource("SetControlSize"),
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0),
+        };
+        var row = (Button)BuildSettingsRow(
+            glyph: "\uE8C8",   // Copy
+            label: Strings.Get("MpChipYourIp"),
+            subtitle: ip,
+            click: () =>
+            {
+                try
+                {
+                    if (!HarnessMode.Block("copy the Radmin IP")) Clipboard.SetText(ip);
+                    action.Text = Strings.Get("MpChipCopied");
+                    action.Foreground = new SolidColorBrush(Color.FromRgb(0x8F, 0xE0, 0xB0));
+                }
+                catch (Exception ex)
+                {
+                    // The clipboard can be held by another process; that is not worth a dialog,
+                    // and the address is right there on the row to read.
+                    DiagnosticLog.Write($"Connected menu: copying the IP failed: {ex.Message}");
+                }
+            });
+        var grid = (Grid)row.Content;
+        var stack = FindDescendant<StackPanel>(grid);
+        if (stack is { Children.Count: > 1 } && stack.Children[0] is TextBlock label
+            && stack.Children[1] is TextBlock address)
+        {
+            label.FontSize = (double)FindResource("SetCaptionSize");
+            label.FontWeight = FontWeights.Normal;
+            label.Foreground = (Brush)FindResource("WindowMuted");
+            address.FontFamily = (FontFamily)FindResource("MonoFont");
+            address.FontSize = (double)FindResource("DialogBodySize");
+            address.FontWeight = FontWeights.Medium;
+            address.Foreground = (Brush)FindResource("WindowStrongText");
+            address.Margin = new Thickness(0, 3, 0, 0);
+        }
+        Grid.SetColumn(action, 2);
+        grid.Children.Add(action);
+        return row;
     }
 
     /// <summary>

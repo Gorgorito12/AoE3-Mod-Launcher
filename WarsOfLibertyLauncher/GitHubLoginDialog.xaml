@@ -8,7 +8,6 @@
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         ResizeMode="NoResize"
-        Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
   <Grid>
     <Grid.RowDefinitions>
@@ -16,176 +15,172 @@
         <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
     <controls:TitleBar Grid.Row="0" x:Name="TitleBarControl"
+                       TitleIcon="pack://application:,,,/Aoe3ModLauncher;component/AppIcon.png"
                        ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
-    <Grid Grid.Row="1" Margin="28,22">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
 
-        <!-- Row 0 held a 24 px heading that read exactly what the title bar reads: both
-             came from MpSignInDialogTitle, so the window announced itself twice in the same
-             words, forty pixels apart. The bar says it once. -->
+    <StackPanel Grid.Row="1" Margin="22,24,22,20">
+        <TextBlock x:Name="HeadlineText" Style="{StaticResource WindowHeadline}"/>
+        <TextBlock x:Name="LeadText" Style="{StaticResource WindowBody}" Margin="0,8,0,0"/>
 
-        <TextBlock Grid.Row="1"
-                   x:Name="Step1Text"
-                   Foreground="{DynamicResource TextSecondary}"
-                   FontSize="{DynamicResource FontSizeBody}"
-                   TextWrapping="Wrap"
-                   Margin="0,4,0,0"/>
+        <!-- BEFORE the button, not after it: advice that arrives after the action it is about is
+             decoration. It names what to check rather than leaving it to judgement. -->
+        <Border x:Name="CautionBox" Style="{StaticResource WindowNotice}" Margin="0,14,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource WindowNoticeMark}">
+                    <TextBlock Text="!" FontSize="11" FontWeight="Bold" Foreground="#0F1C2E"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <TextBlock Grid.Column="1" x:Name="BrowserHintText"
+                           Style="{StaticResource WindowBody}"
+                           Foreground="{DynamicResource WindowNoticeTitle}"
+                           Margin="10,1,0,0"/>
+            </Grid>
+        </Border>
 
-        <StackPanel Grid.Row="2">
-            <!-- BEFORE the button, not after it. This told you to check which browser
-                 opened, printed underneath the button that opens one - advice that arrives
-                 after the action it is about is decoration. And it now names what to check
-                 rather than leaving it to judgement. -->
-            <Border Margin="0,14,0,0"
-                    Padding="11,10"
-                    CornerRadius="4"
-                    Background="{DynamicResource MpCautionBg}"
-                    BorderBrush="{DynamicResource MpCautionRim}"
-                    BorderThickness="1">
+        <!-- The link, WHOLE and selectable: you cannot verify a link you cannot read. A RichTextBox
+             because a TextBox cannot put the host in bold. -->
+        <Border x:Name="LinkBox" Style="{StaticResource WindowField}" Margin="0,14,0,0">
+            <StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0"
-                               Text="&#x26a0;"
-                               Foreground="{DynamicResource MpCaution}"
-                               FontSize="{DynamicResource FontSizeCaption}"
-                               VerticalAlignment="Top"
-                               Margin="0,0,9,0"/>
-                    <TextBlock Grid.Column="1"
-                               x:Name="BrowserHintText"
-                               Foreground="{DynamicResource MpCautionText}"
-                               FontSize="{DynamicResource FontSizeCaption}"
-                               TextWrapping="Wrap"/>
-                </Grid>
-            </Border>
-
-            <!-- The link, WHOLE. It was TextTrimming="CharacterEllipsis" with no wrap and no
-                 tooltip, so the card that exists to hand you a URL - and whose own advice
-                 says to check where it points - showed "...authorize?response_type=co...".
-                 You cannot verify a link you cannot read. Selectable, too: copying by hand
-                 is the fallback the Copy button exists to save you from, not to replace. -->
-            <Border Margin="0,12,0,0"
-                    Background="{DynamicResource BgPanel}"
-                    BorderBrush="{DynamicResource BorderSubtle}"
-                    BorderThickness="1"
-                    CornerRadius="4"
-                    Padding="12,11">
-                <StackPanel>
                     <TextBlock x:Name="UriLabelText"
-                               Foreground="{DynamicResource TextDisabled}"
-                               FontSize="{DynamicResource FontSizeCaption}"
-                               FontWeight="SemiBold"/>
-                    <TextBox x:Name="VerificationUriText"
-                             Foreground="{DynamicResource TextPrimary}"
+                               FontSize="{DynamicResource SetCaptionSize}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource UiTextFaint}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0"/>
+                    <Button Grid.Column="1" x:Name="CopyLinkButton"
+                            Style="{StaticResource WindowChipButton}"
+                            Click="CopyLinkButton_Click"/>
+                </Grid>
+                <RichTextBox x:Name="VerificationUriText"
+                             Margin="-5,7,0,0"
+                             Padding="0"
                              Background="Transparent"
                              BorderThickness="0"
-                             Padding="0"
-                             Margin="0,7,0,0"
                              IsReadOnly="True"
-                             TextWrapping="Wrap"
+                             IsReadOnlyCaretVisible="False"
                              FontFamily="Consolas, Courier New, monospace"
-                             FontSize="{DynamicResource FontSizeCaption}"/>
+                             FontSize="{DynamicResource SetRowDescSize}"
+                             Foreground="{DynamicResource UiBodyText}"/>
+                <StackPanel x:Name="LinkPlaceholder" Margin="0,9,0,2">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="92*"/>
+                            <ColumnDefinition Width="8*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Height="10" CornerRadius="5" Background="{DynamicResource WindowPlaceholder}"/>
+                    </Grid>
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64*"/>
+                            <ColumnDefinition Width="36*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Height="10" CornerRadius="5" Background="{DynamicResource WindowPlaceholderFaint}"/>
+                    </Grid>
                 </StackPanel>
-            </Border>
-
-            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                <Button x:Name="OpenBrowserButton"
-                        Click="OpenBrowserButton_Click"
-                        Style="{StaticResource SidebarPrimaryButton}"
-                        Padding="14,6"
-                        MinWidth="120"/>
-                <Button x:Name="CopyLinkButton"
-                        Click="CopyLinkButton_Click"
-                        Style="{StaticResource SidebarSecondaryButton}"
-                        Padding="14,6"
-                        MinWidth="120"
-                        Margin="10,0,0,0"/>
             </StackPanel>
-        </StackPanel>
+        </Border>
 
-        <!-- Step 2 + code panel are only shown for legacy device-code
-             flows (GitHub-style) where the user has to type a code
-             into the browser. Discord skips this step entirely, so
-             we hide both rows when the server returns an empty
-             user_code. -->
-        <TextBlock Grid.Row="3"
-                   x:Name="Step2Text"
-                   Foreground="{DynamicResource TextSecondary}"
-                   FontSize="{DynamicResource FontSizeBody}"
-                   TextWrapping="Wrap"
-                   Margin="0,18,0,6"/>
-
-        <!-- Big user code + Copy button. -->
-        <Border Grid.Row="4"
-                x:Name="UserCodeBorder"
-                Background="{DynamicResource BgPanel}"
-                BorderBrush="{DynamicResource BorderSubtle}"
-                BorderThickness="1"
-                CornerRadius="4"
-                Padding="14,12">
+        <!-- Only for a server that sends a user_code (the GitHub-style flow). Discord does not. -->
+        <TextBlock x:Name="Step2Text" Style="{StaticResource WindowBody}" Margin="0,14,0,0"/>
+        <Border x:Name="UserCodeBorder" Style="{StaticResource WindowField}"
+                Padding="13,11" Margin="0,8,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0"
-                           x:Name="UserCodeText"
-                           Foreground="{DynamicResource TextPrimary}"
+                <TextBlock x:Name="UserCodeText"
+                           Foreground="#FFFFFF"
                            FontFamily="Consolas, Courier New, monospace"
-                           FontSize="{DynamicResource FontSizeDisplay}"
+                           FontSize="{DynamicResource DialogCodeSize}"
                            FontWeight="Bold"
-                           VerticalAlignment="Center"/>
-                <Button Grid.Column="1"
-                        x:Name="CopyButton"
-                        Click="CopyButton_Click"
-                        Style="{StaticResource SidebarPrimaryButton}"
-                        Padding="14,6"
-                        MinWidth="120"
-                        VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="0,0,12,0"/>
+                <Button Grid.Column="1" x:Name="CopyButton"
+                        Style="{StaticResource WindowSecondaryButton}"
+                        Click="CopyButton_Click"/>
             </Grid>
         </Border>
 
-        <!-- Privacy consent line — links to PRIVACY.md (the policy is also
-             reachable from Launcher Settings → Privacy). Built in code-behind
-             (PrivacyConsentBlock.Inlines) so the localized prefix + hyperlink
-             compose cleanly across EN/ES. -->
-        <TextBlock Grid.Row="5"
-                   x:Name="PrivacyConsentBlock"
-                   Foreground="{DynamicResource TextSecondary}"
-                   FontSize="{DynamicResource FontSizeCaption}"
+        <!-- A failure: a plain title, and what the log holds underneath. -->
+        <Border x:Name="ErrorBox" Style="{StaticResource WindowNotice}" Padding="11,9" Margin="0,14,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource WindowNoticeMark}">
+                    <TextBlock Text="!" FontSize="11" FontWeight="Bold" Foreground="#0F1C2E"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="10,1,0,0">
+                    <TextBlock x:Name="ErrorTitleText"
+                               FontSize="{DynamicResource SetRowTitleSize}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource WindowNoticeTitle}"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ErrorBodyText" Style="{StaticResource WindowBody}"
+                               Foreground="{DynamicResource WindowNoticeBody}"
+                               Margin="0,5,0,0"/>
+                    <TextBlock x:Name="ErrorDetailText"
+                               FontFamily="Consolas, Courier New, monospace"
+                               FontSize="{DynamicResource SetDescSize}"
+                               Foreground="{DynamicResource WindowMuted}"
+                               TextWrapping="Wrap"
+                               Margin="0,8,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- The wait, on its own row. -->
+        <Border x:Name="StatusRow"
+                BorderBrush="{DynamicResource WindowFooterRule}"
+                BorderThickness="0,1,0,0"
+                Padding="0,12,0,0"
+                Margin="0,14,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <controls:WindowSpinner/>
+                <TextBlock Grid.Column="1" x:Name="StatusText"
+                           FontSize="{DynamicResource SetRowDescSize}"
+                           Foreground="{DynamicResource WindowMuted}"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0"/>
+            </Grid>
+        </Border>
+
+        <TextBlock x:Name="PrivacyConsentBlock"
+                   FontSize="{DynamicResource SetControlSize}"
+                   Foreground="{DynamicResource WindowFineText}"
                    TextWrapping="Wrap"
-                   Margin="0,18,0,0"/>
+                   Margin="0,14,0,0"/>
 
-        <!-- The status on its OWN line, and Cancel as a link.
-
-             It was one Grid row: the waiting sentence in a star column with Cancel beside
-             it, so "Esperando tu autorizacion en el navegador. Esta ventana se cierra sola
-             al terminar" was cut against the button. Full width, and it wraps.
-
-             Cancel wore SidebarPrimaryButton - the gold gradient WITH the drop-shadow halo,
-             the same style as "Open browser". The way out was the brightest thing in the
-             window. ONE solid element, and it is the one that does the thing. -->
-        <StackPanel Grid.Row="6" Margin="0,16,0,0">
-            <TextBlock x:Name="StatusText"
-                       Foreground="{DynamicResource TextSecondary}"
-                       FontSize="{DynamicResource FontSizeCaption}"
-                       TextWrapping="Wrap"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button x:Name="CancelButton"
-                    Click="CancelButton_Click"
-                    Style="{StaticResource ChromeLinkButton}"
-                    HorizontalAlignment="Right"
-                    Margin="0,16,0,0"/>
+                    Style="{StaticResource WindowSecondaryButton}"
+                    IsCancel="True"
+                    Click="CancelButton_Click"/>
+            <Button x:Name="OpenBrowserButton"
+                    Style="{StaticResource WindowPrimaryButton}"
+                    ToolTipService.ShowOnDisabled="True"
+                    Margin="8,0,0,0"
+                    Click="OpenBrowserButton_Click"/>
         </StackPanel>
-    </Grid>
+    </StackPanel>
   </Grid>
 </Window>

@@ -69,7 +69,7 @@ public class FilesAndAntivirusDialogTests
                 copyLabel: "", otherCopies: 0, isCopy: false);
 
             Assert.Equal("65,057 files · 4,130 folders", dlg.CountsText.Text);
-            Assert.Equal("Uninstall Wars of Liberty (2)?", dlg.HeaderText.Text);
+            Assert.Equal("Uninstall Wars of Liberty?", dlg.HeaderText.Text);
             Assert.Equal("Uninstall", dlg.TitleBarControl.Title);
             // Without other copies the window must not promise anything about them.
             Assert.DoesNotContain("copies", dlg.SafeNoteText.Text);
@@ -118,14 +118,14 @@ public class FilesAndAntivirusDialogTests
     // ---------------------------------------------------------------- antivirus (48a / 48b)
 
     [Fact]
-    public void TheNoticeHasOneSolidButtonAndCancelIsALink()
+    public void TheNoticeHasOneSolidButtonAndCancelIsAGhost()
     {
         Run(() =>
         {
             var dlg = new AntivirusExclusionDialog("Wars of Liberty", @"AI3\wolai.upl",
                 @"C:\Games\Age Of Empires 3\Wars of Liberty", preventive: true);
 
-            Assert.Same(Application.Current.FindResource("SetFooterLinkButton"), dlg.CancelButton.Style);
+            Assert.Same(Application.Current.FindResource("SetFooterBarGhostButton"), dlg.CancelButton.Style);
             Assert.Same(Application.Current.FindResource("SetFooterSolidButton"), dlg.ContinueButton.Style);
             Assert.Equal(Visibility.Visible, dlg.DontShowAgainCheck.Visibility);
             Assert.Equal(Visibility.Visible, dlg.InstallRow.Visibility);
@@ -168,16 +168,10 @@ public class FilesAndAntivirusDialogTests
             {
                 var dlg = new AntivirusExclusionDialog("Wars of Liberty", @"AI3\wolai.upl",
                     @"C:\Games\Age Of Empires 3\Wars of Liberty", preventive: true);
-                // A Window that was never shown is not laid out, so this checks the SHAPE that
-                // makes the label fit: both rows share one Auto column, at least the
-                // reference's 92 wide. A fixed width here is exactly what clipped it.
+                // Each label has the row's whole width above its path, so nothing can clip it;
+                // a fixed column beside the path is exactly what did.
                 foreach (var label in new[] { dlg.TempRowLabel, dlg.InstallRowLabel })
-                {
-                    var column = ((Grid)label.Parent).ColumnDefinitions[0];
-                    Assert.True(column.Width.IsAuto, $"'{label.Text}' sits in a fixed-width column");
-                    Assert.Equal("AvRowLabel", column.SharedSizeGroup);
-                    Assert.Equal(92, column.MinWidth);
-                }
+                    Assert.IsType<StackPanel>(label.Parent);
                 Assert.Equal("Carpeta del mod", dlg.InstallRowLabel.Text);
                 dlg.Close();
             }
@@ -197,7 +191,7 @@ public class FilesAndAntivirusDialogTests
             applyTranslation: _ => { }, revertToEnglish: () => { },
             openVerify: () => { }, openRepair: () => { },
             checkForUpdates: () => Task.FromResult<UpdateService.CheckResult?>(null),
-            openAoE3Folder: () => { }, changeModFolder: () => { }, changeAoE3Folder: () => { },
+            openAoE3Folder: () => { }, changeAoE3Folder: () => { },
             openUserDataFolder: () => { }, createBackup: () => null, restoreBackup: () => null,
             viewLogs: () => { }, shareDiagnostics: () => { }, uninstall: () => { },
             uninstallCopy: _ => Task.CompletedTask);
@@ -216,12 +210,60 @@ public class FilesAndAntivirusDialogTests
             Assert.Null(typeof(ModPropertiesDialog).GetField("LblDangerZone",
                 BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
             Assert.Equal(Visibility.Visible, dlg.CopiesSection.Visibility);
-            // The two top cards are always side by side (the maintainer's call), and the
-            // window opens wide enough for their buttons to share one line in Spanish.
-            Assert.Equal(2, Grid.GetColumn(dlg.TroubleCard));
-            Assert.Equal(0, Grid.GetRow(dlg.TroubleCard));
-            Assert.Equal(1040, dlg.Width);
+            Assert.Equal(1120, dlg.Width);
             dlg.Close();
+        });
+    }
+
+    /// <summary>
+    /// Design 71: one row per other copy, the note with the count, the notice when another copy
+    /// is newer, and a menu whose three actions reach the right copy.
+    /// </summary>
+    [Fact]
+    public void TheCopiesListShowsEachCopyAndItsMenuActsOnThatCopy()
+    {
+        Run(() =>
+        {
+            var was = Strings.Language;
+            Strings.SetLanguage("es");
+            try
+            {
+                var config = new LauncherConfig();
+                var state = config.GetState(ModRegistry.Default.Id);
+                state.InstallPath = @"C:\Juegos\Principal";
+                state.LastKnownVersion = "1.2.0d";
+                state.OtherInstalls.Add(new ModInstall { Id = "t", InstallPath = @"D:\Juegos\Torneo", LastKnownVersion = "1.2.0e" });
+
+                string? removed = null, uninstalled = null;
+                var dlg = new ModPropertiesDialog(
+                    ModRegistry.Default, new UpdateService(config, ModRegistry.Default), config,
+                    translationIndex: null, applyTranslation: _ => { }, revertToEnglish: () => { },
+                    openVerify: () => { }, openRepair: () => { },
+                    checkForUpdates: () => Task.FromResult<UpdateService.CheckResult?>(null),
+                    openAoE3Folder: () => { }, changeAoE3Folder: () => { },
+                    openUserDataFolder: () => { }, createBackup: () => null, restoreBackup: () => null,
+                    viewLogs: () => { }, shareDiagnostics: () => { }, uninstall: () => { },
+                    removeInstall: id => removed = id,
+                    uninstallCopy: id => { uninstalled = id; return Task.CompletedTask; });
+
+                Assert.Single(dlg.ManageInstallsHost.Children);
+                Assert.StartsWith("2 copias", dlg.LblManageInstallsDesc.Text);
+                Assert.Equal(Visibility.Visible, dlg.LblCopiesIntro.Visibility);
+                Assert.Equal(Visibility.Visible, dlg.NewerCopyNotice.Visibility);
+                Assert.Contains("Torneo", dlg.NewerCopyText.Text);
+                Assert.Contains("v1.2.0e", dlg.NewerCopyText.Text);
+
+                var menu = dlg.BuildCopyMenu(new Button(), "t", "Torneo", @"D:\Juegos\Torneo", "1.2.0e");
+                var rows = menu.Items.OfType<MenuItem>().ToList();
+                Assert.Equal(new object[] { "Torneo · v1.2.0e", "Abrir carpeta", "Quitar de la lista", "Desinstalar…" },
+                    rows.Select(r => r.Header).ToArray());
+                rows[2].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                rows[3].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Assert.Equal("t", removed);
+                Assert.Equal("t", uninstalled);
+                dlg.Close();
+            }
+            finally { Strings.SetLanguage(was); }
         });
     }
 

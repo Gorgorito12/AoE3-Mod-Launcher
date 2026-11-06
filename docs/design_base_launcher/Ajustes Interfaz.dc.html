@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<div style="padding:32px 36px;display:flex;flex-direction:column;gap:12px">
+  <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px">69</span><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Ajustes del launcher › Interfaz · grupo nuevo APARIENCIA</span></div>
+  <div style="max-width:980px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty">Los ajustes visuales de la Biblioteca pasan a la sección <b>Interfaz</b>, que hoy solo tiene el tamaño del texto y el orden de las pestañas. Arriba hay una vista previa que cambia en cuanto tocas un ajuste. Por defecto: transparencia Media, imagen y color del mod activados, y efectos y lista en Automático. Pruébalo: todos los controles funcionan.</div>
+
+  <div style="width:980px;height:700px;border-radius:8px;overflow:hidden;background:#0f1c2e;box-shadow:0 10px 36px rgba(0,0,0,.35);display:flex;flex-direction:column;color-scheme:dark">
+    <div style="height:36px;flex:none;display:flex;align-items:center;padding:0 6px 0 14px;background:#233648"><span style="flex:1;font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0">Ajustes del launcher</span><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;display:flex;gap:22px;padding-right:10px"><span>—</span><span>❐</span><span>✕</span></span></div>
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:216px minmax(0,1fr)">
+      <div style="background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.08);display:flex;flex-direction:column;padding:14px 10px">
+        <div style="height:32px;box-sizing:border-box;margin:0 2px 12px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14);display:flex;align-items:center;gap:7px;padding:0 10px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d"><svg width="12" height="12" viewBox="0 0 13 13" fill="none" stroke="#8ea4c0" stroke-width="1.5" stroke-linecap="round"><circle cx="5.5" cy="5.5" r="4.2"></circle><path d="M8.7 8.7 12 12"></path></svg>Buscar ajustes</div>
+        <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5"><div style="height:34px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:7px;background:{{ n.bg }};box-shadow:{{ n.bar }};font:{{ n.w }} 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ n.c }};white-space:nowrap">{{ n.t }}</div></sc-for>
+        <div style="flex:1"></div>
+        <div style="margin:0 2px;padding-top:12px;box-shadow:inset 0 1px 0 rgba(130,175,255,.1);display:flex;flex-direction:column;gap:4px;font:400 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#6d829d"><span>AoE3 Mod Launcher</span><span style="font-family:Consolas,ui-monospace,monospace">v1.0.16e</span></div>
+      </div>
+
+      <div style="min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;padding:18px 20px 24px">
+        <div style="font:700 18px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc;margin-bottom:14px">Interfaz</div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#61779a;margin:4px 0 9px">APARIENCIA</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="padding:12px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="position:relative;height:150px;border-radius:8px;overflow:hidden;background:{{ P.bg }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)">
+              <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,28,46,.85) 0%,rgba(15,28,46,.55) 40%,rgba(15,28,46,.15) 100%)"></div>
+              <div style="position:absolute;left:10px;top:10px;bottom:10px;width:150px;border-radius:7px;background:{{ P.rail }};backdrop-filter:blur({{ P.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:6px;display:flex;flex-direction:column;gap:3px">
+                <sc-for list="{{ P.rows }}" as="r" hint-placeholder-count="4"><div style="height:26px;border-radius:5px;display:flex;align-items:center;gap:7px;padding:0 6px;background:{{ r.bg }}"><span style="width:16px;height:16px;background:{{ r.icon }}"></span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.t }}</span></div></sc-for>
+              </div>
+              <div style="position:absolute;left:178px;bottom:16px;display:flex;flex-direction:column;gap:8px">
+                <span style="font:700 22px/1 'Source Serif 4',Georgia,serif;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.5)">Wars of Liberty</span>
+                <div style="display:flex;gap:6px"><span style="height:26px;padding:0 14px;border-radius:6px;display:flex;align-items:center;background:{{ P.acc }};font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#fff;transition:background .3s">▶ Jugar</span><span style="height:26px;padding:0 10px;border-radius:6px;display:flex;align-items:center;background:{{ P.glass }};backdrop-filter:blur({{ P.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Ajustes</span></div>
+              </div>
+              <span style="position:absolute;right:10px;top:10px;height:20px;padding:0 8px;border-radius:10px;display:flex;align-items:center;background:rgba(10,19,33,.6);font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">VISTA PREVIA</span>
+            </div>
+          </div>
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;box-shadow:{{ r.line }}">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">{{ r.t }}</span><span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;text-wrap:pretty">{{ r.d }}</span></div>
+              <sc-if value="{{ r.isSeg }}" hint-placeholder-val="{{ true }}"><div style="flex:none;display:flex;gap:2px;padding:2px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)"><sc-for list="{{ r.opts }}" as="o" hint-placeholder-count="3"><span onClick="{{ o.pick }}" style="height:26px;padding:0 11px;border-radius:5px;display:flex;align-items:center;cursor:pointer;white-space:nowrap;background:{{ o.bg }};box-shadow:{{ o.ring }};font:{{ o.w }} 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ o.c }}">{{ o.t }}</span></sc-for></div></sc-if>
+              <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.flip }}" style="flex:none;cursor:pointer;width:34px;height:20px;border-radius:10px;box-sizing:border-box;padding:2px;display:flex;justify-content:{{ r.just }};background:{{ r.tbg }};transition:background .2s"><span style="width:16px;height:16px;border-radius:8px;background:{{ r.knob }}"></span></span></sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#61779a;margin:20px 0 9px">TEXTO Y PESTAÑAS</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <sc-for list="{{ rows2 }}" as="r" hint-placeholder-count="2">
+            <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;box-shadow:{{ r.line }}">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">{{ r.t }}</span><span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;text-wrap:pretty">{{ r.d }}</span></div>
+              <div style="flex:none;display:flex;gap:2px;padding:2px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)"><sc-for list="{{ r.opts }}" as="o" hint-placeholder-count="3"><span onClick="{{ o.pick }}" style="height:26px;padding:0 11px;border-radius:5px;display:flex;align-items:center;cursor:pointer;white-space:nowrap;background:{{ o.bg }};box-shadow:{{ o.ring }};font:{{ o.w }} 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ o.c }}">{{ o.t }}</span></sc-for></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;justify-content:flex-start;margin-top:14px"><span onClick="{{ reset }}" style="cursor:pointer;height:30px;padding:0 12px;border-radius:7px;display:flex;align-items:center;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(130,175,255,.18);font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Restablecer la apariencia</span></div>
+      </div>
+    </div>
+    <div style="height:52px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px;background:#12213a;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)"><span style="flex:1;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Los cambios se aplican al instante</span><span style="height:32px;padding:0 18px;border-radius:7px;display:flex;align-items:center;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Cerrar</span></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1060,&quot;height&quot;:820}}">
+class Component extends DCLogic {
+  static DEF = { tr: 'mid', img: true, col: true, fx: 'auto', rail: 'auto', start: 'bib', text: '100' };
+  state = { ...Component.DEF };
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const seg = (key, opts) => opts.map(([v, t]) => { const on = s[key] === v; return { t, pick: () => set({ [key]: v }), bg: on ? 'rgba(47,127,224,.22)' : 'transparent', ring: on ? 'inset 0 0 0 1px rgba(47,127,224,.55)' : 'none', c: on ? '#ffffff' : '#b9c9de', w: on ? 600 : 500 }; });
+    const tog = key => ({ isToggle: true, isSeg: false, flip: () => set({ [key]: !s[key] }), just: s[key] ? 'flex-end' : 'flex-start', tbg: s[key] ? '#2f7fe0' : 'rgba(255,255,255,.14)', knob: s[key] ? '#ffffff' : '#8ea4c0' });
+    const line = 'inset 0 -1px 0 rgba(130,175,255,.08)';
+    const rows = [
+      { t: 'Transparencia', d: 'Cuánto deja ver la imagen del mod detrás de la lista y los paneles. Predeterminada: Media.', isSeg: true, isToggle: false, opts: seg('tr', [['solid', 'Sólida'], ['mid', 'Media'], ['max', 'Máxima']]), line },
+      { t: 'Imagen del mod de fondo', d: 'Muestra la portada del mod elegido detrás de la Biblioteca. Desactivada, solo queda el resplandor de su color.', ...tog('img'), line },
+      { t: 'Color de cada mod', d: 'La Biblioteca toma el color del mod elegido. Desactivado, usa siempre el azul del launcher.', ...tog('col'), line },
+      { t: 'Efectos y animaciones', d: 'Difuminados y transiciones. Automático los reduce si Windows tiene las animaciones desactivadas.', isSeg: true, isToggle: false, opts: seg('fx', [['auto', 'Automático'], ['full', 'Completos'], ['low', 'Reducidos']]), line },
+      { t: 'Lista de mods', d: 'Automática: plegada a solo iconos en ventanas de menos de 1400 px.', isSeg: true, isToggle: false, opts: seg('rail', [['auto', 'Automática'], ['open', 'Desplegada'], ['closed', 'Plegada']]), line: 'none' }
+    ];
+    const rows2 = [
+      { t: 'Tamaño del texto', d: 'Se aplica a todo el launcher.', opts: seg('text', [['100', '100 %'], ['110', '110 %'], ['125', '125 %']]), line },
+      { t: 'Pestaña al abrir', d: 'Con Taller y Biblioteca unidas quedan dos pestañas.', opts: seg('start', [['mp', 'Multijugador'], ['bib', 'Biblioteca']]), line: 'none' }
+    ];
+    const acc = s.col ? '#c8102e' : '#2f7fe0';
+    const a = { solid: .86, mid: .5, max: .28 }[s.tr];
+    const blur = s.fx === 'low' || s.tr === 'solid' ? '0px' : (s.tr === 'mid' ? '14px' : '8px');
+    const glow = `radial-gradient(120% 120% at 90% 0%, ${s.col ? 'rgba(200,16,46,.45)' : 'rgba(47,127,224,.45)'}, transparent 70%), #0f1c2e`;
+    const ic = id => `url(mods/${id}/icon.png) center/contain no-repeat`;
+    const P = {
+      bg: s.img ? `url(mods/wol/hero.jpg) center 30%/cover no-repeat` : glow,
+      rail: `rgba(10,19,33,${a})`, glass: `rgba(10,19,33,${Math.min(.86, a + .2)})`, blur, acc,
+      rows: [['wol', 'Wars of Liberty', true], ['aoe3-tad', 'The Asian Dynasties'], ['hundred-days', 'Hundred Days'], ['improvement-mod', 'Improvement Mod']].map(([id, t, on]) => ({ t, icon: ic(id), bg: on ? (s.col ? 'rgba(200,16,46,.3)' : 'rgba(47,127,224,.3)') : 'transparent' }))
+    };
+    const nav = ['General', 'Interfaz', 'Partidas', 'Mods y actualizaciones', 'Avanzado'].map(t => { const on = t === 'Interfaz'; return { t, bg: on ? 'rgba(47,127,224,.16)' : 'transparent', bar: 'none', c: on ? '#f0f5fb' : '#b9c9de', w: on ? 600 : 500 }; });
+    return { nav, rows, rows2, P, reset: () => this.setState({ ...Component.DEF }) };
+  }
+}
+</script>
+</body>
+</html>

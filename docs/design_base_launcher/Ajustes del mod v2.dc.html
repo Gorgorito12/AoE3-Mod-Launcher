@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+
+<section id="t71" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t71" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">71</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Ajustes del mod, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px;display:flex;flex-direction:column;gap:5px">
+    <span>Las mismas 7 secciones que hoy (General, Archivos, Datos, Idioma, Complementos, Barajas y Estadísticas), sobre la imagen del mod y con su color, porque esta ventana es de un solo mod. Tarjetas de cristal con el nivel de transparencia del jugador; botones de acción en una columna fija de 112 px a la derecha; lo destructivo, en rojo: junto a la copia en uso y al final del menú ⋯ de las demás.</span>
+    <span><b>Compartir diagnóstico</b> pasa a ser una tarjeta azul fija al pie del menú lateral, visible desde cualquier sección. Prueba: cambia de sección, activa interruptores, elige otra copia (la «Copia antigua» muestra el aviso de versión), abre el menú ⋯ de una copia, verifica los archivos en General o activa «Humo de pólvora». En Tweaks puedes cambiar el mod, la transparencia y el tamaño de la ventana. Rutas, tamaños, complementos, barajas y partidas son de ejemplo; con Hundred Days o Improvement Mod ves Barajas y Estadísticas vacías.</span>
+  </div>
+
+  <div id="71a" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#71a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">71a</a><span>Interactivo.</span></div>
+    <div data-frame="1" style="width:{{ fw }};height:{{ fh }};container-type:inline-size;color-scheme:dark;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.32);background:#0f1c2e;display:flex;flex-direction:column">
+      <div style="position:absolute;left:0;right:0;top:0;height:{{ heroH }};background:{{ heroBg }}"></div>
+      <div style="position:absolute;inset:0;background:{{ shade }}"></div>
+      <sc-if value="{{ MORE.open }}" hint-placeholder-val="{{ false }}"><div onClick="{{ MORE.close }}" style="position:absolute;inset:0;z-index:60"></div><div style="position:absolute;left:{{ MORE.x }};top:{{ MORE.y }};z-index:61;width:220px;box-sizing:border-box;padding:6px;border-radius:10px;background:{{ MORE.bg }};backdrop-filter:blur({{ MORE.blur }});box-shadow:0 16px 40px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.12);display:flex;flex-direction:column"><span style="padding:6px 10px 8px;font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ MORE.title }}</span><sc-for list="{{ MORE.items }}" as="it" hint-placeholder-count="4"><sc-if value="{{ it.sep }}" hint-placeholder-val="{{ false }}"><span style="height:1px;margin:4px 6px;background:rgba(255,255,255,.1)"></span></sc-if><sc-if value="{{ it.row }}" hint-placeholder-val="{{ true }}"><div onClick="{{ it.act }}" style="height:32px;flex:none;display:flex;align-items:center;padding:0 10px;border-radius:6px;cursor:pointer;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ it.c }};white-space:nowrap" style-hover="background:rgba(255,255,255,.08)">{{ it.label }}</div></sc-if></sc-for></div></sc-if>
+
+      <div style="position:relative;height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 6px 0 14px;background:{{ titleBg }};backdrop-filter:blur({{ titleBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)">
+        <span style="flex:none;width:22px;height:22px;background:{{ iconBg }}"></span>
+        <span style="flex:none;font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Ajustes de</span>
+        <span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:700 15px/1.2 'Source Serif 4',Georgia,serif;color:#ffffff">{{ name }}</span>
+        <span style="flex:none;white-space:nowrap;height:24px;padding:0 10px 0 8px;border-radius:12px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#7ee08b" stroke-width="1.7" stroke-linejoin="round"><path d="M1.5 8.6V2.2c0-.4.3-.7.7-.7h6.4l6 6c.3.3.3.7 0 1l-5.7 5.7c-.3.3-.7.3-1 0z"></path><circle cx="5" cy="5" r="1.2"></circle></svg><span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:#e8eef6">{{ ver }}</span></span>
+        <sc-if value="{{ multi }}" hint-placeholder-val="{{ false }}"><span style="flex:none;white-space:nowrap;height:24px;padding:0 10px;border-radius:12px;display:flex;align-items:center;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Copia «{{ copyLabel }}»</span></sc-if>
+        <div style="flex:1"></div>
+        <span style="flex:none;font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;display:flex;gap:26px;padding:0 10px"><span>—</span><span>❐</span><span>✕</span></span>
+      </div>
+
+      <div style="position:relative;flex:1;min-height:0;display:grid;grid-template-columns:clamp(220px,15cqw,280px) minmax(0,1fr);gap:16px;padding:16px">
+        <div style="min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:12px;padding:8px;border-radius:14px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)">
+          <div style="height:34px;flex:none;box-sizing:border-box;border-radius:8px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);display:flex;align-items:center;gap:8px;padding:0 10px"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#8C9CB1" stroke-width="1.5" stroke-linecap="round"><circle cx="5.5" cy="5.5" r="4.2"></circle><path d="M8.7 8.7 12 12"></path></svg><input value="{{ q }}" onChange="{{ onQ }}" placeholder="Buscar en este mod" style="flex:1;min-width:0;background:transparent;border:0;outline:0;color:#f0f5fb;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif"></div>
+          <sc-if value="{{ noMatch }}" hint-placeholder-val="{{ false }}"><span style="padding:6px 8px;font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ noMatch }}</span></sc-if>
+          <div style="flex:0 1 auto;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:{{ thumb }} transparent;display:flex;flex-direction:column;gap:2px">
+            <sc-for list="{{ nav }}" as="n" hint-placeholder-count="7"><div onClick="{{ n.pick }}" style="cursor:pointer;height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:8px;background:{{ n.bg }};box-shadow:{{ n.bar }}"><span style="flex:none;width:18px;text-align:center;font:400 15px/1 'Segoe Fluent Icons','Segoe MDL2 Assets';color:{{ n.c }}">{{ n.glyph }}</span><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:{{ n.w }} 13.5px/1.2 'Segoe UI',system-ui,sans-serif;color:{{ n.c }}">{{ n.t }}</span><sc-if value="{{ n.count }}" hint-placeholder-val="{{ false }}"><span style="flex:none;min-width:20px;height:20px;box-sizing:border-box;padding:0 6px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.1);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ n.count }}</span></sc-if></div></sc-for>
+          </div>
+          <div style="flex:1"></div>
+          <div data-comment-anchor="1cc33dd711-div" style="flex:none;padding:14px;border-radius:10px;background:rgba(47,127,224,.16);box-shadow:inset 0 0 0 1px rgba(85,172,238,.5);display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px"><span style="flex:none;width:28px;height:28px;border-radius:14px;background:rgba(85,172,238,.22);display:flex;align-items:center;justify-content:center;font:700 13px/1 'Segoe UI',system-ui,sans-serif;color:#a9d6f7">⇪</span><div style="min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 13.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#f4f8fc">Compartir diagnóstico</span><span style="font:400 11.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">¿El mod falla o no abre? Crea un informe para el soporte.</span></div></div>
+            <span onClick="{{ diag }}" style="cursor:pointer;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;white-space:nowrap;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ diagLabel }}</span>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><span style="cursor:pointer;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;white-space:nowrap;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Registros</span><span style="cursor:pointer;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;white-space:nowrap;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Discord ↗</span></div>
+          </div>
+          <div style="flex:none;padding:2px 6px 4px;display:flex;flex-direction:column;gap:5px"><span style="font:400 11.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ author }}</span><span style="font:600 12px/1.2 'Segoe UI',system-ui,sans-serif;color:{{ accText }}">{{ site }} ↗</span></div>
+        </div>
+
+        <div style="min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:{{ thumb }} transparent;padding:4px 6px 8px 4px">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:6px"><span style="font:700 clamp(22px,1.5cqw,30px)/1.15 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 2px 12px rgba(0,0,0,.45)">{{ secTitle }}</span><sc-if value="{{ secIntro }}" hint-placeholder-val="{{ false }}"><span style="max-width:84ch;font:400 13px/1.55 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ secIntro }}</span></sc-if></div>
+            <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-if value="{{ g.label }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding:0 4px;min-height:32px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ g.label }}</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ g.note }}</span><div style="flex:1"></div><sc-if value="{{ g.action }}" hint-placeholder-val="{{ false }}"><span onClick="{{ g.act }}" style="cursor:pointer;flex:none;white-space:nowrap;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ g.action }}</span></sc-if></div></sc-if>
+                <div style="border-radius:12px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px {{ g.ring }};overflow:hidden">
+                  <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2">
+                    <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 24px;align-items:center;padding:14px 16px;background:{{ r.rowBg }};box-shadow:{{ r.line }}">
+                      <div style="min-width:0;display:flex;flex-direction:column;gap:5px">
+                        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px"><span style="font:600 13.5px/1.3 'Segoe UI',system-ui,sans-serif;color:{{ r.tc }}">{{ r.t }}</span><sc-if value="{{ r.hasVer }}" hint-placeholder-val="{{ false }}"><span style="flex:none;white-space:nowrap;height:22px;padding:0 9px 0 7px;border-radius:11px;display:flex;align-items:center;gap:5px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#7ee08b" stroke-width="1.7" stroke-linejoin="round"><path d="M1.5 8.6V2.2c0-.4.3-.7.7-.7h6.4l6 6c.3.3.3.7 0 1l-5.7 5.7c-.3.3-.7.3-1 0z"></path><circle cx="5" cy="5" r="1.2"></circle></svg><span style="font:600 10.5px/1 Consolas,ui-monospace,monospace;color:#e8eef6">{{ r.ver }}</span></span></sc-if><sc-for list="{{ r.chips }}" as="c" hint-placeholder-count="0"><span style="flex:none;white-space:nowrap;height:22px;padding:0 9px;border-radius:11px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6"><span style="width:6px;height:6px;border-radius:3px;background:{{ c.dot }}"></span>{{ c.t }}</span></sc-for></div>
+                        <sc-if value="{{ r.d }}" hint-placeholder-val="{{ true }}"><span style="max-width:84ch;font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ r.d }}</span></sc-if>
+                        <sc-if value="{{ r.mono }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px/1.3 Consolas,ui-monospace,monospace;color:#c3d2e5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.mono }}</span></sc-if><sc-if value="{{ r.hasInput }}" hint-placeholder-val="{{ false }}"><input value="{{ r.inVal }}" onChange="{{ r.inChange }}" placeholder="{{ r.inPh }}" style="margin-top:6px;height:34px;box-sizing:border-box;padding:0 12px;border-radius:8px;border:0;outline:0;background:rgba(10,19,33,.6);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);color:#f0f5fb;font:400 12.5px/1 Consolas,ui-monospace,monospace"></sc-if>
+                        <sc-if value="{{ r.box }}" hint-placeholder-val="{{ false }}"><div style="margin-top:4px;padding:9px 12px;border-radius:8px;background:{{ r.boxBg }};box-shadow:inset 0 0 0 1px {{ r.boxRing }};font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:{{ r.boxC }};text-wrap:pretty">{{ r.box }}</div></sc-if>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+                        <sc-if value="{{ r.hasStatus }}" hint-placeholder-val="{{ false }}"><span style="flex:none;white-space:nowrap;min-width:112px;box-sizing:border-box;height:32px;padding:0 12px;border-radius:7px;display:flex;align-items:center;justify-content:center;gap:6px;background:{{ r.sBg }};box-shadow:inset 0 0 0 1px {{ r.sRing }};font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ r.sC }}">{{ r.status }}</span></sc-if>
+                        <sc-for list="{{ r.btns }}" as="b" hint-placeholder-count="0"><span onClick="{{ b.act }}" style="cursor:pointer;flex:none;white-space:nowrap;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ b.bg }};box-shadow:inset 0 0 0 1px {{ b.ring }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.c }}">{{ b.t }}</span></sc-for><sc-if value="{{ r.hasMore }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.moreOpen }}" title="Más opciones" style="cursor:pointer;flex:none;width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:700 14px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">⋯</span></sc-if>
+                        <sc-if value="{{ r.isSeg }}" hint-placeholder-val="{{ false }}"><div style="flex:none;display:flex;gap:2px;padding:2px;border-radius:9px;background:rgba(10,19,33,.6);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"><sc-for list="{{ r.seg }}" as="o" hint-placeholder-count="2"><span onClick="{{ o.pick }}" style="cursor:pointer;white-space:nowrap;height:28px;padding:0 12px;border-radius:7px;display:flex;align-items:center;background:{{ o.bg }};font:{{ o.w }} 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ o.c }}">{{ o.t }}</span></sc-for></div></sc-if>
+                        <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.flip }}" style="cursor:pointer;flex:none;width:38px;height:22px;box-sizing:border-box;padding:2px;border-radius:11px;display:flex;justify-content:{{ r.just }};background:{{ r.tbg }};transition:background .2s"><span style="width:18px;height:18px;border-radius:9px;background:{{ r.knob }}"></span></span></sc-if>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ g.isDeck }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 16px;display:flex;flex-direction:column;gap:14px">
+                    <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ g.pills }}" as="p" hint-placeholder-count="3"><span onClick="{{ p.pick }}" style="cursor:pointer;white-space:nowrap;height:30px;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:7px;background:{{ p.bg }};box-shadow:inset 0 0 0 1px {{ p.ring }};font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ p.c }}">{{ p.t }}<span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ p.nc }}">{{ p.n }}</span></span></sc-for></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start">
+                      <div style="flex:1 1 420px;min-width:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px"><sc-for list="{{ g.cards }}" as="c" hint-placeholder-count="12"><div onClick="{{ c.pick }}" style="cursor:pointer;height:46px;box-sizing:border-box;padding:0 10px;border-radius:7px;display:flex;align-items:center;gap:8px;background:{{ c.bg }};box-shadow:inset 0 0 0 1px {{ c.ring }}"><span style="flex:none;width:18px;font:600 10.5px/1 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ c.slot }}</span><span style="min-width:0;font:500 12px/1.25 'Segoe UI',system-ui,sans-serif;color:{{ c.tc }};display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ c.name }}</span></div></sc-for></div>
+                      <div style="flex:1 1 260px;min-height:150px;box-sizing:border-box;padding:14px 16px;border-radius:10px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px {{ g.dRing }};display:flex;flex-direction:column;gap:8px"><span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ g.dSlot }}</span><span style="font:600 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#f4f8fc">{{ g.dName }}</span><sc-if value="{{ g.dText }}" hint-placeholder-val="{{ false }}"><span style="font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ g.dText }}</span></sc-if><sc-for list="{{ g.dFx }}" as="e" hint-placeholder-count="1"><span style="font:600 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:{{ accText }}">{{ e }}</span></sc-for><span style="margin-top:auto;padding-top:6px;font:400 11px/1.2 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ g.dInternal }}</span></div>
+                    </div>
+                  </div></sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="position:relative;height:52px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px;background:rgba(8,15,27,.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)"><span style="flex:1;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Los cambios se aplican al instante</span><span style="cursor:pointer;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cerrar</span></div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mod&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Wars of Liberty&quot;,&quot;Hundred Days&quot;,&quot;Improvement Mod&quot;],&quot;default&quot;:&quot;Wars of Liberty&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;fondo&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Franja&quot;,&quot;Imagen completa&quot;,&quot;Solo color&quot;],&quot;default&quot;:&quot;Franja&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;ventana&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;1120×720&quot;,&quot;1600×960&quot;,&quot;2200×1240&quot;],&quot;default&quot;:&quot;1120×720&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const MODS = {
+  'Wars of Liberty': { id: 'wol', acc: '#c8102e', hero: true, author: 'Wars of Liberty Team', site: 'aoe3wol.com', size: '6,8 GB', args: '', data: 'Documentos\\My Games\\Age of Empires 3', redirect: false, tr: true,
+    copies: [{ id: 'main', label: 'Principal', path: 'C:\\Program Files (x86)\\Wars of Liberty', ver: 'v1.2.0e' }, { id: 'torneo', label: 'Torneo', path: 'D:\\Juegos\\WoL Torneo', ver: 'v1.2.0e' }, { id: 'old', label: 'Copia antigua', path: 'D:\\Backup\\Wars of Liberty', ver: 'v1.2.0d' }] },
+  'Hundred Days': { id: 'hundred-days', acc: '#8f9a2e', hero: true, author: 'Yomgui, aoenw; Improved HD AI: MystericX', site: 'moddb.com/mods/hundred-days', size: '3,1 GB', args: '+noIntroCinematics', data: 'Documentos\\My Games\\AoE III - Hundred Days', redirect: true, tr: false,
+    copies: [{ id: 'main', label: 'Principal', path: 'C:\\Program Files (x86)\\Hundred Days', ver: 'vbeta-0.10' }] },
+  'Improvement Mod': { id: 'improvement-mod', acc: '#3a8cd9', hero: false, author: 'Improvement Mod Team', site: 'impmod.blogspot.com', size: '5,4 GB', args: '', data: 'Documentos\\My Games\\Age of Empires 3', redirect: false, tr: false,
+    copies: [{ id: 'main', label: 'Principal', path: 'C:\\Program Files (x86)\\Improvement Mod', ver: 'v16.10.2026' }] }
+};
+const DECKS = { city: 'Buenos Aires', civ: 'Argentines', level: 37, file: 'sp_BuenosAires_homecity', decks: [
+  { name: 'Principal', cards: [['700 de madera', 'HCShipWoodCrates3', '', ['+700 de madera']], ['3 aldeanos', 'HCShipSettlers3', '', ['+3 aldeanos']], ['Comercio de cueros', 'HCHideTrade', 'Los mercados venden más caro el cuero y la carne.', ['+20 % de oro al vender comida']], ['600 de oro', 'HCShipCoinCrates2', '', ['+600 de oro']], ['5 Gauchos', 'HCShipGauchos1', '', ['+5 Gauchos']], ['Fortificaciones', 'HCFortifications', 'Los muros y torres resisten más.', ['+25 % de vida a muros y torres']], ['8 Granaderos', 'HCShipGrenadiers2', '', ['+8 Granaderos']], ['Infantería veterana', 'HCInfantryVeteran', 'Tu infantería sube a veterana.', ['+20 % de vida y ataque a la infantería']], ['2 Cañones', 'HCShipFalconets2', '', ['+2 Cañones']], ['Banco provincial', 'HCProvincialBank', 'Envía un banco que genera oro sin aldeanos.', ['+1 Banco']], ['Puerto libre', 'HCFreePort', 'Las rutas comerciales dan más recursos.', ['+15 % en rutas comerciales']], ['10 Milicianos', 'HCShipMilitia', '', ['+10 Milicianos']]] },
+  { name: 'Supremacía', cards: [['700 de madera', 'HCShipWoodCrates3', '', ['+700 de madera']], ['5 Gauchos', 'HCShipGauchos1', '', ['+5 Gauchos']], ['8 Granaderos', 'HCShipGrenadiers2', '', ['+8 Granaderos']], ['2 Cañones', 'HCShipFalconets2', '', ['+2 Cañones']], ['Infantería veterana', 'HCInfantryVeteran', 'Tu infantería sube a veterana.', ['+20 % de vida y ataque a la infantería']]] },
+  { name: 'Tratado', cards: [['Fortificaciones', 'HCFortifications', 'Los muros y torres resisten más.', ['+25 % de vida a muros y torres']], ['Banco provincial', 'HCProvincialBank', 'Envía un banco que genera oro sin aldeanos.', ['+1 Banco']], ['Puerto libre', 'HCFreePort', 'Las rutas comerciales dan más recursos.', ['+15 % en rutas comerciales']]] }
+] };
+const STATS = {
+  human: [{ rival: 'Aluclown', won: true, meta: 'ESOC Indonesia · 33 min · hace 2 días' }, { rival: 'Kaiser', won: false, meta: 'ESOC Florida · 24 min · hace 5 días' }, { rival: 'NathanR06 (LAN)', won: null, meta: 'Great Plains · 41 min · hace 9 días' }],
+  ai: [{ ai: 'Menelik', won: true, meta: '41 min · puntuación 18.240 · primer ataque a los 7 min', res: 'Oro 12.400 · Madera 9.800 · Comida 14.200 · 31 envíos' }, { ai: 'Bolívar', won: false, meta: '28 min · puntuación no registrada · sin ataques', res: 'Recursos no registrados por el juego.' }]
+};
+class Component extends DCLogic {
+  state = { menu: null, removed: {}, q: '', stay: false, chk: 'idle', backups: [], same: false, imp: 0, src: '', extra: [], deckI: 0, cardI: 0, sec: 'general', active: {}, lang: 'en', verify: 'idle', smoke: false, tog: { ui: true, rot: true }, diag: false };
+  componentWillUnmount() { clearTimeout(this.t1); clearTimeout(this.t2); }
+  openMore(e, id) { e.stopPropagation(); const fr = e.currentTarget.closest('[data-frame="1"]'); if (!fr) return; const b = e.currentTarget.getBoundingClientRect(), r = fr.getBoundingClientRect(), sc = (r.width / fr.offsetWidth) || 1; this.setState({ menu: { id: id, x: (b.right - r.left) / sc, y: (b.bottom - r.top) / sc + 6 } }); }
+  renderVals() {
+    const name = this.props.mod ?? 'Wars of Liberty', m = MODS[name] || MODS['Wars of Liberty'];
+    const [W, H] = ({ '1120×720': [1120, 720], '1600×960': [1600, 960], '2200×1240': [2200, 1240] })[this.props.ventana ?? '1120×720'] || [1120, 720];
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px' }, 'Media': { bg: 'rgba(10,19,33,.5)', blur: '16px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px' } })[this.props.transparencia ?? 'Media'] || { bg: 'rgba(10,19,33,.5)', blur: '16px' };
+    const hx = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const toHex = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+    const mix = (a, b, t) => { const A = hx(a), B = hx(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+    const al = (h, a) => { const [r, g, b] = hx(h); return `rgba(${r},${g},${b},${a})`; };
+    const lum = h => { const c = hx(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+    const con = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+    const NAVY = '#0f1c2e', acc = m.acc, FILL = mix(acc, NAVY, .58), FONDO = this.props.fondo ?? 'Franja';
+    const accText = (() => { let t = .3, c = mix(acc, '#ffffff', t); while (con(c, NAVY) < 5 && t < .9) { t += .08; c = mix(acc, '#ffffff', t); } return c; })();
+    const onText = con(acc, '#ffffff') >= con(acc, NAVY) ? '#ffffff' : NAVY;
+    const set = o => this.setState(o);
+    const cps = m.copies.filter(c => !this.state.removed[c.id]), multi = cps.length > 1, cur = cps.find(c => c.id === this.state.active[m.id]) || cps[0];
+    const B = (t, act, kind) => ({ t, act: act || (() => {}), bg: kind === 'red' ? '#c84a4a' : kind === 'blue' ? '#2f7fe0' : kind === 'acc' ? acc : '#1a2c48', ring: kind ? 'rgba(0,0,0,0)' : 'rgba(130,175,255,.22)', c: kind === 'red' || kind === 'blue' ? '#ffffff' : kind === 'acc' ? onText : '#dce7f5' });
+    const TOG = (on, flip) => ({ isToggle: true, flip, just: on ? 'flex-end' : 'flex-start', tbg: on ? acc : 'rgba(255,255,255,.14)', knob: on ? '#ffffff' : '#8ea4c0' });
+    const CHIP = { cos: { t: 'COSMÉTICO', dot: '#55ACEE' }, risk: { t: 'RIESGO MULTIJUGADOR', dot: '#F4900C' }, blk: { t: 'BLOQUEADO', dot: '#c84a4a' }, inst: { t: 'INSTALADOR', dot: '#a8bcd2' }, ok: { t: 'TODO CORRECTO', dot: '#4fd68a' }, win: { t: 'VICTORIA', dot: '#4fd68a' }, loss: { t: 'DERROTA', dot: '#c84a4a' }, nores: { t: 'SIN RESULTADO', dot: '#8C9CB1' }, official: { t: 'OFICIAL', dot: '#4fd68a' }, compat: { t: 'COMPATIBLE', dot: '#4fd68a' }, uptodate: { t: 'AL DÍA', dot: '#4fd68a' }, inuse: { t: 'EN USO', dot: '#4fd68a' } };
+    const D = m.id === 'wol' ? DECKS : null, deckI = Math.min(this.state.deckI, DECKS.decks.length - 1), deck = DECKS.decks[deckI], cardI = Math.min(this.state.cardI, deck.cards.length - 1), card = deck.cards[cardI];
+    const ST = m.id === 'wol' ? STATS : null;
+    const INFO = { boxBg: 'rgba(85,172,238,.1)', boxRing: 'rgba(85,172,238,.38)', boxC: '#a9d6f7' }, latest = m.copies.map(c => c.ver).sort().pop(), newer = cps.filter(c => c.id !== cur.id && c.ver > cur.ver).sort((a, b) => (a.ver < b.ver ? 1 : -1))[0];
+    const IMP = ['Age of Dynasties (Remake)', 'Hundred Days', 'Improvement Mod', 'Wars of Liberty'].filter(x => x !== name);
+    const LG = (k, t, extra, useLabel) => { const on = this.state.lang === k; return Object.assign({ t: t }, extra, on ? { hasStatus: true, status: '✓  En uso', sBg: FILL, sRing: al(acc, .6), sC: '#ffffff' } : { btns: [B(useLabel || 'Usar', () => set({ lang: k }))] }); };
+    const AMBER = { boxBg: 'rgba(244,144,12,.1)', boxRing: 'rgba(244,144,12,.38)', boxC: '#F5BD76' }, RED = { boxBg: 'rgba(200,74,74,.12)', boxRing: 'rgba(200,74,74,.42)', boxC: '#f0a6a6' };
+    const norm = rows => rows.map((r, i) => ({ tc: '#f0f5fb', d: '', mono: '', box: '', chips: [], btns: [], seg: [], isSeg: false, isToggle: false, hasStatus: false, ver: '', rowBg: 'transparent', hasMore: false, moreOpen: () => {}, hasInput: false, inVal: '', inPh: '', inChange: () => {}, ...r, hasVer: !!r.ver, line: i < rows.length - 1 ? 'inset 0 -1px 0 rgba(255,255,255,.07)' : 'none' }));
+    const grp = (label, rows, extra) => ({ label, note: '', action: '', ring: 'rgba(255,255,255,.1)', isDeck: false, act: () => {}, ...extra, rows: norm(rows) });
+    const S = {
+      general: { t: 'General', intro: '', groups: [
+        grp('ESTADO DEL MOD', [
+          (cur.ver < latest
+            ? { t: 'Hay una versión más nueva', d: 'Esta copia tiene la ' + cur.ver + '. La última publicada es la ' + latest + '.', btns: [B('Actualizar', null, 'acc')] }
+            : { t: this.state.chk === 'run' ? 'Buscando actualizaciones…' : 'Estás al día', d: 'Tienes la ' + cur.ver + ', la última versión publicada.', mono: this.state.chk === 'done' ? 'Comprobado ahora' : '', btns: [B(this.state.chk === 'run' ? 'Comprobando…' : 'Comprobar', () => { if (this.state.chk === 'run') return; set({ chk: 'run' }); clearTimeout(this.t2); this.t2 = setTimeout(() => set({ chk: 'done' }), 1200); })] }),
+          { t: 'Archivos del mod', d: 'Comprueba cada archivo sin descargar nada. Si sigue fallando, usa «Compartir diagnóstico» en el menú.', chips: this.state.verify === 'done' ? [CHIP.ok] : [], mono: this.state.verify === 'done' ? '1.284 archivos comprobados · ahora' : '', btns: [this.state.verify === 'run' ? B('Verificando…') : B(this.state.verify === 'done' ? 'Verificar otra vez' : 'Verificar', () => { set({ verify: 'run' }); clearTimeout(this.t1); this.t1 = setTimeout(() => set({ verify: 'done' }), 1500); })] }
+        ], { note: multi ? 'Copia «' + cur.label + '»' : '' }),
+        grp('ACTUALIZACIONES', [{ t: 'Quedarse en esta versión', d: 'El launcher deja de ofrecerte actualizaciones para este mod.', box: 'Algunas actualizaciones arreglan la compatibilidad en multijugador. Si te quedas atrás, puede que no puedas jugar con quienes actualizaron.', ...AMBER, ...TOG(this.state.stay, () => set({ stay: !this.state.stay })) }]),
+        grp('INICIO', [{ t: 'Argumentos de inicio', d: m.args ? 'Se añaden al abrir el juego.' : 'Ninguno. Se añaden al abrir el juego.', mono: m.args, btns: [B('Editar…')] }])
+      ] },
+      files: { t: 'Archivos', intro: multi ? 'En el menú ⋯ de cada copia, «Quitar de la lista» la olvida y deja sus archivos, y «Desinstalar…» la borra del disco.' : '', groups: [
+        grp('COPIAS DE ESTE MOD', [
+          ...[cur].concat(cps.filter(c => c.id !== cur.id)).map(c => c.id === cur.id
+            ? { t: c.label, ver: c.ver, mono: c.path, chips: [CHIP.inuse], d: 'Es la que se abre al pulsar Jugar.', rowBg: FILL, btns: [B('Abrir carpeta'), B('Reparar'), B('Desinstalar…', null, 'red')], ...(newer ? Object.assign({ box: '«' + newer.label + '» tiene la ' + newer.ver + ', más nueva que esta.' }, INFO) : {}) }
+            : { t: c.label, ver: c.ver, mono: c.path, btns: [B('Usar esta', () => set({ active: { ...this.state.active, [m.id]: c.id } }))], hasMore: true, moreOpen: e => this.openMore(e, c.id) }),
+          { t: 'Instalar otra copia', d: 'Descarga una copia nueva en otra carpeta. La que tienes no cambia.', btns: [B('Instalar…')] }
+        ], { note: cps.length + (cps.length === 1 ? ' copia' : ' copias') + ' · solo la que está en uso se abre con Jugar' }),
+        grp('CARPETAS', [
+          { t: 'Carpeta de AoE3', mono: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Age Of Empires 3\\bin', btns: [B('Abrir'), B('Cambiar…')] },
+          { t: '¿Moviste el mod o ya lo tienes en otra carpeta?', d: 'Elige su carpeta o deja que el launcher la busque en todas tus unidades. Se suma a la lista de copias; no se descarga nada.', btns: [B('Elegir carpeta…'), B('Buscar en mis discos…')] }
+        ]),
+        grp('MANTENIMIENTO', [{ t: 'Archivos temporales', d: 'Caché de descargas. Se puede borrar; vuelve si reparas.', btns: [B('Liberar espacio')] }])
+      ] },
+      data: { t: 'Datos', intro: '', groups: [
+        grp('UBICACIÓN', [{ t: 'Carpeta de datos', mono: 'C:\\Users\\Jeison\\Documents\\My Games\\' + name, btns: [B('Abrir')] }]),
+        grp('COPIAS DE SEGURIDAD', this.state.backups.length
+          ? this.state.backups.map((b, i) => ({ t: b, d: 'Partidas guardadas, metrópolis y perfil.', btns: [B('Restaurar…'), B('Borrar', () => set({ backups: this.state.backups.filter((x, k) => k !== i) }), 'red')] }))
+          : [{ t: 'Todavía no hay copias de seguridad', d: 'Crea una y aparecerá aquí.' }],
+          { note: 'Guardan partidas, metrópolis y tu perfil, no los archivos del mod', action: 'Crear copia de seguridad', act: () => set({ backups: ['Copia de hoy, ' + new Date().toTimeString().slice(0, 5)].concat(this.state.backups) }) }),
+        grp('AJUSTES DEL JUEGO', [
+          { t: 'Mismos ajustes en todos los mods', d: 'Los mods con esto activado comparten gráficos, sonido y atajos: si los cambias jugando a uno, los demás también. La primera vez se guarda una copia de los ajustes originales del mod.', ...TOG(this.state.same, () => set({ same: !this.state.same })) },
+          { t: 'Importar de otro mod', d: 'Copia una vez los gráficos, el volumen y los atajos.', btns: [B(IMP[this.state.imp % IMP.length] + '  ▾', () => set({ imp: this.state.imp + 1 })), B('Importar')] }
+        ])
+      ] },
+      lang: { t: 'Idioma', intro: 'Elige el idioma de los textos del mod dentro del juego.', groups: [
+        grp('IDIOMA ACTUAL', [
+          LG('en', 'English (predeterminado)', {}),
+          ...(m.tr ? [
+            LG('es1', 'Español — Gorgorito', { chips: [CHIP.official, CHIP.compat], mono: 'Gorgorito12/translations · para el mod 1.2.0e · paquete v1.1' }),
+            LG('es2', 'Español — Gorgorito', { chips: [CHIP.official], mono: 'papillo12/translations · para el mod 1.2.0c2 · paquete v1.1', box: 'Hecha para otra versión del mod. Puede haber textos mal, que falten o en inglés, y puede causar problemas de sincronización con otros jugadores. Úsala bajo tu responsabilidad.', ...AMBER }, 'Usar igual…')
+          ] : [])
+        ], { action: this.state.trq === 'run' ? 'Buscando…' : 'Buscar traducciones nuevas', act: () => { if (this.state.trq === 'run') return; set({ trq: 'run' }); clearTimeout(this.t3); this.t3 = setTimeout(() => set({ trq: 'done' }), 1200); }, note: this.state.trq === 'done' ? 'Comprobado ahora · no hay traducciones nuevas' : (m.tr ? '' : 'Este mod todavía no tiene traducciones de la comunidad') }),
+        grp('ORÍGENES DE TRADUCCIONES', [
+          ...(m.tr ? ['Gorgorito12/translations', 'papillo12/translations'] : []).concat(this.state.extra).map(s => { const mine = this.state.extra.includes(s); return { t: s, d: mine ? 'Añadido por ti' : 'Repositorio de GitHub · 1 traducción para este mod', chips: mine ? [] : [CHIP.official], btns: [B('Copiar enlace')] }; }),
+          { t: 'Seguir a otro traductor', d: 'Pega el enlace que te dio: un repositorio de GitHub (dueño/repo) o su translations-index.json en Google Drive, Dropbox o su web. Cuando publique una versión nueva, aparecerá aquí sola.', hasInput: true, inVal: this.state.src, inPh: 'dueño/repo o https://…', inChange: e => set({ src: e.target.value }), btns: [B('Añadir', () => { const v = this.state.src.trim(); if (v) set({ extra: this.state.extra.concat([v]), src: '' }); })] }
+        ])
+      ] },
+      addons: { t: 'Complementos', intro: 'Se vuelven a aplicar solos después de cada actualización y reparación. Al desactivar uno, se restauran los archivos originales.', groups: [
+        grp('DEL CATÁLOGO', [
+          { t: 'Humo de pólvora', chips: [CHIP.risk], d: 'Reemplaza 77 archivos .xmb.', box: 'AoE3 usa los .xmb para comprobar la versión en LAN: puede que la partida no llegue a empezar con quien no lo tenga.', ...AMBER,
+            ...(this.state.smoke ? TOG(true, () => set({ smoke: false })) : { btns: [B('Activar igual…', () => set({ smoke: true }))] }) },
+          { t: 'Interfaz transparente', chips: [CHIP.inst, CHIP.risk], d: 'Escribe 25 archivos dentro de data\\. Windows pedirá confirmación al activarlo.', box: 'La comprobación de la sala no cubre data\\: entras bien, pero la partida se desincroniza a mitad con quien no lo tenga.', ...AMBER, ...TOG(this.state.tog.ui, () => set({ tog: { ...this.state.tog, ui: !this.state.tog.ui } })) }
+        ], { note: multi ? `En la copia «${cur.label}»` : 'En esta instalación' }),
+        grp('IMPORTADOS', [
+          { t: 'Building Rotator', chips: [CHIP.cos], mono: 'local-8c1f02a9d3e7', d: '1 archivo omitido: Building Rotator.exe (el launcher no copia ejecutables a la carpeta del juego).', ...TOG(this.state.tog.rot, () => set({ tog: { ...this.state.tog, rot: !this.state.tog.rot } })) },
+          { t: 'Balance personal', chips: [CHIP.blk], mono: 'local-3f9a1c2b7d4e', box: 'Reemplaza data\\protoy.xml, que define las unidades del juego. No se puede activar.', ...RED }
+        ], { note: 'Disponibles en todos tus mods', action: 'Añadir desde archivo…' })
+      ] },
+      decks: { t: 'Barajas', intro: D ? 'Se leen de los archivos de tu metrópoli. Elige una carta para ver qué hace.' : '', groups: D ? [
+        grp('METRÓPOLI', [{ t: D.city, d: `Civilización según el archivo: ${D.civ} · nivel ${D.level}`, mono: D.file }]),
+        { ...grp('BARAJAS', [], { note: D.decks.length + ' barajas' }), isDeck: true,
+          pills: D.decks.map((dk, i) => { const a = i === deckI; return { t: dk.name, n: dk.cards.length + ' cartas', pick: () => set({ deckI: i, cardI: 0 }), bg: a ? FILL : 'rgba(10,19,33,.5)', ring: a ? al(acc, .6) : 'rgba(255,255,255,.12)', c: a ? '#ffffff' : '#c3d2e5', nc: a ? accText : '#8C9CB1' }; }),
+          cards: deck.cards.map((c, i) => { const a = i === cardI; return { slot: i + 1, name: c[0], pick: () => set({ cardI: i }), bg: a ? FILL : 'rgba(10,19,33,.45)', ring: a ? al(acc, .7) : 'rgba(255,255,255,.08)', tc: a ? '#ffffff' : '#dce7f5' }; }),
+          dSlot: 'CARTA ' + (cardI + 1) + ' DE ' + deck.cards.length, dName: card[0], dText: card[2] || '', dFx: card[3] || [], dInternal: card[1], dRing: al(acc, .4) }
+      ] : [grp('', [{ t: 'Todavía no hay barajas', d: 'Aparecerán aquí cuando crees una metrópoli con este mod y abras el juego.' }])] },
+      stats: { t: 'Estadísticas', intro: '', groups: ST ? [
+        grp('CONTRA PERSONAS', ST.human.map(g => ({ t: 'Contra ' + g.rival, chips: [g.won === true ? CHIP.win : g.won === false ? CHIP.loss : CHIP.nores], mono: g.meta })), { note: 'De tus grabaciones, también las de LAN y escaramuzas' }),
+        grp('CONTRA LA IA', ST.ai.map(g => ({ t: 'Contra la IA · ' + g.ai, chips: [g.won ? CHIP.win : CHIP.loss], mono: g.meta, d: g.res })), { note: 'Del registro de partidas del juego' })
+      ] : [grp('', [{ t: 'Todavía no hay partidas', d: 'Aparecerán aquí cuando juegues con este mod, contra personas o contra la IA.' }])] }
+    };
+    const on = (this.state.smoke ? 1 : 0) + (this.state.tog.ui ? 1 : 0) + (this.state.tog.rot ? 1 : 0);
+    const NAV = [['general', 'General'], ['files', 'Archivos'], ['data', 'Datos'], ['lang', 'Idioma'], ['addons', 'Complementos', on], ['decks', 'Barajas'], ['stats', 'Estadísticas']];
+    const GLYPH = { general: String.fromCharCode(0xE946), files: String.fromCharCode(0xE8B7), data: String.fromCharCode(0xE77B), lang: String.fromCharCode(0xE775), addons: String.fromCharCode(0xE710), decks: String.fromCharCode(0xE71D), stats: String.fromCharCode(0xE904) };
+    const ICONS = { general: "<circle cx='9' cy='9' r='7'/><path d='M9 8.2v4.6M9 5.6v.2'/>", files: "<path d='M2 4.5h4.6l1.5 1.7H16V14.5H2z'/>", data: "<circle cx='9' cy='6.2' r='3'/><path d='M3.2 15.3c.8-3 3-4.5 5.8-4.5s5 1.5 5.8 4.5'/>", lang: "<circle cx='9' cy='9' r='7'/><path d='M2 9h14M9 2c1.9 2.1 2.8 4.5 2.8 7s-.9 4.9-2.8 7M9 2C7.1 4.1 6.2 6.5 6.2 9s.9 4.9 2.8 7'/>", addons: "<rect x='2.5' y='2.5' width='13' height='13' rx='3'/><path d='M9 6v6M6 9h6'/>", decks: "<rect x='5' y='2.5' width='8' height='13' rx='1.5'/><path d='M2.5 5v8.5M15.5 5v8.5'/>", stats: "<path d='M3.5 15.5v-5M7.5 15.5v-9M11.5 15.5v-6.5M15.5 15.5v-12'/>" };
+    const ico = (k, col) => 'url("data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18' fill='none' stroke='" + col + "' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'>" + ICONS[k] + "</svg>") + '") center/contain no-repeat';
+    const PANEL = ({ 'Sólida': { bg: 'rgba(12,22,38,.95)', blur: '18px' }, 'Media': { bg: 'rgba(12,22,38,.74)', blur: '28px' }, 'Máxima': { bg: 'rgba(12,22,38,.6)', blur: '32px' } })[this.props.transparencia ?? 'Media'] || { bg: 'rgba(12,22,38,.74)', blur: '28px' };
+    const mn = this.state.menu, mc = mn && cps.find(c => c.id === mn.id);
+    const shut = extra => () => set(Object.assign({ menu: null }, extra || {}));
+    const MORE = mc ? { open: true, x: Math.max(8, mn.x - 220) + 'px', y: Math.max(8, Math.min(mn.y, H - 200)) + 'px', title: mc.label + ' · ' + mc.ver, bg: PANEL.bg, blur: PANEL.blur, close: shut(), items: [
+      { row: true, sep: false, label: 'Abrir carpeta', c: '#e8eef6', act: shut() },
+      { row: true, sep: false, label: 'Renombrar…', c: '#e8eef6', act: shut() },
+      { row: true, sep: false, label: 'Quitar de la lista', c: '#e8eef6', act: shut({ removed: Object.assign({}, this.state.removed, { [mc.id]: true }) }) },
+      { row: false, sep: true, label: '', c: '', act: shut() },
+      { row: true, sep: false, label: 'Desinstalar…', c: '#f0a6a6', act: shut() }
+    ] } : { open: false };
+    const q = (this.state.q || '').trim().toLowerCase();
+    const hit = k => { if (!q) return true; const s = S[k]; return [s.t, s.intro].concat(...s.groups.map(g => [g.label, g.note, g.action].concat(g.rows.map(r => [r.t, r.d].concat(r.btns.map(b => b.t), r.chips.map(c => c.t)).join(' '))))).join(' ').toLowerCase().includes(q); };
+    const matches = NAV.filter(([k]) => hit(k)).map(([k]) => k);
+    const secKey = matches.includes(this.state.sec) || !matches.length ? this.state.sec : matches[0];
+    const sec = S[secKey] || S.general;
+    return {
+      fw: W + 'px', fh: H + 'px', MORE, G, name, ver: cur.ver, multi, copyLabel: cur.label, author: m.author, site: m.site, accText,
+      iconBg: `url(mods/${m.id}/icon.png) center/contain no-repeat`,
+      heroBg: m.hero ? `url(mods/${m.id}/hero.jpg) center 30%/cover no-repeat` : `radial-gradient(120% 140% at 85% 0%, ${mix(acc, '#ffffff', .18)} 0%, ${acc} 32%, ${mix(acc, NAVY, .72)} 100%)`,
+      heroH: FONDO === 'Solo color' ? '0px' : FONDO === 'Imagen completa' ? '100%' : '340px',
+      shade: FONDO === 'Imagen completa'
+        ? `linear-gradient(90deg, rgba(15,28,46,.84) 0%, rgba(15,28,46,.72) 45%, rgba(15,28,46,.6) 100%), radial-gradient(60% 60% at 100% 0%, ${al(acc, .22)}, transparent 70%)`
+        : FONDO === 'Solo color'
+          ? `radial-gradient(90% 70% at 100% 0%, ${al(acc, .32)}, transparent 70%), radial-gradient(70% 60% at 0% 100%, ${al(acc, .12)}, transparent 70%)`
+          : `radial-gradient(80% 60% at 100% 0%, ${al(acc, .3)}, transparent 70%), linear-gradient(180deg, rgba(15,28,46,.45) 0px, rgba(15,28,46,.8) 170px, #0f1c2e 340px)`,
+      titleBg: (() => { const a = ({ 'Sólida': 1, 'Media': .42, 'Máxima': .3 })[(this.props.transparencia ?? 'Media')] ?? .42, n = parseInt(acc.slice(1), 16), b = [11, 20, 34]; return 'rgba(' + [n >> 16 & 255, n >> 8 & 255, n & 255].map((v, i) => Math.round(v * .22 + b[i] * .78)).join(',') + ',' + a + ')'; })(), titleBlur: (this.props.transparencia ?? 'Media') === 'Sólida' ? '0px' : '10px', thumb: al(acc, .5),
+      q: this.state.q || '', onQ: e => set({ q: e.target.value }),
+      noMatch: q && !matches.length ? 'Ningún ajuste coincide con «' + this.state.q.trim() + '»' : '',
+      nav: NAV.filter(([k]) => hit(k)).map(([k, t, n]) => { const a = secKey === k; return { t, count: n || 0, pick: () => set({ sec: k }), bg: a ? FILL : 'transparent', bar: 'none', glyph: GLYPH[k] || '', c: a ? '#ffffff' : '#c3d2e5', w: a ? 600 : 500 }; }),
+      secTitle: sec.t, secIntro: sec.intro, groups: sec.groups,
+      diagLabel: this.state.diag ? 'Informe creado ✓' : 'Crear informe', diag: () => set({ diag: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

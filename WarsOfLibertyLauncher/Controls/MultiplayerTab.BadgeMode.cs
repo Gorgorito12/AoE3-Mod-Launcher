@@ -34,6 +34,109 @@ public partial class MultiplayerTab
     /// The selector card, or null when the server sent no preference (a backend older than the
     /// field): offering a choice nobody can save is worse than not offering one.
     /// </summary>
+    /// <summary>The chooser for the account menu (design 79a), for whoever is signed in.</summary>
+    internal UIElement? BuildAccountBadgeCard()
+    {
+        var standing = _cachedStanding;
+        if (_session?.CurrentUser == null || standing?.BadgeMode == null) return null;
+
+        var pref = BadgeModes.Parse(standing.BadgeMode);
+        int? soloRank = standing.LadderRank;
+        int? soloSize = standing.LadderSize;
+        if (soloRank == null && MyLadderRank() is > 0 and var fromTable)
+        {
+            soloRank = fromTable;
+            soloSize = LadderSize(team: false);
+        }
+        var teamSize = standing.LadderSizeTeam is > 0 and var ts ? ts : LadderSize(team: true);
+        var soloAge = RankAges.ForOptional(soloRank, soloSize);
+        var teamAge = RankAges.ForOptional(standing.LadderRankTeam, teamSize);
+
+        var stack = new StackPanel { Margin = new Thickness(6, 2, 6, 2) };
+        stack.Children.Add(AccountLadderRow("MpBadgeMode1v1", soloAge, standing.Rating, standing.Rd, standing.GamesPlayed));
+        stack.Children.Add(AccountLadderRow("MpBadgeModeTeams", teamAge, standing.RatingTeam, standing.RdTeam, standing.GamesPlayedTeam));
+
+        var label = new TextBlock
+        {
+            Text = Strings.Get("MpBadgeAccountLabel"),
+            Margin = new Thickness(0, 12, 0, 8),
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)Application.Current.FindResource("UiMutedText"),
+        };
+        stack.Children.Add(label);
+
+        var tray = new Grid();
+        for (var i = 0; i < 3; i++)
+            tray.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var teamUnlocked = RankBadgeChoice.HasTeamBadge(teamAge);
+        var online = !ConnectivityState.IsOffline;
+        tray.Children.Add(BuildBadgeSegment(BadgeMode.Highest, "MpBadgeModeBest", pref, enabled: online, 0));
+        tray.Children.Add(BuildBadgeSegment(BadgeMode.Solo, "MpBadgeMode1v1", pref, enabled: online, 1));
+        tray.Children.Add(BuildBadgeSegment(BadgeMode.Team, "MpBadgeModeTeams", pref, teamUnlocked && online, 2));
+        stack.Children.Add(new Border
+        {
+            Child = tray,
+            Padding = new Thickness(3),
+            CornerRadius = new CornerRadius(8),
+            Background = (Brush)Application.Current.FindResource("MpField"),
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = Strings.Get(!online ? "MpBadgeAccountOffline"
+                : teamUnlocked ? "MpBadgeAccountHint" : "MpBadgeAccountLocked"),
+            Margin = new Thickness(0, 8, 0, 4),
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.FindResource(online ? "UiMutedText" : "WindowNoticeTitle"),
+        });
+        return stack;
+    }
+
+    private static UIElement AccountLadderRow(string modeKey, RankAge? age, double? rating, double? rd, int? games)
+    {
+        var row = new Grid { Height = 28 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(new TextBlock
+        {
+            Text = Strings.Get(modeKey),
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)Application.Current.FindResource("UiMutedText"),
+        });
+        var name = new TextBlock
+        {
+            Text = age is { } a ? Strings.Get(RankAges.NameKey(a)) : Strings.Get("MpDash"),
+            FontSize = 12.5,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 0, 10, 0),
+            Foreground = (Brush)Application.Current.FindResource(age is { } b ? "RankLabel" + b : "MpTextFaint"),
+        };
+        Grid.SetColumn(name, 1);
+        row.Children.Add(name);
+        if (RatingDisplay.ShouldShow(rating))
+        {
+            var elo = new TextBlock
+            {
+                Text = RatingDisplay.IsUnrated(rd, games)
+                    ? Strings.Get("MpEloUnrated")
+                    : Strings.Format("MpChipElo", (int)Math.Round(rating!.Value)),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+                Foreground = (Brush)Application.Current.FindResource("UiBodyText"),
+            };
+            Grid.SetColumn(elo, 2);
+            row.Children.Add(elo);
+        }
+        return row;
+    }
+
     internal UIElement? BuildBadgeModeCard(LobbyUserSummary user)
     {
         var standing = _cachedStanding;
@@ -151,6 +254,7 @@ public partial class MultiplayerTab
             button.ToolTip = TooltipHelper.Wrap(Strings.Get("MpBadgeModeTeamsLocked"));
             ToolTipService.SetShowOnDisabled(button, true);
         }
+        System.Windows.Automation.AutomationProperties.SetAutomationId(button, "BadgeMode_" + mode);
         Grid.SetColumn(button, column);
         button.Click += (_, _) => _ = ChooseBadgeModeAsync(mode);
         return button;

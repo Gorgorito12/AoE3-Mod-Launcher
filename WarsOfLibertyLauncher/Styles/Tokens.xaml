@@ -69,8 +69,8 @@
     <!-- Two-tone "punched-out" popup rim — NOT part of the scale. Outer
          MUST stay inner+1 (the 1px near-black band over the 2px bright
          inner line). See the popup-rim gotcha in CLAUDE.md. -->
-    <CornerRadius x:Key="RadiusPopupInner">6</CornerRadius>
-    <CornerRadius x:Key="RadiusPopupOuter">7</CornerRadius>
+    <CornerRadius x:Key="RadiusPopupInner">12</CornerRadius>
+    <CornerRadius x:Key="RadiusPopupOuter">12</CornerRadius>
     <CornerRadius x:Key="RadiusPopupSubmenuInner">4</CornerRadius>
     <CornerRadius x:Key="RadiusPopupSubmenuOuter">5</CornerRadius>
 
@@ -112,7 +112,7 @@
          below. WindowChrome.CaptionHeight is matched per-window in
          App.ApplyWindowChrome (this token for secondaries, TitleBarHeightMain for
          MainWindow) so the whole bar stays the native drag/double-click region. -->
-    <sys:Double x:Key="TitleBarHeight">28</sys:Double>
+    <sys:Double x:Key="TitleBarHeight">40</sys:Double>
     <!-- Main launcher header height — the ONLY window off the slim secondary bar.
          MainWindow opts into this explicitly (Height + its CaptionHeight both read it)
          so the compact secondary bar never shrinks the main header.
@@ -130,7 +130,7 @@
          upper edge. No compile error, nothing visible to hint at it.
 
          36 is DPI-clean where 46 was not: ×1.25 = 45, ×1.5 = 54, whole pixels both. -->
-    <sys:Double x:Key="TitleBarHeightMain">36</sys:Double>
+    <sys:Double x:Key="TitleBarHeightMain">40</sys:Double>
     <!-- The SAME bar in the COMPACT layout (design handoff turns 38-39, below ~1500x900): the
          same contents, only lower. Every rule above applies to it unchanged:
          App.MainTitleBarHeightKey picks this key OR the one above, and BOTH the bar's Height
@@ -138,7 +138,7 @@
          (MainWindow.ApplyCompactHeader + App.SyncMainCaptionHeight).
          34 is the handoff's value and, like MainNavHeight below, NOT whole at 125 %
          (x1.25 = 42.5, x1.5 = 51); UseLayoutRounding absorbs the half pixel. -->
-    <sys:Double x:Key="TitleBarHeightMainCompact">34</sys:Double>
+    <sys:Double x:Key="TitleBarHeightMainCompact">40</sys:Double>
     <!-- Nav row height — the strip under the title bar carrying the three main tabs and
          the player's status. MainWindow only; it is a plain content row, NOT part of the
          caption region, which is exactly why it gets its own knob instead of extending
@@ -150,11 +150,11 @@
          BOTTOM edge — where the 1px rule and the active tab's 2px underline sit — so 56
          (70 / 84) is the nearest clean value if either ever looks fuzzy on a real 125%
          display. -->
-    <sys:Double x:Key="MainNavHeight">54</sys:Double>
+    <sys:Double x:Key="MainNavHeight">56</sys:Double>
     <!-- The nav row in the COMPACT layout (design handoff turns 38-39): the same tabs, capsule
          and account block, 42 high. Set by MainWindow.ApplyCompactHeader through a resource
          reference, so MainNav's XAML value stays the wide one. -->
-    <sys:Double x:Key="MainNavHeightCompact">42</sys:Double>
+    <sys:Double x:Key="MainNavHeightCompact">56</sys:Double>
     <!-- Caption-button footprint. Width 40 (down from the classic 46) to match the
          slimmer bar; height fills the bar so they read as one strip. 40 is DPI-clean
          (×1.25=50, ×1.5=60). The main header overrides back to 46 locally. -->
@@ -166,12 +166,12 @@
     <sys:Double x:Key="TitleBarButtonWidthMainCompact">44</sys:Double>
     <!-- Segoe MDL2 glyph size for the min/max/restore/close icons — 8 to stay
          proportionate to the 28px bar (main header overrides back to 10). -->
-    <sys:Double x:Key="TitleBarGlyphSize">8</sys:Double>
+    <sys:Double x:Key="TitleBarGlyphSize">10</sys:Double>
     <!-- Title text size — sized to sit centred in the 28px bar without clipping
          (gold DisplayFont). 16 (down from 24): the bar is the fixed dimension now
          and the title fits IT, the inverse of the old rule. Its OWN knob, still
          independent of TitleBarHeight. -->
-    <sys:Double x:Key="TitleBarTitleSize">16</sys:Double>
+    <sys:Double x:Key="TitleBarTitleSize">14</sys:Double>
     <!-- Left gutter before the icon/title; right side is flush with the
          buttons. -->
     <Thickness x:Key="TitleBarContentPadding">12,0,8,0</Thickness>
@@ -184,7 +184,7 @@
          `border-radius: 999px` is a clamped-to-50% idiom that WPF renders as a
          distorted ellipse. RadiusPill (13) belongs to the 26px chips elsewhere and is
          wrong for a 30px capsule. -->
-    <Thickness x:Key="MainNavPadding">20,0</Thickness>
+    <Thickness x:Key="MainNavPadding">32,0</Thickness>
     <sys:Double x:Key="ChromeVersionSize">11</sys:Double>
     <CornerRadius x:Key="ChromeVersionRadius">3</CornerRadius>
     <sys:Double x:Key="ChromeCapsuleHeight">30</sys:Double>
@@ -220,7 +220,7 @@
          the tabs lived INSIDE the title bar, where they had to fit a 46px strip beside
          everything else. Back in a row of their own they fit the type scale's
          documented floor again — so this is one deviation that closed itself. -->
-    <sys:Double x:Key="NavTabTextSize">13</sys:Double>
+    <sys:Double x:Key="NavTabTextSize">14</sys:Double>
     <!-- The tabs in the 42-px compact nav row (design handoff turns 38-39): 12, the handoff's
          value. Scaled by the Text-size setting like the wide one. -->
     <sys:Double x:Key="NavTabCompactTextSize">12</sys:Double>
@@ -428,6 +428,34 @@
     <!-- A tournament's own name, serif, at the head of its detail pane. Larger than
          MpPageTitleSize because it is not the page's title: the page is "Torneos" and this
          says which tournament you opened. -->
+    <!-- The Profile window, design 95. -->
+    <sys:Double x:Key="ProfileTitleSize">22</sys:Double>
+    <sys:Double x:Key="ProfileRatingSize">42</sys:Double>
+    <sys:Double x:Key="ProfileNameSize">24</sys:Double>
+    <sys:Double x:Key="ProfileNameSizeCompact">20</sys:Double>
+    <sys:Double x:Key="ProfileNameSizeWide">28</sys:Double>
+    <sys:Double x:Key="ProfileCurveFigureSize">26</sys:Double>
+    <sys:Double x:Key="ProfileStreakFigureSize">26</sys:Double>
+    <sys:Double x:Key="ProfileStreakBestSize">20</sys:Double>
+    <sys:Double x:Key="ProfileRefundFigureSize">18</sys:Double>
+    <sys:Double x:Key="ProfileDeckTitleSize">19</sys:Double>
+    <!-- The Statistics page, design 98. A family of its own for the same reason Mp*, Ws* and Set*
+         are: pointing it at another chains two surfaces together. -->
+    <sys:Double x:Key="StatsTitleSize">28</sys:Double>
+    <sys:Double x:Key="StatsTitleSizeCompact">22</sys:Double>
+    <sys:Double x:Key="StatsFigureSize">30</sys:Double>
+    <sys:Double x:Key="StatsFigureSizeCompact">26</sys:Double>
+    <sys:Double x:Key="StatsSubtitleSize">14</sys:Double>
+    <sys:Double x:Key="StatsBandSize">15</sys:Double>
+    <sys:Double x:Key="StatsRowNameSize">14</sys:Double>
+    <sys:Double x:Key="StatsRowNameSizeCompact">13.5</sys:Double>
+    <sys:Double x:Key="StatsBodySize">13</sys:Double>
+    <sys:Double x:Key="StatsProseSize">12.5</sys:Double>
+    <sys:Double x:Key="StatsNoteSize">12</sys:Double>
+    <sys:Double x:Key="StatsDeckCountSize">11.5</sys:Double>
+    <sys:Double x:Key="StatsLabelSize">11</sys:Double>
+    <sys:Double x:Key="StatsHeaderSize">10.5</sys:Double>
+    <sys:Double x:Key="StatsTagSize">9.5</sys:Double>
     <sys:Double x:Key="MpTournamentNameSize">19</sys:Double>
 
     <!-- ===================================================================
@@ -522,8 +550,22 @@
          decision and nobody has asked for it.
          =================================================================== -->
     <sys:Double x:Key="SetDescMaxWidth">840</sys:Double>
+    <!-- Design 72 (docs/design_base_launcher): the row of a settings window. Separate from
+         SetBodySize and SetDescSize, which the dialogs that were not redone still use. -->
+    <sys:Double x:Key="SetRowTitleSize">13.5</sys:Double>
+    <sys:Double x:Key="SetRowDescSize">12.5</sys:Double>
+    <sys:Double x:Key="SetNavSize">13.5</sys:Double>
+    <sys:Double x:Key="SetCaptionSize">11</sys:Double>
+    <sys:Double x:Key="SetPageTitleSize">22</sys:Double>
+    <!-- The dialogs of design_base_launcher_2: headline, body and a device code. -->
+    <sys:Double x:Key="DialogHeadlineSize">21</sys:Double>
+    <sys:Double x:Key="DialogTitleSize">22</sys:Double>
+    <sys:Double x:Key="DialogSubheadSize">19</sys:Double>
+    <sys:Double x:Key="WzLabelSize">13.5</sys:Double>
+    <sys:Double x:Key="DialogBodySize">13</sys:Double>
+    <sys:Double x:Key="DialogCodeSize">30</sys:Double>
     <sys:Double x:Key="SetRailWidth">216</sys:Double>         <!-- launcher settings sidebar -->
-    <sys:Double x:Key="SetModRailWidth">206</sys:Double>      <!-- per-mod properties sidebar -->
+    <sys:Double x:Key="SetModRailWidth">220</sys:Double>      <!-- per-mod properties sidebar -->
 
     <!-- The rail footer's ceiling, and the ONLY thing standing between the mod's own
          mod.json and the width of the whole page.
@@ -543,7 +585,7 @@
          size. If the rail legitimately grows past 206 - a longer translated nav label at a
          larger text size, which is what MinWidth-not-Width exists for - the footer simply
          does not use the extra room. That is the price of it never pushing. -->
-    <sys:Double x:Key="SetModRailTextWidth">181</sys:Double>
+    <sys:Double x:Key="SetModRailTextWidth">194</sys:Double>
 
     <!-- Fixed action-column widths. The width must NOT follow the label, or the
          right edge of the column zigzags down the section. 88 = Open/Change/
@@ -556,11 +598,11 @@
 
     <!-- Toggle switch. 34x20 with a 16 px thumb leaves 2 px of track around it,
          which is why SetTogglePadding is 2 and not a derived value. -->
-    <sys:Double x:Key="SetToggleWidth">34</sys:Double>
-    <sys:Double x:Key="SetToggleHeight">20</sys:Double>
-    <sys:Double x:Key="SetToggleThumbSize">16</sys:Double>
-    <CornerRadius x:Key="SetToggleRadius">10</CornerRadius>   <!-- half of 20; WPF has no 999 idiom -->
-    <CornerRadius x:Key="SetToggleThumbRadius">8</CornerRadius>
+    <sys:Double x:Key="SetToggleWidth">38</sys:Double>
+    <sys:Double x:Key="SetToggleHeight">22</sys:Double>
+    <sys:Double x:Key="SetToggleThumbSize">18</sys:Double>
+    <CornerRadius x:Key="SetToggleRadius">11</CornerRadius>   <!-- half of 20; WPF has no 999 idiom -->
+    <CornerRadius x:Key="SetToggleThumbRadius">9</CornerRadius>
 
     <Thickness x:Key="SetRowPadding">14,13,14,13</Thickness>       <!-- setting row -->
     <Thickness x:Key="SetActionRowPadding">14,11,14,11</Thickness>  <!-- row whose control is a button -->

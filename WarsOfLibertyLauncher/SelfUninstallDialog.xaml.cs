@@ -25,6 +25,7 @@ public partial class SelfUninstallDialog : Window
     public SelfUninstallDialog(SelfInstallService.UninstallFacts facts, bool elevated)
     {
         InitializeComponent();
+        Controls.ModDialogChrome.AttachGlobal(this);
         _facts = facts;
         _elevated = elevated;
 
@@ -42,6 +43,8 @@ public partial class SelfUninstallDialog : Window
         Title = title;
         TitleBarControl.Title = title;
         HeaderText.Text = Strings.Get(Portable ? "DlgSelfUninstallHeadlinePortable" : "DlgSelfUninstallHeadline");
+        LeadText.Text = Strings.Get(!Portable ? "DlgSelfUninstallLead"
+            : _facts.InstalledCopyDir != null ? "DlgSelfUninstallLeadPortable" : "DlgSelfUninstallLeadPortableAlone");
 
         RemovedLabelText.Text = Strings.Get("DlgSelfUninstallRemovedLabel");
         BuildRemovedList();
@@ -50,13 +53,14 @@ public partial class SelfUninstallDialog : Window
         // the list is the one the player can read and recognise.
         var hasMods = _facts.InstalledMods.Count > 0;
         SafeNoteText.Text = hasMods
-            ? Strings.Format("DlgSelfUninstallSafeMods", string.Join(", ", _facts.InstalledMods))
+            ? Strings.Format("DlgSelfUninstallSafeMods", JoinNames(_facts.InstalledMods))
             : Strings.Get("DlgSelfUninstallSafeNoMods");
         ModsHintText.Text = Strings.Get("DlgSelfUninstallModsHint");
         ModsHintText.Visibility = hasMods ? Visibility.Visible : Visibility.Collapsed;
 
         PortablePanel.Visibility = Portable && !string.IsNullOrWhiteSpace(_facts.RunningExe)
             ? Visibility.Visible : Visibility.Collapsed;
+        PortableLabelText.Text = Strings.Get("DlgSelfUninstallPortableLabel");
         PortableNoteText.Text = Strings.Get("DlgSelfUninstallPortableStays");
         PortablePathText.Text = PathDisplay.BreakAtSeparators(_facts.RunningExe);
 
@@ -80,7 +84,28 @@ public partial class SelfUninstallDialog : Window
 
         AntivirusNoteText.Text = Strings.Get("DlgSelfUninstallAntivirus");
         CancelButton.Content = Strings.Get("BtnCancel");
-        OkButton.Content = Strings.Get(Portable ? "DlgSelfUninstallConfirmPortable" : "BtnUninstall");
+        UpdateConfirmCaption();
+
+        Controls.ModDialogChrome.SetLineHeight(1.25, HeaderText);
+        Controls.ModDialogChrome.SetLineHeight(1.55, LeadText);
+        Controls.ModDialogChrome.SetLineHeight(1.45, SafeNoteText, ModsHintText, PortablePathText, PortableNoteText,
+            OptDataDesc, OptDataPath, OptDataPending, OptDataBackups, AntivirusNoteText);
+    }
+
+    /// <summary>What cannot be undone is read on the button that does it.</summary>
+    private void UpdateConfirmCaption()
+    {
+        OkButton.Content = Strings.Get(OptDeleteData.IsChecked == true ? "DlgSelfUninstallConfirmData"
+            : Portable ? "DlgSelfUninstallConfirmPortable" : "DlgSelfUninstallConfirm");
+    }
+
+    private void OptDeleteData_Changed(object sender, RoutedEventArgs e) => UpdateConfirmCaption();
+
+    private static string JoinNames(System.Collections.Generic.IReadOnlyList<string> names)
+    {
+        if (names.Count < 2) return string.Join("", names);
+        return string.Join(", ", System.Linq.Enumerable.Take(names, names.Count - 1))
+            + Strings.Get("DlgSelfUninstallAnd") + names[^1];
     }
 
     private static string Count(int n) => n.ToString("N0", UninstallDialog.CountCulture());
@@ -108,19 +133,27 @@ public partial class SelfUninstallDialog : Window
 
     private void AddItem(string text, string? detail = null, bool detailIsPath = false)
     {
-        var row = new Grid { Margin = new Thickness(0, RemovedList.Children.Count == 0 ? 0 : 6, 0, 0) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var row = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var bullet = new TextBlock { Text = "•", Margin = new Thickness(0, 0, 8, 0) };
-        bullet.SetResourceReference(TextBlock.FontSizeProperty, "SetControlSize");
-        bullet.SetResourceReference(TextBlock.ForegroundProperty, "UiDangerLabel");
+        var bullet = new Border
+        {
+            Width = 5,
+            Height = 5,
+            CornerRadius = new CornerRadius(2.5),
+            Margin = new Thickness(1, 7, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+        bullet.SetResourceReference(Border.BackgroundProperty, "UiDangerText");
         row.Children.Add(bullet);
 
-        var body = new StackPanel();
-        var line = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap };
-        line.SetResourceReference(TextBlock.FontSizeProperty, "SetControlSize");
-        line.SetResourceReference(TextBlock.ForegroundProperty, "MpTextHeading");
+        var body = new StackPanel { Margin = new Thickness(9, 0, 0, 0) };
+        var line = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontWeight = FontWeights.Medium };
+        line.SetResourceReference(TextBlock.FontSizeProperty, "SetRowTitleSize");
+        line.SetResourceReference(TextBlock.ForegroundProperty, "WindowStrongText");
+        Controls.ModDialogChrome.SetLineHeight(1.4, line);
         body.Children.Add(line);
         if (!string.IsNullOrWhiteSpace(detail))
         {
@@ -130,9 +163,9 @@ public partial class SelfUninstallDialog : Window
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 3, 0, 0),
             };
-            if (detailIsPath) note.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
-            note.SetResourceReference(TextBlock.FontSizeProperty, detailIsPath ? "SetMonoSize" : "SetDescSize");
-            note.SetResourceReference(TextBlock.ForegroundProperty, "MpTextMuted");
+            if (detailIsPath) note.FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace");
+            note.SetResourceReference(TextBlock.FontSizeProperty, "SetControlSize");
+            note.SetResourceReference(TextBlock.ForegroundProperty, "WindowMuted");
             body.Children.Add(note);
         }
         Grid.SetColumn(body, 1);

@@ -309,7 +309,8 @@ public static class DeltaPatchService
     /// </summary>
     public static async Task<GenerateResult> GeneratePatchAsync(
         string oldZipPath, string newZipPath, string fromTag, string toTag,
-        string outputFolder, CancellationToken ct = default)
+        string outputFolder, CancellationToken ct = default,
+        IProgress<PatchGenerationProgress>? progress = null)
     {
         if (!File.Exists(oldZipPath)) throw new FileNotFoundException("Old overlay zip not found.", oldZipPath);
         if (!File.Exists(newZipPath)) throw new FileNotFoundException("New overlay zip not found.", newZipPath);
@@ -318,18 +319,15 @@ public static class DeltaPatchService
         var work = Path.Combine(Path.GetTempPath(), "aoe3ml-delta-gen-" + Guid.NewGuid().ToString("N"));
         var oldDir = Path.Combine(work, "old");
         var newDir = Path.Combine(work, "new");
+        string? partZip = null, partJson = null;
         try
         {
             Directory.CreateDirectory(oldDir);
             Directory.CreateDirectory(newDir);
-            await Task.Run(() =>
-            {
-                ZipFile.ExtractToDirectory(oldZipPath, oldDir);
-                ZipFile.ExtractToDirectory(newZipPath, newDir);
-            }, ct);
-
-            var oldHashes = await Task.Run(() => HashTree(oldDir), ct);
-            var newHashes = await Task.Run(() => HashTree(newDir), ct);
+            var oldHashes = await Task.Run(
+                () => ReadTree(oldZipPath, oldDir, PatchGenerationPhase.ComparingOld, progress, ct), ct);
+            var newHashes = await Task.Run(
+                () => ReadTree(newZipPath, newDir, PatchGenerationPhase.ComparingNew, progress, ct), ct);
             var (changed, deleted) = ComputeDiff(oldHashes, newHashes);
 
             var stem = PatchAssetNaming.StemFor(fromTag, toTag);
@@ -338,22 +336,27 @@ public static class DeltaPatchService
             var patchZipPath = Path.Combine(outputFolder, patchZipName);
             var patchJsonPath = Path.Combine(outputFolder, patchJsonName);
 
+            // Written under a scratch name and moved at the very end, so a cancel or a failure
+            // leaves nothing half-done in the output folder and an earlier good patch where it was.
+            partZip = patchZipPath + ".part";
+            partJson = patchJsonPath + ".part";
+
             // Pack the changed/added files (from the NEW tree) into the patch zip.
-            if (File.Exists(patchZipPath)) File.Delete(patchZipPath);
             await Task.Run(() =>
             {
-                using var fs = new FileStream(patchZipPath, FileMode.Create, FileAccess.Write);
+                using var fs = new FileStream(partZip, FileMode.Create, FileAccess.Write);
                 using var zip = new ZipArchive(fs, ZipArchiveMode.Create);
+                var done = 0;
                 foreach (var c in changed)
                 {
                     ct.ThrowIfCancellationRequested();
                     var src = Path.Combine(newDir, c.Path.Replace('/', Path.DirectorySeparatorChar));
-                    if (!File.Exists(src)) continue;
-                    zip.CreateEntryFromFile(src, c.Path, CompressionLevel.Optimal);
+                    if (File.Exists(src)) zip.CreateEntryFromFile(src, c.Path, CompressionLevel.Optimal);
+                    progress?.Report(new PatchGenerationProgress(PatchGenerationPhase.Writing, ++done, changed.Count));
                 }
             }, ct);
 
-            var payloadSha = (await Task.Run(() => VerifyService.ComputeFingerprintOf(patchZipPath), ct)).Sha256;
+            var payloadSha = (await Task.Run(() => VerifyService.ComputeFingerprintOf(partZip), ct)).Sha256;
 
             var descriptor = new DeltaPatchDescriptor
             {
@@ -364,7 +367,10 @@ public static class DeltaPatchService
                 Changed = changed,
                 Deleted = deleted,
             };
-            await File.WriteAllTextAsync(patchJsonPath, JsonSerializer.Serialize(descriptor, JsonOpts), ct);
+            await File.WriteAllTextAsync(partJson, JsonSerializer.Serialize(descriptor, JsonOpts), ct);
+            ct.ThrowIfCancellationRequested();
+            File.Move(partZip, patchZipPath, overwrite: true);
+            File.Move(partJson, patchJsonPath, overwrite: true);
 
             long patchSize = new FileInfo(patchZipPath).Length;
             long fullSize = 0;
@@ -376,17 +382,39 @@ public static class DeltaPatchService
         finally
         {
             try { if (Directory.Exists(work)) Directory.Delete(work, recursive: true); } catch { /* best-effort */ }
+            try { if (partZip != null && File.Exists(partZip)) File.Delete(partZip); } catch { /* best-effort */ }
+            try { if (partJson != null && File.Exists(partJson)) File.Delete(partJson); } catch { /* best-effort */ }
         }
     }
 
-    private static Dictionary<string, string> HashTree(string root)
+    /// <summary>Unpacks one overlay and fingerprints it file by file, in one pass so a Cancel is
+    /// heard between files and the window can count them. An entry that would land outside the
+    /// folder is refused, as <c>ZipFile.ExtractToDirectory</c> refused it.</summary>
+    private static Dictionary<string, string> ReadTree(
+        string zipPath, string root, PatchGenerationPhase phase,
+        IProgress<PatchGenerationProgress>? progress, CancellationToken ct)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        var rootPrefix = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        using var zip = ZipFile.OpenRead(zipPath);
+        var entries = zip.Entries.Where(e => e.Name.Length > 0).ToList();
+        var done = 0;
+        foreach (var entry in entries)
         {
-            var rel = Path.GetRelativePath(root, f).Replace('\\', '/');
-            try { result[rel] = VerifyService.ComputeFingerprintOf(f).Sha256; }
+            ct.ThrowIfCancellationRequested();
+            var dest = Path.GetFullPath(Path.Combine(root, entry.FullName));
+            if (!dest.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                throw new IOException($"The zip entry '{entry.FullName}' points outside the folder.");
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            entry.ExtractToFile(dest, overwrite: true);
+
+            var rel = Path.GetRelativePath(root, dest).Replace('\\', '/');
+            try { result[rel] = VerifyService.ComputeFingerprintOf(dest).Sha256; }
             catch { /* unreadable file drops out */ }
+
+            done++;
+            if (done % 16 == 0 || done == entries.Count)
+                progress?.Report(new PatchGenerationProgress(phase, done, entries.Count));
         }
         return result;
     }
@@ -599,6 +627,21 @@ public static class DeltaPatchService
 
     /// <summary>A downloaded, hash-verified, pre-verified patch ready to apply.</summary>
     public sealed record PreparedPatch(DeltaPatchDescriptor Descriptor, string LocalZipPath);
+
+    /// <summary>The three stages of one patch, in order.</summary>
+    public enum PatchGenerationPhase { ComparingOld, ComparingNew, Writing }
+
+    /// <summary>Where <see cref="GeneratePatchAsync"/> is, in files of the current stage.</summary>
+    public sealed record PatchGenerationProgress(PatchGenerationPhase Phase, int Done, int Total)
+    {
+        /// <summary>How far the whole run is, 0 to 1: <paramref name="patchIndex"/> of
+        /// <paramref name="patches"/>, each worth three stages.</summary>
+        public double Overall(int patchIndex, int patches)
+        {
+            var within = Total > 0 ? Math.Clamp((double)Done / Total, 0, 1) : 1;
+            return (patchIndex * 3 + (int)Phase + within) / (patches * 3);
+        }
+    }
 
     /// <summary>Result of <see cref="GeneratePatchAsync"/>.</summary>
     public sealed record GenerateResult(

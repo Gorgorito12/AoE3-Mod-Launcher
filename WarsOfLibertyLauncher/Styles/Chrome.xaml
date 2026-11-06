@@ -95,7 +95,7 @@
          contractually wired in TitleBar.OnApplyTemplate.
          ============================================================ -->
     <Style TargetType="{x:Type controls:TitleBar}">
-        <Setter Property="Background" Value="{DynamicResource BgSidebar}"/>
+        <Setter Property="Background" Value="{DynamicResource GlassTitleBar}"/>
         <Setter Property="Height" Value="{StaticResource TitleBarHeight}"/>
         <!-- Geometry defaults: compact secondary sizes (MainWindow overrides
              Height/ButtonWidth/GlyphSize locally back to the classic header). -->
@@ -112,6 +112,8 @@
                          (gutter 18 DIP × 1.25 = 22.5 px) and rendered blurry. No
                          transform / no text resize — pure pixel snapping. -->
                     <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{DynamicResource TitleBarLine}"
+                            BorderThickness="0,0,0,1"
                             Height="{TemplateBinding Height}"
                             SnapsToDevicePixels="True"
                             UseLayoutRounding="True">
@@ -135,7 +137,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Image x:Name="PART_Icon" Grid.Column="0"
-                                       Width="20" Height="20"
+                                       Width="18" Height="18"
                                        VerticalAlignment="Center" Margin="0,0,10,0"
                                        Visibility="Collapsed"
                                        RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -150,8 +152,8 @@
                                            VerticalAlignment="Center"
                                            FontFamily="{DynamicResource DisplayFont}"
                                            FontSize="{TemplateBinding TitleSize}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentBrush}"
+                                           FontWeight="Bold"
+                                           Foreground="{DynamicResource UiTitleText}"
                                            TextTrimming="CharacterEllipsis"
                                            Visibility="Collapsed"/>
                                 <ContentPresenter Grid.Column="2"

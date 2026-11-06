@@ -2,7 +2,9 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
@@ -48,14 +50,12 @@ public partial class RadminAssistantWindow : Window
     private RadminStage _lastStage = (RadminStage)(-1);
 
     /// <summary>The four steps. One number, so the bar and the list cannot disagree.</summary>
-    private const int StepCount = 4;
+    private const int StepCount = 3;
 
     /// <summary>Segoe MDL2 "copy". A Private Use Area char - it prints as nothing in a
     /// terminal or a grep, which has made this pair look like a lost literal before.</summary>
-    private const string CopyGlyph = "\ue8c8";
 
     /// <summary>Segoe MDL2 "accept", flashed for 1.5 s after a copy.</summary>
-    private const string CopiedGlyph = "\ue73e";
 
     /// <summary>Last probe, kept so a re-render does not have to wait for the next tick.</summary>
     private RadminStatus? _status;
@@ -75,7 +75,18 @@ public partial class RadminAssistantWindow : Window
     private TextBlock? _networkLabel;
     private TextBlock? _networkName;
     private Button? _copyBtn;
-    private TextBlock? _copyGlyph;
+    private Button? _openInCard;
+    private bool _copied;
+
+    // The waiting dot of the open step, which the poll beats.
+    private Border? _waitDot;
+
+    // Radmin installing from here: the percent, and 100 once msiexec has the file.
+    private bool _installing;
+    private int _installPercent;
+
+    // A --preview-dialog state: this stage and nothing probed.
+    private readonly RadminStage? _previewStage;
 
     /// <summary>
     /// True only when the launcher opened this itself (Radmin wasn't ready).
@@ -84,11 +95,13 @@ public partial class RadminAssistantWindow : Window
     /// </summary>
     private readonly bool _autoOpened;
 
-    public RadminAssistantWindow(LauncherConfig config, bool autoOpened = false)
+    public RadminAssistantWindow(LauncherConfig config, bool autoOpened = false, RadminStage? previewStage = null)
     {
         _config = config;
         _autoOpened = autoOpened;
+        _previewStage = previewStage;
         InitializeComponent();
+        Controls.ModDialogChrome.AttachGlobal(this);
         ApplyStrings();
         DontShowAgainCheck.IsChecked = _config.RadminAssistantSkipped;
         // The network name is seeded by NetworkCard() from the same canonical constant the
@@ -117,6 +130,17 @@ public partial class RadminAssistantWindow : Window
             // (Manual at 0,0). Not pretty but never crashes.
         }
 
+        if (_previewStage is { } stage)
+        {
+            ApplyStage(stage, Preview(stage));
+            if (_previewOpened) { _stepsExpanded = true; Repaint(); }
+            if (_previewInstalling) StartPreviewInstall();
+            _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            _pollTimer.Tick += (_, _) => PulseWaitDot();
+            _pollTimer.Start();
+            return;
+        }
+
         // Kick the first probe right away so the checklist isn't
         // visually empty for 3 seconds before the timer fires.
         Refresh();
@@ -131,7 +155,11 @@ public partial class RadminAssistantWindow : Window
         // LoggedIn: the probe parses every rotated Radmin log, which is why it runs on the pool
         // and why a tick never starts a second probe while one is still running.
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _pollTimer.Tick += (_, _) => DiagnosticLog.Time("Radmin assistant refresh", Refresh);
+        _pollTimer.Tick += (_, _) =>
+        {
+            DiagnosticLog.Time("Radmin assistant refresh", Refresh);
+            PulseWaitDot();
+        };
         _pollTimer.Start();
     }
 
@@ -192,7 +220,6 @@ public partial class RadminAssistantWindow : Window
             // overlay quiet (no flicker) during the long stretches
             // where the user is staring at Radmin's window.
             if (stage == _lastStage) return;
-            _lastStage = stage;
 
             ApplyStage(stage, snap.Status);
 
@@ -229,24 +256,10 @@ public partial class RadminAssistantWindow : Window
 
     // -- Step rendering -------------------------------------------------------
 
-    /// <summary>
-    /// Paint the whole window from one stage.
-    ///
-    /// <para><b>Two shapes, not four rows.</b> Below <see cref="RadminStage.InAoE3Network"/>
-    /// this is a checklist with exactly ONE card open; at it, the checklist folds to a line
-    /// and the window becomes the thing it is actually for — the network name, in full,
-    /// with its copy button. The old version laid out four identical Grids in every state and
-    /// hid none of them, so the only difference between "you have three steps to go" and
-    /// "you are connected" was the colour of four badges.</para>
-    ///
-    /// <para><b>internal, for the tests.</b> On a machine where Radmin is already connected
-    /// the probe only ever reports <see cref="RadminStage.InAoE3Network"/>, so three of the
-    /// four states cannot be reached by opening the window at all — driving the stage is
-    /// the only way to look at them.</para>
-    /// </summary>
     internal void ApplyStage(RadminStage stage, RadminStatus status)
     {
         _status = status;
+        _lastStage = stage;
         bool connected = stage == RadminStage.InAoE3Network;
 
         // Reaching the end folds the list; opening it again is the user's call and sticks
@@ -261,11 +274,17 @@ public partial class RadminAssistantWindow : Window
         if (connected)
         {
             ConnectedTitle.Text = Strings.Get("RadAsstConnectedTitle");
-            ConnectedIp.Text = Strings.Format("RadAsstConnectedIp", status.AdapterIp ?? "26.?.?.?");
+            ConnectedIp.Inlines.Clear();
+            Controls.ModDialogChrome.AddMarkedText(ConnectedIp,
+                Strings.Format("RadAsstConnectedIp", status.AdapterIp ?? "26.?.?.?"));
             StepsDoneText.Text = Strings.Get("RadAsstAllDone");
-            ReopenRadminLink.Content = Strings.Get("RadAsstStep1BtnReopen");
+            ReopenRadminLink.Content = Strings.Get("RadAsstOpenRadmin");
             ShowStepsLink.Content = Strings.Get(_stepsExpanded ? "RadAsstHideSteps" : "RadAsstBannerShowSteps");
         }
+
+        // "Close" is the way out only once there is nothing left to do: until then the
+        // primary button on screen is the step's own action.
+        CloseBtn.Style = (Style)FindResource(connected ? "WindowPrimaryButton" : "WindowSecondaryButton");
 
         // The card has ONE definition. Which parent holds it is the only thing that changes,
         // and a WPF element cannot have two, so the old host is cleared first. Its label is
@@ -276,13 +295,14 @@ public partial class RadminAssistantWindow : Window
         _networkLabel!.Text = Strings.Get(connected
             ? "RadAsstNetworkLabelJoined"
             : "RadAsstNetworkLabel");
-        var wantsCard = connected;
-        if (wantsCard && !ReferenceEquals(ConnectedNetworkHost.Content, card))
+        _openInCard!.Visibility = connected ? Visibility.Collapsed : Visibility.Visible;
+        PaintCopyButton();
+        if (connected && !ReferenceEquals(ConnectedNetworkHost.Content, card))
         {
             Detach(card);
             ConnectedNetworkHost.Content = card;
         }
-        else if (!wantsCard && ConnectedNetworkHost.Content != null)
+        else if (!connected && ConnectedNetworkHost.Content != null)
         {
             ConnectedNetworkHost.Content = null;
         }
@@ -291,36 +311,29 @@ public partial class RadminAssistantWindow : Window
         RenderSteps(stage, status);
     }
 
-    /// <summary>Four segments and a count, so the window says where you are before you read it.</summary>
     private void RenderProgress(RadminStage stage)
     {
         int done = DoneCount(stage);
         int current = Math.Min(done + 1, StepCount);
-        ProgressLabel.Text = Strings.Format("RadAsstProgress", current, StepCount);
+        ProgressLabel.Text = done == StepCount
+            ? Strings.Get("RadAsstProgressDone")
+            : Strings.Format("RadAsstProgress", current, StepCount);
 
         ProgressSegments.Children.Clear();
         for (int i = 1; i <= StepCount; i++)
         {
-            ProgressSegments.Children.Add(new Border
+            var segment = new Border
             {
                 Height = 4,
                 CornerRadius = new CornerRadius(2),
-                Margin = new Thickness(0, 0, i == StepCount ? 0 : 3, 0),
-                Background = i <= done ? Brush("MpOk")
-                    : i == current ? Brush("MpAction")
-                    : Brush("MpRimSoft"),
-            });
+                Margin = new Thickness(0, 0, i == StepCount ? 0 : 4, 0),
+            };
+            segment.SetResourceReference(Border.BackgroundProperty,
+                i <= done ? "WindowSafeTick" : i == current ? "MpAction" : "WindowCardRim");
+            ProgressSegments.Children.Add(segment);
         }
     }
 
-    /// <summary>
-    /// The list: finished steps on one line, the active one open, the rest dim.
-    ///
-    /// <para>Rebuilt rather than toggled because the three shapes share no layout — a
-    /// folded row is a check, a sentence and a number, and the open one is a card with an
-    /// action inside it. <see cref="Refresh"/> only calls this on a stage CHANGE, so this
-    /// runs about four times in the window's life.</para>
-    /// </summary>
     private void RenderSteps(RadminStage stage, RadminStatus status)
     {
         StepsList.Children.Clear();
@@ -328,35 +341,22 @@ public partial class RadminAssistantWindow : Window
 
         for (int n = 1; n <= StepCount; n++)
         {
-            if (n <= done)
-            {
-                // Step 1 keeps its action here, shrunk to a link. It used to stay a
-                // 160-px button in a finished step because ApplyStage set it Visible in
-                // BOTH of its branches and nothing ever set it back.
-                StepsList.Children.Add(FoldedStep(n, DoneCaption(n, status),
-                    n == 1 ? Strings.Get("RadAsstStep1BtnReopen") : null));
-            }
-            else if (n == done + 1)
-            {
-                StepsList.Children.Add(OpenStep(n, stage));
-            }
-            else
-            {
-                StepsList.Children.Add(PendingStep(n));
-            }
+            if (n <= done) StepsList.Children.Add(FoldedStep(n, DoneCaption(n, status)));
+            else if (n == done + 1) StepsList.Children.Add(OpenStep(n));
+            else StepsList.Children.Add(PendingStep(n));
         }
     }
 
-    private string DoneCaption(int n, RadminStatus status) => n switch
+    private static string DoneCaption(int n, RadminStatus status) => n switch
     {
         1 => Strings.Get("RadAsstStep1Done"),
         2 => Strings.Format("RadAsstStep2Done", status.AdapterIp ?? "26.?.?.?"),
-        3 => Strings.Get("RadAsstStep3Done"),
-        _ => Strings.Get("RadAsstStep4Done"),
+        _ => Strings.Get("RadAsstStep3Done"),
     };
 
-    /// <summary>How many steps are behind you. The stage enum is ordinal and stays the source.</summary>
-    private static int DoneCount(RadminStage stage) => stage switch
+    /// <summary>Three steps: the launcher goes from "join the network" straight to all green, so
+    /// a fourth "connection confirmed" step never opened. The waiting line does that job.</summary>
+    internal static int DoneCount(RadminStage stage) => stage switch
     {
         RadminStage.NotInstalled => 0,
         RadminStage.InstalledNotRunning => 1,
@@ -366,130 +366,81 @@ public partial class RadminAssistantWindow : Window
 
     // -- The three step shapes ------------------------------------------------
 
-    private UIElement FoldedStep(int n, string caption, string? actionLabel)
+    private UIElement FoldedStep(int n, string caption)
     {
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 2) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var text = new TextBlock
+        {
+            FontSize = Size("SetRowDescSize"),
+            Foreground = Brush("WindowSoftText"),
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Controls.ModDialogChrome.AddMarkedText(text, caption);
 
-        var check = new Border
+        return StepRow(n, new Border
         {
             Width = 18,
             Height = 18,
             CornerRadius = new CornerRadius(9),
-            Background = Brush("MpOkBg"),
-            Margin = new Thickness(0, 0, 10, 0),
-            VerticalAlignment = VerticalAlignment.Center,
+            Background = Brush("WindowTickFill"),
             Child = new TextBlock
             {
-                Text = "\u2713",
-                Foreground = Brush("MpOk"),
-                FontSize = Size("MpSectionLabelSize"),
+                Text = "✓",
+                Foreground = Brush("WindowSafeTick"),
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             },
-        };
-        Grid.SetColumn(check, 0);
-        grid.Children.Add(check);
-
-        var text = new TextBlock
-        {
-            Text = caption,
-            FontWeight = FontWeights.Medium,
-            FontSize = Size("MpLabelSize"),
-            Foreground = Brush("MpTextMuted"),
-            TextWrapping = TextWrapping.Wrap,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(text, 1);
-        grid.Children.Add(text);
-
-        if (actionLabel != null)
-        {
-            var link = new Button
-            {
-                Content = actionLabel,
-                Style = (Style)FindResource("MpLinkButton"),
-                Margin = new Thickness(10, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            link.Click += Step1OpenBtn_Click;
-            Grid.SetColumn(link, 2);
-            grid.Children.Add(link);
-        }
-
-        var number = new TextBlock
-        {
-            Text = n.ToString(),
-            FontFamily = (System.Windows.Media.FontFamily)FindResource("MonoFont"),
-            FontSize = Size("MpPillSize"),
-            Foreground = Brush("MpTextGhost"),
-            Margin = new Thickness(10, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(number, 3);
-        grid.Children.Add(number);
-
-        return new Border
-        {
-            Padding = new Thickness(2, 8, 2, 8),
-            BorderBrush = Brush("MpRimFaint"),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = grid,
-        };
+        }, text);
     }
 
-    private UIElement PendingStep(int n)
+    private UIElement PendingStep(int n) => StepRow(n, new Border
     {
-        var grid = new Grid { Margin = new Thickness(2, 8, 2, 8) };
+        Width = 18,
+        Height = 18,
+        CornerRadius = new CornerRadius(9),
+        BorderBrush = Brush("WindowFieldRim"),
+        BorderThickness = new Thickness(1),
+    }, new TextBlock
+    {
+        Text = StepTitleText(n),
+        FontSize = Size("SetRowDescSize"),
+        Foreground = Brush("WindowFineText"),
+        TextWrapping = TextWrapping.Wrap,
+        VerticalAlignment = VerticalAlignment.Center,
+    });
+
+    private UIElement StepRow(int n, FrameworkElement mark, TextBlock text)
+    {
+        var grid = new Grid { MinHeight = 30 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var ring = new Border
-        {
-            Width = 18,
-            Height = 18,
-            CornerRadius = new CornerRadius(9),
-            BorderBrush = Brush("MpRimSoft"),
-            BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 10, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(ring, 0);
-        grid.Children.Add(ring);
+        mark.Margin = new Thickness(0, 0, 10, 0);
+        mark.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(mark);
 
-        var text = new TextBlock
-        {
-            Text = StepTitleText(n),
-            FontWeight = FontWeights.Medium,
-            FontSize = Size("MpLabelSize"),
-            Foreground = Brush("MpTextGhost"),
-            TextWrapping = TextWrapping.Wrap,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
 
         var number = new TextBlock
         {
             Text = n.ToString(),
-            FontFamily = (System.Windows.Media.FontFamily)FindResource("MonoFont"),
+            FontFamily = (FontFamily)FindResource("MonoFont"),
             FontSize = Size("MpPillSize"),
-            Foreground = Brush("MpTextGhost"),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x61, 0x77, 0x9A)),
             Margin = new Thickness(10, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(number, 2);
         grid.Children.Add(number);
-
         return grid;
     }
 
-    /// <summary>The one card that is open, with whatever that step needs you to do inside it.</summary>
-    private UIElement OpenStep(int n, RadminStage stage)
+    private UIElement OpenStep(int n)
     {
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -500,29 +451,31 @@ public partial class RadminAssistantWindow : Window
             Width = 22,
             Height = 22,
             CornerRadius = new CornerRadius(11),
-            Background = Brush("MpAction"),
-            Margin = new Thickness(0, 1, 11, 0),
+            Margin = new Thickness(0, 0, 11, 0),
             VerticalAlignment = VerticalAlignment.Top,
             Child = new TextBlock
             {
                 Text = n.ToString(),
-                Foreground = System.Windows.Media.Brushes.White,
+                Foreground = Brushes.White,
+                FontFamily = (FontFamily)FindResource("MonoFont"),
                 FontWeight = FontWeights.SemiBold,
-                FontSize = Size("MpFigureSize"),
+                FontSize = Size("SetCaptionSize"),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             },
         };
-        Grid.SetColumn(badge, 0);
+        badge.SetResourceReference(Border.BackgroundProperty, "MpAction");
         head.Children.Add(badge);
 
-        var titles = new StackPanel();
+        var titles = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
         titles.Children.Add(new TextBlock
         {
             Text = StepTitleText(n),
             Style = (Style)FindResource("StepTitle"),
         });
-        var body = new TextBlock { Style = (Style)FindResource("StepBody"), Text = BodyText(n, stage) };
+        var body = new TextBlock { Style = (Style)FindResource("StepBody") };
+        Controls.ModDialogChrome.AddMarkedText(body, Strings.Get($"RadAsstStep{n}Body"));
+        Controls.ModDialogChrome.SetLineHeight(1.5, body);
         titles.Children.Add(body);
         Grid.SetColumn(titles, 1);
         head.Children.Add(titles);
@@ -530,103 +483,256 @@ public partial class RadminAssistantWindow : Window
         var stack = new StackPanel();
         stack.Children.Add(head);
 
-        if (n == 1)
+        switch (n)
         {
-            var open = new Button
-            {
-                Style = (Style)FindResource("PropertyActionButton"),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                MinWidth = 160,
-                Margin = new Thickness(33, 11, 0, 0),
-                Content = Strings.Get(stage == RadminStage.NotInstalled
-                    ? "RadAsstStep1BtnInstall"
-                    : "RadAsstStep1BtnReopen"),
-            };
-            open.Click += Step1OpenBtn_Click;
-            stack.Children.Add(open);
-        }
-        else if (n == 3)
-        {
-            var card = NetworkCard();
-            Detach(card);
-            var host = new ContentControl { Content = card, Margin = new Thickness(0, 11, 0, 0) };
-            stack.Children.Add(host);
-            stack.Children.Add(WaitingLine(Strings.Get("RadAsstWaitingJoin")));
-        }
-        else if (n == 4)
-        {
-            stack.Children.Add(WaitingLine(Strings.Get("RadAsstStep4BodyManual")));
+            case 1 when _installing:
+                stack.Children.Add(InstallProgress());
+                stack.Children.Add(WaitingLine(Strings.Get("RadAsstWaitingInstall")));
+                break;
+            case 1:
+                stack.Children.Add(InstallActions());
+                stack.Children.Add(WaitingLine(Strings.Get("RadAsstWaitingInstall")));
+                break;
+            case 2:
+                var open = new Button
+                {
+                    Style = (Style)FindResource("WindowPrimaryButton"),
+                    MinWidth = 136,
+                    Content = Strings.Get("RadAsstOpenRadmin"),
+                };
+                open.Click += OpenRadmin_Click;
+                stack.Children.Add(new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(33, 11, 0, 0),
+                    Children = { open },
+                });
+                stack.Children.Add(WaitingLine(Strings.Get("RadAsstWaitingLogin")));
+                break;
+            default:
+                var card = NetworkCard();
+                Detach(card);
+                stack.Children.Add(new ContentControl { Content = card, Margin = new Thickness(0, 11, 0, 0) });
+                stack.Children.Add(WaitingLine(Strings.Get("RadAsstWaitingJoin")));
+                var hint = new TextBlock
+                {
+                    Text = Strings.Get("RadAsstStep3Hint"),
+                    FontSize = Size("SetControlSize"),
+                    Foreground = Brush("WindowFineText"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(33, 11, 0, 0),
+                };
+                Controls.ModDialogChrome.SetLineHeight(1.45, hint);
+                stack.Children.Add(hint);
+                break;
         }
 
         return new Border
         {
+            Style = (Style)FindResource("WindowCard"),
             Margin = new Thickness(0, 4, 0, 4),
-            Padding = new Thickness(13),
-            CornerRadius = new CornerRadius(9),
-            Background = Brush("MpRowHighlight"),
-            BorderBrush = Brush("MpActionRim"),
-            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14),
             Child = stack,
         };
     }
 
-    /// <summary>A dot and a sentence: what the launcher is watching for while you do the step.</summary>
+    private UIElement InstallActions()
+    {
+        var install = new Button
+        {
+            Style = (Style)FindResource("WindowPrimaryButton"),
+            MinWidth = 136,
+            Content = Strings.Get("RadAsstStep1BtnInstall"),
+        };
+        install.Click += InstallRadmin_Click;
+
+        var web = new Button
+        {
+            Style = (Style)FindResource("WindowTextLink"),
+            Content = Strings.Get("RadAsstStep1Web"),
+            Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        web.Click += (_, _) => RadminVpnService.OpenDownloadPageInBrowser();
+
+        return new WrapPanel
+        {
+            Margin = new Thickness(33, 11, 0, 0),
+            Children = { install, web },
+        };
+    }
+
+    /// <summary>The bar takes the place of the button. It stops counting once msiexec has the
+    /// file, because from there Windows is waiting for the player to accept its prompt.</summary>
+    private UIElement InstallProgress()
+    {
+        var setup = _installPercent >= 100;
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(new TextBlock
+        {
+            Text = Strings.Get(setup ? "RadAsstSettingUp" : "RadAsstDownloading"),
+            FontSize = Size("SetRowDescSize"),
+            Foreground = Brush("UiBodyText"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 8, 0),
+        });
+        if (!setup)
+        {
+            var pct = new TextBlock
+            {
+                Text = $"{_installPercent} %",
+                FontFamily = (FontFamily)FindResource("MonoFont"),
+                FontSize = Size("SetControlSize"),
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Bottom,
+            };
+            Grid.SetColumn(pct, 1);
+            row.Children.Add(pct);
+        }
+
+        var bar = new ProgressBar
+        {
+            Height = 8,
+            Margin = new Thickness(0, 7, 0, 0),
+            Minimum = 0,
+            Maximum = 100,
+            Value = setup ? 100 : _installPercent,
+            Template = (ControlTemplate)FindResource("WindowBar"),
+            Opacity = setup ? .55 : 1,
+        };
+        bar.SetResourceReference(ForegroundProperty, "MpAction");
+
+        return new StackPanel
+        {
+            Margin = new Thickness(33, 11, 0, 0),
+            Children = { row, bar },
+        };
+    }
+
+    private async void InstallRadmin_Click(object sender, RoutedEventArgs e)
+    {
+        _installing = true;
+        _installPercent = 0;
+        Repaint();
+
+        if (_previewStage != null && !_previewRealDownload)
+        {
+            for (var p = 0; p < 100; p += 4)
+            {
+                _installPercent = p;
+                Repaint();
+                await System.Threading.Tasks.Task.Delay(90);
+                if (_closed) return;
+            }
+            _installPercent = 100;
+            Repaint();
+            await System.Threading.Tasks.Task.Delay(1600);
+            if (_closed) return;
+            _installing = false;
+            ApplyStage(RadminStage.InstalledNotRunning, Preview(RadminStage.InstalledNotRunning));
+            return;
+        }
+
+        var progress = new Progress<int>(p =>
+        {
+            _installPercent = p;
+            if (!_closed) Repaint();
+        });
+
+        bool ok;
+        try
+        {
+            ok = await RadminVpnService.InstallSilentAsync(
+                progress, System.Threading.CancellationToken.None, confirmSpace: ConfirmSpace);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RadminAssistant.Install: {ex.Message}");
+            ok = false;
+        }
+        if (_closed) return;
+
+        _installing = false;
+        Repaint();
+        if (!ok) RadminVpnService.OpenDownloadPageInBrowser();
+    }
+
+    /// <summary>The same room check the multiplayer banner's installer makes.</summary>
+    private bool ConfirmSpace(long msiBytes)
+    {
+        var required = Math.Max(0, msiBytes) + DiskSpaceService.RadminInstallAllowanceBytes;
+        var shortfall = DiskSpaceService.Check(
+            System.IO.Path.GetTempPath(), required, tempPath: null, tempRequired: 0);
+        return WarsOfLibertyLauncher.DiskSpacePrompt.ConfirmOrCancel(this, shortfall, "DiskSpaceConfirmDownloadBody");
+    }
+
+    private void Repaint()
+    {
+        if (_status != null) ApplyStage(_lastStage, _status);
+    }
+
     private UIElement WaitingLine(string text)
     {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 10, 0, 0),
-        };
-        row.Children.Add(new Border
+        var scale = new ScaleTransform(1, 1, 3, 3);
+        _waitDot = new Border
         {
             Width = 6,
             Height = 6,
             CornerRadius = new CornerRadius(3),
-            Background = Brush("MpAction"),
             Margin = new Thickness(0, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center,
-        });
-        row.Children.Add(new TextBlock
+            RenderTransform = scale,
+        };
+        _waitDot.SetResourceReference(Border.BackgroundProperty, "MpAction");
+
+        var row = new Grid { Margin = new Thickness(33, 11, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.Children.Add(_waitDot);
+        var label = new TextBlock
         {
             Text = text,
-            FontSize = Size("MpFigureSize"),
-            Foreground = Brush("MpTextMuted"),
+            FontSize = Size("SetControlSize"),
+            Foreground = Brush("WindowMuted"),
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
-            MaxWidth = 330,
-        });
+        };
+        Grid.SetColumn(label, 1);
+        row.Children.Add(label);
         return row;
+    }
+
+    /// <summary>One beat per probe, so the dot says what the launcher is really doing. A finite
+    /// animation started by the poll, and not a forever clock: there is nothing to stop, and the
+    /// window asks nothing of WPF between beats.</summary>
+    private void PulseWaitDot()
+    {
+        if (_waitDot == null || RankBadge.ReducedEffects || !SystemParameters.ClientAreaAnimation) return;
+
+        DoubleAnimationUsingKeyFrames Beat(double low)
+        {
+            var beat = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.Stop };
+            beat.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            beat.KeyFrames.Add(new EasingDoubleKeyFrame(low, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.5))));
+            beat.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(3))));
+            return beat;
+        }
+
+        _waitDot.BeginAnimation(OpacityProperty, Beat(.3));
+        if (_waitDot.RenderTransform is ScaleTransform scale)
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, Beat(.6));
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, Beat(.6));
+        }
     }
 
     private static string StepTitleText(int n) => Strings.Get($"RadAsstStep{n}Title");
 
-    private static string BodyText(int n, RadminStage stage) => n switch
-    {
-        1 => Strings.Get(stage == RadminStage.NotInstalled
-            ? "RadAsstStep1BodyNotInstalled"
-            : "RadAsstStep1BodyDone"),
-        2 => Strings.Get("RadAsstStep2BodyWaiting"),
-        3 => Strings.Get(stage >= RadminStage.LoggedIn
-            ? "RadAsstStep3BodyActive"
-            : "RadAsstStep3BodyPending"),
-        _ => Strings.Get("RadAsstStep4BodyPending"),
-    };
-
     // -- The network name card, built once ------------------------------------
 
-    /// <summary>
-    /// The card the whole window exists to hand over: the network name, IN FULL, and the
-    /// button that copies it.
-    ///
-    /// <para>It used to be a <c>TextBlock</c> with <c>TextTrimming="CharacterEllipsis"</c>,
-    /// no wrap and no tooltip, so "Age of Empires III: The Asian Dynasties" arrived as "Age
-    /// of Empires III: The Asian D…" — unreadable and unrecoverable, in the one control
-    /// the code itself calls the only reason to keep the window open. It wraps now.</para>
-    ///
-    /// <para>Built once and MOVED between hosts rather than built per host: two cards would
-    /// be two copy buttons and two glyphs to flip back.</para>
-    /// </summary>
     private Border NetworkCard()
     {
         if (_networkCard != null) return _networkCard;
@@ -636,75 +742,74 @@ public partial class RadminAssistantWindow : Window
         {
             Text = Strings.Get("RadAsstNetworkLabel"),
             FontWeight = FontWeights.SemiBold,
-            FontSize = Size("MpSectionLabelSize"),
-            Foreground = Brush("MpTextGhost"),
+            FontSize = Size("MpPillSize"),
+            Foreground = Brush("WindowMuted"),
         };
         stack.Children.Add(_networkLabel);
 
         _networkName = new TextBlock
         {
             Text = RadminVpnService.AoE3TadNetworkName,
-            FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+            FontFamily = (FontFamily)FindResource("MonoFont"),
             FontWeight = FontWeights.Medium,
-            FontSize = Size("MpMetaSize"),
-            Foreground = Brush("MpTextSecondary"),
+            FontSize = Size("DialogBodySize"),
+            Foreground = Brush("WindowStrongText"),
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 7, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
         };
         stack.Children.Add(_networkName);
 
-        var row = new StackPanel
+        _copyBtn = new Button { MinWidth = 104, ToolTip = Strings.Get("RadAsstCopyNetwork") };
+        _copyBtn.Click += CopyNetworkBtn_Click;
+
+        _openInCard = new Button
+        {
+            Style = (Style)FindResource("WindowSecondaryButton"),
+            MinWidth = 112,
+            Margin = new Thickness(8, 0, 0, 0),
+            Content = Strings.Get("RadAsstOpenRadmin"),
+        };
+        _openInCard.Click += OpenRadmin_Click;
+
+        stack.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 10, 0, 0),
-        };
-        _copyGlyph = new TextBlock
-        {
-            Text = CopyGlyph,
-            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-            FontSize = Size("MpLabelSize"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 7, 0),
-        };
-        var copyContent = new StackPanel { Orientation = Orientation.Horizontal };
-        copyContent.Children.Add(_copyGlyph);
-        copyContent.Children.Add(new TextBlock
-        {
-            Text = Strings.Get("RadAsstCopy"),
-            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _copyBtn, _openInCard },
         });
-        _copyBtn = new Button
-        {
-            Content = copyContent,
-            Style = (Style)FindResource("PropertyActionButton"),
-            ToolTip = Strings.Get("RadAsstCopyNetwork"),
-        };
-        _copyBtn.Click += CopyNetworkBtn_Click;
-        row.Children.Add(_copyBtn);
-        row.Children.Add(new TextBlock
-        {
-            Text = Strings.Get("RadAsstCopyDone"),
-            FontSize = Size("MpPillSize"),
-            Foreground = Brush("MpTextGhost"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(9, 0, 0, 0),
-            TextWrapping = TextWrapping.Wrap,
-        });
-        stack.Children.Add(row);
 
         _networkCard = new Border
         {
-            Padding = new Thickness(12, 11, 12, 11),
-            CornerRadius = new CornerRadius(8),
-            Background = Brush("MpAppBg"),
-            BorderBrush = Brush("MpRimSoft"),
-            BorderThickness = new Thickness(1),
+            Style = (Style)FindResource("WindowField"),
+            Padding = new Thickness(12, 11, 12, 12),
             Child = stack,
         };
+        PaintCopyButton();
         return _networkCard;
     }
 
-    /// <summary>Take the card off whatever is holding it — an element has one parent.</summary>
+    /// <summary>"Copy" is the step's primary action until there is nothing left to do, and says it
+    /// worked only after it did: the window never touches the clipboard by itself.</summary>
+    private void PaintCopyButton()
+    {
+        if (_copyBtn == null) return;
+        var connected = _lastStage == RadminStage.InAoE3Network;
+        _copyBtn.Style = (Style)FindResource(connected || _copied ? "WindowSecondaryButton" : "WindowPrimaryButton");
+        _copyBtn.Content = Strings.Get(_copied ? "RadAsstCopyDone" : "RadAsstCopy");
+        if (_copied)
+        {
+            _copyBtn.Background = Brush("WindowSafeFill");
+            _copyBtn.BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0x4F, 0xD6, 0x8A));
+            _copyBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x8F, 0xE0, 0xB0));
+        }
+        else
+        {
+            _copyBtn.ClearValue(BackgroundProperty);
+            _copyBtn.ClearValue(BorderBrushProperty);
+            _copyBtn.ClearValue(ForegroundProperty);
+        }
+    }
+
     private static void Detach(UIElement child)
     {
         switch (LogicalTreeHelper.GetParent(child))
@@ -720,63 +825,47 @@ public partial class RadminAssistantWindow : Window
 
     // -- Strings --------------------------------------------------------------
 
-    /// <summary>
-    /// Translate all static labels in one pass. Step bodies are
-    /// re-translated on every Refresh (they vary by stage) — this
-    /// is for the header, titles, button labels, footer.
-    /// </summary>
     private void ApplyStrings()
     {
         Title = Strings.Get("RadAsstWindowTitle");
-        // The product, not an instruction. "Conectate a la red AoE3" was fine as a heading
-        // over a checklist and wrong the moment you were on the network - and with the
-        // subtitle gone it is the only label the window has.
-        TitleBarControl.Title = Strings.Get("RadAsstTitleBar");
-        DontShowAgainCheck.Content = Strings.Get("RadAsstDontShowAgain");
+        TitleBarControl.Title = Strings.Get("RadAsstWindowTitle");
+        DontShowAgainCheck.Content = new TextBlock
+        {
+            Text = Strings.Get("RadAsstDontShowAgain"),
+            FontSize = Size("SetRowDescSize"),
+            Foreground = Brush("WindowSoftText"),
+        };
         CloseBtn.Content = Strings.Get("RadAsstClose");
-        SupportLinkHost.Content = Controls.SupportLink.Build();
+        SupportLinkHost.Content = Controls.SupportLink.BuildOutline("SupportDiscordHelpLabel");
     }
 
     // -- Handlers -------------------------------------------------------------
 
-    private void Step1OpenBtn_Click(object sender, RoutedEventArgs e)
+    private void OpenRadmin_Click(object sender, RoutedEventArgs e)
     {
-        var status = RadminVpnService.GetStatus();
-        if (status.InstallState == RadminInstallState.NotInstalled)
+        if (_previewStage != null)
         {
-            // No MSI on disk → bounce to the download page in
-            // the user's browser. We don't run the silent install
-            // from inside the overlay because that triggers UAC
-            // and a long download — MultiplayerTab's banner has
-            // the proper installer flow with progress reporting.
-            RadminVpnService.OpenDownloadPageInBrowser();
+            DiagnosticLog.Write("Radmin assistant preview: Open Radmin not run.");
             return;
         }
-        if (!string.IsNullOrEmpty(status.ExePath))
-        {
-            RadminVpnService.LaunchGui(status.ExePath);
-        }
+        var status = RadminVpnService.GetStatus();
+        if (!string.IsNullOrEmpty(status.ExePath)) RadminVpnService.LaunchGui(status.ExePath);
     }
 
     private void CopyNetworkBtn_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            Clipboard.SetText(RadminVpnService.AoE3TadNetworkName);
-            // Briefly flip the icon to a checkmark so the user
-            // gets visible confirmation the paste landed. WPF
-            // clipboard ops occasionally throw COMException on
-            // first call when another process holds the
-            // clipboard — non-fatal, swallow.
-            if (_copyGlyph != null)
+            // Clipboard calls occasionally throw COMException when another process holds the
+            // clipboard. Non-fatal, and then it does not say it copied.
+            if (_previewStage == null) Clipboard.SetText(RadminVpnService.AoE3TadNetworkName);
+            _copied = true;
+            PaintCopyButton();
+            _ = System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Dispatcher.Invoke(() =>
             {
-                _copyGlyph.Text = CopiedGlyph;
-                _ = System.Threading.Tasks.Task.Delay(1500).ContinueWith(
-                    _ => Dispatcher.Invoke(() =>
-                    {
-                        if (_copyGlyph != null) _copyGlyph.Text = CopyGlyph;
-                    }));
-            }
+                _copied = false;
+                if (!_closed) PaintCopyButton();
+            }));
         }
         catch (Exception ex)
         {
@@ -824,4 +913,33 @@ public partial class RadminAssistantWindow : Window
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
+
+    private static RadminStatus Preview(RadminStage stage) => new(
+        stage == RadminStage.NotInstalled ? RadminInstallState.NotInstalled : RadminInstallState.Installed,
+        ExePath: null,
+        Version: null,
+        IsServiceRunning: stage > RadminStage.InstalledNotRunning,
+        AdapterIp: stage >= RadminStage.LoggedIn ? "26.162.244.170" : null);
+
+    private bool _previewOpened;
+    private bool _previewInstalling;
+
+    /// <summary>The two preview states a stage alone does not say: the steps unfolded (78e) and
+    /// the install under way (78f).</summary>
+    internal void ConfigurePreview(bool stepsOpen, bool installing, bool realDownload = false)
+    {
+        _previewOpened = stepsOpen;
+        _previewInstalling = installing;
+        _previewRealDownload = realDownload;
+    }
+
+    /// <summary>Downloads the real installer; the harness still stops msiexec from running.</summary>
+    private bool _previewRealDownload;
+
+    private void StartPreviewInstall()
+    {
+        _installing = true;
+        _installPercent = 64;
+        Repaint();
+    }
 }

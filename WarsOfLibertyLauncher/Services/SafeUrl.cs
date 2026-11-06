@@ -59,7 +59,7 @@ internal static class SafeUrl
     ///
     /// <para><b>Whole segments, never half a word.</b> The path is elided between the host and
     /// the LAST segment, which is the one that identifies the thing — the same reasoning
-    /// <see cref="PathDisplay.SplitForDisplay"/> is built on. And when even that does not fit,
+    /// <see cref="PathDisplay.SplitWhole"/> is built on. And when even that does not fit,
     /// it falls back to the bare host rather than stacking a second ellipsis onto the first:
     /// measured in the rail, <c>moddb.com/…/knights-and-barbarians</c> wants 190 px of the 181
     /// there are, and a line reading <c>moddb.com/…/knights-and-barbaria…</c> is worse than one
@@ -112,7 +112,7 @@ internal static class SafeUrl
 
         try
         {
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = url!.Trim(),
                 UseShellExecute = true,

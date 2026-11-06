@@ -113,7 +113,7 @@ public class TournamentDemoDataTests
         // room's own description never names them.
         Assert.DoesNotContain(sides, s => sample.RoomTitle.Contains(s, StringComparison.Ordinal));
         Assert.NotEmpty(sample.Chat);
-        Assert.All(sample.Chat, line => Assert.Contains(line.Author, sides));
+        Assert.All(sample.Chat.Where(line => !line.IsSystem), line => Assert.Contains(line.Author, sides));
     }
 
     [Fact]

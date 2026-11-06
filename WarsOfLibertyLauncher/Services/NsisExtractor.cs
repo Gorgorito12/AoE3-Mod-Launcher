@@ -104,7 +104,7 @@ public static class NsisExtractor
         Process? started;
         try
         {
-            started = Process.Start(psi);
+            started = Services.HarnessMode.Start(psi);
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
         {

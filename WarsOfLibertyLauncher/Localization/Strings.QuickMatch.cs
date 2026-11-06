@@ -17,6 +17,31 @@ public static partial class Strings
 {
     private static readonly Dictionary<string, Dictionary<string, string>> QuickMatchTable = new()
     {
+        ["QmRoomSearching"] = new() { [LangEn] = "SEARCHING FOR A RIVAL", [LangEs] = "BUSCANDO RIVAL" },
+        // {0} the time the search started.
+        ["QmRoomSince"] = new() { [LangEn] = "since {0}", [LangEs] = "desde las {0}" },
+        // {0} the mod.
+        ["QmRoomBody"] = new()
+        {
+            [LangEn] = "Your room is listed for whoever looks for a 1v1 in {0}. You can switch tabs or minimise: we’ll tell you when somebody joins.",
+            [LangEs] = "Tu sala está anunciada para quien busque un 1v1 en {0}. Puedes cambiar de pestaña o minimizar: te avisamos cuando alguien entre.",
+        },
+        ["QmRoomNote"] = new()
+        {
+            [LangEn] = "Every 20 seconds it checks whether somebody opened a room before you. If so, you move to theirs and this one closes.",
+            [LangEs] = "Cada 20 segundos se comprueba si alguien abrió una sala antes que tú. Si es así, pasas a la suya y esta se cierra.",
+        },
+        // {0} the elapsed time.
+        ["QmRoomFooter"] = new() { [LangEn] = "Searching for a rival · {0}", [LangEs] = "Buscando rival · {0}" },
+        // {0} minutes.
+        ["QmRoomGiveUp"] = new()
+        {
+            [LangEn] = "If nobody joins in {0} minutes, the search stops and the room closes.",
+            [LangEs] = "Si nadie entra en {0} minutos, la búsqueda se detiene y la sala se cierra.",
+        },
+        ["QmSeatWaiting"] = new() { [LangEn] = "Waiting for a rival…", [LangEs] = "Esperando rival…" },
+        // {0} the mod.
+        ["QmSeatWho"] = new() { [LangEn] = "Whoever looks for a 1v1 in {0} joins", [LangEs] = "Entra quien busque un 1v1 en {0}" },
         ["QmFindMatch"] = new() { [LangEn] = "Find a 1v1 match", [LangEs] = "Buscar partida 1v1" },
         ["QmFindMatchTip"] = new()
         {
@@ -92,6 +117,11 @@ public static partial class Strings
             [LangEn] = "The quick match plays your active mod, and it isn't installed. Install it from the Library first.",
             [LangEs] = "La partida rápida juega con tu mod activo, y no está instalado. Instálalo primero desde la Biblioteca.",
         },
+        ["QmModMissingNamed"] = new()
+        {
+            [LangEn] = "The quick match plays your active mod, and {0} isn't installed. Install it from the Library first.",
+            [LangEs] = "La partida rápida juega con tu mod activo, y {0} no está instalado. Instálalo primero desde la Biblioteca.",
+        },
         // {0} is the server's or the network's message.
         ["QmFailed"] = new()
         {
@@ -104,6 +134,13 @@ public static partial class Strings
         {
             [LangEn] = "Radmin VPN isn't on. The search goes on, but you'll need it to play the match.",
             [LangEs] = "Radmin VPN no está encendido. La búsqueda sigue, pero lo necesitarás para jugar la partida.",
+        },
+        // The room's footer says it at more length, because the footer has the room.
+        ["QmRoomRadminTitle"] = new() { [LangEn] = "Your Radmin VPN isn't ready", [LangEs] = "Tu Radmin VPN no está listo" },
+        ["QmRoomRadminBody"] = new()
+        {
+            [LangEn] = "The search goes on ({0}), but you'll need it to play the match. Others can't see you on the network until it's on.",
+            [LangEs] = "La búsqueda sigue ({0}), pero lo necesitarás para jugar la partida. Los demás no te ven en la red hasta que esté encendido.",
         },
         ["QmRadminOpen"] = new() { [LangEn] = "Open the assistant", [LangEs] = "Abrir el asistente" },
         // The result card's second button, beside "Close".

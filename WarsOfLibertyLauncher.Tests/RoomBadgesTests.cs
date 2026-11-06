@@ -18,6 +18,7 @@ namespace WarsOfLibertyLauncher.Tests;
 /// refusal is the point in both: a <c>ladder_rank</c> the server did not send must draw NO
 /// badge, never a Discovery one — that would tell a player on the ladder that they are not.
 /// </summary>
+[Collection("wpf-and-language")]
 public class RoomBadgesTests
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;

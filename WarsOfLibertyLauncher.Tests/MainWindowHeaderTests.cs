@@ -42,8 +42,8 @@ public class MainWindowHeaderTests
     [Fact]
     public void TheCompactBarsAreTheHandoffsHeights()
     {
-        Assert.Equal(34, Token("TitleBarHeightMainCompact"));
-        Assert.Equal(42, Token("MainNavHeightCompact"));
+        Assert.Equal(40, Token("TitleBarHeightMainCompact"));
+        Assert.Equal(56, Token("MainNavHeightCompact"));
         Assert.Equal(44, Token("TitleBarButtonWidthMainCompact"));
         Assert.Equal(44, Token("MpSubBarHeightCompact"));
     }

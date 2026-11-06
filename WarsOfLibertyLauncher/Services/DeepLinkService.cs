@@ -42,6 +42,7 @@ public static class DeepLinkService
     /// </summary>
     public static void EnsureRegistered(string? exePathOverride = null)
     {
+        if (HarnessMode.Block("register deep links")) return;
         try
         {
             // ProcessPath is the right primitive for the running .exe path — it
@@ -92,6 +93,7 @@ public static class DeepLinkService
     /// </summary>
     public static void EnsureUnregistered()
     {
+        if (HarnessMode.Block("unregister deep links")) return;
         try
         {
             Registry.CurrentUser.DeleteSubKeyTree(ClassRoot, throwOnMissingSubKey: false);

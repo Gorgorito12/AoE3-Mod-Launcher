@@ -72,6 +72,8 @@ public partial class MultiplayerTab
     /// everything is ready. Null when there is nothing to say.</summary>
     internal string? StartGateText(StartGate.Verdict verdict)
     {
+        // Searching alone, the waiting box already says what is missing, and why it is fine.
+        if (QuickSearchAlone) return null;
         string Blocked(string detail) => Strings.Get("MpStartBlockedPrefix") + " " + detail;
         return verdict.Reason switch
         {

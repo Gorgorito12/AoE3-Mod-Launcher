@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:560px;box-sizing:border-box;border-radius:10px;overflow:hidden;color-scheme:dark;box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08);background:{{ bg }};display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ barBg }};backdrop-filter:blur({{ barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(mods/wol/icon.png) center/contain no-repeat"></span><span style="font:700 14px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">{{ winTitle }}</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">✕</span></div>
+  <div style="padding:24px 22px 0;display:flex;flex-direction:column;gap:16px">
+    <div style="display:grid;grid-template-columns:34px minmax(0,1fr);gap:14px;align-items:start">
+      <span style="width:34px;height:38px;box-sizing:border-box;padding-bottom:3px;clip-path:polygon(50% 0%,100% 16%,96% 60%,50% 100%,4% 60%,0% 16%);background:linear-gradient(180deg,#f8b35a,#c46f05);display:flex;align-items:center;justify-content:center;font:800 15px/1 'Segoe UI',system-ui,sans-serif;color:#2b1a02">{{ glyph }}</span>
+      <div style="min-width:0;display:flex;flex-direction:column;gap:8px">
+        <span style="font:700 20px/1.25 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 2px 12px rgba(0,0,0,.45);text-wrap:pretty">{{ headline }}</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="height:24px;padding:0 9px;border-radius:6px;display:flex;align-items:center;background:{{ tagBg }};box-shadow:inset 0 0 0 1px {{ tagRing }};font:500 12px/1 Consolas,ui-monospace,monospace;color:{{ tagC }}">AI3\wolai.upl</span><span style="font:400 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-shadow:0 1px 6px rgba(0,0,0,.5)">{{ tagCaption }}</span></div>
+        <span style="font:400 13px/1.55 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-shadow:0 1px 8px rgba(0,0,0,.5);text-wrap:pretty">{{ body1 }}<b style="font-weight:600;color:#ffffff">{{ bodyB }}</b>{{ body2 }}</span>
+      </div>
+    </div>
+    <div style="border-radius:12px;overflow:hidden;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)">
+      <div style="padding:13px 16px 11px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">CARPETAS QUE EXCLUIR</span></div>
+      <div style="display:flex;flex-direction:column;gap:1px;background:rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)">
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px 10px 16px;background:#0d1828"><div style="min-width:0;display:flex;flex-direction:column;gap:4px"><span style="font:500 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ r.label }}</span><span style="font:400 12.5px/1.5 Consolas,ui-monospace,monospace;color:#f0f5fb;overflow-wrap:anywhere">{{ r.path }}</span></div><span onClick="{{ r.copy }}" style="cursor:pointer;flex:none;white-space:nowrap;box-sizing:border-box;height:32px;padding:0 12px;border-radius:7px;display:flex;align-items:center;justify-content:center;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;min-width:104px;background:{{ r.cpBg }};box-shadow:inset 0 0 0 1px {{ r.cpRing }};color:{{ r.cpC }}">{{ r.cpT }}</span></div></sc-for>
+      </div>
+      <div style="padding:12px 16px 14px;display:flex;flex-direction:column;gap:9px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)">
+        <span style="margin-bottom:2px;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">EN SEGURIDAD DE WINDOWS</span>
+        <sc-for list="{{ steps }}" as="st" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:start"><span style="width:22px;height:22px;box-sizing:border-box;border-radius:11px;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(130,175,255,.3);font:600 11px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">{{ st.n }}</span><span style="padding-top:2px;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty">{{ st.pre }}<b style="font-weight:600;color:#ffffff">{{ st.b }}</b>{{ st.t }}</span><sc-if value="{{ st.open }}" hint-placeholder-val="{{ false }}"><span style="cursor:pointer;flex:none;white-space:nowrap;box-sizing:border-box;height:32px;padding:0 12px;border-radius:7px;display:flex;align-items:center;justify-content:center;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;min-width:96px;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);color:#dce7f5">Abrir ↗</span></sc-if></div></sc-for>
+        <span style="padding-top:3px;font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ otherAv }}</span>
+      </div>
+    </div>
+    <div style="display:flex"><span style="cursor:pointer;white-space:nowrap;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">¿Necesitas ayuda? Pregunta en Discord ↗</span></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0 20px">
+      <sc-if value="{{ pre }}" hint-placeholder-val="{{ true }}"><span onClick="{{ flip }}" style="cursor:pointer;display:flex;align-items:center;gap:9px"><span style="flex:none;width:16px;height:16px;box-sizing:border-box;border-radius:4px;display:flex;align-items:center;justify-content:center;background:{{ cbBg }};box-shadow:inset 0 0 0 1px {{ cbRing }};font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ onAcc }}">{{ cbTick }}</span><span style="font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap">No volver a mostrar</span></span></sc-if>
+      <div style="flex:1"></div>
+      <sc-if value="{{ pre }}" hint-placeholder-val="{{ true }}">
+        <span style="cursor:pointer;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cancelar</span>
+        <span style="cursor:pointer;min-width:140px;box-sizing:border-box;height:32px;padding:0 16px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ acc }};box-shadow:{{ accSh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ onAcc }};white-space:nowrap">Continuar la instalación</span>
+      </sc-if>
+      <sc-if value="{{ blocked }}" hint-placeholder-val="{{ false }}"><span style="cursor:pointer;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cerrar</span></sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:600,&quot;height&quot;:760},&quot;modo&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Antes de instalar&quot;,&quot;Bloqueado&quot;],&quot;default&quot;:&quot;Antes de instalar&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sinCarpeta&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { copied: null, dont: false };
+  componentWillUnmount() { clearTimeout(this.t); }
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const acc = '#c8102e', name = 'Wars of Liberty';
+    const pre = (this.props.modo ?? 'Antes de instalar') === 'Antes de instalar';
+    const two = !this.props.sinCarpeta;
+    const lvl = this.props.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px' }, 'Media': { bg: 'rgba(10,19,33,.5)', blur: '16px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px' } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px' };
+    const rgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+    const hexA = (h, a) => 'rgba(' + rgb(h).join(',') + ',' + a + ')';
+    const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const Lm = h => { const [r, g, b] = rgb(h); return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b); };
+    const onAcc = 1.05 / (Lm(acc) + 0.05) >= (Lm(acc) + 0.05) / (Lm('#0f1c2e') + 0.05) ? '#ffffff' : '#0f1c2e';
+    const brk = p => p.replace(/\\/g, '\\\u200B');
+    const TEMP = 'C:\\Users\\Jeison\\AppData\\Local\\Temp\\WarsOfLibertyLauncher';
+    const DEST = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Age Of Empires 3\\' + name;
+    return {
+      bg: 'radial-gradient(520px 340px at 88% 0%, ' + hexA(acc, .3) + ', transparent 70%), linear-gradient(180deg, rgba(15,28,46,.28) 0px, rgba(15,28,46,.8) 180px, #0f1c2e 300px), url(mods/wol/hero.jpg) center top/100% auto no-repeat, #0f1c2e',
+      barBg: 'rgba(' + rgb(acc).map((v, i) => Math.round(v * .22 + [11, 20, 34][i] * .78)).join(',') + ',' + (({ 'Sólida': 1, 'Media': .42, 'Máxima': .3 })[lvl] ?? .42) + ')', barBlur: lvl === 'Sólida' ? '0px' : '10px',
+      G, acc, onAcc, accSh: '0 4px 14px ' + hexA(acc, .4), pre, blocked: !pre,
+      winTitle: pre ? 'Exclusión del antivirus' : 'Instalación detenida',
+      glyph: pre ? '!' : '✕',
+      headline: pre ? 'Windows Defender puede borrar un archivo de este mod' : 'Windows Defender quitó un archivo del mod',
+      tagCaption: pre ? 'falso positivo conocido · ya reportado' : 'un falso positivo',
+      tagBg: pre ? 'rgba(10,19,33,.6)' : 'rgba(244,144,12,.14)', tagRing: pre ? 'rgba(255,255,255,.16)' : 'rgba(244,144,12,.5)', tagC: pre ? '#f0f5fb' : '#F5BD76',
+      body1: pre ? 'El archivo es parte de ' + name + '. Si Defender lo quita, la instalación se detiene ' : '',
+      bodyB: pre ? 'después de toda la descarga' : 'Nada está roto.',
+      body2: pre ? (two ? ', así que añade antes estas dos carpetas a las exclusiones.' : ', así que añade antes esta carpeta a las exclusiones.') : (two ? ' Añade las dos carpetas de abajo a las exclusiones y vuelve a instalar el mod.' : ' Añade la carpeta de abajo a las exclusiones y vuelve a instalar el mod.'),
+      rows: [{ label: 'Descarga', path: brk(TEMP) }, ...(two ? [{ label: 'Carpeta del mod', path: brk(DEST) }] : [])].map((r, i) => { const on = s.copied === i; return { ...r, copy: () => { set({ copied: i }); clearTimeout(this.t); this.t = setTimeout(() => this.setState({ copied: null }), 1400); }, cpT: on ? '✓ Copiado' : 'Copiar', cpBg: on ? 'rgba(79,214,138,.12)' : '#1a2c48', cpRing: on ? 'rgba(79,214,138,.5)' : 'rgba(130,175,255,.22)', cpC: on ? '#8fe0b0' : '#dce7f5' }; }),
+      steps: [
+        { n: '1', pre: 'Abre ', b: 'Administrar la configuración', t: ' de Protección antivirus y contra amenazas, en Seguridad de Windows.', open: true },
+        { n: '2', pre: '', b: 'Agregar o quitar exclusiones', t: ', en el apartado Exclusiones.', open: false },
+        { n: '3', pre: '', b: 'Agregar una exclusión → Carpeta', t: two ? ' y pega una ruta. Repítelo con la otra.' : ' y pega la ruta.', open: false }
+      ],
+      otherAv: two ? '¿Usas otro antivirus? Añade las mismas carpetas en sus exclusiones.' : '¿Usas otro antivirus? Añade la misma carpeta en sus exclusiones.',
+      flip: () => set({ dont: !s.dont }), cbBg: s.dont ? acc : 'transparent', cbRing: s.dont ? acc : 'rgba(130,175,255,.45)', cbTick: s.dont ? '✓' : ''
+    };
+  }
+}
+</script>
+</body>
+</html>

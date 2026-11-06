@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:430px;box-sizing:border-box;border-radius:10px;overflow:hidden;color-scheme:dark;box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.1);background:radial-gradient(420px 300px at 90% 0%, rgba(47,127,224,.2), transparent 70%), #0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ barBg }};backdrop-filter:blur({{ barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:700 14px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">Asistente de Radmin</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">✕</span></div>
+  <div style="padding:18px 20px 14px;display:flex;flex-direction:column;gap:12px">
+    <sc-if value="{{ connected }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;align-items:center"><span style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(79,214,138,.16);font:700 17px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a">✓</span><div style="min-width:0;display:flex;flex-direction:column;gap:5px"><span style="font:700 19px/1.2 'Source Serif 4',Georgia,serif;color:#ffffff">Estás en la red AoE3</span><span style="font:400 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Tu IP de Radmin: <span style="font:500 12px/1 Consolas,ui-monospace,monospace;color:#dce7f5">26.162.244.170</span></span></div></div>
+      <div style="padding:11px 12px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);display:flex;flex-direction:column;gap:8px">
+        <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">RED A LA QUE ESTÁS UNIDO</span>
+        <span style="font:500 13px/1.4 Consolas,ui-monospace,monospace;color:#f0f5fb">Age of Empires III: The Asian Dynasties</span>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:2px"><span onClick="{{ copy }}" style="cursor:pointer;white-space:nowrap;min-width:104px;box-sizing:border-box;height:32px;padding:0 12px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ cpBg }};box-shadow:{{ cpSh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ cpC }}">{{ cpT }}</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)"><span style="flex:1;min-width:0;font:400 12.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Los tres pasos están completos.</span><span style="cursor:pointer;flex:none;white-space:nowrap;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">Abrir Radmin</span><span onClick="{{ toggleSteps }}" style="cursor:pointer;flex:none;white-space:nowrap;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">{{ stepsT }}</span></div>
+    </sc-if>
+    <sc-if value="{{ showSteps }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:10px"><span style="flex:none;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ progT }}</span><div style="flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:4px"><sc-for list="{{ segs }}" as="sg" hint-placeholder-count="3"><span style="height:4px;border-radius:2px;background:{{ sg }}"></span></sc-for></div></div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <sc-for list="{{ steps }}" as="st" hint-placeholder-count="3">
+          <sc-if value="{{ st.done }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:30px"><span style="width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:rgba(79,214,138,.18);font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a">✓</span><span style="min-width:0;font:400 12.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">{{ st.cap }}<span style="font:500 12px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ st.capMono }}</span></span><span style="font:600 10.5px/1 Consolas,ui-monospace,monospace;color:#61779a">{{ st.n }}</span></div></sc-if>
+          <sc-if value="{{ st.open }}" hint-placeholder-val="{{ true }}">
+            <div style="margin:4px 0;padding:14px;border-radius:12px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);display:flex;flex-direction:column;gap:11px">
+              <div style="display:grid;grid-template-columns:22px minmax(0,1fr);gap:11px;align-items:start"><span style="width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:#2f7fe0;font:600 11px/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ st.n }}</span><div style="min-width:0;display:flex;flex-direction:column;gap:4px;padding-top:2px"><span style="font:600 14px/1.3 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ st.title }}</span><span style="font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ st.body }}<b style="font-weight:600;color:#ffffff">{{ st.bodyB }}</b>{{ st.body2 }}</span></div></div>
+              <sc-if value="{{ st.net }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:11px 12px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);display:flex;flex-direction:column;gap:8px">
+                  <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">NOMBRE DE LA RED</span>
+                  <span style="font:500 13px/1.4 Consolas,ui-monospace,monospace;color:#f0f5fb">Age of Empires III: The Asian Dynasties</span>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:2px"><span onClick="{{ copy }}" style="cursor:pointer;white-space:nowrap;min-width:104px;box-sizing:border-box;height:32px;padding:0 12px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ cpBg }};box-shadow:{{ cpSh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ cpC }}">{{ cpT }}</span><span onClick="{{ st.act2 }}" style="cursor:pointer;white-space:nowrap;min-width:112px;box-sizing:border-box;height:32px;padding:0 12px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Abrir Radmin</span></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ st.btn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-left:33px"><span onClick="{{ st.act }}" style="cursor:pointer;white-space:nowrap;min-width:136px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#2f7fe0;box-shadow:0 4px 14px rgba(47,127,224,.35);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ st.btn }}</span><sc-if value="{{ st.alt }}" hint-placeholder-val="{{ false }}"><span style="cursor:pointer;white-space:nowrap;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">{{ st.alt }}</span></sc-if></div></sc-if>
+              <sc-if value="{{ st.prog }}" hint-placeholder-val="{{ false }}"><div style="padding-left:33px;display:flex;flex-direction:column;gap:7px"><div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ st.progT }}</span><div style="flex:1"></div><span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ st.progP }}</span></div><div style="height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden"><div style="height:100%;width:{{ st.progW }};border-radius:4px;background:#2f7fe0;opacity:{{ st.progO }}"></div></div></div></sc-if>
+              <div style="display:flex;align-items:center;gap:8px;padding-left:33px">{{ dot }}<span style="font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ st.wait }}</span></div>
+              <sc-if value="{{ st.hint }}" hint-placeholder-val="{{ false }}"><span style="padding-left:33px;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ st.hint }}</span></sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ st.pending }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:30px"><span style="width:18px;height:18px;box-sizing:border-box;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.3)"></span><span style="font:400 12.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ st.title }}</span><span style="font:600 10.5px/1 Consolas,ui-monospace,monospace;color:#61779a">{{ st.n }}</span></div></sc-if>
+        </sc-for>
+      </div>
+    </sc-if>
+    <div style="display:flex;padding-top:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)"><span style="cursor:pointer;white-space:nowrap;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">¿Necesitas ayuda? Pregunta en Discord ↗</span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;background:rgba(8,15,27,.45);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)">
+    <span onClick="{{ flipDont }}" style="cursor:pointer;flex:1;min-width:0;display:flex;align-items:center;gap:9px"><span style="flex:none;width:16px;height:16px;box-sizing:border-box;border-radius:4px;display:flex;align-items:center;justify-content:center;background:{{ cbBg }};box-shadow:inset 0 0 0 1px {{ cbRing }};font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ cbTick }}</span><span style="font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">No volver a mostrar</span></span>
+    <span style="cursor:pointer;flex:none;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ clBg }};box-shadow:{{ clSh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ clC }}">Cerrar</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:470,&quot;height&quot;:640},&quot;etapa&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sin instalar&quot;,&quot;Instalando&quot;,&quot;Sin sesión&quot;,&quot;En sesión&quot;,&quot;En la red&quot;,&quot;En la red · pasos&quot;],&quot;default&quot;:&quot;Sin instalar&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { stage: null, copied: false, expanded: null, dont: false, inst: null };
+  componentDidMount() { if (!document.getElementById('radPulseKF')) { const st = document.createElement('style'); st.id = 'radPulseKF'; st.textContent = '@keyframes radPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.6)}}'; document.head.appendChild(st); } }
+  componentWillUnmount() { clearTimeout(this.t1); clearTimeout(this.t2); clearInterval(this.iv); }
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const START = { 'Instalando': 0, 'Sin instalar': 0, 'Sin sesión': 1, 'En sesión': 2, 'En la red': 3, 'En la red · pasos': 3 };
+    const stage = s.stage ?? START[this.props.etapa] ?? 0;
+    const connected = stage === 3;
+    const expanded = s.expanded ?? (this.props.etapa === 'En la red · pasos');
+    const lvl = this.props.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px' }, 'Media': { bg: 'rgba(10,19,33,.5)', blur: '16px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px' } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px' };
+    const advance = (to, ms) => () => { clearTimeout(this.t2); this.t2 = setTimeout(() => this.setState({ stage: to }), ms); };
+    const copy = () => { set({ copied: true }); clearTimeout(this.t1); this.t1 = setTimeout(() => this.setState({ copied: false }), 1500); if (stage === 2) advance(3, 2600)(); };
+    const inst = s.inst ?? (this.props.etapa === 'Instalando' && s.stage == null ? 64 : null);
+    const startInstall = () => { if (inst != null) return; clearInterval(this.iv); set({ inst: 0 }); this.iv = setInterval(() => { const p = (this.state.inst ?? 0) + 4; if (p >= 100) { clearInterval(this.iv); this.setState({ inst: 'setup' }); clearTimeout(this.t2); this.t2 = setTimeout(() => this.setState({ inst: 'done', stage: 1 }), 1600); } else this.setState({ inst: p }); }, 90); };
+    const busy = inst != null && inst !== 'done';
+    const X = { alt: '', prog: false, progT: '', progP: '', progW: '0%', progO: 1 };
+    const DEF = [
+      { ...X, title: 'Instala Radmin VPN', cap: 'Radmin VPN instalado', capMono: '', body: 'Es gratis y crea la red privada por la que se juegan las partidas. Windows te pedirá permiso para instalarlo.', bodyB: '', body2: '', btn: busy ? '' : 'Instalar Radmin VPN', alt: busy ? '' : 'o descárgalo desde su web ↗', act: startInstall, prog: busy, progT: inst === 'setup' ? 'Instalando… acepta el permiso de Windows.' : 'Descargando Radmin VPN…', progP: inst === 'setup' || !busy ? '' : Math.floor(inst) + ' %', progW: inst === 'setup' ? '100%' : (busy ? inst : 0) + '%', progO: inst === 'setup' ? .55 : 1, wait: 'Cuando termine de instalarse, esto se marca solo.', net: false, hint: '' },
+      { ...X, title: 'Abre Radmin e inicia sesión', cap: 'Sesión iniciada · IP ', capMono: '26.162.244.170', body: 'Si es la primera vez, termina de crear tu cuenta en Radmin.', bodyB: '', body2: '', btn: 'Abrir Radmin', act: advance(2, 1200), wait: 'Esperando a que inicies sesión. Esto se marca solo.', net: false, hint: '' },
+      { ...X, title: 'Únete a la red', cap: 'En la red AoE3', capMono: '', body: 'En la ventana de Radmin pulsa ', bodyB: 'Unirse a una red', body2: ' y pega este nombre.', btn: '', act: null, wait: 'Esperando a que te unas. Esto se marca solo.', net: true, hint: '¿Ya te uniste y no se marca? Comprueba en Radmin que la red aparece en tu lista.' }
+    ];
+    const steps = DEF.map((d, i) => ({ ...d, n: String(i + 1), done: i < stage, open: i === stage, pending: i > stage, act: d.act || (() => {}), act2: () => {} }));
+    const showSteps = !connected || expanded;
+    return {
+      barBg: 'rgba(11,20,34,' + (({ 'Sólida': 1, 'Media': .42, 'Máxima': .3 })[lvl] ?? .42) + ')', barBlur: lvl === 'Sólida' ? '0px' : '10px', G,
+      connected, showSteps, steps,
+      dot: React.createElement('span', { style: { flex: 'none', width: 6, height: 6, borderRadius: 3, background: '#2f7fe0', animation: 'radPulse 3s ease-in-out infinite' } }),
+      progT: connected ? 'Completado' : 'Paso ' + (stage + 1) + ' de 3',
+      segs: [0, 1, 2].map(i => i < stage ? '#4fd68a' : i === stage ? '#2f7fe0' : 'rgba(255,255,255,.12)'),
+      toggleSteps: () => set({ expanded: !expanded }), stepsT: expanded ? 'Ocultar pasos' : 'Ver pasos',
+      copy, cpT: s.copied ? '✓ Copiado' : 'Copiar',
+      cpBg: s.copied ? 'rgba(79,214,138,.12)' : connected ? '#1a2c48' : '#2f7fe0',
+      cpSh: s.copied ? 'inset 0 0 0 1px rgba(79,214,138,.5)' : connected ? 'inset 0 0 0 1px rgba(130,175,255,.22)' : '0 4px 14px rgba(47,127,224,.35)',
+      cpC: s.copied ? '#8fe0b0' : connected ? '#dce7f5' : '#ffffff',
+      flipDont: () => set({ dont: !s.dont }), cbBg: s.dont ? '#2f7fe0' : 'transparent', cbRing: s.dont ? '#2f7fe0' : 'rgba(130,175,255,.45)', cbTick: s.dont ? '✓' : '',
+      clBg: connected ? '#2f7fe0' : '#1a2c48', clSh: connected ? '0 4px 14px rgba(47,127,224,.35)' : 'inset 0 0 0 1px rgba(130,175,255,.22)', clC: connected ? '#ffffff' : '#dce7f5'
+    };
+  }
+}
+</script>
+</body>
+</html>

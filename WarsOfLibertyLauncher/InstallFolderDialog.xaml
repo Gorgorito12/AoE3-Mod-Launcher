@@ -11,8 +11,8 @@
         ShowInTaskbar="False">
 
     <!--
-        "Where it installs" — rebuilt to docs/design_publicar_e_instalar (19a the dialog,
-        19b the path field measured).
+        "Where it installs": docs/design_publicar_e_instalar (19a, 19b) on the base of design 74,
+        with the mod's image and colour, glass cards and solid secondary buttons.
 
         THE WINDOW IS 700, NOT 560. The spec contradicts itself — its Medidas table says
         560, which is simply the geometry it was measuring, while its mockup draws the card
@@ -41,64 +41,56 @@
         follows. Don't add a ScrollViewer or a fixed height — they fight the measure pass.
     -->
     <Window.Resources>
-        <!-- Gold globally, and the shared TextBox template paints the focus ring by
-             TargetName, so a field cannot opt out on its own. -->
+        <!-- The window puts the mod's colour here too: the shared TextBox template paints the
+             focus ring by TargetName, so a field cannot opt out on its own. -->
         <SolidColorBrush x:Key="TextBoxFocusBrush" Color="#2F7FE0"/>
 
-        <!-- The label above a field, and the note that rides opposite it. -->
-        <Style x:Key="InLabel" TargetType="TextBlock" BasedOn="{StaticResource SetGroupLabel}">
-            <Setter Property="Margin" Value="0"/>
+        <Style x:Key="InLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{DynamicResource DialogBodySize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource WindowStrongText}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
-        <Style x:Key="InNote" TargetType="TextBlock"
-               BasedOn="{StaticResource {x:Type TextBlock}}">
-            <Setter Property="FontSize" Value="{DynamicResource SetGroupLabelSize}"/>
-            <Setter Property="Foreground" Value="{DynamicResource UiTextDim}"/>
+        <Style x:Key="InNote" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource WindowMuted}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextWrapping" Value="NoWrap"/>
         </Style>
-
-        <!-- The field shell. Both rows use the SAME one, which is the alignment fix: the
-             handoff's author warns that he drew the nesting as a rail INSIDE the second row
-             and stole 20 px from its field, so the two "Change…" buttons stopped lining up.
-             The nesting is said in the LABEL instead. -->
+        <!-- The field shell. Both rows use the SAME one, which keeps the two "Change…" buttons
+             on one line; the nesting is said in the label. -->
         <Style x:Key="InFieldShell" TargetType="Border">
             <Setter Property="Height" Value="34"/>
             <Setter Property="Background" Value="{DynamicResource MpField}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MpRimField}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource WindowFieldRim}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="{StaticResource RadiusControl}"/>
+            <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="11,0"/>
             <Setter Property="ClipToBounds" Value="True"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
         </Style>
-
         <!-- The three pieces of a path. Root and middle dim, the folder you are actually
              choosing bright and semibold. -->
-        <Style x:Key="InPathRoot" TargetType="TextBlock"
-               BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Style x:Key="InPathRoot" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
-            <Setter Property="FontSize" Value="{DynamicResource SetMonoSize}"/>
-            <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetRowDescSize}"/>
+            <Setter Property="Foreground" Value="#8EA4C0"/>
             <Setter Property="TextWrapping" Value="NoWrap"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style x:Key="InPathMid" TargetType="TextBlock" BasedOn="{StaticResource InPathRoot}">
-            <Setter Property="Foreground" Value="{DynamicResource UiTextDim}"/>
+            <Setter Property="Foreground" Value="#6D829D"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
         <Style x:Key="InPathLeaf" TargetType="TextBlock" BasedOn="{StaticResource InPathRoot}">
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiBodyText}"/>
         </Style>
-
-        <Style x:Key="InChangeButton" TargetType="Button" BasedOn="{StaticResource SetActionButton}">
+        <Style x:Key="InChangeButton" TargetType="Button" BasedOn="{StaticResource WindowSecondaryButton}">
             <Setter Property="Height" Value="34"/>
-            <Setter Property="Width" Value="Auto"/>
-            <Setter Property="MinWidth" Value="92"/>
-            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Width" Value="112"/>
             <Setter Property="Margin" Value="8,0,0,0"/>
-            <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+            <Setter Property="Cursor" Value="Hand"/>
         </Style>
     </Window.Resources>
 
@@ -110,99 +102,89 @@
         <controls:TitleBar Grid.Row="0" x:Name="TitleBarControl"
                            ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
 
-        <StackPanel Grid.Row="1" Margin="20,18,20,20">
-            <TextBlock x:Name="HeaderText" Style="{StaticResource SetSectionTitle}"/>
-            <TextBlock x:Name="DescriptionText"
-                       FontSize="{DynamicResource SetControlSize}"
-                       Foreground="{DynamicResource MpTextBody}"
-                       TextWrapping="Wrap"
-                       LineHeight="19"
-                       LineStackingStrategy="BlockLineHeight"
-                       Margin="0,6,0,0"/>
+        <StackPanel Grid.Row="1" Margin="22,26,22,20">
+            <TextBlock x:Name="HeaderText" Style="{StaticResource WindowHeadline}"
+                       FontSize="{DynamicResource DialogTitleSize}"
+                       Margin="2,0,2,0"/>
+            <TextBlock x:Name="DescriptionText" Style="{StaticResource WindowBody}"
+                       MaxWidth="400"
+                       HorizontalAlignment="Left"
+                       Margin="2,7,2,0"/>
 
-            <!-- One card holds both paths and the space line, because they are one
-                 question: where the base comes from, where the mod lands, and whether it
-                 fits. -->
-            <Border Style="{StaticResource SetCard}" Padding="13" Margin="0,16,0,0">
+            <!-- One card holds both paths and the space line, because they are one question:
+                 where the base comes from, where the mod lands, and whether it fits. -->
+            <Border Style="{StaticResource WindowCard}" Padding="16" Margin="0,20,0,0">
                 <StackPanel>
-                    <!-- AoE3 source — the folder to CLONE. Collapsed as a block for an
-                         in-place overlay, which clones nothing: the base game is already at
-                         the destination, so asking for a source there would block an
-                         install that needs none. -->
-                    <StackPanel x:Name="Aoe3Row">
-                        <Grid>
+                    <!-- AoE3 source: the folder to CLONE. Collapsed for an in-place overlay,
+                         which clones nothing. -->
+                    <StackPanel x:Name="Aoe3Row" Margin="0,0,0,14">
+                        <Grid MinHeight="24">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="LblAoE3Folder" Grid.Column="0"
-                                       Style="{StaticResource InLabel}"/>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal"
-                                        VerticalAlignment="Center">
-                                <Ellipse x:Name="Aoe3StatusDot"
-                                         Width="6" Height="6"
-                                         VerticalAlignment="Center"
-                                         Margin="0,0,6,0"/>
-                                <TextBlock x:Name="Aoe3StatusText"
-                                           FontSize="{DynamicResource SetGroupLabelSize}"
-                                           FontWeight="Medium"
-                                           TextWrapping="NoWrap"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
+                            <TextBlock x:Name="LblAoE3Folder" Style="{StaticResource InLabel}"
+                                       Margin="0,0,10,0"/>
+                            <Border Grid.Column="1" Height="24" CornerRadius="12" Padding="10,0"
+                                    Background="#8C0A1321" BorderThickness="1"
+                                    BorderBrush="{DynamicResource WindowCardRim}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse x:Name="Aoe3StatusDot" Width="7" Height="7"
+                                             VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock x:Name="Aoe3StatusText"
+                                               FontSize="{DynamicResource SetCaptionSize}"
+                                               FontWeight="SemiBold"
+                                               Foreground="#E8EEF6"
+                                               TextWrapping="NoWrap"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
                         </Grid>
-
                         <Grid Margin="0,7,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Style="{StaticResource InFieldShell}">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock x:Name="Aoe3PathRoot" Style="{StaticResource InPathRoot}"/>
-                                    <TextBlock x:Name="Aoe3PathMid"  Style="{StaticResource InPathMid}"/>
-                                    <TextBlock x:Name="Aoe3PathLeaf" Style="{StaticResource InPathLeaf}"/>
-                                    <TextBlock x:Name="Aoe3PathEmpty" Style="{StaticResource InPathMid}"/>
-                                </StackPanel>
+                            <Border x:Name="Aoe3PathShell" Grid.Column="0" Style="{StaticResource InFieldShell}">
+                                <Grid>
+                                    <controls:PathLinePanel VerticalAlignment="Center">
+                                        <TextBlock x:Name="Aoe3PathRoot" Style="{StaticResource InPathRoot}"/>
+                                        <TextBlock x:Name="Aoe3PathMid"  Style="{StaticResource InPathMid}"/>
+                                        <TextBlock x:Name="Aoe3PathLeaf" Style="{StaticResource InPathLeaf}"/>
+                                    </controls:PathLinePanel>
+                                    <TextBlock x:Name="Aoe3PathEmpty"
+                                               FontSize="{DynamicResource SetRowDescSize}"
+                                               Foreground="{DynamicResource WindowFineText}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
                             </Border>
-                            <Button x:Name="BrowseAoE3InDialogButton"
-                                    Grid.Column="1"
+                            <Button x:Name="BrowseAoE3InDialogButton" Grid.Column="1"
                                     Style="{StaticResource InChangeButton}"
                                     Click="BrowseAoE3InDialogButton_Click"/>
                         </Grid>
-
-                        <!-- The long "AoE3 was not detected" explanation, only when there
-                             is nothing to show above. -->
-                        <TextBlock x:Name="Aoe3MissingText"
-                                   FontSize="{DynamicResource SetGroupLabelSize}"
-                                   Foreground="{DynamicResource MpCautionText}"
-                                   TextWrapping="Wrap"
-                                   LineHeight="16"
-                                   LineStackingStrategy="BlockLineHeight"
-                                   Margin="0,7,0,0"
-                                   Visibility="Collapsed"/>
-
-                        <!-- Manual "search my Asian Dynasties" — exhaustive content scan,
-                             shown only when no source is set. The automatic pre-fill
-                             already runs a conservative scan; this is the user-initiated
-                             exhaustive one. -->
-                        <!-- Auto width, not one of the fixed action widths: those exist to
-                             keep a COLUMN of buttons from zigzagging, and this one stands
-                             alone with a caption long enough to be clipped by 132 px. -->
-                        <Button x:Name="SearchAoe3Button"
-                                Style="{StaticResource SetFooterGhostButton}"
-                                Height="30"
-                                HorizontalAlignment="Left"
-                                Margin="0,9,0,0"
-                                Visibility="Collapsed"
-                                Click="SearchAoe3Button_Click"/>
+                        <!-- Only with nothing to show above: what is missing, and the exhaustive
+                             search of the disks, which the automatic scan is not. -->
+                        <Grid x:Name="Aoe3MissingRow" Margin="0,9,0,0" Visibility="Collapsed">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="Aoe3MissingText"
+                                       FontSize="{DynamicResource SetRowDescSize}"
+                                       Foreground="{DynamicResource WindowNoticeTitle}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,12,0"/>
+                            <Button x:Name="SearchAoe3Button" Grid.Column="1"
+                                    Style="{StaticResource WindowSecondaryButton}"
+                                    VerticalAlignment="Center"
+                                    Click="SearchAoe3Button_Click"/>
+                        </Grid>
                     </StackPanel>
 
-                    <!-- Destination. The "↳" and the note beside it are the NESTING, shown
-                         only when the destination really is inside the source — the row
-                         itself keeps exactly the geometry of the one above. -->
-                    <StackPanel x:Name="DestBlock" Margin="0,11,0,0">
-                        <Grid>
+                    <!-- Destination. The "↳" and the note beside it are the NESTING, shown only
+                         when the destination really is inside the source. -->
+                    <StackPanel x:Name="DestBlock">
+                        <Grid MinHeight="24">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -211,16 +193,17 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="NestGlyph" Grid.Column="0"
                                        Text="↳"
-                                       FontSize="{DynamicResource SetMonoSize}"
-                                       Foreground="{DynamicResource UiTextGhost}"
+                                       FontFamily="{DynamicResource MonoFont}"
+                                       FontSize="{DynamicResource DialogBodySize}"
+                                       FontWeight="SemiBold"
+                                       Foreground="#8EA4C0"
                                        VerticalAlignment="Center"
-                                       Margin="0,0,6,0"/>
+                                       Margin="0,0,8,0"/>
                             <TextBlock x:Name="LblFolder" Grid.Column="1"
                                        Style="{StaticResource InLabel}"/>
                             <TextBlock x:Name="NestNote" Grid.Column="3"
                                        Style="{StaticResource InNote}"/>
                         </Grid>
-
                         <Grid Margin="0,7,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -231,59 +214,66 @@
                                 <TextBox x:Name="FolderTextBox"
                                          Height="34"
                                          Background="{DynamicResource MpField}"
-                                         Foreground="{DynamicResource MpTextPrimary}"
+                                         Foreground="{DynamicResource UiBodyText}"
                                          CaretBrush="{DynamicResource MpActionText}"
                                          SelectionBrush="{DynamicResource MpAction}"
-                                         BorderBrush="{DynamicResource MpRimField}"
+                                         BorderBrush="{DynamicResource WindowFieldRim}"
                                          BorderThickness="1"
                                          Padding="11,0"
                                          VerticalContentAlignment="Center"
                                          FontFamily="{DynamicResource MonoFont}"
-                                         FontSize="{DynamicResource SetMonoSize}"
+                                         FontSize="{DynamicResource SetRowDescSize}"
                                          TextChanged="FolderTextBox_TextChanged"
                                          GotKeyboardFocus="FolderTextBox_GotKeyboardFocus"
                                          LostKeyboardFocus="FolderTextBox_LostKeyboardFocus"/>
-                                <!-- What you SEE while the box is not focused. Not
-                                     hit-testable, so a click goes straight through to the
-                                     box underneath and the whole path comes back. -->
+                                <!-- What you SEE while the box is not focused. Not hit-testable,
+                                     so a click goes straight through to the box underneath and
+                                     the whole path comes back. -->
                                 <Border x:Name="DestDisplay"
                                         Style="{StaticResource InFieldShell}"
                                         IsHitTestVisible="False">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock x:Name="DestPathRoot" Style="{StaticResource InPathRoot}"/>
-                                        <TextBlock x:Name="DestPathMid"  Style="{StaticResource InPathMid}"/>
-                                        <TextBlock x:Name="DestPathLeaf" Style="{StaticResource InPathLeaf}"/>
-                                    </StackPanel>
+                                    <Grid>
+                                        <controls:PathLinePanel VerticalAlignment="Center">
+                                            <TextBlock x:Name="DestPathRoot" Style="{StaticResource InPathRoot}"/>
+                                            <TextBlock x:Name="DestPathMid"  Style="{StaticResource InPathMid}"/>
+                                            <TextBlock x:Name="DestPathLeaf" Style="{StaticResource InPathLeaf}"/>
+                                        </controls:PathLinePanel>
+                                        <TextBlock x:Name="DestPlaceholder"
+                                                   FontSize="{DynamicResource SetRowDescSize}"
+                                                   Foreground="{DynamicResource WindowFineText}"
+                                                   VerticalAlignment="Center"
+                                                   Visibility="Collapsed"/>
+                                    </Grid>
                                 </Border>
                             </Grid>
-                            <Button x:Name="BrowseButton"
-                                    Grid.Column="1"
+                            <Button x:Name="BrowseButton" Grid.Column="1"
                                     Style="{StaticResource InChangeButton}"
                                     Click="BrowseButton_Click"/>
                         </Grid>
                     </StackPanel>
 
-                    <!-- What it needs and what you have, in ONE line. They used to be 200 px
-                         apart: the requirement was the tail of the header paragraph ("About
-                         12 GB… recommended") and the figure was a grey line under the field
-                         — and the MEASURED requirement only ever appeared when it was short. -->
+                    <!-- What it needs and what you have, in ONE line. -->
                     <Border x:Name="DiskSpaceBox"
                             BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusControl}"
-                            Padding="11,9"
-                            Margin="0,12,0,0"
+                            CornerRadius="8"
+                            Padding="12,9"
+                            Margin="0,14,0,0"
                             SnapsToDevicePixels="True">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="DiskSpaceGlyph"
-                                       FontSize="{DynamicResource SetGroupLabelSize}"
-                                       VerticalAlignment="Center"
-                                       Margin="0,0,9,0"/>
-                            <TextBlock x:Name="DiskSpaceText"
-                                       FontSize="{DynamicResource SetMonoSize}"
-                                       FontFamily="{DynamicResource BodyFont}"
-                                       TextWrapping="Wrap"
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="DiskSpaceMark" Width="20" Height="20" CornerRadius="10"
+                                    VerticalAlignment="Center" Margin="0,0,10,0">
+                                <TextBlock x:Name="DiskSpaceGlyph" FontSize="11" FontWeight="Bold"
+                                           Foreground="#0F1C2E"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock x:Name="DiskSpaceText" Grid.Column="1"
+                                       Style="{StaticResource WindowBody}"
                                        VerticalAlignment="Center"/>
-                        </StackPanel>
+                        </Grid>
                     </Border>
                 </StackPanel>
             </Border>
@@ -291,102 +281,81 @@
             <!-- First-run reminder: open the original game at least once before installing
                  (non-blocking, shown only when AoE3's user-data folder is missing). -->
             <Border x:Name="FirstRunWarningBox"
-                    Style="{StaticResource SetNoticeAmber}"
-                    Margin="0,13,0,0"
+                    Style="{StaticResource WindowNotice}"
+                    CornerRadius="10"
+                    Padding="12,10"
+                    Margin="0,14,0,0"
                     Visibility="Collapsed">
                 <TextBlock x:Name="FirstRunWarningText"
-                           FontSize="{DynamicResource SetGroupLabelSize}"
-                           TextWrapping="Wrap"
-                           LineHeight="16"
-                           LineStackingStrategy="BlockLineHeight"/>
+                           FontSize="{DynamicResource SetRowDescSize}"
+                           Foreground="{DynamicResource WindowNoticeTitle}"
+                           TextWrapping="Wrap"/>
             </Border>
 
             <!-- Copy the player's graphics / sound / hotkeys from a mod they already have.
-
-                 The WHOLE block is collapsed when there is no other mod to copy from, which
-                 is the case for anyone installing their first one — so the question only
-                 ever appears to somebody who can answer it. Eligibility is decided by the
-                 caller through GameSettingsStore.CanImportFrom, the same rule the settings
-                 page uses.
-
-                 The copy is NOT made here. This dialog only reports the choice; see
-                 ModState.PendingSettingsImportFrom for why it usually cannot happen until
-                 the mod has been opened once. -->
+                 Collapsed when there is no other mod to copy from, so the question only ever
+                 appears to somebody who can answer it. Eligibility is decided by the caller
+                 through GameSettingsStore.CanImportFrom. The copy is NOT made here: this dialog
+                 only reports the choice, see ModState.PendingSettingsImportFrom. -->
             <Border x:Name="CopySettingsRow"
-                    Style="{StaticResource SetNoticeInfo}"
-                    Padding="13"
-                    Margin="0,13,0,0"
+                    Style="{StaticResource WindowCard}"
+                    Padding="16,14"
+                    Margin="0,14,0,0"
                     Visibility="Collapsed">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <CheckBox x:Name="CopySettingsCheck"
-                              Grid.Column="0"
-                              Style="{StaticResource SetCheckBox}"
-                              VerticalAlignment="Top"
-                              Margin="0,1,0,0"
-                              Click="CopySettingsCheck_Click"/>
-                    <StackPanel Grid.Column="1">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <CheckBox x:Name="CopySettingsCheck"
+                                  Style="{StaticResource WindowCheckBox}"
+                                  VerticalAlignment="Center"
+                                  Click="CopySettingsCheck_Click">
                             <TextBlock x:Name="CopySettingsTitle"
-                                       Grid.Column="0"
-                                       FontSize="{DynamicResource SetBodySize}"
+                                       FontSize="{DynamicResource DialogBodySize}"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource MpTextPrimary}"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
-                            <ComboBox x:Name="CopySettingsCombo"
-                                      Grid.Column="1"
-                                      Style="{StaticResource SetCompactCombo}"
-                                      Height="30"
-                                      MinWidth="180"
-                                      Margin="11,0,0,0"
-                                      IsEnabled="False"/>
-                        </Grid>
-                        <TextBlock x:Name="CopySettingsHint"
-                                   FontSize="{DynamicResource SetMonoSize}"
-                                   FontFamily="{DynamicResource BodyFont}"
-                                   Foreground="{DynamicResource MpTextMuted}"
-                                   TextWrapping="Wrap"
-                                   LineHeight="16"
-                                   LineStackingStrategy="BlockLineHeight"
-                                   Margin="0,6,0,0"/>
+                                       Foreground="{DynamicResource WindowStrongText}"
+                                       Margin="-2,0,0,0"
+                                       VerticalAlignment="Center"/>
+                        </CheckBox>
+                        <ComboBox x:Name="CopySettingsCombo"
+                                  Style="{StaticResource SetCompactCombo}"
+                                  Height="32"
+                                  MinWidth="170"
+                                  Margin="10,0,0,0"
+                                  IsEnabled="False"/>
                     </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- Validation warning -->
-            <TextBlock x:Name="WarningText"
-                       FontSize="{DynamicResource SetGroupLabelSize}"
-                       Foreground="{DynamicResource MpDestructiveText}"
-                       TextWrapping="Wrap"
-                       Margin="0,13,0,0"
-                       Visibility="Collapsed"/>
-
-            <Border BorderBrush="{DynamicResource UiRimSeam}"
-                    BorderThickness="0,1,0,0"
-                    Margin="0,17,0,0"
-                    Padding="0,14,0,0">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="CancelButton"
-                            Style="{StaticResource MpLinkButton}"
-                            VerticalAlignment="Center"
-                            Margin="0,0,14,0"
-                            Click="CancelButton_Click"/>
-                    <Button x:Name="OkButton"
-                            Style="{StaticResource SetFooterPrimaryButton}"
-                            Height="36"
-                            MinWidth="136"
-                            IsDefault="True"
-                            Click="OkButton_Click"/>
+                    <TextBlock x:Name="CopySettingsHint"
+                               FontSize="{DynamicResource SetRowDescSize}"
+                               Foreground="{DynamicResource WindowMuted}"
+                               TextWrapping="Wrap"
+                               Margin="26,8,0,0"/>
                 </StackPanel>
             </Border>
+
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <!-- Why Install is off, beside the button it explains. -->
+                <TextBlock x:Name="WarningText"
+                           FontSize="{DynamicResource SetRowDescSize}"
+                           Foreground="{DynamicResource WindowNoticeTitle}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0"
+                           Visibility="Collapsed"/>
+                <Button x:Name="CancelButton" Grid.Column="1"
+                        Style="{StaticResource WindowSecondaryButton}"
+                        MinWidth="112"
+                        Click="CancelButton_Click"/>
+                <Button x:Name="OkButton" Grid.Column="2"
+                        Style="{StaticResource WindowPrimaryButton}"
+                        MinWidth="136"
+                        Margin="8,0,0,0"
+                        IsDefault="True"
+                        Click="OkButton_Click"/>
+            </Grid>
         </StackPanel>
     </Grid>
 </Window>

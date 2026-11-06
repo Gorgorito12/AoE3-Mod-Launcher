@@ -494,6 +494,11 @@ public static class DiagnosticLog
         s_renderMsThisSecond = 0;
         s_animatedRendersThisSecond = 0;
 
+        // What the testbed turns into frame cost. Nothing else writes these numbers unless a storm
+        // is under way, and a line a second is not something a player's bundle should carry.
+        if (HarnessMode.Active)
+            Write($"PERF  {passes} passes, {renders} redraws, {animated} animated, {renderMs} ms drawing");
+
         var watched = true;
         try { watched = LayoutStormWatched?.Invoke() ?? true; }
         catch { /* assume watched: the stricter threshold */ }

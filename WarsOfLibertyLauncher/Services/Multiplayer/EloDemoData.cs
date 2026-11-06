@@ -59,6 +59,36 @@ internal sealed record EloProfileSample(
 /// </summary>
 internal static class EloDemoData
 {
+    /// <summary>Four sample decks for the Profile's Decks section, on the page's own shape.</summary>
+    internal static IReadOnlyList<Models.HomeCityProfile> Decks()
+    {
+        static Models.HomeCityDeckEntry Deck(string name, params string[] cards) => new()
+        {
+            Name = name,
+            Cards = cards.Select((c, i) => new Models.HomeCityCard { Slot = i, InternalName = c }).ToList(),
+        };
+
+        return new[]
+        {
+            new Models.HomeCityProfile
+            {
+                Civ = "British", CityName = "Londres",
+                Decks = { Deck("Rush", "HCShipSettlers3", "HCShipWood2", "HCExplorerEngineering",
+                               "HCShipMusketeers2", "HCShipHussars1", "HCUnlockFort") },
+            },
+            new Models.HomeCityProfile
+            {
+                Civ = "Chinese", CityName = "Beijing",
+                Decks = { Deck("Beijing", "HCShipSettlers3"), Deck("Nank\u00edn", "HCShipWood2") },
+            },
+            new Models.HomeCityProfile
+            {
+                Civ = "Bulgarians", CityName = "Sof\u00eda",
+                Decks = { Deck("Deck 1", "HCShipSettlers3") },
+            },
+        };
+    }
+
     /// <summary>Every scene, in the order the Settings list shows them.</summary>
     internal static IReadOnlyList<EloPreviewScene> Scenes { get; } =
         Enum.GetValues<EloPreviewScene>().ToList();

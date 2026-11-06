@@ -65,17 +65,17 @@ internal static class StatsDemoData
     /// </summary>
     private static readonly (string Civ, int Played, int Wins, int Losses)[] Civs =
     {
-        ("México", 64, 34, 27),
-        ("Estados Unidos", 58, 26, 28),
-        ("Argentina", 41, 20, 19),
-        ("Brasil", 33, 13, 18),
-        ("Gran Colombia", 12, 7, 5),
-        ("Perú", 9, 4, 5),
-        ("Haití", 4, 2, 2),          // under the bar: no percentage, empty channel
-        ("Chile", 3, 2, 1),
-        ("Bolivia", 3, 1, 1),
-        ("Paraguay", 2, 1, 1),
-        ("Uruguay", 2, 0, 1),
+        ("Mexicans", 64, 34, 27),
+        ("UnitedStates", 58, 26, 28),
+        ("Argentineans", 41, 20, 19),
+        ("Brazilians", 33, 13, 18),
+        ("Colombians", 12, 7, 5),
+        ("Peruvians", 9, 4, 5),
+        ("Haitians", 4, 2, 2),          // under the bar: no percentage, empty channel
+        ("Chileans", 3, 2, 1),
+        ("Bolivians", 3, 1, 1),
+        ("Paraguayans", 2, 1, 1),
+        ("Uruguayans", 2, 0, 1),
         ("Venezuela", 2, 1, 0),
         ("Ecuador", 1, 1, 0),
         ("Guatemala", 1, 0, 1),
@@ -123,12 +123,12 @@ internal static class StatsDemoData
     /// table that mirrored the solo one would let a broken mode filter pass.</summary>
     private static readonly (string Civ, int Played, int Wins, int Losses)[] TeamCivs =
     {
-        ("México", 41, 24, 17),
-        ("Estados Unidos", 38, 19, 19),
-        ("Brasil", 29, 16, 13),
-        ("Argentina", 22, 9, 13),
-        ("Gran Colombia", 11, 6, 5),
-        ("Perú", 4, 3, 1),
+        ("Mexicans", 41, 24, 17),
+        ("UnitedStates", 38, 19, 19),
+        ("Brazilians", 29, 16, 13),
+        ("Argentineans", 22, 9, 13),
+        ("Colombians", 11, 6, 5),
+        ("Peruvians", 4, 3, 1),
     };
 
     /// <summary>How the matches of the window fall across its days. Deliberately uneven, and
@@ -419,10 +419,10 @@ internal static class StatsDemoData
         var together = team && !second
             ? new (string A, string B, int Played, int WinsA)[]
             {
-                ("Estados Unidos", "México", 17, 10),
-                ("Brasil", "México", 12, 5),
-                ("Argentina", "Estados Unidos", 8, 5),
-                ("Gran Colombia", "México", 3, 2),
+                ("UnitedStates", "Mexicans", 17, 10),
+                ("Brazilians", "Mexicans", 12, 5),
+                ("Argentineans", "UnitedStates", 8, 5),
+                ("Colombians", "Mexicans", 3, 2),
             }
             : System.Array.Empty<(string A, string B, int Played, int WinsA)>();
 
@@ -434,19 +434,19 @@ internal static class StatsDemoData
             : team
             ? new (string A, string B, int Played, int WinsA)[]
             {
-                ("Estados Unidos", "México", 24, 11),
-                ("Brasil", "México", 18, 7),
-                ("Argentina", "México", 13, 6),
-                ("Argentina", "Brasil", 7, 4),
-                ("Gran Colombia", "México", 2, 1),
+                ("UnitedStates", "Mexicans", 24, 11),
+                ("Brazilians", "Mexicans", 18, 7),
+                ("Argentineans", "Mexicans", 13, 6),
+                ("Argentineans", "Brazilians", 7, 4),
+                ("Colombians", "Mexicans", 2, 1),
             }
             : new (string A, string B, int Played, int WinsA)[]
             {
-                ("Estados Unidos", "México", 19, 9),
-                ("Argentina", "Brasil", 14, 8),
-                ("Brasil", "México", 11, 4),
-                ("Argentina", "México", 9, 5),
-                ("Estados Unidos", "Gran Colombia", 4, 3),
+                ("UnitedStates", "Mexicans", 19, 9),
+                ("Argentineans", "Brazilians", 14, 8),
+                ("Brazilians", "Mexicans", 11, 4),
+                ("Argentineans", "Mexicans", 9, 5),
+                ("UnitedStates", "Colombians", 4, 3),
             };
 
         MatchupEntry Pair((string A, string B, int Played, int WinsA) p) => new()

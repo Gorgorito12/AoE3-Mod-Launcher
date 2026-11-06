@@ -80,6 +80,11 @@ public partial class InstallFolderDialog : Window
     private long _cloneBytes = -1;
     private string? _measuredSource;
     private bool _spaceWarning;
+    private string? _shortDrive;
+
+    // A --preview-dialog state: the disk figures it should show, so nothing is measured.
+    private readonly InstallFolderPreview? _preview;
+    internal const string PreviewAoe3Folder = @"C:\Program Files (x86)\Steam\steamapps\common\Age Of Empires 3";
 
     /// <param name="modDisplayName">
     /// Display name of the mod being installed (e.g. "Wars of Liberty",
@@ -124,9 +129,13 @@ public partial class InstallFolderDialog : Window
         bool settingsBeforeFirstLaunch = false,
         string? modFolderName = null,
         IReadOnlyCollection<string>? knownFolderLeaves = null,
-        bool inPlaceOverlay = false)
+        bool inPlaceOverlay = false,
+        InstallFolderPreview? preview = null)
     {
+        _preview = preview;
         InitializeComponent();
+        Controls.ModDialogChrome.Attach(this, TitleBarControl);
+        if (Resources.Contains("MpAction")) Resources["TextBoxFocusBrush"] = Resources["MpAction"];
         Aoe3SourcePath = aoe3Path;
         _aoe3SourceLabel = aoe3SourceLabel;
         _requiresAoe3Source = requiresAoe3Source;
@@ -192,8 +201,8 @@ public partial class InstallFolderDialog : Window
     /// </summary>
     private void UpdateFirstRunWarning()
     {
-        bool launchedBefore = false;
-        try
+        bool launchedBefore = _preview is { NeverOpened: false };
+        if (_preview == null) try
         {
             var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             if (!string.IsNullOrEmpty(docs))
@@ -211,12 +220,18 @@ public partial class InstallFolderDialog : Window
 
     private void ApplyLanguage()
     {
-        Title = Strings.Format("DlgPickInstallFolderTitle", _modDisplayName);
-        TitleBarControl.Title = Strings.Format("DlgPickInstallFolderTitle", _modDisplayName);
-        HeaderText.Text = Strings.Get("DlgPickInstallFolderHeader");
-        DescriptionText.Text = Strings.Format("DlgPickInstallFolderDescription", _modDisplayName);
-        LblAoE3Folder.Text = Strings.Get("DlgInstallCopiedFrom");
-        LblFolder.Text = Strings.Get("DlgInstallInstalledIn");
+        Title = Strings.Format("DlgInstallWindowTitle", _modDisplayName);
+        TitleBarControl.Title = Title;
+        HeaderText.Text = _requiresAoe3Source
+            ? Strings.Format("DlgInstallHeadline", _modDisplayName)
+            : Strings.Get("DlgInstallHeadlineOverlay");
+        DescriptionText.Text = Strings.Get(_requiresAoe3Source ? "DlgInstallDesc" : "DlgInstallDescOverlay");
+        LblAoE3Folder.Text = Strings.Get("DlgInstallYourAoe3");
+        LblFolder.Text = Strings.Get(_requiresAoe3Source ? "DlgInstallModFolder" : "DlgInstallOverlayFolder");
+        DestPlaceholder.Text = Strings.Get("DlgInstallPickAoe3First");
+        Controls.ModDialogChrome.SetLineHeight(1.2, HeaderText);
+        Controls.ModDialogChrome.SetLineHeight(1.5, DescriptionText, Aoe3MissingText, FirstRunWarningText, CopySettingsHint);
+        Controls.ModDialogChrome.SetLineHeight(1.45, DiskSpaceText);
         BrowseButton.Content = Strings.Get("ChangePathButton");
         BrowseAoE3InDialogButton.Content = Strings.Get("ChangePathButton");
         SearchAoe3Button.Content = Strings.Get("DlgSearchAoe3Button");
@@ -238,27 +253,22 @@ public partial class InstallFolderDialog : Window
     {
         bool found = !string.IsNullOrEmpty(Aoe3SourcePath);
         SetPathParts(Aoe3PathRoot, Aoe3PathMid, Aoe3PathLeaf, Aoe3SourcePath);
+        Aoe3PathShell.ToolTip = found ? Aoe3SourcePath : null;
 
         // The long "AoE3 was not detected, here is what to do" paragraph belongs UNDER the
         // empty field, not inside the status chip beside the label: it is four lines of
         // instructions, and a chip is two words.
         Aoe3PathEmpty.Text = found ? "" : Strings.Get("DlgInstallAoe3Empty");
         Aoe3MissingText.Text = found ? "" : Strings.Get("InstallAoe3NotDetected");
-        Aoe3MissingText.Visibility = found ? Visibility.Collapsed : Visibility.Visible;
+        Aoe3MissingRow.Visibility = found ? Visibility.Collapsed : Visibility.Visible;
 
         Aoe3StatusDot.Visibility = Visibility.Visible;
-        Aoe3StatusDot.Fill = found ? BrushOf("MpOk") : BrushOf("MpCaution");
-        Aoe3StatusText.Foreground = found ? BrushOf("MpOkText") : BrushOf("MpCautionText");
+        Aoe3StatusDot.Fill = found ? BrushOf("WindowSafeTick") : BrushOf("WindowNoticeDot");
         Aoe3StatusText.Text = found
             ? (string.IsNullOrEmpty(_aoe3SourceLabel)
                 ? Strings.Get("DlgAoe3DetectedChip")
                 : Strings.Format("DlgAoe3DetectedChipWithSource", _aoe3SourceLabel))
             : Strings.Get("DlgAoe3MissingChip");
-
-        // Offer the manual "search my Asian Dynasties" button only while no
-        // source is set (a real AoE3 in a non-standard folder that neither the
-        // fast probes nor the automatic pre-scan found).
-        SearchAoe3Button.Visibility = found ? Visibility.Collapsed : Visibility.Visible;
 
         // The nesting note is only TRUE while the destination really is inside this folder.
         UpdateNesting();
@@ -300,16 +310,18 @@ public partial class InstallFolderDialog : Window
     private void UpdateDestDisplay()
     {
         SetPathParts(DestPathRoot, DestPathMid, DestPathLeaf, FolderTextBox.Text.Trim());
+        DestPlaceholder.Visibility = string.IsNullOrWhiteSpace(FolderTextBox.Text)
+            ? Visibility.Visible : Visibility.Collapsed;
         UpdateNesting();
     }
 
     /// <summary>
     /// Paints one path as root + elided middle + last folder. The rule lives in
-    /// <see cref="PathDisplay.SplitForDisplay"/> so both rows and their tests share it.
+    /// <see cref="PathDisplay.SplitWhole"/> so both rows and their tests share it.
     /// </summary>
     private static void SetPathParts(TextBlock root, TextBlock mid, TextBlock leaf, string? path)
     {
-        var (r, m, l) = PathDisplay.SplitForDisplay(path);
+        var (r, m, l) = PathDisplay.SplitWhole(path);
         root.Text = r;
         mid.Text = m;
         leaf.Text = l;
@@ -382,29 +394,31 @@ public partial class InstallFolderDialog : Window
     private void ValidateInputs()
     {
         _pathCheck = InstallFolderRules.Validate(FolderTextBox.Text, InstallFolderRules.CurrentDriveRoots());
-        string? warning = _pathCheck.Problem != null
-            ? InstallFolderProblemText.Describe(_pathCheck.Problem, _modFolderName, _inPlaceOverlay)
-            : null;
+        ApplyBlockReason();
+    }
 
-        // AoE3 source is mandatory for a CLONING install — checked after the folder so a
-        // bad folder warning takes priority (the user fixes one thing at a time). An
-        // in-place overlay clones nothing, so it never waits for a source.
-        if (warning == null && _requiresAoe3Source && string.IsNullOrEmpty(Aoe3SourcePath))
-        {
-            warning = Strings.Get("DlgInstallAoe3Required");
-        }
-
-        if (warning != null)
-        {
-            WarningText.Text = warning;
-            WarningText.Visibility = Visibility.Visible;
-            OkButton.IsEnabled = false;
-        }
+    /// <summary>
+    /// Install stays off with its reason beside it (design 74): the folder first, because the
+    /// player fixes one thing at a time, then the AoE3 this install clones, then the room for it.
+    /// An empty box is not a bad path: it is the next thing to choose, and with no AoE3 the
+    /// reason is that one.
+    /// </summary>
+    private void ApplyBlockReason()
+    {
+        var needsSource = _requiresAoe3Source && string.IsNullOrEmpty(Aoe3SourcePath);
+        string? reason;
+        if (string.IsNullOrWhiteSpace(FolderTextBox.Text))
+            reason = Strings.Get(needsSource ? "DlgInstallAoe3Required" : "DlgInstallPickFolder");
+        else if (_pathCheck?.Problem != null)
+            reason = InstallFolderProblemText.Describe(_pathCheck.Problem, _modFolderName, _inPlaceOverlay);
+        else if (needsSource)
+            reason = Strings.Get("DlgInstallAoe3Required");
         else
-        {
-            WarningText.Visibility = Visibility.Collapsed;
-            OkButton.IsEnabled = true;
-        }
+            reason = _spaceWarning ? Strings.Format("DlgInstallNoRoom", _shortDrive ?? "") : null;
+
+        WarningText.Text = reason ?? "";
+        WarningText.Visibility = reason != null ? Visibility.Visible : Visibility.Collapsed;
+        OkButton.IsEnabled = reason == null;
     }
 
     /// <summary>
@@ -422,6 +436,14 @@ public partial class InstallFolderDialog : Window
         {
             _cloneBytes = -1;
             _measuredSource = null;
+            UpdateDiskSpace();
+            return;
+        }
+
+        if (_preview != null)
+        {
+            _cloneBytes = _preview.CloneBytes;
+            _measuredSource = source;
             UpdateDiskSpace();
             return;
         }
@@ -462,6 +484,12 @@ public partial class InstallFolderDialog : Window
     /// </summary>
     private void UpdateDiskSpace()
     {
+        MeasureDiskSpace();
+        ApplyBlockReason();
+    }
+
+    private void MeasureDiskSpace()
+    {
         // Nothing to measure while the folder cannot exist: a green "it fits" line under a path
         // the install would refuse reads as an all-clear.
         if (_pathCheck is not { Problem: null, FullPath: { } dest })
@@ -471,12 +499,16 @@ public partial class InstallFolderDialog : Window
             return;
         }
 
-        long free = DiskSpaceService.SafeFreeSpace(dest);
+        long free = _preview == null ? DiskSpaceService.SafeFreeSpace(dest)
+            : dest.StartsWith('C') ? _preview.FreeBytes : 860L << 30;
         var root = SafeRoot(dest);
+
+        // An in-place overlay clones nothing, so its requirement is known from the start.
+        var cloneBytes = _requiresAoe3Source ? _cloneBytes : 0;
 
         // Until the clone is measured (or with no source), just show free space —
         // never warn on an unknown requirement.
-        if (_cloneBytes < 0)
+        if (cloneBytes < 0)
         {
             _spaceWarning = false;
             if (free >= 0 && !string.IsNullOrEmpty(root))
@@ -487,13 +519,13 @@ public partial class InstallFolderDialog : Window
             return;
         }
 
-        long required = DiskSpaceService.EstimateInstallRequirement(_cloneBytes);
+        long required = DiskSpaceService.EstimateInstallRequirement(cloneBytes);
         long freeTemp = DiskSpaceService.SafeFreeSpace(Path.GetTempPath());
 
         bool destShort = DiskSpaceService.IsShort(free, required);
         // If %TEMP% is on a DIFFERENT volume than the destination, it needs room
         // for the payload download + extraction independently — check it too.
-        bool tempDifferent = !SameRoot(dest, Path.GetTempPath());
+        bool tempDifferent = _preview == null && !SameRoot(dest, Path.GetTempPath());
         bool tempShort = tempDifferent
             && DiskSpaceService.IsShort(freeTemp, DiskSpaceService.InstallExtraAllowanceBytes);
 
@@ -503,19 +535,22 @@ public partial class InstallFolderDialog : Window
         {
             long shortFree = destShort ? free : freeTemp;
             long shortReq = destShort ? required : DiskSpaceService.InstallExtraAllowanceBytes;
-            var shortDrive = destShort ? root : SafeRoot(Path.GetTempPath());
-            PaintSpaceLine("warn", "⚠", Strings.Format("DiskSpaceWarningLine",
-                DiskSpaceService.FormatBytes(shortReq),
+            _shortDrive = destShort ? root : SafeRoot(Path.GetTempPath());
+            PaintSpaceLine("warn", "!", Strings.Format("DlgInstallSpaceShort",
+                RoundedUp(shortReq),
                 DiskSpaceService.FormatBytes(shortFree),
-                shortDrive));
+                _shortDrive));
             return;
         }
 
         PaintSpaceLine("ok", "✓", Strings.Format("InstallSpaceLine",
-            DiskSpaceService.FormatBytes(required),
+            RoundedUp(required),
             DiskSpaceService.FormatBytes(free),
             root));
     }
+
+    /// <summary>What it needs is an estimate that says "about": a whole number of GB.</summary>
+    private static string RoundedUp(long bytes) => $"{Math.Ceiling(bytes / (double)(1L << 30)):0} GB";
 
     /// <summary>Green when it fits, amber when it does not, quiet while unknown.</summary>
     private void PaintSpaceLine(string tone, string glyph, string text)
@@ -524,27 +559,28 @@ public partial class InstallFolderDialog : Window
             ? Visibility.Collapsed
             : Visibility.Visible;
         DiskSpaceGlyph.Text = glyph;
-        DiskSpaceText.Text = text;
+        DiskSpaceText.Inlines.Clear();
+        Controls.ModDialogChrome.AddMarkedText(DiskSpaceText, text);
 
         switch (tone)
         {
             case "ok":
-                DiskSpaceBox.Background = BrushOf("MpOkBg");
+                DiskSpaceBox.Background = BrushOf("WindowSafeFill");
                 DiskSpaceBox.BorderBrush = BrushOf("MpOkRim");
-                DiskSpaceGlyph.Foreground = BrushOf("MpOk");
-                DiskSpaceText.Foreground = BrushOf("MpOkText");
+                DiskSpaceMark.Background = BrushOf("WindowSafeTick");
+                DiskSpaceText.Foreground = BrushOf("UiBodyText");
                 break;
             case "warn":
-                DiskSpaceBox.Background = BrushOf("MpCautionBg");
-                DiskSpaceBox.BorderBrush = BrushOf("MpCautionRim");
-                DiskSpaceGlyph.Foreground = BrushOf("MpCaution");
-                DiskSpaceText.Foreground = BrushOf("MpCautionText");
+                DiskSpaceBox.Background = BrushOf("WindowNoticeFill");
+                DiskSpaceBox.BorderBrush = BrushOf("WindowNoticeRim");
+                DiskSpaceMark.Background = BrushOf("WindowNoticeDot");
+                DiskSpaceText.Foreground = BrushOf("WindowNoticeTitle");
                 break;
             default:
                 DiskSpaceBox.Background = Brushes.Transparent;
                 DiskSpaceBox.BorderBrush = BrushOf("UiRimSeam");
-                DiskSpaceGlyph.Foreground = BrushOf("UiTextDim");
-                DiskSpaceText.Foreground = BrushOf("MpTextMuted");
+                DiskSpaceMark.Background = Brushes.Transparent;
+                DiskSpaceText.Foreground = BrushOf("WindowMuted");
                 break;
         }
     }
@@ -574,6 +610,12 @@ public partial class InstallFolderDialog : Window
 
     private void BrowseButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_preview != null)
+        {
+            FolderTextBox.Text = Path.Combine(@"D:\Juegos", _modFolderName);
+            return;
+        }
+
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
             // Format, not Get: the title takes the mod's name and showed a literal "{0}".
@@ -609,6 +651,12 @@ public partial class InstallFolderDialog : Window
 
     private void BrowseAoE3InDialogButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_preview != null)
+        {
+            AdoptAoe3(PreviewAoe3Folder);
+            return;
+        }
+
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
             Title = Strings.Get("DlgAoE3FolderPickerTitle"),
@@ -679,37 +727,49 @@ public partial class InstallFolderDialog : Window
     private async void SearchAoe3Button_Click(object sender, RoutedEventArgs e)
     {
         SearchAoe3Button.IsEnabled = false;
-        Aoe3StatusDot.Visibility = Visibility.Collapsed;
-        Aoe3StatusText.Text = Strings.Get("DlgSearchAoe3Searching");
-        Aoe3StatusText.Foreground = BrushOf("MpTextMuted");
+        SearchAoe3Button.Content = Strings.Get("DlgSearchAoe3Searching");
 
         try
         {
+            if (_preview != null)
+            {
+                await Task.Delay(1000);
+                AdoptAoe3(PreviewAoe3Folder);
+                return;
+            }
+
             var hits = await Task.Run(
                 () => AoE3Detector.FindAllDeep(includeDriveRoots: true, maxDirs: 20_000));
             var hit = hits.FirstOrDefault(h => !string.IsNullOrEmpty(h.ModRoot));
 
             if (hit != null)
             {
-                Aoe3SourcePath = hit.ModRoot;
-                _aoe3SourceLabel = null;   // found by content, no named source
-                UpdateAoE3Display();       // green status, hides this button, re-validates
+                AdoptAoe3(hit.ModRoot!);   // found by content, no named source
                 return;
             }
 
             Aoe3StatusText.Text = Strings.Get("DlgSearchAoe3NotFound");
-            Aoe3StatusText.Foreground = BrushOf("MpCautionText");
         }
         catch
         {
             Aoe3StatusText.Text = Strings.Get("DlgSearchAoe3NotFound");
-            Aoe3StatusText.Foreground = BrushOf("MpCautionText");
         }
         finally
         {
-            if (string.IsNullOrEmpty(Aoe3SourcePath))
-                SearchAoe3Button.IsEnabled = true;
+            SearchAoe3Button.Content = Strings.Get("DlgSearchAoe3Button");
+            SearchAoe3Button.IsEnabled = true;
         }
+    }
+
+    /// <summary>The source is known now: the mod's folder, empty until this moment, goes inside it
+    /// unless the player has already written one.</summary>
+    private void AdoptAoe3(string folder)
+    {
+        Aoe3SourcePath = folder;
+        _aoe3SourceLabel = null;
+        UpdateAoE3Display();
+        if (string.IsNullOrWhiteSpace(FolderTextBox.Text))
+            FolderTextBox.Text = Path.Combine(folder, _modFolderName);
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -720,6 +780,7 @@ public partial class InstallFolderDialog : Window
         // start mod-only (an unplayable folder with no base-game files). An in-place overlay is
         // exempt: it adds to the game that is already there.
         ValidateInputs();
+        UpdateDiskSpace();
         if (!OkButton.IsEnabled || _pathCheck?.FullPath is not { } chosen) return;
 
         // The one thing the pure rules cannot see: a FILE where the folder, or a folder above
@@ -733,17 +794,6 @@ public partial class InstallFolderDialog : Window
                 new InstallPathProblem(InstallPathProblemKind.FileInTheWay, Detail: fileInTheWay), _modFolderName);
             WarningText.Visibility = Visibility.Visible;
             return;
-        }
-
-        // Low-disk-space warning (warn-but-allow): if the conservative estimate
-        // says the drive is short, confirm before proceeding. Never blocks.
-        if (_spaceWarning)
-        {
-            var res = MessageBox.Show(this,
-                Strings.Get("DiskSpaceConfirmInstallBody"),
-                Strings.Get("DiskSpaceConfirmTitle"),
-                MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (res != MessageBoxResult.Yes) return;
         }
 
         SelectedFolder = chosen;
@@ -764,3 +814,6 @@ public partial class InstallFolderDialog : Window
     }
 
 }
+
+/// <summary>What <c>--preview-dialog=installfolder:*</c> pretends the disk says.</summary>
+public sealed record InstallFolderPreview(long FreeBytes, long CloneBytes, bool NeverOpened);

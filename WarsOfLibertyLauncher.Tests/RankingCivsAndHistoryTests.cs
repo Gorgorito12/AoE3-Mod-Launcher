@@ -356,19 +356,19 @@ public class RankingCivsAndHistoryTests
     /// sidebar dropped the tag, so it said "Fertile Crescent" to people who know the map as
     /// "ESOC Fertile Crescent" — the name the match list beside the ladder already prints.
     /// </summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void TheMapTablePrintsTheWholeNamePackIncluded(bool compact)
+    [Fact]
+    public void TheMapTableKeepsThePackBesideTheName()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
-            var row = tab.BuildMapRow(1, "ESOC_Fertile Crescent", 5, 5, compact, isLast: false);
+            var row = tab.BuildMapRow(1, "ESOC_Fertile Crescent", 5, 5);
             var texts = TextBlocks(row).Select(t => t.Text).ToList();
-            Assert.Contains("ESOC Fertile Crescent", texts);
-            Assert.DoesNotContain("Fertile Crescent", texts);
-            Assert.DoesNotContain("ESOC", texts);
+
+            // Design 98 draws the pack as a tag, and what must not come back is losing it:
+            // people know this map as "ESOC Fertile Crescent".
+            Assert.Contains("Fertile Crescent", texts);
+            Assert.Contains("ESOC", texts);
         });
 
         Assert.Null(error);

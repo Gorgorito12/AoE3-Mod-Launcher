@@ -1,0 +1,9 @@
+{
+  "name": "aoe3-launcher-testbed",
+  "private": true,
+  "type": "module",
+  "description": "Renders the design prototypes so they can be compared with the launcher.",
+  "dependencies": {
+    "playwright-core": "1.49.1"
+  }
+}

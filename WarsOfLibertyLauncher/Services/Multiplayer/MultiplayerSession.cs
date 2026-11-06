@@ -66,6 +66,12 @@ public sealed class MultiplayerSession : IAsyncDisposable
     public SessionStatus Status { get; private set; } = SessionStatus.SignedOut;
     public LobbyStatus Lobby { get; private set; } = LobbyStatus.Idle;
     public LobbyUserSummary? CurrentUser { get; private set; }
+
+    /// <summary>A sample account for the testbed. Does nothing outside the harness.</summary>
+    internal void PreviewSignIn(LobbyUserSummary user)
+    {
+        if (HarnessMode.Active) CurrentUser = user;
+    }
     public string? CurrentLobbyId { get; private set; }
     public string? CurrentLobbyTitle { get; private set; }
     public LobbyWebSocket? RoomSocket { get; private set; }
@@ -183,7 +189,7 @@ public sealed class MultiplayerSession : IAsyncDisposable
             var done = await Api.PollDeviceFlowAsync(
                 start.PollHandle,
                 start.IntervalSeconds,
-                TimeSpan.FromSeconds(Math.Max(60, start.ExpiresInSeconds)),
+                TimeSpan.FromSeconds(start.ExpiresInSeconds > 0 ? Math.Max(60, start.ExpiresInSeconds) : 900),
                 ct);
 
             _config.Multiplayer.SessionToken = done.Token;

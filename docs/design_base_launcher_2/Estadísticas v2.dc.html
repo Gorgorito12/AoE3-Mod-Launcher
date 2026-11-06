@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t98" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t98" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">98</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Estadísticas, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px">La pestaña Estadísticas (StatsView) pasa a la base. A diferencia de Clasificación, aquí se mira un solo mod cada vez, así que la página toma su color: el mod elegido, el modo activo y las barras van en el color del mod; los colores de victoria y derrota siguen fijos y la navegación (pestañas y subpestañas) sigue en el azul global, porque no pertenece al mod. Arriba, el título con las cifras del periodo y, a la derecha, el mod y el modo (1v1 / Equipos, solo si el mod tiene partidas de equipos). Dos columnas: a la izquierda el balance de civilizaciones con las columnas de CivTableLayout (nombre flexible hasta 320, partidas 74, récord 86, barra 150, % 58, duración 72) y los enfrentamientos, lado a lado desde 1600 px y apilados en portátil, y debajo lo que lleva la comunidad en sus mazos (DeckStatsView, por bandas); a la derecha la actividad de los 30 días con las horas punta en tu hora, y los mapas más jugados con la cola agrupada. Las reglas del código se respetan: orden por partidas jugadas, porcentaje solo desde 5 decididas, horas punta solo con 20 salas o más, nada inventado donde el servidor no manda el dato.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:44px 40px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="1">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:9px;max-width:1180px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <sc-if value="{{ f.interactive }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><span onClick="{{ f.reset }}" style-hover="background:#f4f2ee" style="cursor:pointer;padding:5px 10px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);color:#1a1a1a">Volver al principio</span><span style="margin-left:4px;color:rgba(0,0,0,.55)">{{ f.log }}</span></div></sc-if>
+        <div style="width:{{ f.w }};height:{{ f.h }};container-type:inline-size;color-scheme:dark;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.3);background:#0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+          <div style="position:absolute;inset:0;background:{{ f.glow }}"></div>
+          <div style="position:relative;height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ f.barBg }};backdrop-filter:blur({{ f.barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">AoE3 Mod Launcher</span><span style="height:20px;padding:0 6px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.25);display:flex;align-items:center;font:400 11px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">v1.0.16e</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;display:flex;gap:26px"><span>—</span><span>❐</span><span>✕</span></span></div>
+          <div style="position:relative;height:56px;flex:none;display:flex;align-items:stretch;gap:30px;padding:0 24px 0 32px;background:rgba(10,19,33,.45);backdrop-filter:blur(12px);box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+            <span style="display:flex;align-items:center;font:600 14px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 -2px 0 #2f7fe0">MULTIJUGADOR</span>
+            <span style="display:flex;align-items:center;font:500 14px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">BIBLIOTECA</span>
+            <div style="flex:1"></div>
+            <div style="align-self:center;display:flex;align-items:center;gap:10px">
+              <span style="flex:none;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:7px;background:rgba(79,214,138,.12);box-shadow:inset 0 0 0 1px rgba(79,214,138,.35);font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#7fe0a8"><span style="width:7px;height:7px;border-radius:4px;background:#4fd68a"></span>Conectado<span style="font:400 10px/1 'Segoe UI',system-ui,sans-serif">▾</span></span>
+              <span style="width:1px;height:20px;margin:0 6px;background:rgba(255,255,255,.14)"></span>
+              <span style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:26px;border-radius:13px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">G</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Gorgo</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">1402 ELO · 1v1</span></span></span>
+            </div>
+          </div>
+          <div style="position:relative;height:44px;flex:none;display:flex;align-items:stretch;gap:26px;padding:0 {{ f.mp }};background:rgba(10,19,33,.32);backdrop-filter:blur(10px);box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+            <span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">SALAS</span>
+            <span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">TORNEOS</span>
+            <span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">CLASIFICACIÓN</span>
+            <span style="display:flex;align-items:center;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 -2px 0 #2f7fe0">ESTADÍSTICAS</span>
+          </div>
+          <div style="position:relative;flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:{{ f.scroll }} transparent;display:flex;flex-direction:column;gap:{{ f.mp }};padding:{{ f.mp }}">
+            <div style="flex:none;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+              <div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span style="font:700 clamp(22px,1.5cqw,28px)/1.15 'Source Serif 4',Georgia,serif;color:#f0f5fb">Estadísticas</span><span style="font:400 13px/1.3 Consolas,ui-monospace,monospace;color:#a8bcd2">{{ f.counts }}</span></div>
+              <div style="flex:1"></div>
+              <div style="display:flex;gap:4px;padding:4px;border-radius:19px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)">
+                <sc-for list="{{ f.mods }}" as="o" hint-placeholder-count="2"><span onClick="{{ o.go }}" style-hover="color:#ffffff" style="cursor:pointer;height:30px;box-sizing:border-box;padding:0 14px 0 6px;border-radius:15px;display:flex;align-items:center;gap:8px;background:{{ o.bg }};font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ o.c }};white-space:nowrap"><span style="width:20px;height:20px;border-radius:10px;background:{{ o.icon }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></span>{{ o.t }}</span></sc-for>
+              </div>
+              <sc-if value="{{ f.hasModes }}" hint-placeholder-val="{{ true }}"><div style="display:flex;gap:4px;padding:4px;border-radius:19px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)">
+                <sc-for list="{{ f.modes }}" as="o" hint-placeholder-count="2"><span onClick="{{ o.go }}" style-hover="color:#ffffff" style="cursor:pointer;height:30px;box-sizing:border-box;padding:0 16px;border-radius:15px;display:flex;align-items:center;background:{{ o.bg }};font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ o.c }};white-space:nowrap">{{ o.t }}</span></sc-for>
+              </div></sc-if>
+            </div>
+            <sc-if value="{{ f.error }}" hint-placeholder-val="{{ false }}"><div style="flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:10px;box-sizing:border-box;padding:16px 18px;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(244,144,12,.45)"><span style="font:600 14px/1.3 'Segoe UI',system-ui,sans-serif;color:#F5BD76">No se pudieron cargar las estadísticas</span><span style="font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">El servidor no respondió. Las demás pestañas siguen funcionando; aquí no hay nada guardado que mostrar.</span><span style-hover="background:rgba(255,255,255,.12)" style="cursor:pointer;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Reintentar</span></div></sc-if>
+            <sc-if value="{{ f.body }}" hint-placeholder-val="{{ true }}"><div style="flex:none;display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,24cqw,380px);gap:{{ f.mp }};align-items:start">
+              <div style="min-width:0;display:flex;flex-direction:column;gap:{{ f.mp }}">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(560px,1fr));gap:{{ f.mp }};align-items:start">
+                <div style="min-width:0;box-sizing:border-box;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:14px 16px 10px;display:flex;flex-direction:column">
+                  <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding-bottom:10px"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">BALANCE DE CIVILIZACIONES</span><div style="flex:1"></div><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">{{ f.civScope }}</span></div>
+                  <sc-if value="{{ f.loading }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:14px;padding:8px 0 10px"><sc-for list="{{ f.skel }}" as="k" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:minmax(0,1fr) 74px 86px 150px 58px 72px;gap:12px;align-items:center"><span style="width:{{ k }};height:11px;border-radius:5px;background:rgba(255,255,255,.09)"></span><span style="height:11px;border-radius:5px;background:rgba(255,255,255,.06)"></span><span style="height:11px;border-radius:5px;background:rgba(255,255,255,.06)"></span><span style="height:5px;border-radius:3px;background:rgba(255,255,255,.06)"></span><span style="height:11px;border-radius:5px;background:rgba(255,255,255,.05)"></span><span style="height:11px;border-radius:5px;background:rgba(255,255,255,.05)"></span></div></sc-for></div></sc-if>
+                  <sc-if value="{{ f.civEmpty }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:10px;padding:2px 0 8px"><div style="display:flex;align-items:center;gap:10px"><span style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(85,172,238,.14);box-shadow:inset 0 0 0 1px rgba(85,172,238,.5);font:700 13px/1 'Segoe UI',system-ui,sans-serif;color:#55ACEE">i</span><div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Aún sin datos</span><span style="font:400 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#a8bcd2"><span style="font-family:Consolas,ui-monospace,monospace;color:#dce7f5">0</span> de <span style="font-family:Consolas,ui-monospace,monospace;color:#dce7f5">34</span> partidas puntuadas traen civilización</span></div></div><span style="font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">El launcher empezó a registrar la civilización de cada jugador hace poco. Esta tabla y los enfrentamientos se llenan con las partidas que se jueguen desde ahora: en las viejas no hay forma de deducirla. Wars of Liberty trae 188 civilizaciones, así que hará falta bastante muestra antes de que un porcentaje signifique algo.</span></div></sc-if>
+                  <sc-if value="{{ f.hasCivs }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:grid;grid-template-columns:minmax(0,1fr) 74px 86px 150px 58px 72px;gap:12px;align-items:center;height:30px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.08);font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#61779a"><span>CIVILIZACIÓN</span><span style="text-align:right">PARTIDAS</span><span style="text-align:right">RÉCORD</span><span>VICTORIAS</span><span style="text-align:right">%</span><span style="text-align:right">DURACIÓN</span></div>
+                    <sc-for list="{{ f.civs }}" as="r" hint-placeholder-count="7">
+                      <div style="display:grid;grid-template-columns:minmax(0,1fr) 74px 86px 150px 58px 72px;gap:12px;align-items:center;min-height:{{ f.rowH }};box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+                        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 {{ f.nameFs }}/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ r.civ }}</span>
+                        <span style="text-align:right;font:600 13px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ r.played }}</span>
+                        <span style="text-align:right;font:500 13px/1 Consolas,ui-monospace,monospace;color:#c3d2e5"><span style="color:#7fe0a8">{{ r.w }}</span>–<span style="color:#f0a6a6">{{ r.l }}</span></span>
+                        <span title="{{ r.barTip }}" style="height:6px;border-radius:3px;overflow:hidden;display:flex;background:{{ r.barBg }}"><span style="width:{{ r.barW }};height:100%;background:#4fd68a"></span><span style="flex:1;height:100%;background:{{ r.barLoss }}"></span></span>
+                        <span title="{{ r.pctTip }}" style="text-align:right;font:600 13px/1 Consolas,ui-monospace,monospace;color:{{ r.pctC }}">{{ r.pct }}</span>
+                        <span style="text-align:right;font:400 12.5px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">{{ r.len }}</span>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ f.hasCivTail }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:12px;min-height:40px;padding:6px 0"><span style="flex:1;min-width:0;font:400 12.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ f.civTail }}</span><span onClick="{{ f.civMore }}" style-hover="color:#b9d9fb" style="cursor:pointer;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ f.accT }};white-space:nowrap">{{ f.civMoreT }}</span></div></sc-if>
+                    <span style="padding:8px 0 2px;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">Ordenadas por partidas jugadas. El porcentaje se calcula sobre las decididas y solo aparece desde <span style="font-family:Consolas,ui-monospace,monospace">5</span>; con menos, la barra queda vacía.</span>
+                  </sc-if>
+                </div>
+                <div style="min-width:0;display:flex;flex-direction:column;gap:{{ f.mp }}">
+                <sc-if value="{{ f.hasMatchups }}" hint-placeholder-val="{{ true }}"><div style="min-width:0;box-sizing:border-box;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:14px 16px 10px;display:flex;flex-direction:column">
+                  <div style="display:flex;align-items:baseline;gap:10px;padding-bottom:10px"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">{{ f.muTitle }}</span><div style="flex:1"></div><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">{{ f.muScope }}</span></div>
+                  <div style="display:grid;grid-template-columns:minmax(0,1fr) 74px 86px 58px;gap:12px;align-items:center;height:30px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.08);font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#61779a"><span>{{ f.muCol }}</span><span style="text-align:right">PARTIDAS</span><span style="text-align:right">RÉCORD</span><span style="text-align:right">%</span></div>
+                  <sc-for list="{{ f.matchups }}" as="r" hint-placeholder-count="4">
+                    <div style="display:grid;grid-template-columns:minmax(0,1fr) 74px 86px 58px;gap:12px;align-items:center;min-height:{{ f.rowH }};box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+                      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 {{ f.nameFs }}/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ r.a }}<span style="font-weight:400;color:#8C9CB1"> {{ f.muSep }} </span>{{ r.b }}</span>
+                      <span style="text-align:right;font:600 13px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ r.played }}</span>
+                      <span title="{{ r.recTip }}" style="text-align:right;font:500 13px/1 Consolas,ui-monospace,monospace;color:#c3d2e5"><span style="color:#7fe0a8">{{ r.w }}</span>–<span style="color:#f0a6a6">{{ r.l }}</span></span>
+                      <span title="{{ r.pctTip }}" style="text-align:right;font:600 13px/1 Consolas,ui-monospace,monospace;color:{{ r.pctC }}">{{ r.pct }}</span>
+                    </div>
+                  </sc-for>
+                  <span style="padding:8px 0 2px;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ f.muNote }}</span>
+                </div></sc-if>
+                <sc-if value="{{ f.hasAllies }}" hint-placeholder-val="{{ false }}"><div style="min-width:0;box-sizing:border-box;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:14px 16px 10px;display:flex;flex-direction:column">
+                  <div style="display:flex;align-items:baseline;gap:10px;padding-bottom:10px"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">JUEGAN JUNTAS</span><div style="flex:1"></div><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">en el mismo equipo</span></div>
+                  <div style="display:grid;grid-template-columns:minmax(0,1fr) 74px 86px 58px;gap:12px;align-items:center;height:30px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.08);font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#61779a"><span>PAREJA</span><span style="text-align:right">PARTIDAS</span><span style="text-align:right">RÉCORD</span><span style="text-align:right">%</span></div>
+                  <sc-for list="{{ f.allies }}" as="r" hint-placeholder-count="4">
+                    <div style="display:grid;grid-template-columns:minmax(0,1fr) 74px 86px 58px;gap:12px;align-items:center;min-height:{{ f.rowH }};box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+                      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 {{ f.nameFs }}/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ r.a }}<span style="font-weight:400;color:#8C9CB1"> + </span>{{ r.b }}</span>
+                      <span style="text-align:right;font:600 13px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ r.played }}</span>
+                      <span style="text-align:right;font:500 13px/1 Consolas,ui-monospace,monospace;color:#c3d2e5"><span style="color:#7fe0a8">{{ r.w }}</span>–<span style="color:#f0a6a6">{{ r.l }}</span></span>
+                      <span style="text-align:right;font:600 13px/1 Consolas,ui-monospace,monospace;color:{{ r.pctC }}">{{ r.pct }}</span>
+                    </div>
+                  </sc-for>
+                  <span style="padding:8px 0 2px;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">Récord de la pareja: cuántas ganó y perdió jugando en el mismo bando.</span>
+                </div></sc-if>
+                </div>
+                </div>
+                <div style="box-sizing:border-box;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">LO QUE LLEVA LA COMUNIDAD</span><div style="flex:1"></div><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">{{ f.deckScope }}</span></div>
+                  <sc-if value="{{ f.loading }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:7px"><sc-for list="{{ f.skelPills }}" as="k" hint-placeholder-count="4"><span style="width:{{ k }};height:32px;border-radius:8px;background:rgba(255,255,255,.07)"></span></sc-for></div></sc-if>
+                  <sc-if value="{{ f.deckEmpty }}" hint-placeholder-val="{{ false }}"><span style="font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">Nadie compartió todavía un mazo de {{ f.modName }}. Los mazos se comparten desde Ajustes del launcher › Avanzado › «Compartir mis barajas con la tabla de la comunidad»: se envía qué cartas llevas, nunca cómo juegas.</span></sc-if>
+                  <sc-if value="{{ f.hasDecks }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-wrap:wrap;gap:7px"><sc-for list="{{ f.civPills }}" as="o" hint-placeholder-count="6"><span onClick="{{ o.go }}" style-hover="color:#ffffff" style="cursor:pointer;height:32px;box-sizing:border-box;padding:0 12px;border-radius:8px;display:flex;align-items:center;gap:8px;background:{{ o.bg }};box-shadow:{{ o.ring }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ o.c }};white-space:nowrap">{{ o.t }}<span style="font:500 11.5px/1 Consolas,ui-monospace,monospace;color:{{ o.nc }}">{{ o.n }}</span></span></sc-for></div>
+                    <sc-if value="{{ f.deckUnder }}" hint-placeholder-val="{{ false }}"><span style="font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ f.deckUnderT }}</span></sc-if>
+                    <sc-if value="{{ f.hasBands }}" hint-placeholder-val="{{ true }}">
+                      <sc-for list="{{ f.bands }}" as="b" hint-placeholder-count="4">
+                        <div style="display:flex;flex-direction:column;gap:8px;padding-top:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)">
+                          <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 15px/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ b.pct }}</span><span style="font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ b.sub }}</span></div>
+                          <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ b.cards }}" as="c" hint-placeholder-count="4"><span title="{{ c.tip }}" style="height:28px;box-sizing:border-box;padding:0 10px 0 {{ c.pl }};border-radius:7px;display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap"><sc-if value="{{ c.hasN }}" hint-placeholder-val="{{ false }}"><span style="min-width:18px;height:18px;box-sizing:border-box;padding:0 4px;border-radius:5px;display:flex;align-items:center;justify-content:center;background:{{ f.accFill }};font:700 11px/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ c.n }}</span></sc-if>{{ c.t }}</span></sc-for></div>
+                        </div>
+                      </sc-for>
+                      <div style="display:flex;align-items:center;gap:12px;padding-top:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)"><span style="flex:1;min-width:0;font:400 12.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ f.deckTail }}</span><span onClick="{{ f.deckMore }}" style-hover="color:#b9d9fb" style="cursor:pointer;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ f.accT }};white-space:nowrap">{{ f.deckMoreT }}</span></div>
+                    </sc-if>
+                    <span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">Cartas que la gente lleva en el mazo, no las que envía en partida: ninguna grabación guarda eso. El número de la esquina es la cantidad del envío.</span>
+                  </sc-if>
+                </div>
+              </div>
+              <div style="min-width:0;display:flex;flex-direction:column;gap:{{ f.mp }}">
+                <div style="box-sizing:border-box;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;align-items:baseline;gap:10px"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">ACTIVIDAD</span><div style="flex:1"></div><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">últimos 30 días</span></div>
+                  <sc-if value="{{ f.loading }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:10px"><span style="width:60%;height:26px;border-radius:7px;background:rgba(255,255,255,.08)"></span><span style="height:44px;border-radius:6px;background:rgba(255,255,255,.05)"></span></div></sc-if>
+                  <sc-if value="{{ f.hasAct }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font:600 clamp(26px,1.6cqw,32px)/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ f.actN }}</span><span style="font:400 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">partidas</span></div>
+                    <div title="Partidas por día, de hace 30 días a hoy" style="display:flex;align-items:flex-end;gap:2px;height:44px"><sc-for list="{{ f.days }}" as="d" hint-placeholder-count="30"><span style="flex:1;height:{{ d.h }};border-radius:2px 2px 0 0;background:{{ d.bg }}"></span></sc-for></div>
+                    <div style="display:flex;flex-direction:column;gap:6px">
+                      <sc-for list="{{ f.actFacts }}" as="x" hint-placeholder-count="3"><div style="display:flex;align-items:baseline;gap:10px;min-height:22px"><span style="flex:1;min-width:0;font:400 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ x.k }}</span><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:{{ x.c }};white-space:nowrap">{{ x.v }}</span></div></sc-for>
+                    </div>
+                    <sc-if value="{{ f.hasPeak }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-direction:column;gap:8px;padding-top:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)">
+                      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:700 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#8C9CB1">HORAS PUNTA</span><div style="flex:1"></div><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ f.peakT }}</span></div>
+                      <div title="Salas abiertas por hora, en tu horario" style="display:flex;align-items:flex-end;gap:2px;height:30px"><sc-for list="{{ f.hours }}" as="d" hint-placeholder-count="24"><span style="flex:1;height:{{ d.h }};border-radius:2px 2px 0 0;background:{{ d.bg }}"></span></sc-for></div>
+                      <div style="display:flex;justify-content:space-between;font:400 10.5px/1 Consolas,ui-monospace,monospace;color:#61779a"><span>0 h</span><span>6 h</span><span>12 h</span><span>18 h</span><span>24 h</span></div>
+                      <span style="font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">Es cuando más salas se abren, en tu hora. Sobre {{ f.peakN }} salas en 30 días.</span>
+                    </div></sc-if>
+                    <sc-if value="{{ f.noPeak }}" hint-placeholder-val="{{ false }}"><span style="padding-top:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07);font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">Las horas punta se muestran a partir de 20 salas abiertas en 30 días; con menos, la hora más alta sería ruido.</span></sc-if>
+                  </sc-if>
+                </div>
+                <div style="box-sizing:border-box;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:14px 16px 10px;display:flex;flex-direction:column">
+                  <div style="display:flex;align-items:baseline;gap:10px;padding-bottom:6px"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">MAPAS MÁS JUGADOS</span><div style="flex:1"></div><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">{{ f.mapScope }}</span></div>
+                  <sc-if value="{{ f.loading }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:14px;padding:8px 0"><sc-for list="{{ f.skel }}" as="k" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:18px minmax(0,1fr) 40px;gap:10px;align-items:center"><span style="height:11px;border-radius:5px;background:rgba(255,255,255,.06)"></span><span style="width:{{ k }};height:11px;border-radius:5px;background:rgba(255,255,255,.09)"></span><span style="height:11px;border-radius:5px;background:rgba(255,255,255,.06)"></span></div></sc-for></div></sc-if>
+                  <sc-if value="{{ f.hasMaps }}" hint-placeholder-val="{{ true }}">
+                    <sc-for list="{{ f.maps }}" as="m" hint-placeholder-count="7">
+                      <div style="display:grid;grid-template-columns:18px minmax(0,1fr) 40px;gap:10px;align-items:center;min-height:40px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+                        <span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:{{ m.nC }}">{{ m.n }}</span>
+                        <div style="min-width:0;display:flex;flex-direction:column;gap:5px"><div style="display:flex;align-items:center;gap:7px;min-width:0"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 13px/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ m.name }}</span><sc-if value="{{ m.hasPack }}" hint-placeholder-val="{{ true }}"><span title="Paquete de mapas" style="flex:none;height:16px;padding:0 5px;border-radius:4px;display:flex;align-items:center;background:rgba(255,255,255,.08);font:700 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.04em;color:#a8bcd2">{{ m.pack }}</span></sc-if></div><span style="height:4px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden;display:block"><span style="display:block;width:{{ m.w }};height:100%;background:{{ f.acc }};opacity:{{ m.op }}"></span></span></div>
+                        <span style="text-align:right;font:600 13px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ m.v }}</span>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ f.hasMapTail }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;min-height:40px;padding:6px 0"><span style="flex:1;min-width:0;font:400 12.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ f.mapTail }}</span><span onClick="{{ f.mapMore }}" style-hover="color:#b9d9fb" style="cursor:pointer;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ f.accT }};white-space:nowrap">{{ f.mapMoreT }}</span></div></sc-if>
+                    <sc-if value="{{ f.hasNoMap }}" hint-placeholder-val="{{ true }}"><span style="padding:8px 0 2px;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ f.noMapT }}</span></sc-if>
+                  </sc-if>
+                </div>
+              </div>
+            </div></sc-if>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:34px;max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><b>Para Claude Code.</b> Es StatsView de MultiplayerTab.xaml con la base: StatsTitleText y StatsCountsText se quedan; StatsModPicker y StatsModePicker pasan a dos grupos de píldoras de 30 (como los modos de Clasificación v2), con el mod activo en su color mezclado al 58 % con #0f1c2e, y el grupo de modo colapsado cuando el mod no tiene partidas de equipos (como hoy). StatsRightColumn deja los 310 fijos por <code>clamp(300px,24cqw,380px)</code>. Las columnas del balance son las de CivTableLayout.All y las de enfrentamientos y aliados las de CivTableLayout.Matchups; la barra VICTORIAS es verde sobre rojo con el reparto de decididas y gris vacía bajo la muestra (CivStatsView.WinPercent nulo). La cola de civilizaciones con 3 partidas o menos se agrupa en una fila con «Ver todas», igual que la de mapas con una partida. Actividad: CommunityTotals (Matches, Rated, UnratedTopReason, Players en PlayersWindowDays, MatchesPerDay) y ActivityBuckets pasados por CommunityStatsView.ToLocalHours y PeakWindow (ventana de 3 h, mínimo MinSampleRooms = 20); la diferencia entre partidas y mapas con nombre se explica en una línea bajo los mapas. Los mazos son DeckStatsView.Group con sus bandas (porcentaje solo con MinDecksForPercent mazos; aquí 5, el valor que usa StatsDemoData), CivPills con MaxCivPills = 7 y la cola plegada; la carta lleva el número del envío en la esquina y el nombre resuelto por DeckCardNames. Sin mazos compartidos, la tarjeta dice dónde se activa el envío (Ajustes › Avanzado). El color del mod sale de ModProfile.AccentColor igualado en OKLCH, como en la Biblioteca. Por confirmar: el valor real de PlayerStanding.MinDecidedForPercent (5 según el fixture, 6 según el handoff del perfil), si /stats/community acepta mod y modo (la cabecera los da por hecho) y el nombre de la causa «sin resultado leído» para UnratedTopReason = no_decided_result.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;ventana&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;1366×768&quot;,&quot;1920×1080&quot;,&quot;2560×1392&quot;],&quot;default&quot;:&quot;1920×1080&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { mod: 'wol', mode: 'solo', civ: null, civAll: false, mapAll: false, deckAll: false, log: '' };
+  renderVals() {
+    const p = this.props, s = this.state, set = o => this.setState(o);
+    const NAVY = '#0f1c2e';
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const toHex = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+    const al = (h, a) => 'rgba(' + hex(h).join(',') + ',' + a + ')';
+    const lum = h => { const c = hex(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+    const con = (a, b) => { const A = lum(a) + .05, B = lum(b) + .05; return Math.max(A, B) / Math.min(A, B); };
+    const accText = a => { let t = .3, c = mix(a, '#ffffff', t); while (con(c, NAVY) < 5 && t < .9) { t += .08; c = mix(a, '#ffffff', t); } return c; };
+    const lvl = p.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px', bar: 1 }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px', bar: .3 } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px', bar: .42 };
+    const [W, H] = ({ '1366×768': [1366, 768], '2560×1392': [2560, 1392] })[p.ventana] || [1920, 1080];
+    const MIN = 5;
+    const MODS = { wol: { name: 'Wars of Liberty', acc: '#c04444', icon: 'url(mods/wol/icon.png) center/cover no-repeat, #1a2c48', team: true }, im: { name: 'Improvement Mod', acc: '#3a8cd9', icon: 'url(mods/improvement-mod/icon.png) center/cover no-repeat, #1a2c48', team: false } };
+    const CIVS = {
+      wol: [['México', 64, 34, 27], ['Estados Unidos', 58, 26, 28], ['Argentina', 41, 20, 19], ['Brasil', 33, 13, 18], ['Gran Colombia', 12, 7, 5], ['Perú', 9, 4, 5], ['Haití', 4, 2, 2], ['Chile', 3, 2, 1], ['Bolivia', 3, 1, 1], ['Paraguay', 2, 1, 1], ['Uruguay', 2, 0, 1], ['Venezuela', 2, 1, 0], ['Ecuador', 1, 1, 0], ['Guatemala', 1, 0, 1], ['Cuba', 1, 1, 0]],
+      wolTeam: [['México', 41, 24, 17], ['Estados Unidos', 38, 19, 19], ['Brasil', 29, 16, 13], ['Argentina', 22, 9, 13], ['Gran Colombia', 11, 6, 5], ['Perú', 4, 3, 1]],
+      im: [['Chinos', 6, 4, 2], ['Otomanos', 5, 2, 3], ['Rusos', 2, 1, 1]]
+    };
+    const MU = {
+      wol: [['Estados Unidos', 'México', 19, 9], ['Argentina', 'Brasil', 14, 8], ['Brasil', 'México', 11, 4], ['Argentina', 'México', 9, 5], ['Estados Unidos', 'Gran Colombia', 4, 3]],
+      wolTeam: [['Estados Unidos', 'México', 24, 11], ['Brasil', 'México', 18, 7], ['Argentina', 'México', 13, 6], ['Argentina', 'Brasil', 7, 4], ['Gran Colombia', 'México', 2, 1]],
+      im: [['Chinos', 'Otomanos', 3, 2]]
+    };
+    const ALLIES = [['Estados Unidos', 'México', 17, 10], ['Brasil', 'México', 12, 5], ['Argentina', 'Estados Unidos', 8, 5], ['Gran Colombia', 'México', 3, 2]];
+    const MAPS = { wol: [['ESOC_Fertile Crescent', 74], ['ESOC_Manchuria', 53], ['ESOC_Herald Island', 40], ['ESOC_High Plains', 29], ['ESOC_Tibet', 21], ['ESOC_Arizona', 18], ['ESOC_Thar Desert', 12], ['KOTH_Andes', 6], ['Great_Plains', 4], ['Painted_Desert', 3], ['Yucatan', 2], ['ESOC_Adirondacks', 1], ['ESOC_Baja California', 1], ['ESOC_Cascade Range', 1], ['ESOC_Indonesia', 1], ['ESOC_Yellow River', 1], ['WOL_Pampas Secas', 1], ['Bayou', 1]], im: [['ESOC_Yucatan', 5], ['Great_Plains', 2], ['Bayou', 1]] };
+    const PERDAY = [3, 5, 0, 8, 12, 6, 9, 4, 0, 7, 11, 14, 8, 5, 3, 6, 10, 12, 7, 4, 2, 0, 5, 9, 13, 8, 6, 4, 3, 5];
+    const BYHOUR = [1, 0, 0, 0, 0, 0, 0, 1, 2, 3, 5, 6, 4, 3, 4, 7, 11, 16, 22, 27, 24, 17, 9, 4];
+    const ship = (n, t) => ({ t, n: String(n), hasN: true, pl: '5px', tip: t + ' · envío de ' + n });
+    const tech = t => ({ t, n: '', hasN: false, pl: '10px', tip: t });
+    const DECKS = {
+      wol: [
+        { civ: 'Alemania', decks: 6, distinct: 41, bands: [[6, [ship(1, 'Aviso'), ship(2, 'Avisos'), tech('Combate naval')]], [5, [ship(3, 'Avisos'), ship(1, 'Acorazado (equipo)'), tech('Artilleros navales'), ship(1, 'Acorazado'), ship(1, 'Batería flotante'), tech('Fincas más baratas')]], [4, [ship(2, 'Monitores'), tech('Casas rápidas (equipo)'), tech('Haciendas'), ship(4, 'Colonos'), ship(5, 'Colonos'), tech('Junker'), ship(6, 'Colonos'), ship(7, 'Colonos'), tech('Zollverein'), ship(2, 'Dragones'), ship(3, 'Dragones')]], [3, [ship(4, 'Dragones'), ship(5, 'Dragones'), ship(1, 'Globos'), ship(2, 'Carretas de colonos'), ship(3, 'Carretas de colonos'), tech('Globo avanzado'), ship(4, 'Carretas de colonos')]]], tail: 14 },
+        { civ: 'Estados Unidos', decks: 6, distinct: 2, bands: [[6, [ship(2, 'Mineros')]], [5, [ship(3, 'Mineros')]]], tail: 0 },
+        { civ: 'México', decks: 5, distinct: 2, bands: [[5, [tech('Panteón')]], [4, [ship(2, 'Carreta de presidio')]]], tail: 0 },
+        { civ: 'Perú', decks: 5, distinct: 1, bands: [[5, [ship(3, 'Cholos')]]], tail: 0 },
+        { civ: 'Brasil', decks: 4, distinct: 1, bands: [], tail: 1 },
+        { civ: 'Gran Colombia', decks: 3, distinct: 1, bands: [], tail: 1 }
+      ],
+      im: [{ civ: 'Chinos', decks: 2, distinct: 2, bands: [], tail: 2 }, { civ: 'Otomanos', decks: 1, distinct: 2, bands: [], tail: 2 }]
+    };
+    const mapName = m => { const i = m.indexOf('_'); const pack = i > 0 ? m.slice(0, i) : ''; return { name: (i > 0 ? m.slice(i + 1) : m).replace(/_/g, ' '), pack: pack === 'Great' || pack === 'Painted' ? '' : pack, raw: i > 0 && (pack === 'Great' || pack === 'Painted') ? m.replace(/_/g, ' ') : null }; };
+    const say = (on, t) => on ? () => set({ log: t }) : undefined;
+
+    const build = c => {
+      const on = !!c.interactive, mod = MODS[c.mod], acc = mod.acc, accT = accText(acc), fill = mix(acc, NAVY, .58);
+      const team = c.mode === 'team' && mod.team, st = c.st || 'ok', loading = st === 'cargando', error = st === 'error', empty = st === 'vacio';
+      const m = c.w >= 1600 ? 16 : 12;
+      const pill = (t, active, go, extra) => ({ t, go, bg: active ? fill : 'transparent', c: active ? '#ffffff' : '#a8bcd2', ...(extra || {}) });
+      const mods = Object.keys(MODS).map(k => pill(MODS[k].name, k === c.mod, on ? () => set({ mod: k, mode: MODS[k].team ? s.mode : 'solo', civ: null, civAll: false, mapAll: false, deckAll: false, log: '' }) : undefined, { icon: MODS[k].icon }));
+      const modes = [pill('1v1', !team, on ? () => set({ mode: 'solo', log: '' }) : undefined), pill('Equipos', team, on ? () => set({ mode: 'team', log: '' }) : undefined)];
+      const pct = (w, l) => { const d = w + l; return d >= MIN ? Math.round(w * 100 / d) : null; };
+      const pctC = v => v == null ? '#61779a' : v >= 50 ? '#7fe0a8' : v >= 30 ? '#F5BD76' : '#f0a6a6';
+      const civSrc = empty ? [] : c.mod === 'im' ? CIVS.im : team ? CIVS.wolTeam : CIVS.wol;
+      const civTailN = civSrc.filter(r => r[1] <= 3).length, civShow = c.civAll ? civSrc : civSrc.filter(r => r[1] > 3);
+      const civs = civShow.map((r, i) => { const [civ, played, w, l] = r, d = w + l, v = pct(w, l); return { civ, played: String(played), w: String(w), l: String(l), barW: d >= MIN ? Math.round(w * 100 / d) + '%' : '0%', barBg: 'rgba(255,255,255,.07)', barLoss: d >= MIN ? '#c84a4a' : 'transparent', barTip: d >= MIN ? w + ' victorias de ' + d + ' decididas' : 'Sin muestra: ' + d + ' decididas, hacen falta ' + MIN, pct: v == null ? '' : v + ' %', pctC: pctC(v), pctTip: v == null ? 'Se muestra a partir de ' + MIN + ' partidas decididas' : '', len: Math.round((780 + i * 37) / 60) + ' min' }; });
+      const matchSrc = empty ? [] : c.mod === 'im' ? MU.im : team ? MU.wolTeam : MU.wol;
+      const pair = r => { const [a, b, played, wa] = r, la = played - wa, v = pct(wa, la); return { a, b, played: String(played), w: String(wa), l: String(la), recTip: a + ' ganó ' + wa + ' y perdió ' + la, pct: v == null ? '' : v + ' %', pctC: pctC(v), pctTip: v == null ? 'Se muestra a partir de ' + MIN + ' partidas' : 'Victorias de ' + a }; };
+      const matchups = matchSrc.map(pair), allies = team && !empty ? ALLIES.map(pair) : [];
+      const total = empty ? 34 : c.mod === 'im' ? 10 : team ? 34 : 291, rated = empty ? 30 : c.mod === 'im' ? 7 : team ? 30 : 231, unr = empty ? 3 : c.mod === 'im' ? 2 : team ? 3 : 31, players = empty ? 9 : c.mod === 'im' ? 4 : team ? 19 : 37;
+      const mapSrc = (c.mod === 'im' ? MAPS.im : team ? MAPS.wol.slice(0, 4).map(([k, v]) => [k, Math.max(1, Math.floor(v / 6))]) : MAPS.wol).map(([k, v]) => [k, empty ? Math.max(1, Math.floor(v / 9)) : v]);
+      const mapsNamed = mapSrc.reduce((a, r) => a + r[1], 0), top = mapSrc[0] ? mapSrc[0][1] : 1;
+      const mapTailN = mapSrc.filter(r => r[1] === 1).length, mapShow = c.mapAll || mapTailN < 2 ? mapSrc : mapSrc.filter(r => r[1] > 1);
+      const maps = mapShow.map((r, i) => { const mn = mapName(r[0]); return { n: String(i + 1), nC: i === 0 ? accT : '#8C9CB1', name: mn.raw || mn.name, hasPack: !!mn.pack, pack: mn.pack, w: Math.round(r[1] * 100 / top) + '%', op: i === 0 ? '1' : '.72', v: String(r[1]) }; });
+      const days = (c.mod === 'im' || empty ? PERDAY.map(v => Math.floor(v / 4)) : team ? PERDAY.map(v => Math.round(v / 8)) : PERDAY), dmax = Math.max(1, ...days);
+      const hoursUtc = empty ? BYHOUR.map(v => Math.floor(v / 9)) : c.mod === 'im' ? BYHOUR.map(v => Math.floor(v / 4)) : BYHOUR, local = new Array(24).fill(0); hoursUtc.forEach((v, h) => { local[((h - 3) % 24 + 24) % 24] += v; });
+      const roomsN = local.reduce((a, b) => a + b, 0); let best = -1, bestN = 0; for (let h = 0; h < 24; h++) { const sum = local[h] + local[(h + 1) % 24] + local[(h + 2) % 24]; if (sum > bestN) { bestN = sum; best = h; } }
+      const hasPeak = !loading && roomsN >= 20 && best >= 0, hmax = Math.max(1, ...local);
+      const inPeak = h => best >= 0 && [best, (best + 1) % 24, (best + 2) % 24].includes(h);
+      const deckSrc = empty ? [] : DECKS[c.mod] || [];
+      const sel = deckSrc.find(g => g.civ === c.civ) || deckSrc[0];
+      const civPills = deckSrc.map(g => ({ t: g.civ, n: String(g.decks), nc: sel && g.civ === sel.civ ? 'rgba(255,255,255,.8)' : '#8C9CB1', bg: sel && g.civ === sel.civ ? fill : 'rgba(255,255,255,.04)', ring: sel && g.civ === sel.civ ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.12)', c: sel && g.civ === sel.civ ? '#ffffff' : '#c3d2e5', go: on ? () => set({ civ: g.civ, deckAll: false, log: '' }) : undefined }));
+      const under = !!sel && sel.decks < MIN;
+      const bands = sel && !under ? sel.bands.map(([n, cards]) => ({ pct: Math.max(1, Math.round(n * 100 / sel.decks)) + ' %', sub: n === sel.decks ? 'en los ' + n + ' mazos' : 'en ' + n + ' de los ' + sel.decks + ' mazos', cards })) : [];
+      const deckTail = sel && sel.tail > 0 ? (c.deckAll ? 'Mostrando también las ' + sel.tail + ' cartas que van en 1 o 2 mazos.' : sel.tail + (sel.tail === 1 ? ' carta más' : ' cartas más') + ' en 1 o 2 mazos: muy pocos para decir que la comunidad las prefiere.') : 'Todas las cartas con 3 mazos o más están arriba.';
+      const noMap = total - mapsNamed;
+      return {
+        id: c.id, href: '#' + c.id, label: c.label, w: c.w + 'px', h: c.h + 'px', interactive: on, log: on ? s.log : '',
+        reset: () => set({ mod: 'wol', mode: 'solo', civ: null, civAll: false, mapAll: false, deckAll: false, log: '' }),
+        glow: 'radial-gradient(1400px 800px at 85% -15%, ' + al(acc, .14) + ', transparent 70%),radial-gradient(1000px 700px at -5% 115%, ' + al(acc, .06) + ', transparent 70%)',
+        barBg: al(mix('#0b1422', acc, .22), G.bar), barBlur: lvl === 'Sólida' ? '0px' : '10px', gBg: G.bg, gBlur: G.blur, mp: m + 'px', acc, accT, accFill: fill, scroll: al(acc, .55),
+        counts: error ? '—' : loading ? 'Cargando…' : total + ' partidas puntuadas en 30 días · ' + players + ' jugadores en 7 días · ' + mod.name + (team ? ' · Equipos' : ' · 1v1'),
+        mods, hasModes: mod.team && !error, modes, modName: mod.name,
+        error, loading, body: !error, skel: ['62%', '48%', '55%', '40%', '70%'], skelPills: ['96px', '120px', '84px', '70px'],
+        civScope: loading ? '' : empty ? '' : (c.mod === 'im' ? '9 de 13' : team ? '30 de 34' : '236 de 291') + ' partidas traen civilización',
+        civEmpty: empty, hasCivs: !loading && !empty, civs, rowH: c.w >= 1600 ? '44px' : '40px', nameFs: c.w >= 1600 ? '14px' : '13.5px',
+        hasCivTail: !loading && !empty && civTailN > 0, civTail: c.civAll ? 'Mostrando también las ' + civTailN + ' con 3 partidas o menos.' : civTailN + ' civilizaciones más con 3 partidas o menos: muy pocas para decir nada de ellas.', civMoreT: c.civAll ? 'Ver menos' : 'Ver todas', civMore: on ? () => set({ civAll: !s.civAll, log: '' }) : undefined,
+        hasMatchups: !loading && !empty && matchups.length > 0, muTitle: team ? 'ENFRENTAMIENTOS' : 'ENFRENTAMIENTOS', muScope: 'civilización contra civilización', muCol: 'PAREJA', muSep: 'vs', matchups,
+        muNote: team ? 'En equipos, una partida cuenta para cada pareja de civilizaciones enfrentadas. El récord y el porcentaje son de la primera.' : 'El récord y el porcentaje son de la primera civilización de la pareja. Sin duración: la media de tres partidas no dice nada.',
+        hasAllies: team && !loading && !empty, allies,
+        deckScope: loading ? '' : empty ? '' : (c.mod === 'im' ? '2 jugadores compartieron' : '11 jugadores compartieron') + ' su mazo', deckEmpty: empty, hasDecks: !loading && !empty && deckSrc.length > 0, civPills,
+        deckUnder: under, deckUnderT: sel ? 'La comunidad compartió ' + sel.decks + (sel.decks === 1 ? ' mazo' : ' mazos') + ' de ' + sel.civ + ': hacen falta ' + MIN + ' para decir qué lleva. ' + sel.distinct + (sel.distinct === 1 ? ' carta distinta.' : ' cartas distintas.') : '',
+        hasBands: !under && bands.length > 0, bands: c.deckAll && sel ? bands.concat([{ pct: '', sub: 'en 1 o 2 mazos', cards: [ship(1, 'Carretas de colonos (equipo)'), ship(5, 'Carretas de colonos'), tech('Granadas mejoradas'), ship(6, 'Carretas de colonos'), ship(300, 'Comida'), tech('Ataque corto alcance'), ship(600, 'Comida'), ship(700, 'Comida'), tech('Vida corto alcance'), ship(1000, 'Comida'), ship(300, 'Madera'), tech('Combate largo alcance'), ship(600, 'Madera'), ship(700, 'Madera')] }]) : bands,
+        deckTail, deckMoreT: c.deckAll ? 'Ver menos' : 'Ver todas', deckMore: on ? () => set({ deckAll: !s.deckAll, log: '' }) : undefined,
+        hasAct: !loading, actN: String(total), days: days.map(v => ({ h: Math.max(2, Math.round(v * 44 / dmax)) + 'px', bg: v === 0 ? 'rgba(255,255,255,.06)' : al(acc, .85) })),
+        actFacts: [{ k: 'Puntuaron para el ELO', v: String(rated), c: '#dce7f5' }, { k: 'Sin resultado leído: la grabación no se pudo abrir', v: String(unr), c: '#dce7f5' }, { k: 'Jugadores en los últimos 7 días', v: String(players), c: '#dce7f5' }],
+        hasPeak, noPeak: !loading && !hasPeak, peakT: hasPeak ? String(best).padStart(2, '0') + ':00–' + String((best + 3) % 24).padStart(2, '0') + ':00' : '', peakN: String(roomsN),
+        hours: local.map((v, h) => ({ h: Math.max(2, Math.round(v * 30 / hmax)) + 'px', bg: v === 0 ? 'rgba(255,255,255,.06)' : inPeak(h) ? acc : 'rgba(255,255,255,.22)' })),
+        mapScope: loading ? '' : 'sobre ' + mapsNamed + ' con nombre', hasMaps: !loading, maps,
+        hasMapTail: !loading && mapTailN >= 2, mapTail: c.mapAll ? 'Mostrando también los ' + mapTailN + ' mapas con una partida.' : mapTailN + ' mapas más, una partida cada uno.', mapMoreT: c.mapAll ? 'Ver menos' : 'Ver todos', mapMore: on ? () => set({ mapAll: !s.mapAll, log: '' }) : undefined,
+        hasNoMap: !loading && noMap > 0, noMapT: noMap + (noMap === 1 ? ' partida no tiene mapa' : ' partidas no tienen mapa') + ': su grabación no se pudo leer, así que no suman aquí.'
+      };
+    };
+    const frames = [
+      build({ id: '98a', interactive: true, w: W, h: H, mod: s.mod, mode: s.mode, civ: s.civ, civAll: s.civAll, mapAll: s.mapAll, deckAll: s.deckAll,
+        label: 'Interactivo, con los datos de StatsDemoData. Cambia de mod arriba a la derecha (Improvement Mod no tiene partidas de equipos, así que el selector de modo desaparece), de modo, de civilización en los mazos y despliega las colas. En Tweaks cambias el tamaño y la transparencia.' }),
+      build({ id: '98b', w: 1366, h: 768, mod: 'wol', mode: 'solo',
+        label: 'Portátil, 1366 × 768: el balance y los enfrentamientos se apilan (desde 1600 van lado a lado), la derecha queda en su mínimo de 300 y la página se desplaza entera, porque aquí no hay fila fija que lo impida.' }),
+      build({ id: '98c', w: 1920, h: 1080, mod: 'wol', mode: 'team',
+        label: 'Equipos: civilizaciones y enfrentamientos de las partidas 2v2 y 3v3, y una tarjeta más, «Juegan juntas», con las parejas que comparten equipo. Los mazos no cambian con el modo: una carta va en el mazo juegues lo que juegues.' }),
+      build({ id: '98d', w: 1366, h: 768, mod: 'wol', mode: 'solo', st: 'vacio',
+        label: 'Lo que hay hoy: 34 partidas y ninguna con civilización. El balance lo explica y no muestra tabla; los enfrentamientos no salen, porque no hay nada que mostrar; los mazos dicen dónde se activa el envío. La actividad y los mapas sí tienen datos, y las horas punta se callan por debajo de 20 salas.' }),
+      build({ id: '98e', w: 1366, h: 768, mod: 'wol', mode: 'solo', st: 'cargando',
+        label: 'Mientras llegan las cuatro respuestas: filas provisionales con la forma de las de verdad, sin cifras.' }),
+      build({ id: '98f', w: 1366, h: 768, mod: 'wol', mode: 'solo', st: 'error',
+        label: 'Si el servidor no responde: el motivo y «Reintentar». No hay nada guardado en el PC que mostrar en su lugar, y se dice.' })
+    ];
+    return { frames };
+  }
+}
+</script>
+</body>
+</html>

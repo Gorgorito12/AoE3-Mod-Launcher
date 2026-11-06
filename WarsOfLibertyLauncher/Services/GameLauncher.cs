@@ -336,6 +336,9 @@ public static class GameLauncher
     /// </summary>
     public static GameLaunchResult Launch(LauncherConfig config, string? modInstallPath, ModProfile profile)
     {
+        if (HarnessMode.Block($"launch game {profile.Id}"))
+            throw new GameLaunchCancelledException(profile.GameExecutable);
+
         var exePath = Find(config, modInstallPath, profile);
 
         if (exePath == null)
@@ -408,7 +411,7 @@ public static class GameLauncher
             // Keep the pid when the OS gives us one: it's what lets the exit monitor and
             // Stop target THIS game rather than every process sharing its name. An
             // elevated launch may hand back nothing usable, hence the -1.
-            using var started = Process.Start(startInfo);
+            using var started = Services.HarnessMode.Start(startInfo);
             fallbackPid = started?.Id ?? -1;
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
@@ -453,6 +456,9 @@ public static class GameLauncher
         string? extraArgs = null,
         bool trustConfigCache = true)
     {
+        if (HarnessMode.Block($"launch game {profile.Id} {extraArgs}".TrimEnd()))
+            throw new GameLaunchCancelledException(profile.GameExecutable);
+
         var exePath = Find(config, modInstallPath, profile, trustConfigCache);
         if (exePath == null)
         {

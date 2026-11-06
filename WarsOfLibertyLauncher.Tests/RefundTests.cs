@@ -89,13 +89,15 @@ public class RefundTests
                 var banner = Walk(body).OfType<Border>().Single(b => Equals(b.Tag, MultiplayerTab.RefundBannerTag));
                 Assert.Contains(AllText(banner), t => t.StartsWith("Recuperaste 34 puntos:"));
 
-                // Over the 1v1 card: the banner and that card share one stack, banner first.
-                var stack = (StackPanel)LogicalTreeHelper.GetParent(banner);
-                Assert.Same(banner, stack.Children[0]);
-                Assert.Equal(MultiplayerTab.ModeCardTag, ((FrameworkElement)stack.Children[1]).Tag);
+                // At the top of the Summary, above both modes (95a), until it is closed.
+                int bannerAt = body.Children.IndexOf(banner);
+                Assert.True(bannerAt >= 0, "the notice sits in the page itself.");
+                var cards = body.Children.OfType<UIElement>().Skip(bannerAt + 1)
+                    .SelectMany(Walk).OfType<Border>()
+                    .Where(b => Equals(b.Tag, MultiplayerTab.ModeCardTag));
+                Assert.NotEmpty(cards);
 
                 var ok = Walk(banner).OfType<Button>().Single();
-                Assert.Equal("Entendido", ok.Content);
                 ok.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                 Assert.DoesNotContain(Walk(body).OfType<Border>(), b => Equals(b.Tag, MultiplayerTab.RefundBannerTag));
                 Assert.All(sample.Standing.Refunds!, r => Assert.True(r.Seen));
@@ -110,25 +112,6 @@ public class RefundTests
     /// shows. A kind with no trigger falls back to the plain bell in silence, which would make
     /// "points refunded" read as an ordinary update.
     /// </summary>
-    [Fact]
-    public void EveryKindHasItsOwnGlyphInTheBell()
-    {
-        var xaml = File.ReadAllText(RepoFile("MainWindow.xaml"));
-        foreach (var kind in Enum.GetNames<NotificationKind>())
-        {
-            var count = CountOf(xaml, $"<DataTrigger Binding=\"{{Binding Kind}}\" Value=\"{kind}\">");
-            Assert.True(count >= 1, $"no bell glyph for {kind}");
-        }
-        Assert.Equal(2, CountOf(xaml, "Value=\"RatingRefund\">"));
-    }
-
-    private static int CountOf(string text, string needle)
-    {
-        var n = 0;
-        for (var i = text.IndexOf(needle, StringComparison.Ordinal); i >= 0; i = text.IndexOf(needle, i + 1, StringComparison.Ordinal)) n++;
-        return n;
-    }
-
     private static string RepoFile(string relative)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

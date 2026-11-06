@@ -32,3 +32,7 @@ Launcher/
 ## Python bytecode (the catalog template ships CI scripts)
 __pycache__/
 *.pyc
+
+## Testbed evidence: screenshots, videos and the data folder of test runs
+tools/testbed/out/
+tools/testbed/node_modules/

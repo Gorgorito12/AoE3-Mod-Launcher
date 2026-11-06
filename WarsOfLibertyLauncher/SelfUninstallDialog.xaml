@@ -7,18 +7,16 @@
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         ResizeMode="NoResize"
-        Background="{DynamicResource MpAppBg}"
         ShowInTaskbar="False">
 
-    <!-- "Uninstall from this PC" for the LAUNCHER itself — the sibling of UninstallDialog,
-         which removes one mod and uses the same pieces: what goes in a red-rimmed card, what
-         stays in the green strip beneath it, each extra in its own row.
+    <!-- "Uninstall from this PC" for the LAUNCHER itself (design 100c-100f). What goes in a
+         red-rimmed card, what stays in the green strip beneath it, each extra in its own row.
 
-         Cancel is the DEFAULT button (Enter and Esc both cancel): this removes the program
-         the player is looking at, and the data option cannot be undone.
+         Cancel is the DEFAULT button (Enter and Esc both cancel): this removes the program the
+         player is looking at, and the data option cannot be undone.
 
-         The body scrolls and the footer does not: the constructor caps the window at the work
-         area, and a form this long must never push its buttons off the screen. -->
+         The body scrolls and the buttons do not: the constructor caps the window at the work area,
+         and a form this long must never push its buttons off the screen. -->
 
   <Grid>
     <Grid.RowDefinitions>
@@ -27,42 +25,47 @@
         <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
     <controls:TitleBar Grid.Row="0" x:Name="TitleBarControl"
+                       TitleIcon="pack://application:,,,/Aoe3ModLauncher;component/AppIcon.png"
                        ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
 
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="24,20,24,18">
-            <TextBlock x:Name="HeaderText" Style="{StaticResource SetDialogHeadline}"/>
+    <ScrollViewer Grid.Row="1" Padding="0"
+                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="22,24,22,0">
+            <TextBlock x:Name="HeaderText" Style="{StaticResource WindowHeadline}"/>
+            <TextBlock x:Name="LeadText" Style="{StaticResource WindowBody}" Margin="0,8,0,0"/>
 
-            <!-- What goes, rimmed red; what stays, in the green strip under it. -->
-            <Border Style="{StaticResource SetCard}" BorderBrush="{DynamicResource UiRimDanger}"
-                    Margin="0,12,0,0">
+            <Border Style="{StaticResource WindowCard}"
+                    BorderBrush="{DynamicResource WindowDangerRim}"
+                    Margin="0,14,0,0">
                 <StackPanel>
-                    <StackPanel Margin="13,11,13,11">
-                        <TextBlock x:Name="RemovedLabelText" Style="{StaticResource SetCardLabel}"
-                                   Foreground="{DynamicResource UiDangerLabel}"/>
-                        <StackPanel x:Name="RemovedList" Margin="0,7,0,0"/>
+                    <StackPanel Margin="15,12,15,12">
+                        <TextBlock x:Name="RemovedLabelText" Style="{StaticResource WindowCardLabel}"
+                                   Foreground="{DynamicResource UiDangerText}"/>
+                        <StackPanel x:Name="RemovedList"/>
                     </StackPanel>
-                    <Border Background="{DynamicResource UiOkStripBg}"
-                            BorderBrush="{DynamicResource UiRimSeam}" BorderThickness="0,1,0,0"
-                            Padding="13,9,13,9">
+                    <Border Background="{DynamicResource WindowSafeFill}"
+                            BorderBrush="{DynamicResource WindowFooterRule}"
+                            BorderThickness="0,1,0,0"
+                            CornerRadius="0,0,11,11"
+                            Padding="15,9,15,10">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="&#x2713;" FontWeight="SemiBold"
-                                       FontSize="{DynamicResource SetMonoSize}"
-                                       Foreground="{DynamicResource MpOk}"
+                            <TextBlock Text="&#x2713;" FontWeight="Bold"
+                                       FontSize="{DynamicResource SetControlSize}"
+                                       Foreground="{DynamicResource WindowSafeTick}"
                                        Margin="0,1,9,0"/>
                             <StackPanel Grid.Column="1">
                                 <TextBlock x:Name="SafeNoteText"
-                                           FontSize="{DynamicResource SetDescSize}"
-                                           Foreground="{DynamicResource UiOkText}"
+                                           FontSize="{DynamicResource SetRowDescSize}"
+                                           Foreground="{DynamicResource UiBodyText}"
                                            TextWrapping="Wrap"/>
                                 <TextBlock x:Name="ModsHintText"
-                                           FontSize="{DynamicResource SetDescSize}"
-                                           Foreground="{DynamicResource UiTextDim}"
-                                           TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                           FontSize="{DynamicResource SetControlSize}"
+                                           Foreground="{DynamicResource WindowMuted}"
+                                           TextWrapping="Wrap" Margin="0,4,0,0"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -70,65 +73,67 @@
             </Border>
 
             <!-- A portable exe: the file the player started is theirs and stays. -->
-            <StackPanel x:Name="PortablePanel" Visibility="Collapsed" Margin="0,14,0,0">
-                <TextBlock x:Name="PortableNoteText"
-                           FontSize="{DynamicResource SetDescSize}"
-                           Foreground="{DynamicResource MpTextBody}"
-                           TextWrapping="Wrap"/>
-                <Border Style="{StaticResource SetPathBox}" Margin="0,7,0,0">
-                    <TextBlock x:Name="PortablePathText"
-                               FontFamily="{DynamicResource MonoFont}"
-                               FontSize="{DynamicResource SetDescSize}"
-                               Foreground="{DynamicResource UiTextStrong}"
-                               TextWrapping="Wrap"/>
-                </Border>
-            </StackPanel>
+            <Border x:Name="PortablePanel" Style="{StaticResource WindowField}"
+                    Visibility="Collapsed" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock x:Name="PortableLabelText" Style="{StaticResource WindowFieldLabel}"/>
+                    <TextBlock x:Name="PortablePathText" Style="{StaticResource WindowPath}"
+                               Margin="0,5,0,0"/>
+                    <TextBlock x:Name="PortableNoteText"
+                               FontSize="{DynamicResource SetControlSize}"
+                               Foreground="{DynamicResource WindowMuted}"
+                               TextWrapping="Wrap" Margin="0,5,0,0"/>
+                </StackPanel>
+            </Border>
 
             <!-- YOUR DATA: off by default, because it is the one part that cannot be undone. -->
             <StackPanel x:Name="DataPanel">
-                <TextBlock x:Name="DataLabelText" Style="{StaticResource SetCardLabel}"
-                           Margin="0,18,0,8"/>
-                <Border Style="{StaticResource SetCard}">
-                    <Border Style="{StaticResource SetRowLast}" Padding="12,10,12,10">
-                        <CheckBox x:Name="OptDeleteData" IsChecked="False"
-                                  Style="{StaticResource SetCheckBox}" VerticalContentAlignment="Top">
-                            <StackPanel>
-                                <TextBlock x:Name="OptDataTitle" Style="{StaticResource SetRowTitle}"/>
-                                <TextBlock x:Name="OptDataDesc" Style="{StaticResource SetRowDesc}" Margin="0,3,0,0"/>
-                                <TextBlock x:Name="OptDataPath"
-                                           FontFamily="{DynamicResource MonoFont}"
-                                           FontSize="{DynamicResource SetMonoSize}"
-                                           Foreground="{DynamicResource MpTextMuted}"
-                                           TextWrapping="Wrap" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="OptDataPending" Visibility="Collapsed"
-                                           FontSize="{DynamicResource SetDescSize}"
-                                           Foreground="{DynamicResource MpCautionText}"
-                                           TextWrapping="Wrap" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="OptDataBackups" Visibility="Collapsed"
-                                           FontSize="{DynamicResource SetDescSize}"
-                                           Foreground="{DynamicResource MpCautionText}"
-                                           TextWrapping="Wrap" Margin="0,4,0,0"/>
-                            </StackPanel>
-                        </CheckBox>
-                    </Border>
+                <TextBlock x:Name="DataLabelText" Style="{StaticResource WindowCardLabel}"
+                           Margin="4,18,4,14"/>
+                <Border Style="{StaticResource WindowCard}">
+                    <CheckBox x:Name="OptDeleteData" IsChecked="False"
+                              Style="{StaticResource WindowDangerCheckBox}"
+                              Checked="OptDeleteData_Changed" Unchecked="OptDeleteData_Changed">
+                        <StackPanel>
+                            <TextBlock x:Name="OptDataTitle"
+                                       FontSize="{DynamicResource SetRowTitleSize}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource WindowStrongText}"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock x:Name="OptDataDesc"
+                                       FontSize="{DynamicResource SetRowDescSize}"
+                                       Foreground="{DynamicResource WindowMuted}"
+                                       TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            <TextBlock x:Name="OptDataPath"
+                                       FontFamily="Consolas, Courier New, monospace"
+                                       FontSize="{DynamicResource SetControlSize}"
+                                       Foreground="{DynamicResource WindowFineText}"
+                                       TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            <TextBlock x:Name="OptDataPending" Visibility="Collapsed"
+                                       FontSize="{DynamicResource SetRowDescSize}"
+                                       Foreground="{DynamicResource WindowNoticeTitle}"
+                                       TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            <TextBlock x:Name="OptDataBackups" Visibility="Collapsed"
+                                       FontSize="{DynamicResource SetRowDescSize}"
+                                       Foreground="{DynamicResource WindowNoticeTitle}"
+                                       TextWrapping="Wrap" Margin="0,5,0,0"/>
+                        </StackPanel>
+                    </CheckBox>
                 </Border>
             </StackPanel>
 
             <TextBlock x:Name="AntivirusNoteText"
-                       FontSize="{DynamicResource SetMonoSize}"
-                       Foreground="{DynamicResource UiTextDim}"
+                       FontSize="{DynamicResource SetControlSize}"
+                       Foreground="{DynamicResource WindowFineText}"
                        TextWrapping="Wrap" Margin="0,14,0,0"/>
         </StackPanel>
     </ScrollViewer>
 
-    <!-- Footer: Cancel as a link and the default, one red button. -->
-    <Border Grid.Row="2" Style="{StaticResource SetDialogFooter}">
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="CancelButton" Style="{StaticResource SetFooterLinkButton}"
-                    IsCancel="True" IsDefault="True" Margin="0,0,14,0" Click="CancelButton_Click"/>
-            <Button x:Name="OkButton" Style="{StaticResource SetFooterDangerButton}"
-                    Click="OkButton_Click"/>
-        </StackPanel>
-    </Border>
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="22,16,22,20">
+        <Button x:Name="CancelButton" Style="{StaticResource WindowSecondaryButton}"
+                MinWidth="112" IsCancel="True" IsDefault="True" Click="CancelButton_Click"/>
+        <Button x:Name="OkButton" Style="{StaticResource WindowDangerButton}"
+                MinWidth="160" Margin="8,0,0,0" Click="OkButton_Click"/>
+    </StackPanel>
   </Grid>
 </Window>

@@ -63,9 +63,7 @@ public class ModAssetCacheService
     private const int MaxHeroes = 6;
 
     /// <summary>Folder where cached assets live. Created lazily on first write.</summary>
-    public static string CacheDir { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "AoE3ModLauncher", "mod-assets");
+    public static string CacheDir { get; } = Path.Combine(AppPaths.DataDir, "mod-assets");
 
     // -- Fast path: resolve from disk, download only when needed -------------
 

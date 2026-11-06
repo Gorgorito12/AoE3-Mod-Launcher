@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t78" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t78" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">78</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Asistente de Radmin, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Es una ventana global y flotante (abajo a la derecha, siempre encima), así que va en neutros: barra #0b1422 con la transparencia del usuario y resplandor azul. Sigue midiendo 430 de ancho y su alto se ajusta al contenido. Se mantiene lo del turno 12: un solo paso abierto, los hechos plegados a un renglón con check verde, los pendientes atenuados, la barra de segmentos, el nombre de la red completo y, con todo en verde, la confirmación con la red y «Ver pasos». La ayuda de Discord sigue sola en su línea. Cambios: tres pasos en vez de cuatro, porque «Confirmar la conexión» no era algo que hicieras: el launcher pasa de «Únete a la red» a todo en verde, y la línea «Esperando a que te unas» ya hace ese papel. «Abrir Radmin» va dentro de los pasos que lo necesitan (iniciar sesión y unirse a la red), en vez de como enlace en el renglón del paso 1. «Copiado» aparece solo al copiar, en lugar de decir siempre «Ya está en tu portapapeles». El botón principal es la acción del paso, y «Cerrar» pasa a secundario salvo cuando ya estás en la red. En el paso 3 hay una pista para cuando ya te uniste y no se marca, que es lo que pasa si el launcher no puede leer el registro de Radmin. Además, el título dice «Asistente de Radmin» para no confundirse con la ventana de Radmin, que se abre justo al lado. El paso 1 instala Radmin desde el launcher, con su barra y el aviso del permiso de Windows, y deja la web como alternativa (78f). El punto de «Esperando…» late cada 3 s, al ritmo del sondeo, para que se note que el launcher está comprobando. En el prototipo, la acción de cada paso simula que lo hiciste.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <sc-for list="{{ cases }}" as="c" hint-placeholder-count="5">
+      <div id="{{ c.id }}" style="display:flex;flex-direction:column;gap:10px;width:430px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#{{ c.id }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ c.id }}</a><span>{{ c.note }}</span></div><dc-import name="RadminAsistente" etapa="{{ c.etapa }}" transparencia="{{ tr }}" hint-size="430px,480px"></dc-import></div>
+    </sc-for>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      tr: this.props.transparencia ?? 'Media',
+      cases: [
+        { id: '78a', etapa: 'Sin instalar', note: 'Radmin no está instalado. «Instalar Radmin VPN» lo instala desde el launcher; la web queda como alternativa.' },
+        { id: '78b', etapa: 'Sin sesión', note: 'Instalado, pero sin sesión. «Abrir Radmin» va en este paso.' },
+        { id: '78c', etapa: 'En sesión', note: 'Con sesión iniciada: falta unirse a la red. «Copiar» es la acción principal.' },
+        { id: '78d', etapa: 'En la red', note: 'En la red. Con todo en verde, la ventana es la confirmación y el nombre de la red.' },
+        { id: '78e', etapa: 'En la red · pasos', note: 'En la red, con «Ver pasos» abierto: los tres pasos plegados.' },
+        { id: '78f', etapa: 'Instalando', note: 'Instalando Radmin desde el launcher: la barra sustituye al botón dentro del paso 1.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

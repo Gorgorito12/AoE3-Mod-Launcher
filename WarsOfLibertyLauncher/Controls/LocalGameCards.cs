@@ -30,6 +30,167 @@ internal static class LocalGameCards
     /// <summary>How many unit types a card lists before it stops being a card and becomes a table.</summary>
     private const int TopUnitsPerCard = 8;
 
+    /// <summary>A row of the mod window's statistics (design 71).</summary>
+    private static Border StatRow(
+        string title, ImageSource? flag, Border? chip, string mono, string? monoTip, params UIElement?[] rest)
+    {
+        var resources = Application.Current;
+        var head = new WrapPanel();
+        if (flag != null)
+        {
+            var picture = MultiplayerTab.ArtImage(flag, MultiplayerTab.CivFlagSize);
+            picture.Margin = new Thickness(0, 0, 8, 0);
+            head.Children.Add(picture);
+        }
+        head.Children.Add(new TextBlock
+        {
+            Text = title,
+            Style = (Style)resources.FindResource("SetRowTitle"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        });
+        if (chip != null) head.Children.Add(chip);
+
+        var stack = new StackPanel();
+        stack.Children.Add(head);
+        var line = new TextBlock
+        {
+            Text = mono,
+            Style = (Style)resources.FindResource("SetMonoValue"),
+            Foreground = (Brush)resources.FindResource("WindowSoftText"),
+            Margin = new Thickness(0, 5, 0, 0),
+        };
+        if (!string.IsNullOrEmpty(monoTip)) line.ToolTip = TooltipHelper.Wrap(monoTip);
+        stack.Children.Add(line);
+        foreach (var more in rest)
+            if (more != null) stack.Children.Add(more);
+
+        return new Border { Style = (Style)resources.FindResource("SetRow"), Child = stack };
+    }
+
+    private static TextBlock StatDesc(string text) => new()
+    {
+        Text = text,
+        Style = (Style)Application.Current.FindResource("SetRowDesc"),
+        Margin = new Thickness(0, 5, 0, 0),
+    };
+
+    private static Border WinLossChip(bool won)
+        => ModChips.Status(Strings.Get(won ? "ModChipWin" : "ModChipLoss"), won ? "#4FD68A" : "#C84A4A");
+
+    private static string WhenLabel(DateTime local)
+        => ChatTimeFormat.DateLabel(local, DateTime.Today,
+            Strings.Get("MpChatToday"), Strings.Get("MpChatYesterday"), Strings.Culture);
+
+    /// <summary>
+    /// One local match as a row. A recording the viewer is not in has no result of its own, but
+    /// the file may still name who lost, and then that is what the row says. The file's name is
+    /// the tooltip: AoE3 renumbers its recordings, so it is the only way to find this one on disk.
+    /// </summary>
+    internal static Border BuildHumanGameRow(LocalMatchRow row, UIElement? deckSection = null)
+    {
+        var humans = row.Players.Where(p => p.IsHuman).ToList();
+        var inMatch = humans.Any(p => p.Slot == row.LocalSlot);
+        var others = humans.Where(p => p.Slot != row.LocalSlot).Select(p => p.Name).ToList();
+
+        var title = inMatch && others.Count > 0
+            ? Strings.Format("ModStatsAgainst", string.Join(", ", others))
+            : string.Join(" · ", humans.Select(p => p.Name));
+
+        Border? chip = row.Result.HasValue ? WinLossChip(row.Result.Value >= 1.0)
+            : inMatch ? ModChips.Status(Strings.Get("ModChipNoResult"), "#8C9CB1")
+            : null;
+
+        TextBlock? verdict = null;
+        if (!inMatch)
+        {
+            var parts = new List<string>();
+            var lost = humans.FirstOrDefault(p => p.Slot == row.LoserSlot);
+            var won = humans.FirstOrDefault(p => p.Slot == row.WinnerSlot);
+            if (lost != null) parts.Add($"{Strings.Get("ModPropHumanLost")}: {lost.Name}");
+            if (won != null) parts.Add($"{Strings.Get("ModPropHumanWon")}: {won.Name}");
+            if (parts.Count > 0) verdict = StatDesc(string.Join(" · ", parts));
+        }
+
+        var mono = (row.Map.Length > 0 ? row.Map : Strings.Get("ModPropHumanMapUnknown"))
+                   + " · " + WhenLabel(row.PlayedLocal);
+        return StatRow(title, null, chip, mono, row.FileName, verdict, deckSection);
+    }
+
+    /// <summary>
+    /// One game against the AI as a row. A total the game did not keep is left out, and if none
+    /// is left the row says so: zero here would be a claim that nothing was gathered.
+    /// </summary>
+    internal static Border BuildAiGameRow(
+        AiGameRecord game, IReadOnlyDictionary<string, string> names, AiOpponent? opponent = null)
+    {
+        var title = Strings.Get("ModStatsAgainstAi");
+        if (!string.IsNullOrWhiteSpace(opponent?.Name))
+        {
+            title += " · " + opponent!.Name;
+            if (!string.IsNullOrWhiteSpace(opponent.CivName)) title += $" ({opponent.CivName})";
+        }
+
+        var facts = new List<string>
+        {
+            Strings.Format("ModPropStatsDuration", Math.Max(1, (int)Math.Round(game.DurationMs / 60000.0))),
+        };
+        facts.Add(game.Score > 0
+            ? Strings.Format("ModStatsScore", game.Score.ToString("N0", Strings.Culture))
+            : Strings.Get("ModStatsNoScore"));
+        if (game.FirstAttackSeconds >= 0)
+            facts.Add(Strings.Format("ModStatsFirstAttack", Math.Max(1, game.FirstAttackSeconds / 60)));
+        if (DateTime.TryParse(game.CapturedAtUtc, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out var when))
+            facts.Add(WhenLabel(when.ToLocalTime()));
+
+        var totals = new List<string>();
+        if (game.Gold > 0) totals.Add(Strings.Format("ModStatsGold", game.Gold.ToString("N0", Strings.Culture)));
+        if (game.Wood > 0) totals.Add(Strings.Format("ModStatsWood", game.Wood.ToString("N0", Strings.Culture)));
+        if (game.Food > 0) totals.Add(Strings.Format("ModStatsFood", game.Food.ToString("N0", Strings.Culture)));
+        if (game.Xp > 0) totals.Add(Strings.Format("ModPropStatsXp", game.Xp.ToString("N0", Strings.Culture)));
+        if (game.Shipments > 0) totals.Add(Strings.Format("ModPropStatsShipments", game.Shipments));
+
+        var units = UnitsLine(game, names);
+        if (units != null) units.SetResourceReference(TextBlock.FontSizeProperty, "SetDescSize");
+
+        return StatRow(title, opponent?.CivFlag, game.Won.HasValue ? WinLossChip(game.Won.Value) : null,
+            string.Join(" · ", facts), null,
+            StatDesc(totals.Count > 0 ? string.Join(" · ", totals) : Strings.Get("ModStatsNoTotals")),
+            units);
+    }
+
+    /// <summary>The units, biggest first: the part that is filled in for every stored game.
+    /// Merged by name and without the map script's props; see LocalGames.UnitLines.</summary>
+    private static TextBlock? UnitsLine(AiGameRecord game, IReadOnlyDictionary<string, string> names)
+    {
+        var top = LocalGames.UnitLines(game, names, TopUnitsPerCard);
+        if (top.Count == 0) return null;
+
+        var units = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            Margin = new Thickness(0, 6, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        for (var i = 0; i < top.Count; i++)
+        {
+            if (i > 0) units.Inlines.Add(new Run("   "));
+            var (label, count, resolved) = top[i];
+            var run = new Run(Strings.Format("ModPropStatsUnitCount", label, count));
+            if (!resolved)
+            {
+                // A name this mod does not have: kept, because it identifies the unit, but
+                // drawn as an identifier rather than as this mod's vocabulary.
+                run.Foreground = (Brush)Application.Current.FindResource("MpTextFaint");
+                run.FontFamily = (FontFamily)Application.Current.FindResource("MonoFont");
+            }
+            units.Inlines.Add(run);
+        }
+        return units;
+    }
+
     /// <summary>One game against the AI, as a card.</summary>
     internal static Border BuildAiGameCard(
         AiGameRecord game, IReadOnlyDictionary<string, string> names, AiOpponent? opponent = null)
@@ -130,34 +291,8 @@ internal static class LocalGameCards
             });
         }
 
-        // The units, biggest first. This is the part that is filled in for EVERY stored game.
-        // Merged by name and without the map script's props; see LocalGames.UnitLines.
-        var top = LocalGames.UnitLines(game, names, TopUnitsPerCard);
-        if (top.Count > 0)
-        {
-            var units = new TextBlock
-            {
-                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-                FontSize = caption,
-                Margin = new Thickness(0, 6, 0, 0),
-                TextWrapping = TextWrapping.Wrap,
-            };
-            for (var i = 0; i < top.Count; i++)
-            {
-                if (i > 0) units.Inlines.Add(new Run("   "));
-                var (label, count, resolved) = top[i];
-                var run = new Run(Strings.Format("ModPropStatsUnitCount", label, count));
-                if (!resolved)
-                {
-                    // A name this mod does not have: kept, because it identifies the unit, but
-                    // drawn as an identifier rather than as this mod's vocabulary.
-                    run.Foreground = (Brush)Application.Current.FindResource("MpTextFaint");
-                    run.FontFamily = (FontFamily)Application.Current.FindResource("MonoFont");
-                }
-                units.Inlines.Add(run);
-            }
-            stack.Children.Add(units);
-        }
+        var units = UnitsLine(game, names);
+        if (units != null) stack.Children.Add(units);
 
         return new Border
         {

@@ -52,19 +52,26 @@
              smaller type, which is the whole point of folding them. -->
         <Style x:Key="StepTitle" TargetType="TextBlock">
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="{DynamicResource MpBodySize}"/>
-            <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpStatValueSize}"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
         <Style x:Key="StepBody" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource MpLabelSize}"/>
-            <Setter Property="Foreground" Value="{DynamicResource MpTextBody}"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetRowDescSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource WindowSoftText}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,4,0,0"/>
         </Style>
+        <ControlTemplate x:Key="WindowBar" TargetType="ProgressBar">
+            <Grid>
+                <Border x:Name="PART_Track" Background="#1FFFFFFF" CornerRadius="4"/>
+                <Border x:Name="PART_Indicator" HorizontalAlignment="Left"
+                        Background="{TemplateBinding Foreground}" CornerRadius="4"/>
+            </Grid>
+        </ControlTemplate>
     </Window.Resources>
 
-    <Border BorderBrush="{DynamicResource MpRimSoft}" BorderThickness="1">
+    <Border BorderBrush="#1AFFFFFF" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>   <!-- Header -->
@@ -79,14 +86,15 @@
                  and at 430 px beside the title and the close button it was clipped in
                  every state anyway. -->
             <controls:TitleBar Grid.Row="0" x:Name="TitleBarControl"
-                               Background="{DynamicResource MpTitleBar}"
+                               TitleIcon="pack://application:,,,/Aoe3ModLauncher;component/AppIcon.png"
+                               Background="{DynamicResource GlassTitleBar}"
                                ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
 
             <!-- STEPS -->
             <ScrollViewer Grid.Row="1"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="20,18,20,12">
+                <StackPanel Margin="20,18,20,14">
 
                     <!-- A. CONNECTED (12a). With the checklist green this window stops
                          being a checklist: the copy button and the "open Radmin" shortcut
@@ -103,10 +111,11 @@
                                     Width="34" Height="34"
                                     CornerRadius="10"
                                     Margin="0,0,12,0"
-                                    Background="{DynamicResource MpOkBg}">
+                                    Background="#294FD68A">
                                 <TextBlock Text="&#x2713;"
-                                           Foreground="{DynamicResource MpOk}"
-                                           FontSize="{DynamicResource MpRoomNameSize}"
+                                           Foreground="{DynamicResource WindowSafeTick}"
+                                           FontSize="17"
+                                           FontWeight="Bold"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"/>
                             </Border>
@@ -114,14 +123,13 @@
                                 <TextBlock x:Name="ConnectedTitle"
                                            FontFamily="{DynamicResource DisplayFont}"
                                            FontWeight="Bold"
-                                           FontSize="{DynamicResource MpStatValueSize}"
-                                           Foreground="{DynamicResource MpTextHeading}"
+                                           FontSize="{DynamicResource DialogSubheadSize}"
+                                           Foreground="#FFFFFF"
                                            TextWrapping="Wrap"/>
                                 <TextBlock x:Name="ConnectedIp"
-                                           FontFamily="{DynamicResource MonoFont}"
-                                           FontSize="{DynamicResource MpFigureSize}"
-                                           Foreground="{DynamicResource MpTextMuted}"
-                                           Margin="0,4,0,0"
+                                           FontSize="{DynamicResource SetControlSize}"
+                                           Foreground="{DynamicResource WindowMuted}"
+                                           Margin="0,5,0,0"
                                            TextWrapping="Wrap"/>
                             </StackPanel>
                         </Grid>
@@ -129,12 +137,12 @@
                         <!-- The network card is built ONCE in code and hosted either here or
                              inside the open step 3 - never built twice, so there is only one
                              copy button and one handler. -->
-                        <ContentControl x:Name="ConnectedNetworkHost" Margin="0,14,0,0"/>
+                        <ContentControl x:Name="ConnectedNetworkHost" Margin="0,12,0,0"/>
 
                         <Border Margin="0,12,0,0"
-                                Padding="11,7"
+                                Padding="12,9"
                                 CornerRadius="8"
-                                BorderBrush="{DynamicResource MpRimFaint}"
+                                BorderBrush="#1AFFFFFF"
                                 BorderThickness="1">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -146,20 +154,20 @@
                                            x:Name="StepsDoneText"
                                            VerticalAlignment="Center"
                                            TextWrapping="Wrap"
-                                           FontSize="{DynamicResource MpLabelSize}"
-                                           Foreground="{DynamicResource MpTextMuted}"/>
+                                           FontSize="{DynamicResource SetRowDescSize}"
+                                           Foreground="{DynamicResource WindowMuted}"/>
                                 <!-- "Abrir Radmin" survives the fold on purpose: the rules
                                      file amended itself to say the green window offers the
                                      copy button AND this shortcut - "it is short by one". -->
                                 <Button Grid.Column="1"
                                         x:Name="ReopenRadminLink"
-                                        Style="{StaticResource MpLinkButton}"
-                                        Margin="10,0,0,0"
+                                        Style="{StaticResource WindowTextLink}"
+                                        Margin="12,0,0,0"
                                         VerticalAlignment="Center"
-                                        Click="Step1OpenBtn_Click"/>
+                                        Click="OpenRadmin_Click"/>
                                 <Button Grid.Column="2"
                                         x:Name="ShowStepsLink"
-                                        Style="{StaticResource MpLinkButton}"
+                                        Style="{StaticResource WindowTextLink}"
                                         Margin="12,0,0,0"
                                         VerticalAlignment="Center"
                                         Click="ShowStepsLink_Click"/>
@@ -180,14 +188,14 @@
                                        Margin="0,0,10,0"
                                        VerticalAlignment="Center"
                                        FontWeight="SemiBold"
-                                       FontSize="{DynamicResource MpFigureSize}"
-                                       Foreground="{DynamicResource MpTextMuted}"/>
+                                       FontSize="{DynamicResource SetControlSize}"
+                                       Foreground="{DynamicResource WindowMuted}"/>
                             <UniformGrid Grid.Column="1"
                                          x:Name="ProgressSegments"
                                          Rows="1"
                                          VerticalAlignment="Center"/>
                         </Grid>
-                        <StackPanel x:Name="StepsList" Margin="0,12,0,0"/>
+                        <StackPanel x:Name="StepsList" Margin="0,8,0,0"/>
                     </StackPanel>
 
                     <!-- The support pill, alone on its line, which is the shape three of its
@@ -197,9 +205,9 @@
                          checkbox measured zero. Here it has 34 px of slack. Separator drawn
                          by hand rather than by the footer's own border so the rule sits
                          above the pill, not under it. -->
-                    <Border Margin="0,14,0,0"
+                    <Border Margin="0,12,0,0"
                             Padding="0,12,0,0"
-                            BorderBrush="{DynamicResource BorderSubtle}"
+                            BorderBrush="#14FFFFFF"
                             BorderThickness="0,1,0,0">
                         <ContentControl x:Name="SupportLinkHost"
                                         HorizontalAlignment="Left"/>
@@ -209,8 +217,8 @@
 
             <!-- FOOTER -->
             <Border Grid.Row="2"
-                    Background="{DynamicResource MpRowHighlight}"
-                    BorderBrush="{DynamicResource MpRimSoft}"
+                    Background="#730E1A2B"
+                    BorderBrush="#14FFFFFF"
                     BorderThickness="0,1,0,0"
                     Padding="20,12">
                 <Grid>
@@ -224,14 +232,13 @@
                          window opening by itself on every visit to Multiplayer. -->
                     <CheckBox Grid.Column="0"
                               x:Name="DontShowAgainCheck"
-                              Foreground="{DynamicResource Secondary}"
-                              FontSize="{DynamicResource FontSizeCaption}"
+                              Style="{StaticResource WindowCheckBox}"
                               VerticalAlignment="Center"
                               Margin="0,0,12,0"/>
                     <Button Grid.Column="1"
                             x:Name="CloseBtn"
-                            Style="{StaticResource MpPrimaryButton}"
-                            MinWidth="100"
+                            Style="{StaticResource WindowSecondaryButton}"
+                            MinWidth="112"
                             Click="CloseBtn_Click"/>
                 </Grid>
             </Border>

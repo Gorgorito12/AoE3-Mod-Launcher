@@ -36,7 +36,7 @@ public class SectionSearchKeywordsTests
             {
                 Children =
                 {
-                    new TextBlock { Text = Strings.Get("ModPropTroubleTitle") },
+                    new TextBlock { Text = "Something not working?" },
                     share,
                 },
             },

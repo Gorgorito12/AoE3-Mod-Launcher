@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:820px;height:500px;position:relative;overflow:hidden;border-radius:10px;color-scheme:dark;box-shadow:0 6px 28px rgba(0,0,0,.3);background:#0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="position:absolute;inset:0;background:url(mods/wol/hero.jpg) center 25%/cover no-repeat"></div>
+  <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,28,46,.82) 0%,rgba(15,28,46,.5) 45%,rgba(15,28,46,.25) 100%),linear-gradient(0deg,rgba(15,28,46,.92) 0%,rgba(15,28,46,0) 55%)"></div>
+  <sc-if value="{{ anyOpen }}" hint-placeholder-val="{{ false }}"><div onClick="{{ closeAll }}" style="position:absolute;inset:0;z-index:19"></div></sc-if>
+  <div style="position:relative;height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ barBg }};backdrop-filter:blur({{ barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)">
+    <span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">AoE3 Mod Launcher</span><span style="height:20px;padding:0 6px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.25);display:flex;align-items:center;font:400 11px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">v1.0.16e</span>
+    <div style="flex:1"></div>
+    <sc-if value="{{ offline }}" hint-placeholder-val="{{ false }}"><span onClick="{{ retry }}" title="Pulsa para volver a comprobar" style="cursor:pointer;flex:none;white-space:nowrap;height:24px;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:7px;background:rgba(244,144,12,.14);box-shadow:inset 0 0 0 1px rgba(244,144,12,.5);font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-shadow:none" style-hover="background:rgba(244,144,12,.22)"><span style="width:7px;height:7px;border-radius:4px;background:#F4900C"></span>{{ offT }}</span></sc-if>
+    <span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;display:flex;gap:26px;padding-left:12px"><span>—</span><span>❐</span><span>✕</span></span>
+  </div>
+  <div style="position:relative;z-index:20;height:56px;flex:none;display:flex;align-items:stretch;gap:30px;padding:0 24px 0 32px;background:rgba(10,19,33,.45);backdrop-filter:blur(12px);box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+    <span style="display:flex;align-items:center;font:500 14px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">MULTIJUGADOR</span>
+    <span style="display:flex;align-items:center;font:600 14px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 -2px 0 #c8102e">BIBLIOTECA</span>
+    <div style="flex:1"></div>
+    <div style="align-self:center;display:flex;align-items:center">
+      <sc-if value="{{ signedIn }}" hint-placeholder-val="{{ true }}">
+        <div style="position:relative">
+          <span onClick="{{ toggleConn }}" title="Tu conexión de Radmin" style="cursor:pointer;flex:none;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:7px;background:{{ capBg }};box-shadow:inset 0 0 0 1px {{ capRing }};font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ capC }}" style-hover="filter:brightness(1.15)"><span style="width:7px;height:7px;border-radius:4px;background:{{ capDot }}"></span>{{ capT }}<span style="font:400 10px/1 'Segoe UI',system-ui,sans-serif">{{ chev }}</span></span>
+          <sc-if value="{{ connOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;right:0;top:calc(100% + 6px);z-index:30;width:300px;box-sizing:border-box;padding:6px;border-radius:12px;background:{{ P.bg }};backdrop-filter:blur({{ P.blur }});box-shadow:0 18px 40px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.1);display:flex;flex-direction:column">
+              <div style="display:grid;grid-template-columns:8px minmax(0,1fr);gap:6px 9px;align-items:center;padding:10px 10px 8px"><span style="width:8px;height:8px;border-radius:4px;background:{{ capDot }}"></span><span style="font:600 13px/1.25 'Segoe UI',system-ui,sans-serif;color:{{ capC }}">{{ headT }}</span><sc-if value="{{ outNet }}" hint-placeholder-val="{{ false }}"><span style="grid-column:2;font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">Únete a la red AoE3 para poder jugar en línea.</span></sc-if></div>
+              <span style="height:1px;margin:4px 6px;background:rgba(255,255,255,.08)"></span>
+              <sc-if value="{{ outNet }}" hint-placeholder-val="{{ false }}"><div onClick="{{ closeAll }}" style="cursor:pointer;display:grid;grid-template-columns:16px minmax(0,1fr);gap:10px;align-items:center;padding:8px 10px;border-radius:7px;background:rgba(47,127,224,.16)" style-hover="background:rgba(255,255,255,.07)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#a8bcd2" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6"></circle><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.6c-.5.2-.8.6-.8 1.1v.4"></path><circle cx="8" cy="11.6" r=".5" fill="#a8bcd2"></circle></svg><div style="min-width:0;display:flex;flex-direction:column;gap:4px"><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Ayuda para conectarte</span><span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Abre el asistente de Radmin</span></div></div><span style="height:1px;margin:4px 6px;background:rgba(255,255,255,.08)"></span></sc-if>
+              <sc-if value="{{ hasIp }}" hint-placeholder-val="{{ true }}"><div onClick="{{ copyIp }}" style="cursor:pointer;display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:7px" style-hover="background:rgba(255,255,255,.07)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#a8bcd2" stroke-width="1.4" stroke-linejoin="round"><rect x="5" y="5" width="8.5" height="8.5" rx="1.5"></rect><path d="M3 10.5V3.5c0-.6.4-1 1-1h7"></path></svg><div style="min-width:0;display:flex;flex-direction:column;gap:4px"><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Tu IP de Radmin</span><span style="font:500 13px/1 Consolas,ui-monospace,monospace;color:#f0f5fb">26.162.244.170</span></div><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ ipC }};white-space:nowrap">{{ ipT }}</span></div></sc-if>
+              <sc-if value="{{ noIp }}" hint-placeholder-val="{{ false }}"><span style="padding:9px 10px;font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">No encontramos tu IP de Radmin.</span></sc-if>
+              <sc-if value="{{ helpBottom }}" hint-placeholder-val="{{ true }}"><span style="height:1px;margin:4px 6px;background:rgba(255,255,255,.08)"></span><div onClick="{{ closeAll }}" style="cursor:pointer;display:grid;grid-template-columns:16px minmax(0,1fr);gap:10px;align-items:center;padding:8px 10px;border-radius:7px" style-hover="background:rgba(255,255,255,.07)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#a8bcd2" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6"></circle><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.6c-.5.2-.8.6-.8 1.1v.4"></path><circle cx="8" cy="11.6" r=".5" fill="#a8bcd2"></circle></svg><div style="min-width:0;display:flex;flex-direction:column;gap:4px"><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Ayuda para conectarte</span><span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Abre el asistente de Radmin</span></div></div></sc-if>
+            </div>
+          </sc-if>
+        </div>
+        <span style="width:1px;height:20px;margin:0 16px;background:rgba(255,255,255,.14)"></span>
+        <div style="position:relative">
+          <span onClick="{{ toggleAcc }}" title="Tu cuenta" style="cursor:pointer;display:flex;align-items:center;gap:9px;padding:4px 6px;margin:-4px -6px;border-radius:8px" style-hover="background:rgba(255,255,255,.06)">
+            <span style="flex:none;width:26px;height:26px;border-radius:13px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">G</span>
+            <sc-if value="{{ single }}" hint-placeholder-val="{{ true }}"><span style="flex:none;width:18px;height:21px;clip-path:{{ SH }};background:{{ b.grad }}"></span></sc-if>
+            <sc-if value="{{ dbl }}" hint-placeholder-val="{{ false }}"><span style="flex:none;position:relative;width:26px;height:21px"><span style="position:absolute;left:0;top:3px;width:15px;height:18px;clip-path:{{ SH }};background:{{ b.grad }};opacity:.7"></span><span style="position:absolute;right:0;top:0;width:18px;height:21px;clip-path:{{ SH }};background:{{ b.grad }}"></span></span></sc-if>
+            <span style="display:flex;flex-direction:column;gap:3px"><span style="font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap">gorgorito_12</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap">{{ eloNav }}</span></span>
+          </span>
+          <sc-if value="{{ accOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;right:-6px;top:calc(100% + 10px);z-index:30;width:288px;box-sizing:border-box;padding:6px;border-radius:12px;background:{{ P.bg }};backdrop-filter:blur({{ P.blur }});box-shadow:0 18px 40px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.1);display:flex;flex-direction:column">
+              <div style="display:grid;grid-template-columns:32px minmax(0,1fr);gap:10px;align-items:center;padding:10px 10px 8px"><span style="width:32px;height:32px;border-radius:16px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:700 13px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">G</span><span style="min-width:0;font:600 14px/1.15 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">gorgorito_12</span></div>
+              <div style="padding:0 4px 6px;display:flex;flex-direction:column;gap:2px">
+                <sc-for list="{{ ladders }}" as="l" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:22px 56px minmax(0,1fr) auto;gap:8px;align-items:center;height:26px;padding:0 8px;border-radius:6px;background:{{ l.bg }}"><sc-if value="{{ l.single }}" hint-placeholder-val="{{ true }}"><span style="width:14px;height:16px;clip-path:{{ SH }};background:{{ l.grad }}"></span></sc-if><sc-if value="{{ l.dbl }}" hint-placeholder-val="{{ false }}"><span style="position:relative;width:22px;height:16px"><span style="position:absolute;left:0;top:2px;width:12px;height:14px;clip-path:{{ SH }};background:{{ l.grad }};opacity:.7"></span><span style="position:absolute;right:0;top:0;width:14px;height:16px;clip-path:{{ SH }};background:{{ l.grad }}"></span></span></sc-if><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ l.mode }}</span><span style="min-width:0;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ l.c }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.age }}</span><span style="font:500 12px/1 Consolas,ui-monospace,monospace;color:#dce7f5;white-space:nowrap">{{ l.elo }}</span></div></sc-for>
+              </div>
+              <span style="height:1px;margin:4px 6px;background:rgba(255,255,255,.08)"></span>
+              <div style="padding:8px 10px 10px;display:flex;flex-direction:column;gap:8px">
+                <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">INSIGNIA JUNTO A TU NOMBRE</span>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:3px;border-radius:9px;background:#0d1828">
+                  <sc-for list="{{ modes }}" as="m" hint-placeholder-count="3"><span onClick="{{ m.pick }}" title="{{ m.tip }}" style="cursor:{{ m.cur }};height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ m.bg }};font:{{ m.w }} 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ m.c }};opacity:{{ m.op }};white-space:nowrap">{{ m.t }}</span></sc-for>
+                </div>
+                <span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:{{ modeHintC }};text-wrap:pretty">{{ modeHint }}</span>
+              </div>
+              <span style="height:1px;margin:4px 6px;background:rgba(255,255,255,.08)"></span>
+              <div onClick="{{ closeAll }}" style="cursor:pointer;height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:7px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5" style-hover="background:rgba(255,255,255,.07)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#a8bcd2" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="5.5" r="2.8"></circle><path d="M2.5 14c.8-3 3-4.3 5.5-4.3s4.7 1.3 5.5 4.3"></path></svg>Perfil</div>
+              <div onClick="{{ closeAll }}" style="cursor:pointer;height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:7px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5" style-hover="background:rgba(255,255,255,.07)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#a8bcd2" stroke-width="1.4" stroke-linejoin="round"><path d="M8 1.5l5.5 2v4.2c0 3.4-2.3 5.9-5.5 6.8C4.8 13.6 2.5 11.1 2.5 7.7V3.5z"></path></svg>Cómo funcionan los rangos</div>
+              <span style="height:1px;margin:4px 6px;background:rgba(255,255,255,.08)"></span>
+              <div onClick="{{ closeAll }}" style="cursor:pointer;min-height:32px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5" style-hover="background:rgba(255,255,255,.07)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#a8bcd2" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5H3.5v11H6"></path><path d="M10 5l3 3-3 3"></path><path d="M13 8H6.5"></path></svg><span style="display:flex;flex-direction:column;gap:4px">Cerrar sesión<sc-if value="{{ inRoom }}" hint-placeholder-val="{{ false }}"><span style="font:400 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Saldrás de la sala «Kaiser · 1v1 competitiva»</span></sc-if></span></div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+      <sc-if value="{{ signedOut }}" hint-placeholder-val="{{ false }}"><span style="cursor:pointer;flex:none;white-space:nowrap;height:34px;box-sizing:border-box;padding:0 14px;border-radius:8px;display:flex;align-items:center;gap:8px;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5" style-hover="background:#213758"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#a8bcd2" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="5.5" r="2.8"></circle><path d="M2.5 14c.8-3 3-4.3 5.5-4.3s4.7 1.3 5.5 4.3"></path></svg>Iniciar sesión</span></sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:860,&quot;height&quot;:460},&quot;abierto&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Cuenta&quot;,&quot;Conexión&quot;,&quot;Ninguno&quot;],&quot;default&quot;:&quot;Cuenta&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sesion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;ip&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;sinConexion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;sinEquipos&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;enSala&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;fueraDeRed&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { open: 'init', mode: null, copied: false, off: false, saved: false };
+  componentWillUnmount() { clearTimeout(this.t1); clearTimeout(this.t2); clearTimeout(this.t3); }
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const OPEN = { 'Cuenta': 'acc', 'Conexión': 'conn', 'Ninguno': null };
+    const open = s.open === 'init' ? (OPEN[this.props.abierto ?? 'Cuenta'] ?? null) : s.open;
+    const inRoom = !!this.props.enSala, outNet = !!this.props.fueraDeRed;
+    const signedIn = this.props.sesion !== false, hasIp = this.props.ip !== false, offline = !!this.props.sinConexion, locked = !!this.props.sinEquipos;
+    const lvl = this.props.transparencia ?? 'Media';
+    const P = ({ 'Sólida': { bg: 'rgba(12,22,38,.95)', blur: '18px' }, 'Media': { bg: 'rgba(12,22,38,.74)', blur: '28px' }, 'Máxima': { bg: 'rgba(12,22,38,.6)', blur: '32px' } })[lvl] || { bg: 'rgba(12,22,38,.74)', blur: '28px' };
+    const SOLO = { age: 'Colonial', c: '#f0a75a', grad: 'linear-gradient(160deg,#f0a75a,#a85c1e 62%,#241002)', elo: 1383, mode: '1v1', double: false };
+    const TEAM = { age: 'Fortalezas', c: '#a8ecff', grad: 'linear-gradient(160deg,#a8ecff,#1e9fd4 62%,#03151f)', elo: 1452, mode: 'Equipos', double: true };
+    const mode = s.mode ?? 'best';
+    const shown = locked || mode === '1v1' ? SOLO : TEAM;
+    const toggle = k => () => set({ open: open === k ? null : k });
+    const modes = [['best', 'La más alta'], ['1v1', '1v1'], ['teams', 'Equipos']].map(([k, t]) => {
+      const dis = (k === 'teams' && locked) || offline, on = mode === k && !(k === 'teams' && locked);
+      return { t, pick: dis ? () => {} : () => { set({ mode: k, saved: true }); clearTimeout(this.t3); this.t3 = setTimeout(() => this.setState({ saved: false }), 1800); }, bg: on ? '#233a5c' : 'transparent', c: on ? '#ffffff' : '#a8bcd2', w: on ? 600 : 500, op: dis ? .45 : 1, cur: dis ? 'default' : 'pointer', tip: offline ? 'Sin conexión' : dis ? 'Juega una partida en equipo para conseguir esta insignia' : '' };
+    });
+    return {
+      barBg: 'rgba(11,20,34,' + (({ 'Sólida': 1, 'Media': .42, 'Máxima': .3 })[lvl] ?? .42) + ')', barBlur: lvl === 'Sólida' ? '0px' : '10px',
+      P, SH: 'polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%)', b: shown, single: !shown.double, dbl: shown.double,
+      anyOpen: !!open, closeAll: () => set({ open: null }),
+      accOpen: open === 'acc' && signedIn, connOpen: open === 'conn' && signedIn, toggleAcc: toggle('acc'), toggleConn: toggle('conn'),
+      chev: open === 'conn' ? '▴' : '▾',
+      capBg: outNet ? (open === 'conn' ? 'rgba(244,144,12,.22)' : 'rgba(244,144,12,.14)') : (open === 'conn' ? 'rgba(79,214,138,.2)' : 'rgba(79,214,138,.12)'),
+      capRing: outNet ? 'rgba(244,144,12,.5)' : 'rgba(79,214,138,.35)', capDot: outNet ? '#F4900C' : '#4fd68a', capC: outNet ? '#F5BD76' : '#7fe0a8', capT: outNet ? 'Falta la red' : 'Conectado',
+      headT: outNet ? 'Radmin está abierto, pero no estás en la red AoE3' : 'Conectado a Radmin VPN', outNet, helpBottom: !outNet, inRoom,
+      ladders: [
+        { mode: '1v1', age: SOLO.age, c: SOLO.c, grad: SOLO.grad, elo: SOLO.elo + ' ELO', single: true, dbl: false, bg: shown === SOLO ? 'rgba(255,255,255,.07)' : 'transparent' },
+        locked ? { mode: 'Equipos', age: 'Descubrimiento', c: '#a8bcd2', grad: 'linear-gradient(160deg,#3a443b,#161c17)', elo: '—', single: false, dbl: true, bg: 'transparent' } : { mode: 'Equipos', age: TEAM.age, c: TEAM.c, grad: TEAM.grad, elo: TEAM.elo + ' ELO', single: false, dbl: true, bg: shown === TEAM ? 'rgba(255,255,255,.07)' : 'transparent' }
+      ],
+      signedIn, signedOut: !signedIn, hasIp, noIp: !hasIp,
+      eloNav: shown.elo + ' ELO · ' + shown.mode, headRest: ' · ' + shown.elo + ' ELO · ' + shown.mode,
+      modes, modeHint: offline ? 'Sin conexión: podrás cambiarla cuando vuelva internet.' : s.saved ? '✓ Guardada. Los demás ya te ven así.' : locked ? 'Juega una partida en equipo para desbloquear «Equipos».' : 'Así te ven en el chat y en la lista de jugadores.',
+      modeHintC: offline ? '#F5BD76' : s.saved ? '#8fe0b0' : '#8C9CB1',
+      copyIp: () => { set({ copied: true }); clearTimeout(this.t1); this.t1 = setTimeout(() => this.setState({ copied: false }), 1500); },
+      ipT: s.copied ? '✓ Copiada' : 'Copiar', ipC: s.copied ? '#8fe0b0' : '#8cbcf5',
+      offline, offT: s.off ? 'Comprobando…' : 'Sin conexión',
+      retry: () => { if (s.off) return; set({ off: true }); clearTimeout(this.t2); this.t2 = setTimeout(() => this.setState({ off: false }), 1500); }
+    };
+  }
+}
+</script>
+</body>
+</html>

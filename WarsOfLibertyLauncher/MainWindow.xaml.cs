@@ -224,16 +224,6 @@ public partial class MainWindow : Window
         // Title-bar minimize/maximize/restore/close + the maximize-glyph
         // sync are now owned by the shared controls:TitleBar in Row 0.
 
-        // Window-size UI scaling (Controls/UiScale.cs). The hero keeps its OWN
-        // render transform pinned bottom-left over its full-bleed background
-        // (Kind.Render, origin 0,1) and its hand-tuned 1500x760 reference, so
-        // its behaviour is byte-for-byte what it was before the shared scaler.
-        // Hooked to PlayView.SizeChanged (not the window's) so it re-fires when
-        // the dashboard tab is re-shown: switching away collapses PlayView to a
-        // 0-size (guarded no-op), switching back grows it from 0 — a size change
-        // even though the window itself never resized.
-        UiScale.Attach(HeroContentGrid, PlayView, 1500, 710,
-            UiScale.Kind.Render, new System.Windows.Point(0, 1));
         // Drive the rotating-hero crossfade only while the dashboard is actually
         // on screen — stop the timer when another tab is shown, resume on return.
         PlayView.IsVisibleChanged += (_, __) => UpdateHeroRotationTimer();
@@ -241,7 +231,7 @@ public partial class MainWindow : Window
         // footprint, so a default-sized window resolves to 1.0) for the code-
         // built brand / mod-switch popups, which live in their own top-level
         // visual tree and can't ride a content-root transform.
-        UiScale.Track(ContentHost, 1100, 560);
+        UiScale.Track(ContentHost, 1100, 530);
 
         // The running binary's own tag. Read ONCE into the chip rather than bound:
         // CurrentInformationalTag walks the assembly's custom attributes on every
@@ -399,6 +389,7 @@ public partial class MainWindow : Window
         DiagnosticLog.Write($"  doNotDisturb={_config.DoNotDisturb}");
 
         _updateService = new UpdateService(_config, activeProfile);
+        InitializeLibrary();
         _installerService = new InstallerService();
 
         // Notification bell (Steam-style). Seeds its history from the persisted
@@ -419,34 +410,8 @@ public partial class MainWindow : Window
             Services.SoundService.Play(sound, ambient: sound != Services.SoundService.SoundKind.Success);
         });
         _notifications.ToastRequested += (title, body) => Dispatcher.Invoke(() => ShowToast(title, body));
-        NotificationList.ItemsSource = _notifications.Items;
         NotificationBellButton.ToolTipOpening += (_, _) => NotifToolTip.Content = BellTooltipText();
-        // The popup is StaysOpen=True (never auto-closes) so the bell can be a
-        // reliable click-toggle. We close it ourselves on an outside click or
-        // when the window loses focus; those handlers are attached only while
-        // it's open. Tag="open" drives the pressed-gold tint on the button.
-        NotificationPopup.Opened += (_, _) =>
-        {
-            NotificationBellButton.Tag = "open";
-            PreviewMouseDown += CloseNotifOnOutsideClick;
-            Deactivated += CloseNotifOnDeactivate;
-            // A WPF Popup renders in its own HWND and only computes placement when
-            // it opens — it does NOT follow the owner window on drag/resize. Attach
-            // these while open so the panel stays glued to the bell as the window
-            // moves; detached on close.
-            LocationChanged += RepositionNotifPopup;
-            SizeChanged += RepositionNotifPopup;
-            RefreshBellColor();
-        };
-        NotificationPopup.Closed += (_, _) =>
-        {
-            NotificationBellButton.Tag = null;
-            PreviewMouseDown -= CloseNotifOnOutsideClick;
-            Deactivated -= CloseNotifOnDeactivate;
-            LocationChanged -= RepositionNotifPopup;
-            SizeChanged -= RepositionNotifPopup;
-            RefreshBellColor();
-        };
+        InitializeNotificationPanel();
         RefreshNotificationLabels();
         RefreshNotificationBadge();
 
@@ -741,18 +706,32 @@ public partial class MainWindow : Window
             if (App.PreviewToasts) PreviewNotificationToasts();
 
             // --open-settings: the settings window, for the same screenshot-script reason.
-            if (App.OpenSettings) LauncherSettingsButton_Click(this, new RoutedEventArgs());
+            if (App.OpenTab is { } openTab)
+                SwitchTopTab(openTab.ToLowerInvariant() switch
+                {
+                    "workshop" => TopTab.Mods,
+                    "multiplayer" => TopTab.Multiplayer,
+                    _ => TopTab.Play,
+                });
+            if (App.OpenSettings)
+            {
+                LauncherSettingsButton_Click(this, new RoutedEventArgs());
+                if (App.OpenSettingsSection is { } section) _launcherSettingsDialog?.ShowSectionNamed(section);
+            }
             if (App.OpenModSettings)
             {
                 DashboardSettingsButton_Click(this, new RoutedEventArgs());
-                if (string.Equals(App.OpenModSettingsTab, "local-files", StringComparison.OrdinalIgnoreCase))
-                    _modPropertiesDialog?.ShowLocalFilesTab();
+                if (App.OpenModSettingsTab is { } modSection) _modPropertiesDialog?.ShowTabNamed(modSection);
             }
 
             // --preview-uninstall / --preview-antivirus: the two windows with made-up data.
             // Deferred so the main window finishes loading before a modal takes over.
             if (App.PreviewUninstall != null || App.PreviewAntivirus != null)
                 Dispatcher.BeginInvoke(new Action(PreviewFileDialogs),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
+            if (App.PreviewDialog != null)
+                Dispatcher.BeginInvoke(new Action(() => PreviewDialogState(App.PreviewDialog)),
                     System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
             // --demo-tournaments: a populated bracket, painted by the real cards from
@@ -1347,6 +1326,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void RefreshModsBrowser()
     {
+        ScheduleLibraryRefresh();
         if (!_modsBrowserHooked)
         {
             _modsBrowserHooked = true;
@@ -2078,11 +2058,15 @@ public partial class MainWindow : Window
         // brings it to front on first open.
         var dialog = new LauncherSettingsDialog(_config);
         _launcherSettingsDialog = dialog;
+        dialog.OpenModSettings = mod => WithLibraryMod(mod, () => DashboardSettingsButton_Click(this, new RoutedEventArgs()));
+        dialog.OpenLauncherUpdate = startNow => OpenLauncherUpdateDialog(startNow);
+        dialog.ShowLauncherUpdate(_pendingLauncherUpdate?.LatestVersion);
 
         // "Limpiar caché de iconos" wipes mod-assets\ but the window stays open;
         // re-download the images live so the user doesn't see monograms until a
         // restart. activeOnly:false covers the Workshop grid too.
         dialog.AssetsCleared = () => _ = RevalidateVisibleAssetsAsync(activeOnly: false);
+        dialog.AppearanceChanged = ApplyLibraryAppearance;
 
         // Adding or removing a local mod.json re-merges the catalog, so the Workshop
         // shows the change while Settings is still open. force:true because the catalog
@@ -2811,10 +2795,10 @@ public partial class MainWindow : Window
     {
         // Small unread indicator dot — shown whenever there's anything unread
         // (no count number; the panel carries the detail).
-        NotificationDot.Visibility =
-            _notifications.UnreadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
-        NotificationEmptyText.Visibility =
-            _notifications.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var unread = NotificationView.Unread(_notifications.Items);
+        NotificationDot.Visibility = unread > 0 ? Visibility.Visible : Visibility.Collapsed;
+        NotificationCount.Text = unread.ToString();
+        if (NotificationHost.Visibility == Visibility.Visible) NotificationPanelView.Show(_notifications.Items);
         RefreshBellColor();
     }
 
@@ -2827,7 +2811,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void RefreshBellColor()
     {
-        bool lit = _bellHover || NotificationPopup.IsOpen;
+        bool lit = _bellHover || NotificationHost.Visibility == Visibility.Visible;
         var unread = _notifications.Items.FirstOrDefault(i => !i.Read);
         NotificationBellGlyph.Fill =
             lit ? _bellWhite
@@ -2877,10 +2861,6 @@ public partial class MainWindow : Window
     private void RefreshNotificationLabels()
     {
         NotifToolTip.Content = BellTooltipText();
-        NotificationPanelTitle.Text = Strings.Get("NotifPanelTitle");
-        NotificationMarkAllRead.Content = Strings.Get("NotifMarkAllRead");
-        NotificationClearAll.Content = Strings.Get("NotifClearAll");
-        NotificationEmptyText.Text = Strings.Get("NotifEmpty");
     }
 
     /// <summary>
@@ -2921,31 +2901,8 @@ public partial class MainWindow : Window
 
     private void NotificationBell_Click(object sender, RoutedEventArgs e)
     {
-        // Clean toggle. The popup is StaysOpen=True (it never auto-closes), so
-        // IsOpen always reflects reality here: 2nd click closes, 3rd reopens.
-        // Outside clicks / window deactivation are handled in
-        // CloseNotifOnOutsideClick / CloseNotifOnDeactivate (attached while open).
-        bool open = !NotificationPopup.IsOpen;
-        NotificationPopup.IsOpen = open;
-        // Opening the panel clears the unread badge (the items stay in history).
-        if (open) _notifications.MarkAllRead();
+        SetNotificationPanelOpen(NotificationHost.Visibility != Visibility.Visible);
     }
-
-    /// <summary>
-    /// Closes the notification panel on a mouse-down anywhere outside it. The
-    /// bell button itself is excluded so its own Click handler owns the toggle
-    /// (otherwise the close here + the reopen there would fight). Clicks inside
-    /// the panel don't reach this handler — the popup is its own visual tree.
-    /// </summary>
-    private void CloseNotifOnOutsideClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (IsWithin(e.OriginalSource as DependencyObject, NotificationBellButton))
-            return;
-        NotificationPopup.IsOpen = false;
-    }
-
-    private void CloseNotifOnDeactivate(object? sender, EventArgs e)
-        => NotificationPopup.IsOpen = false;
 
     /// <summary>
     /// True if <paramref name="node"/> is <paramref name="ancestor"/> or sits underneath it.
@@ -2986,23 +2943,6 @@ public partial class MainWindow : Window
             }
         }
         return false;
-    }
-
-    private void NotificationMarkAllRead_Click(object sender, RoutedEventArgs e)
-        => _notifications.MarkAllRead();
-
-    private void NotificationClearAll_Click(object sender, RoutedEventArgs e)
-    {
-        _notifications.Clear();
-        NotificationPopup.IsOpen = false;
-    }
-
-    private void NotificationItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement fe || fe.Tag is not NotificationItem item) return;
-        NotificationPopup.IsOpen = false;
-        _notifications.MarkRead(item);
-        NavigateToNotification(item);
     }
 
     /// <summary>
@@ -3096,8 +3036,8 @@ public partial class MainWindow : Window
         {
             try
             {
-                SwitchTopTab(TopTab.Mods);
-                ModsBrowserView?.ShowDetail(profile);
+                SwitchTopTab(TopTab.Play);
+                SelectLibraryMod(profile);
             }
             catch (Exception ex) { DiagnosticLog.Write($"Notification → new mod detail failed: {ex.Message}"); }
             return;
@@ -3127,20 +3067,6 @@ public partial class MainWindow : Window
         }
         // UpdateAvailable / UpdateFinished: landing on the Library/dashboard tab
         // above is the right target — the UPDATE / PLAY CTA lives right there.
-    }
-
-    /// <summary>
-    /// Keeps the notification popup glued to the bell while the window is dragged or
-    /// resized. A WPF Popup computes its placement only when it opens and doesn't
-    /// track the owner window, so we nudge its offset to force a placement recompute
-    /// against <c>NotificationBellButton</c>. Attached only while the popup is open.
-    /// </summary>
-    private void RepositionNotifPopup(object? sender, EventArgs e)
-    {
-        if (NotificationPopup == null || !NotificationPopup.IsOpen) return;
-        var o = NotificationPopup.HorizontalOffset;
-        NotificationPopup.HorizontalOffset = o + 1;
-        NotificationPopup.HorizontalOffset = o;
     }
 
     /// <summary>
@@ -3622,6 +3548,9 @@ public partial class MainWindow : Window
     /// <summary>Refresh every translatable string in the UI from the table.</summary>
     private void ApplyLanguage()
     {
+        if (_pendingLauncherUpdate != null) ApplyLauncherUpdatePillText(_pendingLauncherUpdate);
+        ApplyLibraryStrings();
+        ScheduleLibraryRefresh();
         // Mod-dependent UI (window title, banner, accent-tinted PLAY button,
         // banner image) factored out so mod-switch can call just that
         // without paying the cost of re-localising every label in the
@@ -4108,7 +4037,7 @@ public partial class MainWindow : Window
             {
                 DashboardVersionText.Text = ver.StartsWith("v", StringComparison.OrdinalIgnoreCase)
                     ? ver
-                    : "v " + ver;
+                    : "v" + ver;
                 DashboardVersionChip.Visibility = Visibility.Visible;
             }
             else
@@ -4272,6 +4201,7 @@ public partial class MainWindow : Window
         // patch + overall but the user-facing summary is "overall").
         DashboardProgressBar.IsIndeterminate = ProgressPanelControl.OverallProgress.IsIndeterminate;
         DashboardProgressBar.Value = ProgressPanelControl.OverallProgress.Value;
+        LibraryDownloadBar.IsIndeterminate = ProgressPanelControl.OverallProgress.IsIndeterminate;
 
         // Pause/Cancel actions follow the legacy
         // ProgressRunningActions row exactly: visible whenever the
@@ -4301,12 +4231,13 @@ public partial class MainWindow : Window
             // indeterminate state. Simpler & more robust: when the
             // legacy panel labelled itself "Reanudar", show the
             // Play glyph; otherwise the Pause glyph.
-            DashboardPauseButtonIcon.Text = string.Equals(
+            DashboardPauseButtonIcon.Text = Strings.Get(string.Equals(
                 ProgressPanelControl.PauseButton.Content?.ToString(),
                 Strings.Get("BtnResume"), StringComparison.Ordinal)
-                ? ""   // Play (we're currently paused)
-                : "";  // Pause (we're currently running)
+                ? "BtnResume"
+                : "BtnPause");
         }
+        RefreshLibraryProgress();
     }
 
     // -- Rotating dashboard hero (crossfade) ---------------------------------
@@ -4344,7 +4275,7 @@ public partial class MainWindow : Window
 
         // Paint the first frame (or the gradient fallback) on the base layer.
         var first = heroes.Count > 0 ? BuildHeroFillBrush(heroes[0]) : null;
-        DashboardBgFill.Background = (System.Windows.Media.Brush?)first ?? BuildNeutralHeroGradient();
+        PaintLibraryCover(profile, heroes, first);
         if (DashboardBgFillB != null)
         {
             DashboardBgFillB.BeginAnimation(System.Windows.UIElement.OpacityProperty, null);
@@ -4353,7 +4284,8 @@ public partial class MainWindow : Window
         }
 
         // Rotate only when there are 2+ real heroes AND the overlay layer exists.
-        _heroRotateList = (first != null && heroes.Count >= 2 && DashboardBgFillB != null)
+        _heroRotateList = (first != null && heroes.Count >= 2 && DashboardBgFillB != null
+                           && _config.ShowModImage && !LibraryReducedEffects)
             ? heroes
             : new List<string>();
         _heroRotateIndex = 0;
@@ -4448,7 +4380,7 @@ public partial class MainWindow : Window
             {
                 Stretch = System.Windows.Media.Stretch.Fill,
             };
-            if (brush.CanFreeze) brush.Freeze();
+            // Not frozen: UpdateLibraryCover sets its Viewbox when the window changes size.
             return brush;
         }
         catch (Exception ex)
@@ -4570,9 +4502,12 @@ public partial class MainWindow : Window
             // after it). Names without a "colon + space" (Wars of Liberty,
             // Improvement Mod) stay on a single line. The canonical
             // DisplayName is untouched; this only affects the hero render.
-            DashboardTitleText.Text = (profile.DisplayName ?? string.Empty)
-                .ToUpperInvariant()
-                .Replace(": ", ":\n");
+            DashboardTitleText.Text = profile.DisplayName ?? string.Empty;
+            LibraryTitleShadow.Text = DashboardTitleText.Text;
+            LibraryAuthorText.Text = profile.Author ?? string.Empty;
+            LibraryAuthorText.Visibility = string.IsNullOrWhiteSpace(profile.Author)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
         }
         if (DashboardIconHost != null)
         {
@@ -4607,8 +4542,6 @@ public partial class MainWindow : Window
             // Locale-aware "SWITCH GAME" / "CAMBIAR JUEGO" label.
             DashboardChangeModButtonText.Text = Strings.Get("DashboardChangeMod");
         }
-        if (DashboardSearchInstallButtonText != null)
-            DashboardSearchInstallButtonText.Text = Strings.Get("SearchInstallButtonShort");
         // Version chip — installed version (CurrentVersion) of the
         // active mod. Hidden when no version is known yet (fresh
         // machine before CheckAsync ran, or mod not installed). The
@@ -4622,7 +4555,7 @@ public partial class MainWindow : Window
             {
                 DashboardVersionText.Text = ver.StartsWith("v", StringComparison.OrdinalIgnoreCase)
                     ? ver
-                    : "v " + ver;
+                    : "v" + ver;
                 DashboardVersionChip.Visibility = Visibility.Visible;
             }
             else
@@ -4764,7 +4697,7 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    Services.HarnessMode.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = uri.ToString(),
                         UseShellExecute = true,
@@ -5524,7 +5457,6 @@ public partial class MainWindow : Window
                 return _checkResultCache.TryGetValue(_updateService.Profile.Id, out var r) ? r : null;
             },
             openAoE3Folder: () => RaiseMenuClick(ActionPanelControl.MenuOpenAoE3Folder),
-            changeModFolder: () => RaiseMenuClick(ActionPanelControl.MenuSelectModFolder),
             changeAoE3Folder: () => RaiseMenuClick(ActionPanelControl.MenuSelectAoE3Folder),
             openUserDataFolder: () => RaiseMenuClick(ActionPanelControl.MenuOpenUserDataFolder),
             // Backup/restore return the localized result line so the dialog
@@ -5739,8 +5671,10 @@ public partial class MainWindow : Window
             ["multiplayer"] = TopTabMultiplayer,
         };
 
+        // The bar's order is fixed (design 68a). The saved order only says which tab opens first,
+        // which is what Settings › Interface › "Tab on opening" sets.
         TopTabBar.Children.Clear();
-        foreach (var id in order)
+        foreach (var id in new[] { "multiplayer", "library", "workshop" })
             if (byId.TryGetValue(id, out var btn))
                 TopTabBar.Children.Add(btn);
 
@@ -5785,7 +5719,10 @@ public partial class MainWindow : Window
 
     private void SwitchTopTab(TopTab tab)
     {
+        // The Workshop is inside the Library (design 68a).
+        if (tab == TopTab.Mods) tab = TopTab.Play;
         _activeTopTab = tab;
+        LibraryBackdrop.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
         PlayView.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
         ModsBrowserView.Visibility = tab == TopTab.Mods ? Visibility.Visible : Visibility.Collapsed;
         MultiplayerView.Visibility = tab == TopTab.Multiplayer ? Visibility.Visible : Visibility.Collapsed;
@@ -5806,8 +5743,11 @@ public partial class MainWindow : Window
     /// </summary>
     private void SetMultiplayerTabDot(bool on)
     {
-        if (MultiplayerTabDot != null)
-            MultiplayerTabDot.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (MultiplayerTabDot == null) return;
+        // The one trace multiplayer leaves in the bar (design 70c): how many new rooms.
+        _newRoomCount = on ? _newRoomCount + 1 : 0;
+        MultiplayerTabCount.Text = _newRoomCount.ToString();
+        MultiplayerTabDot.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -6232,7 +6172,7 @@ public partial class MainWindow : Window
         {
             Background = (System.Windows.Media.Brush)FindResource("ChromePopupBg"),
             BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
-            BorderThickness = new Thickness(2),
+            BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
             Padding = new Thickness(10),
             MinWidth = 260,
@@ -6575,9 +6515,9 @@ public partial class MainWindow : Window
         labelStack.Children.Add(new System.Windows.Controls.TextBlock
         {
             Text = label ?? "",
-            FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
-            FontSize = (double)FindResource("FontSizeBody"),
-            FontWeight = activeAccent ? FontWeights.Bold : FontWeights.Medium,
+            FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
+            FontSize = 13,
+            FontWeight = activeAccent ? FontWeights.Bold : FontWeights.SemiBold,
             Foreground = labelBrush,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
@@ -6840,7 +6780,7 @@ public partial class MainWindow : Window
             // bar it drops from had moved on.
             Background = (System.Windows.Media.Brush)FindResource("ChromePopupBg"),
             BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
-            BorderThickness = new Thickness(2),
+            BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
             Padding = new Thickness(10),
             // Auto-sized to its content — same guardrails as the
@@ -7644,7 +7584,14 @@ public partial class MainWindow : Window
     }
 
     private void DashboardSearchInstallButton_Click(object sender, RoutedEventArgs e)
-        => _ = SearchInstallAsync(_updateService.Profile);
+    {
+        if (HarnessMode.Active)
+        {
+            HarnessMode.Block("folder picker");
+            return;
+        }
+        BrowseButton_Click(sender, e);
+    }
 
     /// <summary>
     /// Low-disk-space guard for Repair (which re-downloads the payload but does
@@ -8366,6 +8313,8 @@ public partial class MainWindow : Window
         InstallCompletion installContext = InstallCompletion.None)
     {
         if (_isBusy) return;
+        if (Services.HarnessMode.BlockOutsideSandbox(
+                $"repair {_updateService.Profile.Id} asUpdate={asUpdate}", _updateService.InstallPath)) return;
         bool updated = false;
 
         // The ONE eligibility gate. The visible entry points (Mod Properties' Repair button, the
@@ -9725,6 +9674,7 @@ public partial class MainWindow : Window
     private async Task ApplyUpdateWithElevationCheckAsync(
         InstallCompletion installContext = InstallCompletion.None)
     {
+        if (Services.HarnessMode.Block($"apply update {_updateService.Profile.Id}")) return;
         if (string.IsNullOrEmpty(_updateService.InstallPath))
         {
             await ApplyAsync(installContext);
@@ -9750,6 +9700,7 @@ public partial class MainWindow : Window
     // click handler can open the download dialog without re-checking. Null when
     // no update is available.
     private LauncherUpdateService.UpdateCheckResult? _pendingLauncherUpdate;
+    private bool _previewPendingUpdate;
 
     /// <summary>
     /// Runs the self-update check and swallows any failure — it must never take the
@@ -9923,8 +9874,7 @@ public partial class MainWindow : Window
         // Surface the persistent pill instead of popping a modal. The user
         // opens the dialog when ready via LauncherUpdatePill_Click.
         _pendingLauncherUpdate = result;
-        LauncherUpdatePill.Content = Strings.Format("LauncherUpdatePill", result.LatestVersion);
-        LauncherUpdatePill.ToolTip = Strings.Get("LauncherUpdatePillTooltip");
+        ApplyLauncherUpdatePillText(result);
         LauncherUpdatePill.Visibility = Services.LauncherUpdateGate.PillShown(
             ConnectivityState.IsOffline, _pendingLauncherUpdate) ? Visibility.Visible : Visibility.Collapsed;
         RefreshPillPulse();
@@ -9966,11 +9916,30 @@ public partial class MainWindow : Window
     /// the pill visible on purpose — no persistent skip, so the reminder returns
     /// next launch until the user updates.
     /// </summary>
-    private void LauncherUpdatePill_Click(object sender, RoutedEventArgs e)
+    private void LauncherUpdatePill_Click(object sender, RoutedEventArgs e) => OpenLauncherUpdateDialog(startNow: false);
+
+    private void OpenLauncherUpdateDialog(bool startNow)
     {
         if (_pendingLauncherUpdate == null) return;
-        var dialog = new LauncherUpdateDialog(_pendingLauncherUpdate, _config) { Owner = this };
+        var dialog = new LauncherUpdateDialog(_pendingLauncherUpdate, _config,
+            inMatch: () => _isGameRunning || MultiplayerView?.IsMatchActive == true,
+            modBusy: () => _operatingModId != null && _operationIsBackgroundable
+                ? ModRegistry.Find(_operatingModId)?.DisplayName ?? _operatingModId : null,
+            preview: _previewPendingUpdate ? "idle" : null,
+            startNow: startNow)
+        { Owner = this };
         dialog.ShowDialog();
+        ApplyLauncherUpdatePillText(_pendingLauncherUpdate);
+    }
+
+    /// <summary>Design 77k. Once the file is downloaded and checked the pill says so, and the
+    /// dialog it opens starts on "ready" instead of downloading 170 MB again.</summary>
+    private void ApplyLauncherUpdatePillText(LauncherUpdateService.UpdateCheckResult update, bool? staged = null)
+    {
+        var ready = staged ?? LauncherUpdateService.IsStaged(update.RemoteTag);
+        LauncherUpdatePill.Tag = ready ? "\u21BB" : "\u2191";
+        LauncherUpdatePill.Content = Strings.Get(ready ? "LauncherUpdatePillReady" : "LauncherUpdatePill");
+        LauncherUpdatePill.ToolTip = Strings.Get(ready ? "LauncherUpdatePillReadyTooltip" : "LauncherUpdatePillTooltip");
     }
 
     /// <summary>
@@ -11008,7 +10977,7 @@ public partial class MainWindow : Window
         {
             var logPath = AppPaths.LogFile;
             if (!File.Exists(logPath)) return;
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = logPath,
                 UseShellExecute = true,
@@ -11088,7 +11057,7 @@ public partial class MainWindow : Window
 
             // Reveal the freshly-created zip selected in Explorer (ready to drag
             // into Discord / attach). /select expects a quoted absolute path.
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = "explorer.exe",
                 Arguments = $"/select,\"{zipPath}\"",
@@ -11201,6 +11170,10 @@ public partial class MainWindow : Window
     /// </summary>
     private bool EnsureGameNotRunning()
     {
+        // A test run never closes a game: the one on this machine belongs to somebody else, and
+        // this check goes by name. Anything the run may write lives in its own sandbox.
+        if (Services.HarnessMode.Active) return true;
+
         var processes = Process.GetProcessesByName(GameProcessName());
         if (processes.Length == 0) return true;
 
@@ -11887,6 +11860,12 @@ public partial class MainWindow : Window
         LogPreExistingUserData();
 
         // Show the styled install dialog (single popup, no MessageBoxes)
+        // Design 74c: with no AoE3 yet, the mod's folder waits for it. The suggestion would be a
+        // guess under Program Files, and the dialog fills the real one once the source is known.
+        if (string.IsNullOrEmpty(aoe3SourcePath) && !overlayInPlace && !addNewSlot
+            && !string.Equals(_config.GetState(profile.Id).InstallPath, suggestedFolder, StringComparison.OrdinalIgnoreCase))
+            suggestedFolder = "";
+
         var dialog = new InstallFolderDialog(
             suggestedFolder, aoe3SourcePath, aoe3SourceLabel,
             profile.DisplayName,
@@ -11910,6 +11889,7 @@ public partial class MainWindow : Window
             Owner = this
         };
         if (dialog.ShowDialog() != true) return;
+        if (Services.HarnessMode.Block($"install {service.Profile.Id} {dialog.SelectedFolder}")) return;
 
         // ---- The destination must be a folder Windows can create, before ANYTHING else ----
         // The dialog already refuses a bad path as it is typed; this is the backstop for the
@@ -13784,7 +13764,8 @@ public partial class MainWindow : Window
         // button still anchors the layout.
         if (DashboardPlayButton != null && DashboardPlayButtonText != null)
         {
-            DashboardPlayButtonText.Text = ActionPanelControl.PlayButtonText.Text;
+            DashboardPlayButtonText.Text = LibraryCaption(action) ?? ActionPanelControl.PlayButtonText.Text;
+            ScheduleLibraryRefresh();
             // Dynamic tooltip: explain what the primary action does in its CURRENT
             // state (Play vs Install vs Update vs Stop), so a newcomer knows what
             // the big button will do before clicking it. Localized per action.
@@ -13916,7 +13897,7 @@ public partial class MainWindow : Window
         {
             Background = (System.Windows.Media.Brush)FindResource("ChromePopupBg"),
             BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
-            BorderThickness = new Thickness(2),
+            BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
             Padding = new Thickness(10),
             MinWidth = 220,
@@ -13956,6 +13937,11 @@ public partial class MainWindow : Window
 
         content.Children.Add(BuildAccountMenuHeader());
         content.Children.Add(BuildSettingsDivider());
+        if (MultiplayerView.BuildAccountBadgeCard() is { } badgeCard)
+        {
+            content.Children.Add(badgeCard);
+            content.Children.Add(BuildSettingsDivider());
+        }
 
         content.Children.Add(BuildSettingsRow(
             glyph: "",   // Contact
@@ -13979,9 +13965,13 @@ public partial class MainWindow : Window
                 MultiplayerView.ShowRankGuide(initial: _accountBadgeKind);
             }));
 
+        // Last and apart, and it says what else it does: signing out leaves the room.
+        content.Children.Add(BuildSettingsDivider());
         content.Children.Add(BuildSettingsRow(
             glyph: "",   // Leave
             label: Strings.Get("MpAccountMenuSignOut"),
+            subtitle: MultiplayerView.CurrentRoomTitle is { } room
+                ? Strings.Format("MpAccountSignOutRoom", room) : null,
             click: () =>
             {
                 popup.IsOpen = false;
@@ -14145,9 +14135,12 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(login))
         {
             AccountButton.Visibility = Visibility.Collapsed;
+            SignInChip.Content = Strings.Get("NavSignIn");
+            SignInChip.Visibility = Visibility.Visible;
             RefreshChromeDivider();
             return;
         }
+        SignInChip.Visibility = Visibility.Collapsed;
 
         AccountName.Text = login;
         AccountAvatarInitial.Text = login.Substring(0, 1).ToUpperInvariant();
@@ -14193,9 +14186,13 @@ public partial class MainWindow : Window
     /// <para>The Radmin IP is not passed in: the capsule does not draw it (design handoff turn
     /// 36), and the Connected ▾ dropdown resolves it when it opens.</para>
     /// </summary>
-    internal void SetConnectionChip(string? status)
+    private bool _radminOutOfNetwork;
+    private bool _previewOutOfNetwork;
+
+    internal void SetConnectionChip(string? status, bool outOfNetwork = false)
     {
         if (ConnectionChip == null) return;
+        _radminOutOfNetwork = outOfNetwork || _previewOutOfNetwork;
 
         if (string.IsNullOrWhiteSpace(status))
         {
@@ -14205,7 +14202,25 @@ public partial class MainWindow : Window
             return;
         }
 
-        ConnectionChipStatus.Text = status;
+        ConnectionChipStatus.Text = _radminOutOfNetwork ? Strings.Get("MpChipNoNetwork") : status;
+        // Design 79h: Radmin is open and the player is not on the network, which reads as
+        // "connected" and is not. Local values, set both ways, so one state cannot stick.
+        if (_radminOutOfNetwork)
+        {
+            ConnectionChip.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0x24, 0xF4, 0x90, 0x0C));
+            ConnectionChip.BorderBrush = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0x80, 0xF4, 0x90, 0x0C));
+            ConnectionChipDot.Fill = (System.Windows.Media.Brush)FindResource("WindowNoticeDot");
+            ConnectionChipStatus.Foreground = (System.Windows.Media.Brush)FindResource("WindowNoticeTitle");
+        }
+        else
+        {
+            ConnectionChip.SetResourceReference(BackgroundProperty, "ChromeConnectedBg");
+            ConnectionChip.SetResourceReference(BorderBrushProperty, "ChromeConnectedRim");
+            ConnectionChipDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "MpOk");
+            ConnectionChipStatus.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "ChromeConnectedText");
+        }
         // The capsule's tooltip names the MENU, the way the account button's does. Rebuilt only
         // when its text changes: this runs on every Radmin tick, and a new ToolTip each time was
         // an allocation per tick for a string that never moves.
@@ -14315,6 +14330,8 @@ public partial class MainWindow : Window
     /// </summary>
     private async void OfflineChip_Click(object sender, RoutedEventArgs e)
     {
+        OfflineChip.IsEnabled = false;
+        OfflineChip.Content = Strings.Get("OfflineChipChecking");
         try
         {
             // Self-update always hits GitHub (mod-mechanism independent) and reports
@@ -14325,6 +14342,17 @@ public partial class MainWindow : Window
         {
             DiagnosticLog.Write($"Offline chip retry failed: {ex.Message}");
         }
+        finally
+        {
+            OfflineChip.IsEnabled = true;
+            OfflineChip.Content = Strings.Get("OfflineChip");
+        }
+    }
+
+    private void SignInChip_Click(object sender, RoutedEventArgs e)
+    {
+        SwitchTopTab(TopTab.Multiplayer);
+        MultiplayerView.RequestSignIn();
     }
 
     // ------------------------------------------------------------------------
@@ -14408,6 +14436,8 @@ public partial class MainWindow : Window
         if (busy && !checkOnly)
         {
             _operatingModId = _updateService.Profile.Id;
+            _lastOperationModId = _operatingModId;
+            ScheduleLibraryRefresh();
             // Default target = the active install (update / repair / verify). InstallAsync
             // overrides it with the NEW folder right after SetBusy(true) for a copy install.
             _operatingInstallPath = _updateService.InstallPath;
@@ -15828,7 +15858,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = folder,
                 UseShellExecute = true,
@@ -15870,7 +15900,10 @@ public partial class MainWindow : Window
             return null;
         }
 
-        var dialog = new UserDataRestoreDialog(backups, userDataFolderName) { Owner = this };
+        var dialog = new UserDataRestoreDialog(backups, userDataFolderName)
+        {
+            Owner = _modPropertiesDialog ?? (Window)this,
+        };
         if (dialog.ShowDialog() != true) return null;
         if (dialog.RestoredBackup == null) return null;
 
@@ -15909,7 +15942,7 @@ public partial class MainWindow : Window
                 : Path.GetDirectoryName(folder) ?? folder;
             if (!Directory.Exists(target)) return;
 
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = target,
                 UseShellExecute = true,
@@ -15944,17 +15977,18 @@ public partial class MainWindow : Window
         if (!UserDataService.HasExistingUserData(userDataFolderName))
         {
             MessageBox.Show(this,
-                Strings.Get("DlgBackupNothingBody"),
+                Strings.Format("DlgBackupNothingBody", _updateService.Profile.DisplayName),
                 Strings.Get("DlgBackupNothingTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return null;
         }
 
-        var confirm = MessageBox.Show(this,
-            Strings.Get("DlgBackupConfirmBody"),
-            Strings.Get("DlgBackupConfirmTitle"),
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return null;
+        // Over the window it was pressed in: the mod settings hide this one.
+        if (!ThemedConfirmDialog.Ask(_modPropertiesDialog ?? (Window)this,
+                Strings.Get("DlgBackupConfirmTitle"),
+                Strings.Format("DlgBackupConfirmBody", _updateService.Profile.DisplayName),
+                Strings.Get("ModPropCreateBackup"), Strings.Get("BtnCancel")))
+            return null;
 
         var path = UserDataService.BackupUserData(userDataFolderName);
         if (string.IsNullOrEmpty(path))
@@ -16079,6 +16113,7 @@ public partial class MainWindow : Window
             Owner = dialogOwner
         };
         if (dialog.ShowDialog() != true) return;
+        if (Services.HarnessMode.Block($"uninstall {profile.Id} {installPath}")) return;
 
         if (plan.Mode != UninstallMode.Valid)
             return;

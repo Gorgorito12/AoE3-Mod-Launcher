@@ -68,8 +68,8 @@
          — the literal "línea negra que lo distinga" the user asked
          for. Same composition recipe is reused in both ActionPanel's
          ContextMenu template and the code-behind mod-switch popup. -->
-    <SolidColorBrush x:Key="MenuBorder" Color="#7C8794"/>
-    <SolidColorBrush x:Key="MenuBorderOuter" Color="#000000"/>
+    <SolidColorBrush x:Key="MenuBorder" Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="MenuBorderOuter" Color="#00000000"/>
 
     <!-- =========================================================
          TYPOGRAPHY — warm off-white primary, cool muted secondary.
@@ -186,7 +186,7 @@
          until design handoff turn 36 gave it the green ChromeConnected* family): the
          reference specified #22303e for all three, so brightening the shared brush
          would move a surface nobody asked about. 2.09:1 — visible, still quiet. -->
-    <SolidColorBrush x:Key="ChromeVersionRim" Color="#3A4B60"/>
+    <SolidColorBrush x:Key="ChromeVersionRim" Color="#4082AFFF"/>
     <!-- Fill of that same chip. It shipped with NO background at all, so it read as
          loose text with a hairline near it rather than as a label, and was reported
          as not standing out. 1.28:1 against the title bar is an elevation, not a
@@ -194,7 +194,7 @@
          is a surface behind it. Its own key rather than ChromePopupBg, which happens
          to carry the same value but means "menu surface" and paints all three
          dropdowns - one of them changing would silently drag the other along. -->
-    <SolidColorBrush x:Key="ChromeVersionBg" Color="#1C2A3A"/>
+    <SolidColorBrush x:Key="ChromeVersionBg" Color="Transparent"/>
     <SolidColorBrush x:Key="ChromeTextDim" Color="#93A4B5"/>       <!-- wordmark, idle tab -->
     <SolidColorBrush x:Key="ChromeTextFaint" Color="#5D7085"/>     <!-- version, IP, ELO -->
     <SolidColorBrush x:Key="ChromeTextSoft" Color="#C3CFDA"/>      <!-- "Connected", caption glyphs -->
@@ -223,7 +223,7 @@
          #0F1A2B. Measured elevation, not eyeballed — 1.28 against the title bar, 1.16
          against the nav row, 1.30 against the content beneath. It does not need to
          shout: the two-tone rim is what cuts the card out of its backdrop. -->
-    <SolidColorBrush x:Key="ChromePopupBg" Color="#1C2A3A"/>
+    <SolidColorBrush x:Key="ChromePopupBg" Color="#F50C1626"/>
 
     <!-- Caption-button states, as KEYS so a single window can restyle its own
          min/max/close without touching the other ~15 that share the TitleBar
@@ -838,6 +838,7 @@
     <!-- Toggle switch. The off track is white at 12%, NOT a blue tint: an off
          switch must read as "no colour", which is the whole reason a row of
          eleven of them can be scanned at a glance. -->
+    <SolidColorBrush x:Key="UiToggleOn"                 Color="#2F7FE0"/>
     <SolidColorBrush x:Key="UiToggleTrackOff" Color="#1FFFFFFF"/>
     <SolidColorBrush x:Key="UiToggleThumbOff" Color="#9FB3CD"/>
 
@@ -875,6 +876,32 @@
          one these buttons already had. Pressed = the hover darkened 4 %, so it is
          never lighter than the hover. No sheen: 52a draws none.
          ========================================================= -->
+    <!-- The design base (docs/design_base_launcher/BASE.md). Glass* are the default level, Media;
+         Services/GlassTheme rewrites them when the player picks another, so bind them with
+         DynamicResource. Ui{Ok,Info,Error,Favorite,Danger} are the fixed states: they never take
+         a mod's colour. -->
+    <SolidColorBrush x:Key="GlassPanel"     Color="#800A1321"/>
+    <SolidColorBrush x:Key="GlassTile"      Color="#470A1321"/>
+    <SolidColorBrush x:Key="GlassMenu"      Color="#BD0C1626"/>
+    <SolidColorBrush x:Key="GlassFooter"    Color="#9E0A1321"/>
+    <SolidColorBrush x:Key="GlassTitleBar"  Color="#6B0B1422"/>
+    <SolidColorBrush x:Key="GlassRim"       Color="#1AFFFFFF"/>   <!-- .10 -->
+    <SolidColorBrush x:Key="GlassRimStrong" Color="#29FFFFFF"/>   <!-- .16 -->
+    <SolidColorBrush x:Key="TitleBarLine"   Color="#0FFFFFFF"/>   <!-- .06 -->
+    <SolidColorBrush x:Key="UiOk"           Color="#4FD68A"/>
+    <SolidColorBrush x:Key="UiInfo"         Color="#55ACEE"/>
+    <SolidColorBrush x:Key="UiError"        Color="#F4900C"/>
+    <SolidColorBrush x:Key="UiErrorText"    Color="#F5BD76"/>
+    <SolidColorBrush x:Key="UiFavorite"     Color="#E6C06A"/>
+    <SolidColorBrush x:Key="UiVersionIcon"  Color="#7EE08B"/>
+    <SolidColorBrush x:Key="UiTitleText"    Color="#F4F8FC"/>
+    <SolidColorBrush x:Key="UiHeadText"     Color="#F0F5FB"/>
+    <SolidColorBrush x:Key="UiBodyText"     Color="#DCE7F5"/>
+    <SolidColorBrush x:Key="UiSoftText"     Color="#C3D2E5"/>
+    <SolidColorBrush x:Key="UiMutedText"    Color="#A8BCD2"/>
+    <SolidColorBrush x:Key="UiDimText"      Color="#8C9CB1"/>
+    <SolidColorBrush x:Key="UiLabelText"    Color="#61779A"/>
+
     <SolidColorBrush x:Key="UiButtonFill"               Color="#1A2C48"/>
     <SolidColorBrush x:Key="UiButtonFillHover"          Color="#213758"/>
     <SolidColorBrush x:Key="UiButtonFillPressed"        Color="#203554"/>
@@ -894,18 +921,6 @@
     <SolidColorBrush x:Key="UiButtonDangerText"         Color="#EDB0B0"/>
     <!-- The red rim is UiRimDangerStrong (.50), the value it already had. -->
 
-    <!-- 52d: the two large card-buttons of LOCAL FILES (Install another copy, Add a folder
-         you already have) wear the same fill, so their icon square steps up one shade to keep
-         standing out on it. The neutral tile is the folder's, the accent tile the "+". The
-         title is MpTextHeading; the description has its own brush although #9FB3CD already
-         exists as UiToggleThumbOff and MpBadgePreviewText — those mean other things, and
-         pointing this text at a toggle thumb would tie two unrelated surfaces together. -->
-    <SolidColorBrush x:Key="UiButtonIconTile"           Color="#2982AFFF"/>   <!-- .16 -->
-    <SolidColorBrush x:Key="UiButtonIconGlyph"          Color="#C9D7E8"/>
-    <SolidColorBrush x:Key="UiButtonIconTileAccent"     Color="#422F7FE0"/>   <!-- .26 -->
-    <SolidColorBrush x:Key="UiButtonIconGlyphAccent"    Color="#A3C9F7"/>
-    <SolidColorBrush x:Key="UiButtonCardDesc"           Color="#9FB3CD"/>
-
     <!-- =========================================================
          LOCAL FILES / UNINSTALL / ANTIVIRUS (docs/design_archivos_antivirus, 48-49).
          Only what had no key yet; everything else is the Mp*/Ui* set above.
@@ -913,10 +928,10 @@
     <!-- The one solid red in the launcher's blue palette: the Uninstall button, the only
          solid button of the uninstall window. Outline red (a copy's Uninstall…) is the text
          and rim pair below, never a fill. -->
-    <SolidColorBrush x:Key="UiDanger"          Color="#B04A52"/>
+    <SolidColorBrush x:Key="UiDanger"          Color="#C84A4A"/>
     <SolidColorBrush x:Key="UiDangerHover"     Color="#C2575F"/>
     <SolidColorBrush x:Key="UiDangerPressed"   Color="#963E45"/>
-    <SolidColorBrush x:Key="UiDangerText"      Color="#E8A6A6"/>
+    <SolidColorBrush x:Key="UiDangerText"      Color="#F0A6A6"/>
     <SolidColorBrush x:Key="UiRimDangerStrong" Color="#80C87878"/>   <!-- .50 -->
     <SolidColorBrush x:Key="UiDangerSoftBg"    Color="#29C87878"/>   <!-- .16, the "!" tile -->
     <SolidColorBrush x:Key="UiDangerTagBg"     Color="#1FC87878"/>   <!-- .12 -->
@@ -955,21 +970,21 @@
          states (hover, pressed) are not in it and are derived from #3CC6C9, a step lighter
          and a step darker, because a solid button with no hover reads as dead.
          ========================================================= -->
-    <SolidColorBrush x:Key="UiDiag"            Color="#3CC6C9"/>
-    <SolidColorBrush x:Key="UiDiagHover"       Color="#55D2D4"/>
-    <SolidColorBrush x:Key="UiDiagPressed"     Color="#2FAEB1"/>
-    <SolidColorBrush x:Key="UiDiagInk"         Color="#032526"/>   <!-- text ON the solid teal -->
-    <SolidColorBrush x:Key="UiDiagText"        Color="#7FE0E2"/>   <!-- light teal text: the "2", PROBLEMS? -->
-    <SolidColorBrush x:Key="UiDiagTitle"       Color="#E6FBFB"/>   <!-- a title sitting on a teal tint -->
-    <SolidColorBrush x:Key="UiDiagBody"        Color="#A9D6D8"/>   <!-- body text on a teal tint -->
-    <SolidColorBrush x:Key="UiDiagSoftBg"      Color="#173CC6C9"/> <!-- .09, the step-2 block -->
-    <SolidColorBrush x:Key="UiDiagRim"         Color="#733CC6C9"/> <!-- .45 -->
-    <SolidColorBrush x:Key="UiDiagRailBg"      Color="#1A3CC6C9"/> <!-- .10, the rail box -->
-    <SolidColorBrush x:Key="UiDiagRailRim"     Color="#613CC6C9"/> <!-- .38 -->
-    <SolidColorBrush x:Key="UiDiagRailHoverBg" Color="#2E3CC6C9"/> <!-- .18, the rail box under the pointer -->
-    <SolidColorBrush x:Key="UiDiagPickBg"      Color="#243CC6C9"/> <!-- .14, the chosen search result -->
-    <SolidColorBrush x:Key="UiDiagPickRim"     Color="#663CC6C9"/> <!-- .40 -->
-    <SolidColorBrush x:Key="UiDiagRing"        Color="#383CC6C9"/> <!-- .22, the "found it" ring -->
+    <SolidColorBrush x:Key="UiDiag"            Color="#2F7FE0"/>
+    <SolidColorBrush x:Key="UiDiagHover"       Color="#4A92E8"/>
+    <SolidColorBrush x:Key="UiDiagPressed"     Color="#2670CC"/>
+    <SolidColorBrush x:Key="UiDiagInk"         Color="#FFFFFF"/>   <!-- text ON the solid teal -->
+    <SolidColorBrush x:Key="UiDiagText"        Color="#8CBCF5"/>   <!-- light teal text: the "2", PROBLEMS? -->
+    <SolidColorBrush x:Key="UiDiagTitle"       Color="#F0F5FB"/>   <!-- a title sitting on a teal tint -->
+    <SolidColorBrush x:Key="UiDiagBody"        Color="#B9C9DE"/>   <!-- body text on a teal tint -->
+    <SolidColorBrush x:Key="UiDiagSoftBg"      Color="#172F7FE0"/> <!-- .09, the step-2 block -->
+    <SolidColorBrush x:Key="UiDiagRim"         Color="#732F7FE0"/> <!-- .45 -->
+    <SolidColorBrush x:Key="UiDiagRailBg"      Color="#1A2F7FE0"/> <!-- .10, the rail box -->
+    <SolidColorBrush x:Key="UiDiagRailRim"     Color="#612F7FE0"/> <!-- .38 -->
+    <SolidColorBrush x:Key="UiDiagRailHoverBg" Color="#2E2F7FE0"/> <!-- .18, the rail box under the pointer -->
+    <SolidColorBrush x:Key="UiDiagPickBg"      Color="#242F7FE0"/> <!-- .14, the chosen search result -->
+    <SolidColorBrush x:Key="UiDiagPickRim"     Color="#662F7FE0"/> <!-- .40 -->
+    <SolidColorBrush x:Key="UiDiagRing"        Color="#382F7FE0"/> <!-- .22, the "found it" ring -->
     <!-- The "1" of step one: the handoff's light blue, a step-number of its own rather than a
          reuse of a link colour that happens to share the hex. -->
     <SolidColorBrush x:Key="UiStepNumeral"     Color="#8FB6EA"/>

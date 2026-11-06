@@ -1,39 +1,50 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services;
 
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Modder-facing delta-patch generator. Diffs overlay <c>.zip</c>s by SHA-256
+/// Modder-facing delta-patch generator (design 101). Diffs overlay <c>.zip</c>s by SHA-256
 /// (<see cref="DeltaPatchService.GeneratePatchAsync"/>) and writes the small
 /// <c>patch-&lt;from&gt;-to-&lt;to&gt;.zip</c> + <c>.json</c> that go on the modder's NEW GitHub
 /// release: the INCREMENTAL (previous → new) and, when a baseline is supplied, the CUMULATIVE
 /// (baseline → new). Mod-agnostic — it operates purely on the zips the modder supplies.
 ///
 /// <para><b>The zips picked here are read for comparison only; they are not what gets uploaded.</b>
-/// The full overlay is needed on a release only when that release is itself a baseline. This
-/// bullet is spelled out because the dialog's own copy used to say the opposite ("you still upload
-/// this one too") — the pre-patch-only model — and following it costs the modder the entire
-/// bandwidth saving with nothing failing to tell them.</para>
+/// The full overlay is needed on a release only when that release is itself a baseline.</para>
 ///
 /// <para>Launched from Launcher Settings → ADVANCED → DEVELOPER → "Incremental patch generator".
 /// The Packager button beside it is the TRANSLATION packager, a different tool.</para>
 /// </summary>
 public partial class PatchGeneratorDialog : Window
 {
+    private const string MissingMark = "missing";
+
     private readonly Models.LauncherConfig? _config;
     private bool _howOpen;
+    private bool _working;
+    private bool _finished;
+    private CancellationTokenSource? _run;
+    private string? _revealPath;
 
     public PatchGeneratorDialog() : this(null) { }
 
-    public PatchGeneratorDialog(Models.LauncherConfig? config)
+    /// <param name="config">Remembers whether the explainer was left open.</param>
+    /// <param name="previewVariant"><c>--preview-dialog=patchgen:…</c>: paint that state, generate nothing.</param>
+    public PatchGeneratorDialog(Models.LauncherConfig? config, string? previewVariant = null)
     {
         InitializeComponent();
+        ModDialogChrome.AttachGlobal(this);
         _config = config;
         _howOpen = config?.PatchGenHowToOpen ?? false;
 
@@ -57,26 +68,32 @@ public partial class PatchGeneratorDialog : Window
         UpdatePlaceholders();
         UpdateOutputPreview();
         UpdateDiagram();
+        UpdateFooter();
 
-        OldZipBox.TextChanged += (_, _) => UpdatePlaceholders();
-        NewZipBox.TextChanged += (_, _) => UpdatePlaceholders();
-        BaselineZipBox.TextChanged += (_, _) => UpdatePlaceholders();
+        OldZipBox.TextChanged += (_, _) => ZipsChanged();
+        NewZipBox.TextChanged += (_, _) => ZipsChanged();
+        BaselineZipBox.TextChanged += (_, _) => ZipsChanged();
         FromTagBox.TextChanged += (_, _) => TagsChanged();
         ToTagBox.TextChanged += (_, _) => TagsChanged();
         BaselineTagBox.TextChanged += (_, _) => TagsChanged();
 
+        Closing += OnClosing;
+
         // The tag of the release being published is the one field a modder always types.
         Loaded += (_, _) => ToTagBox.Focus();
+        if (previewVariant != null) ShowPreview(previewVariant);
     }
 
     private void ApplyLanguage()
     {
         TitleBarControl.Title = Strings.Get("DlgPatchGenTitle");
+        Title = Strings.Get("DlgPatchGenTitle");
         HeaderText.Text = Strings.Get("DlgPatchGenHeader");
         DescriptionText.Text = Strings.Get("DlgPatchGenDescription");
+        ModDialogChrome.SetLineHeight(1.25, HeaderText);
+        ModDialogChrome.SetLineHeight(1.55, DescriptionText);
 
-        HowTitleText.Text = Strings.Get("DlgPatchGenHowTitle");
-        HowBodyText.Text = Strings.Get("DlgPatchGenHowBody");
+        HowTitleText.Text = Strings.Get("DlgPatchGenHowTitle").ToUpper(Strings.Culture);
         HowHideButton.Content = Strings.Get("DlgPatchGenHowHide");
 
         // One card per release. The field labels are the SAME on all three — which
@@ -107,11 +124,13 @@ public partial class PatchGeneratorDialog : Window
         TagWarnTitle.Text = Strings.Get("DlgPatchGenTagWarnTitle");
         TagWarnBody.Text = Strings.Get("DlgPatchGenTagWarnBody");
         LblOutput.Text = Strings.Get("DlgPatchGenOutputFolder");
+        ErrorTitle.Text = Strings.Get("DlgPatchGenErrorPrefix");
 
         BrowseOldBtn.Content = Strings.Get("DlgPatchGenBrowse");
         BrowseNewBtn.Content = Strings.Get("DlgPatchGenBrowse");
         BrowseBaselineBtn.Content = Strings.Get("DlgPatchGenBrowse");
         BrowseOutBtn.Content = Strings.Get("DlgPatchGenBrowse");
+        ShowInFolderBtn.Content = Strings.Get("DlgPatchGenShowInFolder");
         CloseBtn.Content = Strings.Get("DlgPatchGenClose");
         GenerateBtn.Content = Strings.Get("DlgPatchGenGenerate");
         ApplyHowVisibility();
@@ -133,12 +152,9 @@ public partial class PatchGeneratorDialog : Window
     }
 
     /// <summary>
-    /// Fill the diagram's three nodes from the tags the modder has actually typed.
-    ///
-    /// <para>The prototype draws <c>v1.2.0a / v1.2.0d / v1.2.0e</c>; those are illustrative.
-    /// An empty field leaves its node blank rather than inventing a version, because a
-    /// plausible invented tag in a diagram is worse than a gap — it is the one thing a reader
-    /// would take at face value.</para>
+    /// Fill the diagram's three nodes from the tags the modder has actually typed. An empty field
+    /// leaves its node blank rather than inventing a version: a plausible invented tag in a
+    /// diagram is the one thing a reader would take at face value.
     /// </summary>
     private void UpdateDiagram()
     {
@@ -152,57 +168,58 @@ public partial class PatchGeneratorDialog : Window
         DiagBaseRole.Text = Strings.Get("DlgPatchGenDiagramBase");
         DiagPrevRole.Text = Strings.Get("DlgPatchGenDiagramPrev");
         DiagNewRole.Text = Strings.Get("DlgPatchGenDiagramNew");
-        DiagIncrementalText.Text = Strings.Get("DlgPatchGenPreviewIncremental");
-        DiagCumulativeText.Text = Strings.Get("DlgPatchGenPreviewCumulative");
+        DiagIncrementalText.Text = Strings.Get("DlgPatchGenDiagIncremental");
+        DiagCumulativeText.Text = Strings.Get("DlgPatchGenDiagCumulative");
     }
 
     /// <summary>The three short lines under the diagram: what each patch is for, and who picks.</summary>
     private void BuildHowBullets()
     {
         HowBullets.Children.Clear();
-        AddBullet("MpActionText", "DlgPatchGenBulletIncremental");
-        AddBullet("MpPrivateText", "DlgPatchGenBulletCumulative");
-        AddBullet("UiTextDim", "DlgPatchGenBulletRoute");
+        AddBullet("WindowIncremental", "DlgPatchGenBulletIncremental");
+        AddBullet("WindowCumulative", "DlgPatchGenBulletCumulative");
+        AddBullet("WindowFineText", "DlgPatchGenBulletRoute");
     }
 
     private void AddBullet(string dotBrushKey, string textKey)
     {
-        var grid = new System.Windows.Controls.Grid { Margin = new Thickness(0, 0, 0, 7) };
-        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
-        { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
-        { Width = new GridLength(9) });
-        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
-        { Width = new GridLength(1, GridUnitType.Star) });
+        var grid = new Grid { Margin = new Thickness(0, HowBullets.Children.Count == 0 ? 0 : 6, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var dot = new System.Windows.Shapes.Ellipse
         {
-            Width = 4,
-            Height = 4,
-            Margin = new Thickness(0, 6, 0, 0),
+            Width = 5,
+            Height = 5,
+            Margin = new Thickness(0, 7, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
-            Fill = (System.Windows.Media.Brush)FindResource(dotBrushKey),
         };
-        var text = new System.Windows.Controls.TextBlock
-        {
-            Text = Strings.Get(textKey),
-            TextWrapping = TextWrapping.Wrap,
-            LineHeight = 17,
-            FontSize = (double)FindResource("SetDescSize"),
-            Foreground = (System.Windows.Media.Brush)FindResource("MpTextBody"),
-        };
-        System.Windows.Controls.Grid.SetColumn(text, 2);
+        dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, dotBrushKey);
+        var text = new TextBlock { Text = Strings.Get(textKey), TextWrapping = TextWrapping.Wrap };
+        text.SetResourceReference(TextBlock.FontSizeProperty, "SetRowDescSize");
+        text.SetResourceReference(TextBlock.ForegroundProperty, "WindowSoftText");
+        Grid.SetColumn(text, 1);
         grid.Children.Add(dot);
         grid.Children.Add(text);
         HowBullets.Children.Add(grid);
     }
 
+    private void ZipsChanged()
+    {
+        UpdatePlaceholders();
+        UpdateFooter();
+    }
+
     /// <summary>Everything downstream of a tag: the filenames, and the diagram's nodes.</summary>
     private void TagsChanged()
     {
+        if (FromTagBox.Text.Length > 0) FromTagShell.ClearValue(TagProperty);
+        if (ToTagBox.Text.Length > 0) ToTagShell.ClearValue(TagProperty);
         UpdatePlaceholders();
         UpdateOutputPreview();
         UpdateDiagram();
+        UpdateFooter();
     }
 
     private void HowToggleButton_Click(object sender, RoutedEventArgs e)
@@ -222,8 +239,7 @@ public partial class PatchGeneratorDialog : Window
     /// </summary>
     private void UpdatePlaceholders()
     {
-        static Visibility V(System.Windows.Controls.TextBox b) =>
-            string.IsNullOrEmpty(b.Text) ? Visibility.Visible : Visibility.Collapsed;
+        static Visibility V(TextBox b) => string.IsNullOrEmpty(b.Text) ? Visibility.Visible : Visibility.Collapsed;
 
         OldZipPlaceholder.Visibility = V(OldZipBox);
         NewZipPlaceholder.Visibility = V(NewZipBox);
@@ -231,15 +247,15 @@ public partial class PatchGeneratorDialog : Window
         FromTagPlaceholder.Visibility = V(FromTagBox);
         ToTagPlaceholder.Visibility = V(ToTagBox);
         BaselineTagPlaceholder.Visibility = V(BaselineTagBox);
+
+        // Optional, so it sits back until somebody starts on it.
+        BaseCard.Opacity = BaselineZipBox.Text.Length > 0 || BaselineTagBox.Text.Length > 0 ? 1 : 0.78;
     }
 
     /// <summary>
-    /// Live preview of the files this run will write, and the release they belong on.
-    ///
-    /// <para><b>The names come from <see cref="DeltaPatchService.PatchAssetNaming.StemFor"/>,
-    /// the same rule the generator writes with.</b> Deriving them here from a second copy
-    /// would let the screen name one thing and the disk hold another, and the only way the
-    /// modder would find out is by comparing a folder against a screen they had believed.</para>
+    /// Live preview of the files this run will write, and the release they belong on. The names
+    /// come from <see cref="DeltaPatchService.PatchAssetNaming.StemFor"/>, the same rule the
+    /// generator writes with, so the screen and the disk cannot name different things.
     /// </summary>
     private void UpdateOutputPreview()
     {
@@ -251,16 +267,13 @@ public partial class PatchGeneratorDialog : Window
 
         // Nothing can be named until both ends of the hop are known.
         bool haveHop = from.Length > 0 && to.Length > 0;
-        PreviewTarget.Text = haveHop
-            ? Strings.Format("DlgPatchGenPreviewTarget", to)
-            : "";
+        PreviewTarget.Text = haveHop ? Strings.Format("DlgPatchGenPreviewTarget", to) : "";
 
         if (haveHop)
         {
-            AddPreviewRow(DeltaPatchService.PatchAssetNaming.StemFor(from, to) + ".zip",
-                          Strings.Get("DlgPatchGenPreviewIncremental"));
-            AddPreviewRow(DeltaPatchService.PatchAssetNaming.StemFor(from, to) + ".json",
-                          Strings.Get("DlgPatchGenPreviewIndex"));
+            var stem = DeltaPatchService.PatchAssetNaming.StemFor(from, to);
+            AddFileRow(PreviewRows, stem + ".zip", Strings.Get("DlgPatchGenPreviewIncremental"), "WindowIncremental");
+            AddFileRow(PreviewRows, stem + ".json", Strings.Get("DlgPatchGenPreviewIndex"), "WindowFineText");
         }
 
         // The cumulative exists only under the same condition the generator applies:
@@ -269,10 +282,9 @@ public partial class PatchGeneratorDialog : Window
             && !string.Equals(baseTag, from, StringComparison.OrdinalIgnoreCase);
         if (cumulative)
         {
-            AddPreviewRow(DeltaPatchService.PatchAssetNaming.StemFor(baseTag, to) + ".zip",
-                          Strings.Get("DlgPatchGenPreviewCumulative"));
-            AddPreviewRow(DeltaPatchService.PatchAssetNaming.StemFor(baseTag, to) + ".json",
-                          Strings.Get("DlgPatchGenPreviewIndex"));
+            var stem = DeltaPatchService.PatchAssetNaming.StemFor(baseTag, to);
+            AddFileRow(PreviewRows, stem + ".zip", Strings.Get("DlgPatchGenPreviewCumulative"), "WindowCumulative");
+            AddFileRow(PreviewRows, stem + ".json", Strings.Get("DlgPatchGenPreviewIndex"), "WindowFineText");
         }
 
         PreviewCumulativeHint.Visibility = cumulative ? Visibility.Collapsed : Visibility.Visible;
@@ -281,55 +293,48 @@ public partial class PatchGeneratorDialog : Window
             : "DlgPatchGenPreviewNeedTags");
     }
 
-    private void AddPreviewRow(string fileName, string role)
+    /// <summary>One file on a dark row: its name in mono, trimmed, and what it is or weighs.</summary>
+    private static void AddFileRow(Panel target, string fileName, string detail, string detailBrushKey, bool detailIsMono = false)
     {
-        var grid = new System.Windows.Controls.Grid { Margin = new Thickness(0, 0, 0, 6) };
-        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
-        { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
-        { Width = new GridLength(10) });
-        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
-        { Width = GridLength.Auto });
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        // A filename is data the modder copies, so it is monospaced and trims rather than
-        // wrapping — the Grid is what lets the trim actually fire.
-        var name = new System.Windows.Controls.TextBlock
+        var name = new TextBlock
         {
             Text = fileName,
-            FontFamily = (System.Windows.Media.FontFamily)FindResource("MonoFont"),
-            FontSize = (double)FindResource("SetMonoSize"),
-            Foreground = (System.Windows.Media.Brush)FindResource("MpTextPrimary"),
+            FontFamily = new FontFamily("Consolas, Courier New, monospace"),
             TextTrimming = TextTrimming.CharacterEllipsis,
-            TextWrapping = TextWrapping.NoWrap,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0),
         };
-        var tag = new System.Windows.Controls.TextBlock
-        {
-            Text = role,
-            FontSize = (double)FindResource("SetGroupLabelSize"),
-            Foreground = (System.Windows.Media.Brush)FindResource("UiTextDim"),
-            TextWrapping = TextWrapping.NoWrap,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        System.Windows.Controls.Grid.SetColumn(tag, 2);
+        name.SetResourceReference(TextBlock.FontSizeProperty, "SetRowDescSize");
+        name.SetResourceReference(TextBlock.ForegroundProperty, "WindowStrongText");
+
+        var tag = new TextBlock { Text = detail, VerticalAlignment = VerticalAlignment.Center };
+        if (detailIsMono) tag.FontFamily = name.FontFamily;
+        tag.SetResourceReference(TextBlock.FontSizeProperty, detailIsMono ? "SetControlSize" : "SetDescSize");
+        tag.SetResourceReference(TextBlock.ForegroundProperty, detailBrushKey);
+        Grid.SetColumn(tag, 1);
         grid.Children.Add(name);
         grid.Children.Add(tag);
 
-        var row = new System.Windows.Controls.Border
+        target.Children.Add(new Border
         {
-            Background = (System.Windows.Media.Brush)FindResource("MpAppBg"),
-            CornerRadius = (CornerRadius)FindResource("RadiusControl"),
-            Padding = new Thickness(11, 8, 11, 8),
+            Height = 32,
+            Background = new SolidColorBrush(Color.FromArgb(0x66, 0x05, 0x0A, 0x12)),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(11, 0, 11, 0),
+            Margin = new Thickness(0, target.Children.Count == 0 ? 8 : 5, 0, 0),
             Child = grid,
-        };
-        PreviewRows.Children.Add(row);
+        });
     }
 
     private void BrowseOldBtn_Click(object sender, RoutedEventArgs e) => PickZip(OldZipBox);
     private void BrowseNewBtn_Click(object sender, RoutedEventArgs e) => PickZip(NewZipBox);
     private void BrowseBaselineBtn_Click(object sender, RoutedEventArgs e) => PickZip(BaselineZipBox);
 
-    private void PickZip(System.Windows.Controls.TextBox target)
+    private void PickZip(TextBox target)
     {
         var picker = new Microsoft.Win32.OpenFileDialog
         {
@@ -352,121 +357,304 @@ public partial class PatchGeneratorDialog : Window
             OutputBox.Text = picker.FolderName;
     }
 
-    private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
+    /// <summary>"Close" at rest, "Cancel" while a run is going.</summary>
+    private void CloseBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_working) _run?.Cancel();
+        else Close();
+    }
+
+    private void OnClosing(object? sender, CancelEventArgs e) => _run?.Cancel();
+
+    /// <summary>The footer's sentence and whether the button can be pressed. A tag can be missing
+    /// with the button alive: pressing it is what marks the empty one.</summary>
+    private void UpdateFooter()
+    {
+        if (_working)
+        {
+            FooterNote.Text = Strings.Get("DlgPatchGenFootWorking");
+            return;
+        }
+        if (_finished)
+        {
+            FooterNote.Text = Strings.Get("DlgPatchGenFootDone");
+            return;
+        }
+        var haveZips = OldZipBox.Text.Trim().Length > 0 && NewZipBox.Text.Trim().Length > 0;
+        var haveTags = FromTagBox.Text.Trim().Length > 0 && ToTagBox.Text.Trim().Length > 0;
+        GenerateBtn.IsEnabled = haveZips;
+        FooterNote.Text = Strings.Get(haveZips && haveTags ? "DlgPatchGenFootReady" : "DlgPatchGenFootMissing");
+    }
+
+    /// <summary>The amber rim, only once somebody tried to generate without the tag.</summary>
+    internal bool MarkMissingTags()
+    {
+        var fromMissing = FromTagBox.Text.Trim().Length == 0;
+        var toMissing = ToTagBox.Text.Trim().Length == 0;
+        if (fromMissing) FromTagShell.Tag = MissingMark;
+        if (toMissing) ToTagShell.Tag = MissingMark;
+        return fromMissing || toMissing;
+    }
+
+    /// <summary>While a run goes the form stays on screen and the footer offers only Cancel.</summary>
+    internal void SetWorking(bool working)
+    {
+        _working = working;
+        WorkCard.Visibility = working ? Visibility.Visible : Visibility.Collapsed;
+        TagWarning.Visibility = working || _finished ? Visibility.Collapsed : Visibility.Visible;
+        GenerateBtn.Visibility = working ? Visibility.Collapsed : Visibility.Visible;
+        CloseBtn.Content = Strings.Get(working ? "DlgPatchGenCancel" : "DlgPatchGenClose");
+        if (working)
+        {
+            ErrorBox.Visibility = Visibility.Collapsed;
+            ResultPanel.Visibility = Visibility.Collapsed;
+            BodyScroll.ScrollToTop();
+        }
+        UpdateFooter();
+    }
+
+    internal void ShowWork(string title, string count, double fraction, string detail)
+    {
+        WorkTitle.Text = title;
+        WorkCount.Text = count;
+        WorkBar.Value = fraction;
+        WorkSub.Text = detail;
+    }
+
+    /// <summary>The form untouched, the reason in plain words, the exception underneath.</summary>
+    internal void ShowFailure(Exception ex)
+    {
+        ErrorBody.Text = Strings.Get(ex is InvalidDataException or IOException ? "DlgPatchGenFailZip" : "DlgPatchGenFailOther");
+        ErrorDetail.Text = $"{ex.GetType().Name}: {ex.Message}";
+        ErrorDetail.Visibility = Visibility.Visible;
+        ErrorBox.Visibility = Visibility.Visible;
+        BringIntoViewOnceLaidOut(ErrorBox);
+    }
+
+    private void ShowInputsProblem()
+    {
+        ErrorBody.Text = Strings.Get("DlgPatchGenNeedInputs");
+        ErrorDetail.Visibility = Visibility.Collapsed;
+        ErrorBox.Visibility = Visibility.Visible;
+        BringIntoViewOnceLaidOut(ErrorBox);
+    }
+
+    internal void ShowDone(bool two, string toTag, IEnumerable<(string Name, long Bytes)> files,
+        long judgedBytes = 0, long fullBytes = 0)
+    {
+        _finished = true;
+        SetWorking(false);
+        ResultText.Text = Strings.Get(two ? "DlgPatchGenResultBoth" : "DlgPatchGenResult");
+        ReminderText.Inlines.Clear();
+        ModDialogChrome.AddMarkedText(ReminderText, Strings.Format("DlgPatchGenUploadTo", toTag));
+        ResultFiles.Children.Clear();
+        foreach (var (name, bytes) in files)
+            AddFileRow(ResultFiles, name, DiskSpaceService.FormatBytes(bytes), "WindowMuted", detailIsMono: true);
+
+        // Advice, not a rule: once the patch approaches the size of the mod itself it has stopped
+        // saving anybody anything, and the next release should carry the full .zip again.
+        RebaselineText.Inlines.Clear();
+        if (fullBytes > 0)
+            ModDialogChrome.AddMarkedText(RebaselineText, Strings.Format("DlgPatchGenRebaseline",
+                DiskSpaceService.FormatBytes(judgedBytes), DiskSpaceService.FormatBytes(fullBytes)));
+        RebaselinePanel.Visibility = fullBytes > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        ResultPanel.Visibility = Visibility.Visible;
+        GenerateBtn.Content = Strings.Get("DlgPatchGenAnother");
+        GenerateBtn.IsEnabled = true;
+        UpdateFooter();
+        BringIntoViewOnceLaidOut(ResultPanel);
+    }
+
+    private void BringIntoViewOnceLaidOut(FrameworkElement element)
+        => Dispatcher.BeginInvoke(new Action(() => element.BringIntoView()), System.Windows.Threading.DispatcherPriority.Loaded);
+
+    private void BackToTheForm()
+    {
+        _finished = false;
+        _revealPath = null;
+        ResultPanel.Visibility = Visibility.Collapsed;
+        ErrorBox.Visibility = Visibility.Collapsed;
+        TagWarning.Visibility = Visibility.Visible;
+        GenerateBtn.Content = Strings.Get("DlgPatchGenGenerate");
+        UpdateFooter();
+    }
 
     private async void GenerateBtn_Click(object sender, RoutedEventArgs e)
     {
-        ErrorText.Visibility = Visibility.Collapsed;
-        ResultPanel.Visibility = Visibility.Collapsed;
-
-        RebaselinePanel.Visibility = Visibility.Collapsed;
-
-        var oldZip = OldZipBox.Text?.Trim() ?? "";
-        var newZip = NewZipBox.Text?.Trim() ?? "";
-        var fromTag = FromTagBox.Text?.Trim() ?? "";
-        var toTag = ToTagBox.Text?.Trim() ?? "";
-        var outDir = OutputBox.Text?.Trim() ?? "";
-        var baseZip = BaselineZipBox.Text?.Trim() ?? "";
-        var baseTag = BaselineTagBox.Text?.Trim() ?? "";
-
-        if (!File.Exists(oldZip) || !File.Exists(newZip)
-            || fromTag.Length == 0 || toTag.Length == 0 || outDir.Length == 0)
+        if (_finished)
         {
-            ShowError(Strings.Get("DlgPatchGenNeedInputs"));
+            BackToTheForm();
+            return;
+        }
+        ErrorBox.Visibility = Visibility.Collapsed;
+        if (MarkMissingTags()) return;
+
+        var oldZip = OldZipBox.Text.Trim();
+        var newZip = NewZipBox.Text.Trim();
+        var fromTag = FromTagBox.Text.Trim();
+        var toTag = ToTagBox.Text.Trim();
+        var outDir = OutputBox.Text.Trim();
+        var baseZip = BaselineZipBox.Text.Trim();
+        var baseTag = BaselineTagBox.Text.Trim();
+
+        if (!File.Exists(oldZip) || !File.Exists(newZip) || outDir.Length == 0)
+        {
+            ShowInputsProblem();
             return;
         }
 
-        GenerateBtn.IsEnabled = false;
-        var prevContent = GenerateBtn.Content;
-        GenerateBtn.Content = Strings.Get("DlgPatchGenWorking");
+        // The CUMULATIVE patch (baseline -> new), when a baseline was supplied: it keeps a FRESH
+        // install at two downloads however many releases go by, and its deleted[] comes from a
+        // single diff so it carries no ordering hazard. Skipped when it would duplicate the
+        // incremental.
+        var wantCumulative = File.Exists(baseZip) && baseTag.Length > 0
+            && !string.Equals(baseTag, fromTag, StringComparison.OrdinalIgnoreCase);
+        var patches = wantCumulative ? 2 : 1;
+
+        using var run = new CancellationTokenSource();
+        _run = run;
+        var written = new List<string>();
+        SetWorking(true);
         try
         {
-            // The INCREMENTAL patch (previous release -> new): smallest download for anyone who
-            // updates every version.
-            var result = await DeltaPatchService.GeneratePatchAsync(oldZip, newZip, fromTag, toTag, outDir);
+            ShowWork(Strings.Format("DlgPatchGenComparing", Path.GetFileName(oldZip)), "", 0,
+                Strings.Get("DlgPatchGenSubCompare"));
 
-            // The CUMULATIVE patch (baseline -> new), when a baseline was supplied. Optional but
-            // recommended: it is what keeps a FRESH install at two downloads no matter how many
-            // releases have gone by, and its deleted[] comes from a single diff so it carries no
-            // ordering hazard at all. Skipped when it would duplicate the incremental.
+            var incremental = await DeltaPatchService.GeneratePatchAsync(
+                oldZip, newZip, fromTag, toTag, outDir, run.Token,
+                new Progress<DeltaPatchService.PatchGenerationProgress>(p => Report(
+                    p, 0, patches, oldZip, newZip, Strings.Get("DlgPatchGenWritingIncremental"),
+                    Strings.Format("DlgPatchGenSubIncremental", fromTag, toTag))));
+            written.Add(incremental.PatchZipPath);
+            written.Add(incremental.PatchJsonPath);
+
             DeltaPatchService.GenerateResult? cumulative = null;
-            bool wantCumulative = File.Exists(baseZip) && baseTag.Length > 0
-                && !string.Equals(baseTag, fromTag, StringComparison.OrdinalIgnoreCase);
             if (wantCumulative)
+            {
                 cumulative = await DeltaPatchService.GeneratePatchAsync(
-                    baseZip, newZip, baseTag, toTag, outDir);
-
-            ResultText.Text = cumulative == null
-                ? Strings.Format("DlgPatchGenResult",
-                    result.ChangedCount, result.DeletedCount, FormatSize(result.PatchZipSize))
-                : Strings.Format("DlgPatchGenResultBoth",
-                    FormatSize(result.PatchZipSize), FormatSize(cumulative.PatchZipSize));
-
-            // Name the files and the release they belong on. The old reminder said "upload BOTH
-            // the patch .zip and .json" without naming either and never said WHICH release —
-            // and a patch attached to the wrong one is ignored in silence, so the modder would
-            // never learn they had lost the saving. Everything here is already in hand.
-            var files = new List<string> { result.PatchZipPath, result.PatchJsonPath };
-            if (cumulative != null)
-            {
-                files.Add(cumulative.PatchZipPath);
-                files.Add(cumulative.PatchJsonPath);
-            }
-            var uploadList = string.Join(Environment.NewLine,
-                files.Select(f => "    • " + Path.GetFileName(f)));
-            ReminderText.Text =
-                Strings.Format("DlgPatchGenUploadTo", toTag) + Environment.NewLine
-                + uploadList + Environment.NewLine + Environment.NewLine
-                + Strings.Get(cumulative == null ? "DlgPatchGenReminder" : "DlgPatchGenReminderBoth");
-            ResultPanel.Visibility = Visibility.Visible;
-
-            // Advice, not a rule: once the cumulative approaches the size of the mod itself it has
-            // stopped saving anybody anything, and the next release should carry the full .zip
-            // again. Judged on the cumulative when there is one — the incremental stays small
-            // forever and would never trigger it.
-            var judged = cumulative ?? result;
-            if (judged.AdviseRebaseline && judged.NewFullZipSize > 0)
-            {
-                RebaselineText.Text = Strings.Format("DlgPatchGenRebaseline",
-                    FormatSize(judged.PatchZipSize), FormatSize(judged.NewFullZipSize));
-                RebaselinePanel.Visibility = Visibility.Visible;
+                    baseZip, newZip, baseTag, toTag, outDir, run.Token,
+                    new Progress<DeltaPatchService.PatchGenerationProgress>(p => Report(
+                        p, 1, patches, baseZip, newZip, Strings.Get("DlgPatchGenWritingCumulative"),
+                        Strings.Format("DlgPatchGenSubCumulative", baseTag))));
+                written.Add(cumulative.PatchZipPath);
+                written.Add(cumulative.PatchJsonPath);
             }
 
-            // Reveal the two produced files in Explorer for a quick drag-to-release.
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = $"/select,\"{result.PatchZipPath}\"",
-                    UseShellExecute = true,
-                });
-            }
-            catch { /* best-effort reveal */ }
+            var files = written.Select(path => (Path.GetFileName(path), new FileInfo(path).Length)).ToList();
+            // Judged on the cumulative when there is one: the incremental stays small for ever.
+            var judged = cumulative ?? incremental;
+            var advise = judged.AdviseRebaseline && judged.NewFullZipSize > 0;
+            _revealPath = incremental.PatchZipPath;
+            ShowDone(cumulative != null, toTag, files,
+                advise ? judged.PatchZipSize : 0, advise ? judged.NewFullZipSize : 0);
+            RevealInFolder();
+        }
+        catch (OperationCanceledException) when (run.IsCancellationRequested)
+        {
+            DiagnosticLog.Write("Patch generation cancelled.");
+            RemoveFinishedParts(written);
+            SetWorking(false);
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Patch generation failed: {ex}");
-            ShowError(Strings.Get("DlgPatchGenErrorPrefix") + " " + ex.Message);
+            SetWorking(false);
+            ShowFailure(ex);
         }
         finally
         {
-            GenerateBtn.Content = prevContent;
-            GenerateBtn.IsEnabled = true;
+            _run = null;
         }
     }
 
-    private void ShowError(string msg)
+    /// <summary>A cancel means none of this run: a patch that finished before it goes as well.</summary>
+    private static void RemoveFinishedParts(IEnumerable<string> written)
     {
-        ErrorText.Text = msg;
-        ErrorText.Visibility = Visibility.Visible;
+        foreach (var path in written)
+        {
+            try { File.Delete(path); }
+            catch (Exception ex) { DiagnosticLog.Write($"Patch generation: could not remove {path}: {ex.Message}"); }
+        }
     }
 
-    private static string FormatSize(long bytes)
+    private void Report(DeltaPatchService.PatchGenerationProgress p, int patchIndex, int patches,
+        string oldZip, string newZip, string writingTitle, string writingDetail)
     {
-        if (bytes >= 1024L * 1024 * 1024) return $"{bytes / (1024.0 * 1024 * 1024):0.0} GB";
-        if (bytes >= 1024L * 1024) return $"{bytes / (1024.0 * 1024):0.0} MB";
-        if (bytes >= 1024) return $"{bytes / 1024.0:0.0} KB";
-        return $"{bytes} B";
+        var overall = p.Overall(patchIndex, patches);
+        if (p.Phase == DeltaPatchService.PatchGenerationPhase.Writing)
+        {
+            ShowWork(writingTitle, $"{Math.Round(overall * 100)} %", overall, writingDetail);
+            return;
+        }
+        var zip = p.Phase == DeltaPatchService.PatchGenerationPhase.ComparingOld ? oldZip : newZip;
+        ShowWork(Strings.Format("DlgPatchGenComparing", Path.GetFileName(zip)),
+            Strings.Format("DlgPatchGenFiles", p.Done, p.Total), overall, Strings.Get("DlgPatchGenSubCompare"));
+    }
+
+    private void ShowInFolderBtn_Click(object sender, RoutedEventArgs e) => RevealInFolder();
+
+    private void RevealInFolder()
+    {
+        if (_revealPath == null) return;
+        try
+        {
+            HarnessMode.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{_revealPath}\"",
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex) { DiagnosticLog.Write($"Patch generation: could not open the folder: {ex.Message}"); }
+    }
+
+    private void ShowPreview(string variant)
+    {
+        void Fill(bool withBase)
+        {
+            OldZipBox.Text = @"D:\WoL\releases\WarsOfLiberty-1.6.2.zip";
+            FromTagBox.Text = "v1.6.2";
+            NewZipBox.Text = @"D:\WoL\releases\WarsOfLiberty-1.6.3.zip";
+            ToTagBox.Text = "v1.6.3";
+            if (!withBase) return;
+            BaselineZipBox.Text = @"D:\WoL\releases\WarsOfLiberty-1.6.0.zip";
+            BaselineTagBox.Text = "v1.6.0";
+        }
+
+        switch (variant.ToLowerInvariant())
+        {
+            case "empty":
+                break;
+            case "how":
+                Fill(true);
+                _howOpen = true;
+                ApplyHowVisibility();
+                break;
+            case "working":
+                Fill(true);
+                SetWorking(true);
+                ShowWork(Strings.Get("DlgPatchGenWritingIncremental"), "62 %", 0.62,
+                    Strings.Format("DlgPatchGenSubIncremental", "v1.6.2", "v1.6.3"));
+                break;
+            case "error":
+                Fill(false);
+                ShowFailure(new InvalidDataException("End of Central Directory record could not be found. (WarsOfLiberty-1.6.3.zip)"));
+                break;
+            case "done":
+                Fill(true);
+                const long mb = 1024 * 1024;
+                ShowDone(true, "v1.6.3", new (string, long)[]
+                {
+                    ("patch-v1.6.2-to-v1.6.3.zip", 38 * mb),
+                    ("patch-v1.6.2-to-v1.6.3.json", 12 * 1024),
+                    ("patch-v1.6.0-to-v1.6.3.zip", 182 * mb),
+                    ("patch-v1.6.0-to-v1.6.3.json", 41 * 1024),
+                }, 182 * mb, 214 * mb);
+                break;
+            default:
+                Fill(true);
+                break;
+        }
     }
 }

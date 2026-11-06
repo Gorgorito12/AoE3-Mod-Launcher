@@ -174,7 +174,8 @@ public class DialogXamlTests
             dlg.FieldDescriptionEn.Text = "A total conversion set during the Napoleonic Wars.";
             dlg.FieldIcon.Text = "icon.png";
             dlg.GoTo(6);
-            Assert.Equal(Visibility.Collapsed, dlg.MissingCard.Visibility);
+            Assert.Empty(dlg.MissingPills.Children);
+            Assert.Equal(Visibility.Collapsed, dlg.MissingPills.Visibility);
 
             dlg.Close();
         });
@@ -216,10 +217,12 @@ public class DialogXamlTests
             Assert.Equal(full, dlg.FolderTextBox.Text);
             Assert.DoesNotContain("…", dlg.FolderTextBox.Text);
 
-            // …while the display drops the middle and keeps both ends.
+            // …while the display keeps both ends whole and only the middle may trim.
             Assert.Equal(Path.GetPathRoot(full), dlg.DestPathRoot.Text);
             Assert.Equal("Knights and Barbarians", dlg.DestPathLeaf.Text);
-            Assert.Contains("…", dlg.DestPathMid.Text);
+            Assert.Equal(TextTrimming.CharacterEllipsis, dlg.DestPathMid.TextTrimming);
+            Assert.Equal(TextTrimming.None, dlg.DestPathRoot.TextTrimming);
+            Assert.Equal(TextTrimming.None, dlg.DestPathLeaf.TextTrimming);
 
             dlg.Close();
         });
@@ -457,20 +460,14 @@ public class DialogXamlTests
             Assert.NotNull(dlg.OldZipBox);
             Assert.NotNull(dlg.NewZipBox);
 
-            // The "how it works" block is the ONLY place the flow is narrated — which of the two
-            // patches you need, that the zips here are read for comparison rather than uploaded,
-            // and which release the output belongs on. A block added to the XAML but never wired
-            // in ApplyLanguage renders blank and throws nothing, which is exactly how the mod
-            // window shipped an empty section heading for months.
-            Assert.NotNull(dlg.HowBodyText);
+            // A block added to the XAML but never wired in ApplyLanguage renders blank and throws
+            // nothing, which is exactly how the mod window shipped an empty section heading.
             Assert.False(string.IsNullOrWhiteSpace(dlg.HowTitleText.Text));
-            Assert.False(string.IsNullOrWhiteSpace(dlg.HowBodyText.Text));
+            Assert.Equal(3, dlg.HowBullets.Children.Count);
 
             // Strings.Get falls back to the KEY when an entry is missing, so a typo'd or
-            // undefined key renders as "DlgPatchGenHowBody" and looks like copy. That has
-            // shipped here before (see the DlgSettingsPreviewToasts comment in Strings.cs).
+            // undefined key renders as the key and looks like copy.
             Assert.NotEqual("DlgPatchGenHowTitle", dlg.HowTitleText.Text);
-            Assert.NotEqual("DlgPatchGenHowBody", dlg.HowBodyText.Text);
 
             // The baseline pair is what makes a cumulative patch possible; it is optional, so it
             // is on screen but may be left empty.
@@ -1525,7 +1522,7 @@ public class DialogXamlTests
             Assert.Equal("Chinese", RevealText.PlainTextOf(
                 VisualsUnder(nameCell).OfType<TextBlock>().First()));
 
-            Assert.Equal($"{wins}-{losses}",
+            Assert.Equal($"{wins}–{losses}",
                 RevealText.PlainTextOf(cells.Single(t => Grid.GetColumn(t) == 2)));
 
             // Read by COLUMN ROLE and not by index: a column added to the middle of the table
@@ -1543,8 +1540,12 @@ public class DialogXamlTests
             int barColumn = CivTableLayout.All
                 .Select((spec, i) => (spec, i))
                 .Single(x => x.spec.Column == CivColumn.WinBar).i;
-            var bar = grid.Children.OfType<Border>().Single(b => Grid.GetColumn(b) == barColumn);
+            var cell = grid.Children.OfType<Grid>().Single(b => Grid.GetColumn(b) == barColumn);
+            var bar = (Border)cell.Children[0];
             Assert.Equal(expectPercent, bar.Child is Grid);
+
+            // The balloon sits on the whole cell: nobody can aim at six pixels.
+            Assert.NotNull(cell.ToolTip);
         });
 
         Assert.Null(error);
@@ -1570,10 +1571,10 @@ public class DialogXamlTests
 
             Assert.NotNull(row);
 
-            var cells = ((Grid)row).Children.OfType<TextBlock>().ToList();
+            var cells = ((Grid)((Border)row).Child).Children.OfType<TextBlock>().ToList();
             Assert.Equal("Chinese", RevealText.PlainTextOf(cells[0]));
 
-            var percent = cells.Single(t => Grid.GetColumn(t) == 2);
+            var percent = cells.Single(t => Grid.GetColumn(t) == 3);
             Assert.Equal(expectPercent, RevealText.PlainTextOf(percent).Contains('%'));
         });
 
@@ -2209,14 +2210,12 @@ public class DialogXamlTests
 
             Assert.Equal(Visibility.Collapsed, window.ConnectedBlock.Visibility);
             Assert.Equal(Visibility.Visible, window.StepsBlock.Visibility);
-            Assert.Equal(4, window.StepsList.Children.Count);
+            Assert.Equal(3, window.StepsList.Children.Count);
 
             // The open one is the only child with a card's background; folded and pending
             // rows have none. Asserting the SHAPE rather than a colour, because the colour
             // is what the broken version already varied.
-            var open = window.StepsList.Children.OfType<Border>()
-                .Where(b => b.Background != null && b.BorderThickness.Left > 0)
-                .ToList();
+            var open = window.StepsList.Children.OfType<Border>().ToList();
             Assert.Single(open);
             Assert.Same(window.StepsList.Children[expectedOpen - 1], open[0]);
         });
@@ -2418,10 +2417,10 @@ public class DialogXamlTests
                     .Where(c => !string.IsNullOrWhiteSpace(c))
                     .ToList();
 
-                // The two it does offer, and both are things somebody outside the room can
-                // do: say something, and stop watching.
-                Assert.Contains(Strings.Get("MpWatchSend"), captions);
+                // What it does offer is what somebody outside the room can do. Until the server
+                // lets an organiser in, the chat cannot be written to.
                 Assert.Contains(Strings.Get("DlgClose"), captions);
+                Assert.Equal(Visibility.Visible, w.ReadOnlyChip.Visibility);
 
                 // And not one action that belongs to being IN the room. By caption against
                 // LobbyWindow's own keys rather than by counting buttons: the count also
@@ -2515,9 +2514,12 @@ public class DialogXamlTests
                 Strings.SetLanguage("es");
                 var dlg = new GitHubLoginDialog(new MultiplayerSession(new LauncherConfig()));
 
-                Assert.True(dlg.VerificationUriText.TextWrapping != TextWrapping.NoWrap,
-                    "the authorization link does not wrap, so a long one is cut - and this "
-                    + "window asks the player to check where it points.");
+                const string link = "https://discord.com/oauth2/authorize?response_type=code&state=8f21c4d0";
+                dlg.ShowWaiting(new DeviceFlowStart { VerificationUri = link });
+                var shown = new System.Windows.Documents.TextRange(
+                    dlg.VerificationUriText.Document.ContentStart,
+                    dlg.VerificationUriText.Document.ContentEnd).Text.Trim();
+                Assert.Equal(link, shown);
                 Assert.True(dlg.VerificationUriText.IsReadOnly,
                     "the link box is editable, so a stray keystroke rewrites the URL on screen.");
 
@@ -2540,6 +2542,129 @@ public class DialogXamlTests
             {
                 Strings.SetLanguage(previous);
             }
+        });
+        Assert.Null(error);
+    }
+
+    private static (GitHubLoginDialog Dialog, Func<FrameworkElement, bool> Shown) SignInDialog()
+    {
+        EnsureResources();
+        var dlg = new GitHubLoginDialog(new MultiplayerSession(new LauncherConfig()));
+        var root = (FrameworkElement)dlg.Content;
+        root.Measure(new Size(520, double.PositiveInfinity));
+        root.Arrange(new Rect(0, 0, 520, root.DesiredSize.Height));
+        return (dlg, e => e.Visibility == Visibility.Visible);
+    }
+
+    [Fact]
+    public void BeforeTheLinkArrivesTheWindowSaysWhyNothingCanBePressed()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var (dlg, shown) = SignInDialog();
+            dlg.ShowPreparing();
+
+            Assert.False(dlg.OpenBrowserButton.IsEnabled);
+            Assert.NotNull(dlg.OpenBrowserButton.ToolTip);
+            Assert.True(ToolTipService.GetShowOnDisabled(dlg.OpenBrowserButton));
+            Assert.True(shown(dlg.LinkPlaceholder));
+            Assert.False(shown(dlg.CopyLinkButton));
+            Assert.False(shown(dlg.VerificationUriText));
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TheWaitNamesTheLinksDurationOnlyWhenTheServerGaveOne()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var (dlg, _) = SignInDialog();
+
+                dlg.ShowWaiting(new DeviceFlowStart { VerificationUri = "https://discord.com/x", ExpiresInSeconds = 900 });
+                Assert.Contains("15 minutos", dlg.StatusText.Text);
+
+                dlg.ShowWaiting(new DeviceFlowStart { VerificationUri = "https://discord.com/x" });
+                Assert.DoesNotContain("minutos", dlg.StatusText.Text);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TheCodePanelIsOnlyForAServerThatSendsACode()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var (dlg, shown) = SignInDialog();
+
+            dlg.ShowWaiting(new DeviceFlowStart { VerificationUri = "https://discord.com/x" });
+            Assert.False(shown(dlg.UserCodeBorder));
+            Assert.False(shown(dlg.Step2Text));
+
+            dlg.ShowWaiting(new DeviceFlowStart { VerificationUri = "https://x.test/y", UserCode = "WDJB-MJHT" });
+            Assert.True(shown(dlg.UserCodeBorder));
+            Assert.Equal("WDJB-MJHT", dlg.UserCodeText.Text);
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void AFailureSaysWhatHappenedAndOffersToTryAgain()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var (dlg, shown) = SignInDialog();
+
+                dlg.ShowFailure(SignInFailureKind.Unreachable, false, "HttpRequestException: no host");
+                Assert.True(shown(dlg.ErrorBox));
+                Assert.False(shown(dlg.LinkBox));
+                Assert.False(shown(dlg.CautionBox));
+                Assert.False(shown(dlg.StatusRow));
+                Assert.Equal("HttpRequestException: no host", dlg.ErrorDetailText.Text);
+                Assert.Equal(Strings.Get("MpSignInRetry"), dlg.OpenBrowserButton.Content);
+                Assert.Equal(Strings.Get("DlgClose"), dlg.CancelButton.Content);
+                Assert.True(dlg.OpenBrowserButton.IsEnabled);
+
+                dlg.ShowPreparing();
+                Assert.False(shown(dlg.ErrorBox));
+                Assert.True(shown(dlg.LinkBox));
+                Assert.Equal(Strings.Get("MpSignInCancel"), dlg.CancelButton.Content);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void AnExpiredLinkIsItsOwnCase_WithNoTechnicalLine()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var (dlg, shown) = SignInDialog();
+
+                dlg.ShowWaiting(new DeviceFlowStart { VerificationUri = "https://discord.com/x", ExpiresInSeconds = 900 });
+                dlg.ShowFailure(SignInFailureKind.Expired, true, "LobbyApiException: gone");
+
+                Assert.Equal(Strings.Get("MpSignInExpiredHeadline"), dlg.HeadlineText.Text);
+                Assert.Contains("15 minutos", dlg.LeadText.Text);
+                Assert.Equal(Strings.Get("MpSignInNewLink"), dlg.OpenBrowserButton.Content);
+                Assert.False(shown(dlg.ErrorDetailText));
+            }
+            finally { Strings.SetLanguage(previous); }
         });
         Assert.Null(error);
     }
@@ -4851,8 +4976,8 @@ public class DialogXamlTests
             };
             MeasureSharedControl(off);
             off.ApplyTemplate();
-            Assert.Equal(34d, off.Width);
-            Assert.Equal(20d, off.Height);
+            Assert.Equal(38d, off.Width);
+            Assert.Equal(22d, off.Height);
             var offFill = off.Background;
             Assert.True(offFill != null, "SetToggle resolved no off-track brush");
 
@@ -5084,7 +5209,6 @@ public class DialogXamlTests
                 openRepair: () => { },
                 checkForUpdates: () => Task.FromResult<Services.UpdateService.CheckResult?>(null),
                 openAoE3Folder: () => { },
-                changeModFolder: () => { },
                 changeAoE3Folder: () => { },
                 openUserDataFolder: () => { },
                 createBackup: () => null,
@@ -5101,8 +5225,8 @@ public class DialogXamlTests
                 ("GameSettingsSection", dlg.GameSettingsSection),
                 ("LanguageEmptyHint", dlg.LanguageEmptyHint),
                 ("AddonsEmptyHint", dlg.AddonsEmptyHint),
-                ("StatsEmptyHint", dlg.StatsEmptyHint),
-                ("DecksEmptyHint", dlg.DecksEmptyHint),
+                ("StatsEmptyCard", dlg.StatsEmptyCard),
+                ("DecksEmptyCard", dlg.DecksEmptyCard),
             };
 
             var before = hidden.Select(h => (h.Name, h.El, Was: h.El.Visibility)).ToList();
@@ -5151,7 +5275,6 @@ public class DialogXamlTests
                 openRepair: () => { },
                 checkForUpdates: () => Task.FromResult<Services.UpdateService.CheckResult?>(null),
                 openAoE3Folder: () => { },
-                changeModFolder: () => { },
                 changeAoE3Folder: () => { },
                 openUserDataFolder: () => { },
                 createBackup: () => null,
@@ -5208,7 +5331,7 @@ public class DialogXamlTests
             {
                 CivA = "Chinese", CivB = "Ottomans", Played = 1, WinsA = 1, LossesA = 0,
             });
-            var thinText = TextIn(thin).Select(t => t.Text ?? "").ToList();
+            var thinText = TextIn(thin).Select(RevealText.PlainTextOf).ToList();
 
             // The pair is built from parts now - a flag can sit beside each civilization - so
             // the two names are separate runs. What still has to hold is the ORDER: the record
@@ -5220,7 +5343,7 @@ public class DialogXamlTests
             Assert.True(thinPair.IndexOf("Chinese", System.StringComparison.Ordinal)
                         < thinPair.IndexOf("Ottomans", System.StringComparison.Ordinal),
                 $"the pair reads '{thinPair}' - the first civilization must come first.");
-            Assert.Contains("1-0", thinText);
+            Assert.Contains("1–0", thinText);
             Assert.DoesNotContain(thinText, t => t.Contains("%"));
             // Not an em dash and not a zero either — the cell is simply empty.
             Assert.DoesNotContain(thinText, t => t.Contains("—"));
@@ -5230,9 +5353,9 @@ public class DialogXamlTests
             {
                 CivA = "Chinese", CivB = "Ottomans", Played = 9, WinsA = 6, LossesA = 3,
             });
-            var solidText = TextIn(solid).Select(t => t.Text ?? "").ToList();
+            var solidText = TextIn(solid).Select(RevealText.PlainTextOf).ToList();
 
-            Assert.Contains("6-3", solidText);
+            Assert.Contains("6–3", solidText);
             Assert.Contains(solidText, t => t.Contains("%"));
         });
         Assert.Null(error);
@@ -5310,7 +5433,6 @@ public class DialogXamlTests
                 openRepair: () => { },
                 checkForUpdates: () => Task.FromResult<Services.UpdateService.CheckResult?>(null),
                 openAoE3Folder: () => { },
-                changeModFolder: () => { },
                 changeAoE3Folder: () => { },
                 openUserDataFolder: () => { },
                 createBackup: () => null,
@@ -5553,6 +5675,304 @@ public class DialogXamlTests
         Assert.Null(error);
     }
 
+    private const long Mb = 1024 * 1024;
+
+    [Theory]
+    [InlineData(true, 1, true)]
+    [InlineData(true, 2, false)]
+    [InlineData(false, 1, false)]
+    [InlineData(true, 0, true)]
+    public void ARoomIsOnlyASearchUntilSomebodyElseIsInIt(bool searching, int players, bool alone)
+        => Assert.Equal(alone, QuickMatchPlanner.WaitsAlone(searching, players));
+
+    [Fact]
+    public void TheQuickMatchSamplesOpenAsASearch()
+    {
+        foreach (var name in new[] { "quick", "quick-radmin", "quick-long" })
+            Assert.True(RoomDemoData.ByName(name).QuickSearch, name);
+        Assert.False(RoomDemoData.ByName("1v1").QuickSearch);
+        Assert.True(RoomDemoData.ByName("quick-radmin").QuickRadminMissing);
+    }
+
+    [Theory]
+    [InlineData(0, false, true)]
+    [InlineData(1, false, true)]
+    [InlineData(2, true, false)]
+    public void TheWatchWindowShowsAResultOnlyWithOne_AndDecidingOnlyWithout(
+        int stage, bool resultShown, bool decideShown)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var t = TournamentDemoData.Organiser();
+            var m = t.Matches!.First(x => x.Lobby != null);
+            var w = new MatchWatchWindow(t, m, TournamentDemoData.WatchSample((TournamentDemoData.MatchWatchStage)stage), (_, _) => { });
+
+            Assert.Equal(resultShown ? Visibility.Visible : Visibility.Collapsed, w.ResultBox.Visibility);
+            Assert.Equal(decideShown ? Visibility.Visible : Visibility.Collapsed, w.DecideBtn.Visibility);
+            w.Close();
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void WithNoRightToDecideTheWatchWindowOffersNoDecision()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var t = TournamentDemoData.Organiser();
+            var m = t.Matches!.First(x => x.Lobby != null);
+            var w = new MatchWatchWindow(t, m, TournamentDemoData.WatchSample());
+            Assert.Equal(Visibility.Collapsed, w.DecideBtn.Visibility);
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void AnEntrantStillOutsideIsWhatTheWaitingWindowSays()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                EnsureResources();
+                var t = TournamentDemoData.Organiser();
+                var m = t.Matches!.First(x => x.Lobby != null);
+                var w = new MatchWatchWindow(t, m, TournamentDemoData.WatchSample(TournamentDemoData.MatchWatchStage.Waiting));
+
+                Assert.Equal("1 / 2", w.RosterCount.Text);
+                Assert.StartsWith("Esperando a ", w.StateText.Text);
+                Assert.Equal(Visibility.Visible, w.RosterNote.Visibility);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void ThePackagerMarksEveryFieldThatIsNotReady_NotOnlyTheFirst()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                EnsureResources();
+                var dlg = new TranslationPackagerDialog(new LauncherConfig());
+                dlg.IdBox.Text = "";
+                dlg.NameBox.Text = "";
+                dlg.VersionBox.Text = "";
+                dlg.OutputBox.Text = "";
+
+                var problems = dlg.ValidateFields(hasPickedFiles: false, new System.Collections.Generic.List<string>());
+
+                Assert.Equal(6, problems);
+                Assert.Equal("missing", dlg.IdShell.Tag);
+                Assert.Equal("missing", dlg.CompatShell.Tag);
+                Assert.Equal(Strings.Get("DlgPackagerErrorIdMissing"), dlg.HintId.Text);
+
+                dlg.IdBox.Text = "es";
+                Assert.Null(dlg.IdShell.Tag);
+                Assert.Equal(Strings.Get("DlgPackagerHintId"), dlg.HintId.Text);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void ThePackagersLanguageLineFollowsTheForm()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                EnsureResources();
+                var dlg = new TranslationPackagerDialog(new LauncherConfig());
+
+                dlg.NameBox.Text = "Español";
+                dlg.AuthorBox.Text = "Gorgo";
+                dlg.VersionBox.Text = "1.0";
+                dlg.CompatExtraBox.Text = "1.6.1, 1.6.0";
+
+                Assert.Equal("Español", dlg.FormPreviewName.Text);
+                Assert.Equal("v1.0", dlg.FormPreviewVersion.Text);
+                Assert.Contains("1.6.1, 1.6.0", dlg.FormPreviewCompat.Text);
+                Assert.Equal("· Gorgo", dlg.FormPreviewAuthor.Text);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TheProposedChipLeavesOnceAVersionIsTyped()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new TranslationPackagerDialog(new LauncherConfig());
+            Assert.Equal(Visibility.Visible, dlg.OutputProposed.Visibility);
+
+            dlg.VersionBox.Text = "2.0";
+            Assert.Equal(Visibility.Collapsed, dlg.VersionProposed.Visibility);
+
+            dlg.OutputBox.Text = @"C:\elsewhere\pack.zip";
+            Assert.Equal(Visibility.Collapsed, dlg.OutputProposed.Visibility);
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TheInstallOfferSaysWhereAndHowMuch()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new SelfInstallPromptDialog(@"C:\Users\x\AppData\Local\Programs\Aoe3ModLauncher", 48 * Mb, 12_000 * Mb);
+
+            Assert.Contains("Aoe3ModLauncher", dlg.DestinationPath.Text);
+            Assert.Contains("C:", dlg.DestinationSize.Text);
+            Assert.Equal(3, dlg.StepsList.Children.Count);
+            Assert.Equal(Visibility.Collapsed, dlg.SpaceWarning.Visibility);
+            Assert.True(dlg.YesButton.IsEnabled);
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void WithNoRoomTheInstallIsOffAndNotNowIsNot()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new SelfInstallPromptDialog(@"C:\x", 48 * Mb, 31 * Mb);
+
+            Assert.Equal(Visibility.Visible, dlg.SpaceWarning.Visibility);
+            Assert.False(dlg.YesButton.IsEnabled);
+            Assert.True(dlg.NoButton.IsEnabled);
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void AnUnknownFreeSpaceNeverBlocksTheInstall()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new SelfInstallPromptDialog(@"C:\x", 48 * Mb, -1);
+            Assert.True(dlg.YesButton.IsEnabled);
+            Assert.Equal(Visibility.Collapsed, dlg.SpaceWarning.Visibility);
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TickingTheDataBoxChangesWhatTheButtonSays()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                EnsureResources();
+                var facts = new SelfInstallService.UninstallFacts(true, @"C:\a\Aoe3ModLauncher.exe", @"C:\a", true, true, 0,
+                    @"C:\d", true, new[] { "Wars of Liberty", "Hundred Days" }, 0, 0, false);
+                var dlg = new SelfUninstallDialog(facts, elevated: false);
+
+                Assert.Equal("Desinstalar el launcher", dlg.OkButton.Content);
+                Assert.Contains("Wars of Liberty y Hundred Days", dlg.SafeNoteText.Text);
+
+                dlg.OptDeleteData.IsChecked = true;
+                Assert.Equal("Desinstalar y borrar mis datos", dlg.OkButton.Content);
+
+                dlg.OptDeleteData.IsChecked = false;
+                Assert.Equal("Desinstalar el launcher", dlg.OkButton.Content);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void PatchGenerator_NeedsBothZipsAndMarksAMissingTagOnlyWhenAskedToGenerate()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new PatchGeneratorDialog();
+
+            Assert.False(dlg.GenerateBtn.IsEnabled);
+
+            dlg.OldZipBox.Text = @"C:\missing\old.zip";
+            dlg.NewZipBox.Text = @"C:\missing\new.zip";
+            Assert.True(dlg.GenerateBtn.IsEnabled);
+            Assert.Null(dlg.FromTagShell.Tag);
+
+            Assert.False(dlg.MarkMissingTags() == false);
+            Assert.Equal("missing", dlg.FromTagShell.Tag);
+            Assert.Equal("missing", dlg.ToTagShell.Tag);
+
+            dlg.FromTagBox.Text = "v1";
+            Assert.Null(dlg.FromTagShell.Tag);
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void PatchGenerator_WhileWorkingOnlyCancelIsOffered()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                EnsureResources();
+                var dlg = new PatchGeneratorDialog();
+
+                dlg.SetWorking(true);
+                Assert.Equal(Visibility.Visible, dlg.WorkCard.Visibility);
+                Assert.Equal(Visibility.Collapsed, dlg.GenerateBtn.Visibility);
+                Assert.Equal(Visibility.Collapsed, dlg.TagWarning.Visibility);
+                Assert.Equal(Strings.Get("DlgPatchGenCancel"), dlg.CloseBtn.Content);
+
+                dlg.SetWorking(false);
+                Assert.Equal(Visibility.Collapsed, dlg.WorkCard.Visibility);
+                Assert.Equal(Visibility.Visible, dlg.GenerateBtn.Visibility);
+                Assert.Equal(Strings.Get("DlgPatchGenClose"), dlg.CloseBtn.Content);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void PatchGenerator_AFailureLeavesTheFormAsItWas()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new PatchGeneratorDialog();
+            dlg.FromTagBox.Text = "v1";
+
+            dlg.ShowFailure(new System.IO.InvalidDataException("no directory"));
+
+            Assert.Equal(Visibility.Visible, dlg.ErrorBox.Visibility);
+            Assert.Contains("InvalidDataException", dlg.ErrorDetail.Text);
+            Assert.Equal("v1", dlg.FromTagBox.Text);
+        });
+        Assert.Null(error);
+    }
+
     /// <summary>
     /// A portable exe gets the action too, under its own name: it is not "installed", but it can
     /// still leave auto-start, links, temporary files and an installed copy behind. The test host is
@@ -5698,7 +6118,7 @@ public class DialogXamlTests
         // Text BEFORE Buttons, as App.xaml merges them: SidebarNavLabel is BasedOn the
         // implicit TextBlock style that lives in Text.xaml, and a StaticResource in a
         // merged dictionary can only see dictionaries merged before it.
-        foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs", "Controls", "Badges" })
+        foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs", "Controls", "Badges", "Library" })
         {
             app.Resources.MergedDictionaries.Add(new ResourceDictionary
             {
@@ -5719,5 +6139,13 @@ public class DialogXamlTests
         app.Resources["DisplayFont"] = new System.Windows.Media.FontFamily("Cambria, Georgia");
         app.Resources["BodyFont"] = new System.Windows.Media.FontFamily("Segoe UI, Tahoma");
         app.Resources["MonoFont"] = new System.Windows.Media.FontFamily("Consolas, Courier New");
+
+        // Every style is sealed here, on the thread that parsed it. A style is thread-bound until
+        // it is sealed, and applying one is what seals it, so a style no test had applied yet
+        // threw "another thread owns this" at whichever test walked the dictionaries next: a
+        // failure in a full run that passed alone.
+        foreach (var dictionary in app.Resources.MergedDictionaries)
+            foreach (var key in dictionary.Keys.Cast<object>().ToList())
+                if (dictionary[key] is Style style) style.Seal();
     }
 }

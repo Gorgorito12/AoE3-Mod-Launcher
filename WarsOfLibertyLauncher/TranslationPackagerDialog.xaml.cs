@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
@@ -27,7 +29,17 @@ namespace WarsOfLibertyLauncher;
 /// </summary>
 public partial class TranslationPackagerDialog : Window
 {
+    private const string Marked = "missing";
+
+    /// <summary>One line of the mod selector: its icon, its name and the version it is on.</summary>
+    public sealed record ModOption(ModProfile Profile, Brush? Icon, string Name, string Version, Brush NameBrush)
+    {
+        /// <summary>The name alone: a record would print its brushes, which belong to one thread.</summary>
+        public override string ToString() => Name;
+    }
+
     private readonly LauncherConfig _config;
+    private readonly string? _previewVariant;
 
     /// <summary>
     /// Mods offered in the picker. Excludes <see cref="ModProfile.IsStockGame"/>
@@ -98,23 +110,30 @@ public partial class TranslationPackagerDialog : Window
     /// <summary>The last successful export — what "Add to my index" writes.</summary>
     private TranslationService.ExportResult? _lastExport;
 
-    public TranslationPackagerDialog(LauncherConfig config)
+    /// <param name="config">The launcher's settings.</param>
+    /// <param name="previewVariant"><c>--preview-dialog=packager:…</c>: paint that state, write nothing.</param>
+    public TranslationPackagerDialog(LauncherConfig config, string? previewVariant = null)
     {
         _config = config;
+        _previewVariant = previewVariant;
         _profiles = ModRegistry.All
             .Where(p => !p.IsStockGame)
             .ToList();
 
         InitializeComponent();
+        ModDialogChrome.AttachGlobal(this);
         // A manual edit of the path box drops back to "folder" mode; a
         // programmatic set from the file picker keeps the picked file list.
         FolderBox.TextChanged += (_, _) =>
         {
             if (!_settingFolderProgrammatically) _selectedTranslatedFiles.Clear();
+            ClearMark(FolderShell, HintFolder, "DlgPackagerHintFolder");
+            RefreshFileFields();
         };
         OriginalsBox.TextChanged += (_, _) =>
         {
             if (!_settingOriginalsProgrammatically) _selectedOriginalFiles.Clear();
+            RefreshFileFields();
         };
         ApplyLanguage();
         PopulateModCombo();
@@ -133,14 +152,8 @@ public partial class TranslationPackagerDialog : Window
 
         if (defaultPick != null)
         {
-            foreach (ComboBoxItem item in ModCombo.Items)
-            {
-                if (ReferenceEquals(item.Tag, defaultPick))
-                {
-                    ModCombo.SelectedItem = item;
-                    break;
-                }
-            }
+            ModCombo.SelectedItem = ModCombo.Items.OfType<ModOption>()
+                .FirstOrDefault(o => ReferenceEquals(o.Profile, defaultPick));
         }
 
         // Reset the "looks like a mod version" warning whenever the user
@@ -151,13 +164,35 @@ public partial class TranslationPackagerDialog : Window
         {
             _userAcknowledgedModVersionWarning = false;
             if (!_settingVersionProgrammatically) _versionIsAutoSuggested = false;
+            ClearMark(VersionShell, HintVersion, VersionHintKey);
+            GenerateButton.Content = Strings.Get("DlgPackagerBtnGenerate");
+            UpdateFooterNote();
+            UpdateProposedChips();
             UpdateVersionExistsWarning();
+            UpdatePreview();
         };
         IdBox.TextChanged += (_, _) =>
         {
+            ClearMark(IdShell, HintId, "DlgPackagerHintId");
             RefreshVersionSuggestion();
             UpdateVersionExistsWarning();
         };
+        NameBox.TextChanged += (_, _) =>
+        {
+            ClearMark(NameShell, HintName, "DlgPackagerHintName");
+            UpdatePreview();
+        };
+        AuthorBox.TextChanged += (_, _) => UpdatePreview();
+        DescriptionBox.TextChanged += (_, _) => UpdatePlaceholders();
+        CompatExtraBox.TextChanged += (_, _) =>
+        {
+            ClearCompatMark();
+            UpdatePlaceholders();
+            UpdatePreview();
+        };
+        CompatCurrentCheck.Checked += (_, _) => { ClearCompatMark(); UpdatePreview(); };
+        CompatCurrentCheck.Unchecked += (_, _) => UpdatePreview();
+        IndexZipUrlBox.TextChanged += (_, _) => UpdatePlaceholders();
 
         // Once the user types into the output box themselves, stop the
         // auto-suggest. The autosuggest writes the default on mod-switch
@@ -167,6 +202,134 @@ public partial class TranslationPackagerDialog : Window
         // Re-suggest the output filename when the language id changes
         // (still respects the user-edited flag — won't overwrite).
         IdBox.TextChanged += (_, _) => RefreshAutoSuggestedOutput();
+
+        ModDialogChrome.SetLineHeight(1.25, HeaderText, ResultHeaderText);
+        ModDialogChrome.SetLineHeight(1.55, DescriptionText);
+        ModDialogChrome.SetLineHeight(1.5, ResultSummaryText, IndexHint);
+        UpdatePlaceholders();
+        UpdateProposedChips();
+        UpdatePreview();
+        UpdateFooterNote();
+        if (_previewVariant != null) ShowPreview(_previewVariant);
+    }
+
+    private string VersionHintKey => _currentModVersion == "?" ? "DlgPackagerHintVersionUnknown" : "DlgPackagerHintVersion";
+
+    /// <summary>A placeholder shows only while its box is empty.</summary>
+    private void UpdatePlaceholders()
+    {
+        static Visibility V(TextBox b) => string.IsNullOrEmpty(b.Text) ? Visibility.Visible : Visibility.Collapsed;
+        DescriptionPlaceholder.Visibility = V(DescriptionBox);
+        CompatPlaceholder.Visibility = V(CompatExtraBox);
+        IndexZipUrlPlaceholder.Visibility = V(IndexZipUrlBox);
+    }
+
+    private void UpdateProposedChips()
+    {
+        VersionProposed.Visibility = _versionIsAutoSuggested && VersionBox.Text.Length > 0
+            ? Visibility.Visible : Visibility.Collapsed;
+        OutputProposed.Visibility = _outputIsAutoSuggested ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateFooterNote()
+    {
+        FooterNote.Text = Strings.Get(
+            ResultPanel.Visibility == Visibility.Visible ? "DlgPackagerFootDone"
+            : _userAcknowledgedModVersionWarning ? "DlgPackagerFootConfirm"
+            : "DlgPackagerFootReady");
+    }
+
+    /// <summary>What was picked shows as chips; a typed folder stays a path in the box.</summary>
+    private void RefreshFileFields()
+    {
+        ShowFiles(_selectedTranslatedFiles, FolderChips, FolderBox, FolderPlaceholder);
+        ShowFiles(_selectedOriginalFiles, OriginalsChips, OriginalsBox, OriginalsPlaceholder);
+    }
+
+    private static void ShowFiles(List<string> files, WrapPanel chips, TextBox box, TextBlock placeholder)
+    {
+        chips.Children.Clear();
+        foreach (var file in files)
+        {
+            var name = new TextBlock
+            {
+                Text = Path.GetFileName(file),
+                FontFamily = new FontFamily("Consolas, Courier New, monospace"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            name.SetResourceReference(TextBlock.FontSizeProperty, "SetDescSize");
+            name.SetResourceReference(TextBlock.ForegroundProperty, "UiBodyText");
+            chips.Children.Add(new Border
+            {
+                Height = 22,
+                CornerRadius = new CornerRadius(11),
+                Padding = new Thickness(8, 0, 8, 0),
+                Margin = new Thickness(0, 4, 8, 4),
+                Background = new SolidColorBrush(Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+                Child = name,
+            });
+        }
+        var picked = files.Count > 0;
+        chips.Visibility = picked ? Visibility.Visible : Visibility.Collapsed;
+        box.Visibility = picked ? Visibility.Collapsed : Visibility.Visible;
+        placeholder.Visibility = !picked && box.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ClearMark(Border shell, TextBlock hint, string hintKey)
+    {
+        if (shell.Tag == null) return;
+        shell.ClearValue(TagProperty);
+        hint.ClearValue(TextBlock.ForegroundProperty);
+        hint.Text = Strings.Get(hintKey);
+    }
+
+    private void ClearCompatMark()
+    {
+        CompatShell.ClearValue(TagProperty);
+        HintCompat.Visibility = Visibility.Collapsed;
+    }
+
+    private void Mark(Border shell, TextBlock hint, string message)
+    {
+        shell.Tag = Marked;
+        hint.Text = message;
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "WindowNoticeTitle");
+        hint.Visibility = Visibility.Visible;
+    }
+
+    private List<string> CompatVersions()
+    {
+        var compat = new List<string>();
+        if (CompatCurrentCheck.IsChecked == true && _currentModVersion != "?")
+            compat.Add(_currentModVersion);
+        foreach (var v in (CompatExtraBox.Text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = v.Trim();
+            if (trimmed.Length > 0 && !compat.Contains(trimmed)) compat.Add(trimmed);
+        }
+        return compat;
+    }
+
+    /// <summary>The line the language menu will show, in the form as it is typed and in the result.
+    /// It mirrors MainWindow.BuildLanguageMenuItem: name, version, compatibility and author.</summary>
+    private void UpdatePreview()
+    {
+        var name = NameBox.Text.Trim();
+        var version = VersionBox.Text.Trim();
+        var compat = CompatVersions();
+        var compatText = compat.Count > 0
+            ? Strings.Format("DlgPackagerPreviewCompat", string.Join(", ", compat))
+            : Strings.Get("DlgPackagerPreviewNoCompat");
+        var author = AuthorBox.Text.Trim();
+        var authorText = author.Length > 0 ? "· " + author : "";
+        var versionText = "v" + (version.Length > 0 ? version : "…");
+
+        FormPreviewName.Text = ResultPreviewName.Text = name.Length > 0 ? name : "…";
+        FormPreviewVersion.Text = ResultPreviewVersion.Text = versionText;
+        FormPreviewCompat.Text = ResultPreviewCompat.Text = compatText;
+        FormPreviewAuthor.Text = ResultPreviewAuthor.Text = authorText;
     }
 
     private void OutputBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -178,7 +341,10 @@ public partial class TranslationPackagerDialog : Window
         if (BuildSuggestedOutput() != OutputBox.Text)
         {
             _outputIsAutoSuggested = false;
+            UpdateProposedChips();
         }
+        OutputShell.ClearValue(TagProperty);
+        HintOutput.Visibility = Visibility.Collapsed;
     }
 
     private string BuildSuggestedOutput()
@@ -206,26 +372,28 @@ public partial class TranslationPackagerDialog : Window
     private void PopulateModCombo()
     {
         ModCombo.Items.Clear();
+        var strong = (Brush)FindResource("WindowStrongText");
+        var dim = (Brush)FindResource("WindowFineText");
         foreach (var profile in _profiles)
         {
             var state = _config.GetState(profile.Id);
             bool installed = !string.IsNullOrEmpty(state.InstallPath)
                 && Directory.Exists(state.InstallPath);
 
-            var item = new ComboBoxItem
-            {
-                Tag = profile,
-                Content = installed
+            ModCombo.Items.Add(new ModOption(
+                profile,
+                MainWindow.TryLoadTileImage(profile.ResolveIconSource()),
+                installed
                     ? profile.DisplayName
-                    : $"{profile.DisplayName}  ·  {Strings.Get("DlgPackagerModNotInstalled")}",
-            };
-            ModCombo.Items.Add(item);
+                    : $"{profile.DisplayName} · {Strings.Get("DlgPackagerModNotInstalled")}",
+                installed ? state.LastKnownVersion ?? "" : "",
+                installed ? strong : dim));
         }
     }
 
     private void ModCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var profile = (ModCombo.SelectedItem as ComboBoxItem)?.Tag as ModProfile;
+        var profile = (ModCombo.SelectedItem as ModOption)?.Profile;
         if (profile == null) return;
 
         _selectedProfile = profile;
@@ -258,9 +426,18 @@ public partial class TranslationPackagerDialog : Window
 
         // Refresh the compat-checkbox label so it reflects the new
         // mod's version (or "?" if unknown).
-        CompatCurrentCheck.Content = Strings.Format("DlgPackagerCompatCurrent", _currentModVersion);
-        CompatCurrentCheck.IsEnabled = _currentModVersion != "?";
-        if (_currentModVersion == "?") CompatCurrentCheck.IsChecked = false;
+        var known = _currentModVersion != "?";
+        CompatCurrentText.Text = known
+            ? Strings.Format("DlgPackagerCompatCurrent", _currentModVersion)
+            : Strings.Get("DlgPackagerCompatUnknown");
+        CompatCurrentHint.Text = Strings.Get(known ? "DlgPackagerCompatHint" : "DlgPackagerCompatHintUnknown");
+        CompatCurrentCheck.IsEnabled = known;
+        CompatCurrentCheck.IsChecked = known;
+
+        var installed = !string.IsNullOrEmpty(installPath) && Directory.Exists(installPath);
+        HintMod.Text = Strings.Get(installed ? "DlgPackagerHintMod" : "DlgPackagerHintModMissing");
+        HintOriginals.Text = Strings.Get(installed ? "DlgPackagerHintOriginals" : "DlgPackagerHintOriginalsMissing");
+        HintVersion.Text = Strings.Get(VersionHintKey);
 
         // Refresh the output filename suggestion (e.g. wol-es.zip → imp-es.zip
         // when switching from Wars of Liberty to Improvement Mod). Respects
@@ -334,6 +511,7 @@ public partial class TranslationPackagerDialog : Window
         _settingVersionProgrammatically = true;
         VersionBox.Text = suggestion;
         _settingVersionProgrammatically = false;
+        UpdateProposedChips();
     }
 
     /// <summary>
@@ -347,16 +525,16 @@ public partial class TranslationPackagerDialog : Window
         var id = IdBox.Text.Trim();
         var version = VersionBox.Text.Trim();
         var existing = ExistingVersionsFor(id);
-        if (version.Length > 0 && existing.Contains(version, StringComparer.OrdinalIgnoreCase))
-        {
-            VersionExistsText.Text = Strings.Format("DlgPackagerVersionExists", version,
-                TranslationIndexWriter.NextRevision(_currentModVersion, existing));
-            VersionExistsText.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            VersionExistsText.Visibility = Visibility.Collapsed;
-        }
+        var taken = version.Length > 0 && existing.Contains(version, StringComparer.OrdinalIgnoreCase);
+        if (taken)
+            ShowVersionExists(version, TranslationIndexWriter.NextRevision(_currentModVersion, existing));
+        VersionExistsBox.Visibility = taken ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ShowVersionExists(string version, string next)
+    {
+        VersionExistsText.Inlines.Clear();
+        ModDialogChrome.AddMarkedText(VersionExistsText, Strings.Format("DlgPackagerVersionExists", version, next));
     }
 
     private void ApplyLanguage()
@@ -370,39 +548,50 @@ public partial class TranslationPackagerDialog : Window
         SectionIdentityHeader.Text = Strings.Get("DlgPackagerSectionIdentity");
         SectionSourceHeader.Text = Strings.Get("DlgPackagerSectionSource");
         SectionCompatHeader.Text = Strings.Get("DlgPackagerSectionCompat");
-        SectionOutputHeader.Text = Strings.Get("DlgPackagerSectionOutput");
 
-        LblMod.Text = Strings.Get("DlgPackagerFieldMod");
         HintMod.Text = Strings.Get("DlgPackagerHintMod");
 
         LblId.Text = Strings.Get("DlgPackagerFieldId");
         HintId.Text = Strings.Get("DlgPackagerHintId");
         LblName.Text = Strings.Get("DlgPackagerFieldName");
+        HintName.Text = Strings.Get("DlgPackagerHintName");
         LblAuthor.Text = Strings.Get("DlgPackagerFieldAuthor");
         LblVersion.Text = Strings.Get("DlgPackagerFieldVersion");
         HintVersion.Text = Strings.Get("DlgPackagerHintVersion");
         LblDescription.Text = Strings.Get("DlgPackagerFieldDescription");
-        HintDescription.Text = Strings.Get("DlgPackagerHintDescription");
+        DescriptionPlaceholder.Text = Strings.Get("DlgPackagerHintDescription");
+        LblPreviewForm.Text = Strings.Get("DlgPackagerResultPreviewLabel");
+        LblPreview.Text = Strings.Get("DlgPackagerResultPreviewLabel");
         LblFolder.Text = Strings.Get("DlgPackagerFieldFolder");
         HintFolder.Text = Strings.Get("DlgPackagerHintFolder");
         LblOriginals.Text = Strings.Get("DlgPackagerFieldOriginals");
         HintOriginals.Text = Strings.Get("DlgPackagerHintOriginals");
-        BrowseOriginalsButton.Content = Strings.Get("ChangePathButton");
-        LblCompat.Text = Strings.Get("DlgPackagerFieldCompat");
-        HintCompatExtra.Text = Strings.Get("DlgPackagerHintCompatExtra");
+        FolderPlaceholder.Text = OriginalsPlaceholder.Text = Strings.Get("DlgPatchGenNotChosen");
+        BrowseFolderButton.Content = Strings.Get("DlgPackagerChooseFiles");
+        BrowseOriginalsButton.Content = Strings.Get("DlgPackagerChooseFiles");
+        LblCompatExtra.Text = Strings.Get("DlgPackagerHintCompatExtra");
+        CompatPlaceholder.Text = Strings.Get("DlgPackagerCompatPlaceholder");
         LblOutput.Text = Strings.Get("DlgPackagerFieldOutput");
-        BrowseFolderButton.Content = Strings.Get("ChangePathButton");
-        BrowseOutputButton.Content = Strings.Get("ChangePathButton");
+        BrowseOutputButton.Content = Strings.Get("DlgPackagerBrowse");
+        VersionProposedText.Text = OutputProposedText.Text = Strings.Get("DlgPackagerProposed");
+        VersionProposed.ToolTip = TooltipHelper.Wrap(Strings.Get("DlgPackagerProposedVersionTip"));
+        OutputProposed.ToolTip = TooltipHelper.Wrap(Strings.Get("DlgPackagerProposedOutputTip"));
         CancelButton.Content = Strings.Get("BtnCancel");
         GenerateButton.Content = Strings.Get("DlgPackagerBtnGenerate");
 
         // Result-panel labels
+        ResultHeaderText.Text = Strings.Get("DlgPackagerResultHeader");
+        ResultFilesHeader.Text = Strings.Get("DlgPackagerWritten");
+        ResultInstructionsHeader.Text = Strings.Get("DlgPackagerPublishHeader");
+        ResultInstructionsNote.Text = Strings.Get("DlgPackagerPublishNote");
         OpenFolderButton.Content = Strings.Get("DlgPackagerBtnOpenFolder");
+        OpenFolderInCardButton.Content = Strings.Get("DlgPackagerBtnOpenFolder");
         DoneButton.Content = Strings.Get("DlgPackagerBtnDone");
         IndexSectionHeader.Text = Strings.Get("DlgPackagerIndexHeader");
-        IndexHint.Text = Strings.Get("DlgPackagerIndexHint");
+        IndexHint.Inlines.Clear();
+        ModDialogChrome.AddMarkedText(IndexHint, Strings.Get("DlgPackagerIndexHint"));
         LblIndexZipUrl.Text = Strings.Get("DlgPackagerIndexZipUrl");
-        HintIndexZipUrl.Text = Strings.Get("DlgPackagerIndexZipUrlHint");
+        IndexZipUrlPlaceholder.Text = Strings.Get("DlgPackagerIndexZipUrlHint");
         AddToIndexButton.Content = Strings.Get("DlgPackagerIndexAddButton");
     }
 
@@ -475,84 +664,36 @@ public partial class TranslationPackagerDialog : Window
 
     private async void GenerateButton_Click(object sender, RoutedEventArgs e)
     {
-        StatusText.Visibility = Visibility.Collapsed;
+        ErrorBox.Visibility = Visibility.Collapsed;
 
         if (_translationService == null || _selectedProfile == null)
         {
-            ShowError(Strings.Get("DlgPackagerErrorNoMod"));
+            ShowError(Strings.Get("DlgPackagerFailTitle"), Strings.Get("DlgPackagerErrorNoMod"));
             return;
         }
 
-        // ---- Validate fields ----
-        if (string.IsNullOrWhiteSpace(IdBox.Text))
+        bool hasPickedFiles = _selectedTranslatedFiles.Count > 0;
+        var compat = CompatVersions();
+        if (ValidateFields(hasPickedFiles, compat) is var problems && problems > 0)
         {
-            ShowError(Strings.Get("DlgPackagerErrorIdMissing"));
+            ShowError(
+                problems == 1 ? Strings.Get("DlgPackagerMissingOne") : Strings.Format("DlgPackagerMissingMany", problems),
+                Strings.Get("DlgPackagerMissingBody"));
             return;
         }
-        if (string.IsNullOrWhiteSpace(NameBox.Text))
-        {
-            ShowError(Strings.Get("DlgPackagerErrorNameMissing"));
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(VersionBox.Text))
-        {
-            ShowError(Strings.Get("DlgPackagerErrorVersionMissing"));
-            return;
-        }
-        // Both become folder names (translations/<id>/<version>/) and the launcher refuses a
-        // pack whose id isn't a plain folder name — say so here, before anything is built.
-        if (!TranslationPathPolicy.IsSafePackId(IdBox.Text.Trim()))
-        {
-            ShowError(Strings.Get("DlgPackagerErrorIdInvalid"));
-            return;
-        }
-        if (!TranslationPathPolicy.IsSafeVersionSegment(VersionBox.Text.Trim()))
-        {
-            ShowError(Strings.Get("DlgPackagerErrorVersionInvalid"));
-            return;
-        }
-        // Soft warning: "1.2.0c2" looks like a mod version, not a pack
-        // version. The translation pack version is the translator's own
-        // semver (1.0, 1.1, ...) and is independent of the mod version.
-        // The proposed "<mod version>-rN" deliberately names the mod version, so it doesn't warn.
+
+        // Soft warning: "1.2.0c2" looks like a mod version, not a pack version. The translation
+        // pack version is the translator's own and is independent of the mod version. The proposed
+        // "<mod version>-rN" deliberately names the mod version, so it doesn't warn.
         if (LooksLikeModVersion(VersionBox.Text)
             && !TranslationIndexWriter.IsRevisionOfModVersion(VersionBox.Text)
             && !_userAcknowledgedModVersionWarning)
         {
-            ShowError(Strings.Format("DlgPackagerVersionLooksLikeMod", VersionBox.Text.Trim()));
             _userAcknowledgedModVersionWarning = true;
-            return;
-        }
-        // Accept either picked files (any name) or a folder path typed/pasted in.
-        bool hasPickedFiles = _selectedTranslatedFiles.Count > 0;
-        if (hasPickedFiles ? !_selectedTranslatedFiles.All(File.Exists)
-                           : !Directory.Exists(FolderBox.Text))
-        {
-            ShowError(Strings.Get("DlgPackagerErrorFolderMissing"));
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(OutputBox.Text))
-        {
-            ShowError(Strings.Get("DlgPackagerErrorOutputMissing"));
-            return;
-        }
-
-        // ---- Build compatibleWith list ----
-        var compat = new List<string>();
-        if (CompatCurrentCheck.IsChecked == true && _currentModVersion != "?")
-            compat.Add(_currentModVersion);
-        if (!string.IsNullOrWhiteSpace(CompatExtraBox.Text))
-        {
-            foreach (var v in CompatExtraBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var trimmed = v.Trim();
-                if (!string.IsNullOrEmpty(trimmed) && !compat.Contains(trimmed))
-                    compat.Add(trimmed);
-            }
-        }
-        if (compat.Count == 0)
-        {
-            ShowError(Strings.Get("DlgPackagerErrorNoCompat"));
+            ShowError(Strings.Get("DlgPackagerLooksLikeModTitle"),
+                Strings.Format("DlgPackagerVersionLooksLikeMod", VersionBox.Text.Trim()));
+            GenerateButton.Content = Strings.Get("DlgPackagerGenerateAnyway");
+            UpdateFooterNote();
             return;
         }
 
@@ -582,62 +723,34 @@ public partial class TranslationPackagerDialog : Window
             var result = await _translationService.ExportPackageAsync(inputs);
             if (!result.Success)
             {
-                ShowError(result.ErrorMessage ?? "Unknown error.");
+                ShowError(Strings.Get("DlgPackagerFailTitle"), result.ErrorMessage ?? "Unknown error.");
                 return;
             }
 
-            // ---- Show the result panel ----
             _lastExport = result;
             IndexZipUrlBox.Text = "";
-            IndexResultText.Visibility = Visibility.Collapsed;
+            IndexResultBox.Visibility = Visibility.Collapsed;
             // Point "Open folder" at the ready-to-commit translations/<id>/ folder
             // when we built one (the new path); else fall back to the loose zip.
             _generatedZipPath = !string.IsNullOrEmpty(result.FolderPath)
                 ? result.FolderPath
                 : result.ZipPath;
-            ResultHeaderText.Text = Strings.Get("DlgPackagerResultHeader");
 
-            // Lead with the ready-to-commit folder (the recommended path); the
-            // standalone zip + its translation.json are listed underneath for the
-            // legacy "upload as release assets" route.
-            var pathLines = "";
-            if (!string.IsNullOrEmpty(result.FolderPath))
-            {
-                pathLines += Strings.Format("DlgPackagerResultFolderPath", result.FolderPath) + "\n";
-            }
-            pathLines += Strings.Format("DlgPackagerResultPath",
-                result.ZipPath, FormatBytes(result.ZipSize));
-            if (!string.IsNullOrEmpty(result.JsonPath))
-            {
-                pathLines += "\n" + Strings.Format("DlgPackagerResultJsonPath", result.JsonPath);
-            }
-            ResultPathText.Text = pathLines;
-
-            // Point the translator at the SELECTED mod's translations repo, not a
-            // hardcoded one — otherwise non-WoL packs get the wrong upload target.
-            // Prefer the folder repo (the new commit-to-main path); fall back to the
-            // legacy releases repo / global override.
+            // Point the translator at the SELECTED mod's translations repo, not a hardcoded one:
+            // otherwise non-WoL packs get the wrong upload target. Prefer the folder repo, fall
+            // back to the legacy releases repo / global override.
             var publishRepo = _selectedProfile?.Translations?.FolderRepo;
             if (string.IsNullOrWhiteSpace(publishRepo)) publishRepo = _selectedProfile?.Translations?.Repo;
             if (string.IsNullOrWhiteSpace(publishRepo)) publishRepo = _config.TranslationsRepo;
-            var packId = string.IsNullOrWhiteSpace(IdBox.Text) ? "<id>" : IdBox.Text.Trim();
-            ResultInstructionsText.Text = Strings.Format("DlgPackagerResultInstructions", publishRepo, packId);
 
-            // Build a "this is how players will see it" preview that mirrors
-            // BuildLanguageMenuItem in MainWindow.xaml.cs — gives the translator
-            // a sanity check (catches "wait, that says v1.2.0c2 not v1.0").
-            LblPreview.Text = Strings.Get("DlgPackagerResultPreviewLabel");
-            PreviewText.Text = BuildMenuPreview(inputs);
-
-            FormPanel.Visibility = Visibility.Collapsed;
-            ResultPanel.Visibility = Visibility.Visible;
-            FormFooter.Visibility = Visibility.Collapsed;
-            ResultFooter.Visibility = Visibility.Visible;
+            ShowResult(inputs.Name, _selectedProfile?.DisplayName ?? "", inputs.Version, inputs.Id,
+                Path.GetDirectoryName(result.ZipPath) ?? "", publishRepo ?? "",
+                result.FolderPath, result.ZipPath, result.ZipSize, result.JsonPath);
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Packager: unexpected error: {ex}");
-            ShowError(ex.Message);
+            ShowError(Strings.Get("DlgPackagerFailTitle"), ex.Message);
         }
         finally
         {
@@ -715,9 +828,15 @@ public partial class TranslationPackagerDialog : Window
 
     private void ShowIndexResult(string text, bool error)
     {
-        IndexResultText.Text = text;
-        IndexResultText.SetResourceReference(TextBlock.ForegroundProperty, error ? "WarningBrush" : "InfoBrush");
-        IndexResultText.Visibility = Visibility.Visible;
+        IndexResultText.Inlines.Clear();
+        ModDialogChrome.AddMarkedText(IndexResultText, text);
+        IndexResultMark.Text = error ? "!" : "\u2713";
+        IndexResultMark.SetResourceReference(TextBlock.ForegroundProperty, error ? "WindowNoticeDot" : "WindowSafeTick");
+        IndexResultBox.SetResourceReference(Border.BackgroundProperty, error ? "WindowNoticeFill" : "WindowSafeFill");
+        IndexResultBox.BorderBrush = new SolidColorBrush(error
+            ? Color.FromArgb(0x73, 0xF4, 0x90, 0x0C)
+            : Color.FromArgb(0x5C, 0x4F, 0xD6, 0x8A));
+        IndexResultBox.Visibility = Visibility.Visible;
     }
 
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
@@ -728,7 +847,7 @@ public partial class TranslationPackagerDialog : Window
         try
         {
             bool isDir = System.IO.Directory.Exists(_generatedZipPath);
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = "explorer.exe",
                 Arguments = isDir ? $"\"{_generatedZipPath}\"" : $"/select,\"{_generatedZipPath}\"",
@@ -741,58 +860,171 @@ public partial class TranslationPackagerDialog : Window
         }
     }
 
-    private void ShowError(string message)
+    /// <summary>Marks each field that is not ready and answers how many are not.</summary>
+    internal int ValidateFields(bool hasPickedFiles, List<string> compat)
     {
-        StatusText.Text = message;
-        StatusText.Visibility = Visibility.Visible;
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0) return "?";
-        string[] units = { "B", "KB", "MB", "GB" };
-        double size = bytes;
-        int unit = 0;
-        while (size >= 1024 && unit < units.Length - 1) { size /= 1024; unit++; }
-        return $"{size:0.#} {units[unit]}";
-    }
-
-    /// <summary>
-    /// Mirrors the BuildLanguageMenuItem logic in MainWindow.xaml.cs so the
-    /// translator sees an exact preview of how their pack will appear in the
-    /// gear menu. Catches things like "wait, that says v1.2.0c2 — that's the
-    /// mod version, not my translation version" before they publish.
-    /// </summary>
-    private static string BuildMenuPreview(TranslationService.ExportInputs inputs)
-    {
-        var flag = inputs.Id.ToLowerInvariant() switch
+        var problems = 0;
+        void Fail(Border shell, TextBlock hint, string key)
         {
-            "es" or "es-es" or "es-mx" or "es-ar" => "🇪🇸",
-            "fr" or "fr-fr" => "🇫🇷",
-            "de" or "de-de" => "🇩🇪",
-            "it" or "it-it" => "🇮🇹",
-            "pt" or "pt-pt" => "🇵🇹",
-            "pt-br" => "🇧🇷",
-            "ru" or "ru-ru" => "🇷🇺",
-            "zh" or "zh-cn" or "zh-tw" => "🇨🇳",
-            "ja" or "ja-jp" => "🇯🇵",
-            "ko" or "ko-kr" => "🇰🇷",
-            "pl" or "pl-pl" => "🇵🇱",
-            _ => "🌐",
-        };
-        // Mirror the menu format from MainWindow.BuildLanguageMenuItem:
-        // pack version + mod compatibility + author.
-        var preview = $"{flag}  {inputs.Name}";
-        if (!string.IsNullOrEmpty(inputs.Version)) preview += $"  v{inputs.Version}";
-        if (inputs.CompatibleWith != null && inputs.CompatibleWith.Count > 0)
-        {
-            var label = Strings.Format(
-                "MenuLangModVersionLabel",
-                string.Join(", ", inputs.CompatibleWith));
-            preview += $"  {label}";
+            Mark(shell, hint, Strings.Get(key));
+            problems++;
         }
-        if (!string.IsNullOrEmpty(inputs.Author)) preview += $"  · {inputs.Author}";
-        return preview;
+
+        // Both become folder names (translations/<id>/<version>/) and the launcher refuses a pack
+        // whose id isn't a plain folder name: say so here, before anything is built.
+        var id = IdBox.Text.Trim();
+        if (id.Length == 0) Fail(IdShell, HintId, "DlgPackagerErrorIdMissing");
+        else if (!TranslationPathPolicy.IsSafePackId(id)) Fail(IdShell, HintId, "DlgPackagerErrorIdInvalid");
+
+        if (NameBox.Text.Trim().Length == 0) Fail(NameShell, HintName, "DlgPackagerErrorNameMissing");
+
+        var version = VersionBox.Text.Trim();
+        if (version.Length == 0) Fail(VersionShell, HintVersion, "DlgPackagerErrorVersionMissing");
+        else if (!TranslationPathPolicy.IsSafeVersionSegment(version)) Fail(VersionShell, HintVersion, "DlgPackagerErrorVersionInvalid");
+
+        // Accept either picked files (any name) or a folder path typed/pasted in.
+        if (hasPickedFiles ? !_selectedTranslatedFiles.All(File.Exists) : !Directory.Exists(FolderBox.Text))
+            Fail(FolderShell, HintFolder, "DlgPackagerErrorFolderMissing");
+
+        if (compat.Count == 0) Fail(CompatShell, HintCompat, "DlgPackagerErrorNoCompat");
+        if (OutputBox.Text.Trim().Length == 0) Fail(OutputShell, HintOutput, "DlgPackagerErrorOutputMissing");
+        return problems;
+    }
+
+    private void ShowError(string title, string detail)
+    {
+        ErrorTitle.Text = title;
+        ErrorBody.Text = detail;
+        ErrorBox.Visibility = Visibility.Visible;
+        Dispatcher.BeginInvoke(new Action(() => ErrorBox.BringIntoView()), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>The form gives way to what was written, how it will look and how to publish it.</summary>
+    internal void ShowResult(string name, string mod, string version, string id, string outputDir, string repo,
+        string? folder, string? zip, long zipSize, string? json)
+    {
+        var where = string.Equals(outputDir.TrimEnd('\\'), _desktopFolder.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)
+            ? Strings.Get("DlgPackagerOnTheDesktop")
+            : outputDir;
+        ResultSummaryText.Inlines.Clear();
+        ModDialogChrome.AddMarkedText(ResultSummaryText, Strings.Format("DlgPackagerResultSummary", name, mod, version, where));
+
+        ResultFiles.Children.Clear();
+        if (!string.IsNullOrEmpty(folder))
+            AddResultFile(Path.GetRelativePath(outputDir, folder) + "\\", "", "DlgPackagerRoleFolder");
+        if (!string.IsNullOrEmpty(zip))
+            AddResultFile(Path.GetFileName(zip), DiskSpaceService.FormatBytes(zipSize), "DlgPackagerRoleZip");
+        if (!string.IsNullOrEmpty(json) && File.Exists(json))
+            AddResultFile(Path.GetFileName(json), DiskSpaceService.FormatBytes(new FileInfo(json).Length), "DlgPackagerRoleJson");
+
+        ResultSteps.Children.Clear();
+        AddStep(1, Strings.Format("DlgPackagerStepFork", repo));
+        AddStep(2, Strings.Format("DlgPackagerStepCopy", $"translations\\{id}\\"));
+        AddStep(3, Strings.Get("DlgPackagerStepPr"));
+
+        UpdatePreview();
+        FormPanel.Visibility = Visibility.Collapsed;
+        ResultPanel.Visibility = Visibility.Visible;
+        FormFooter.Visibility = Visibility.Collapsed;
+        ResultFooter.Visibility = Visibility.Visible;
+        BodyScroll.ScrollToTop();
+        UpdateFooterNote();
+    }
+
+    private void AddResultFile(string name, string size, string roleKey)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var mono = new FontFamily("Consolas, Courier New, monospace");
+
+        var file = new TextBlock { Text = name, FontFamily = mono, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, 12, 0) };
+        file.SetResourceReference(TextBlock.FontSizeProperty, "SetRowDescSize");
+        file.SetResourceReference(TextBlock.ForegroundProperty, "WindowStrongText");
+        grid.Children.Add(file);
+
+        var weight = new TextBlock { Text = size, FontFamily = mono, VerticalAlignment = VerticalAlignment.Center };
+        weight.SetResourceReference(TextBlock.FontSizeProperty, "SetControlSize");
+        weight.SetResourceReference(TextBlock.ForegroundProperty, "WindowMuted");
+        Grid.SetColumn(weight, 1);
+        grid.Children.Add(weight);
+
+        var role = new TextBlock { Text = Strings.Get(roleKey), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
+        role.SetResourceReference(TextBlock.FontSizeProperty, "SetDescSize");
+        role.SetResourceReference(TextBlock.ForegroundProperty, "WindowFineText");
+        Grid.SetRow(role, 1);
+        Grid.SetColumnSpan(role, 2);
+        grid.Children.Add(role);
+
+        ResultFiles.Children.Add(new Border
+        {
+            MinHeight = 40,
+            Background = new SolidColorBrush(Color.FromArgb(0x66, 0x05, 0x0A, 0x12)),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(11, 6, 11, 6),
+            Margin = new Thickness(0, 8, 0, 0),
+            Child = grid,
+        });
+    }
+
+    private void AddStep(int number, string text)
+    {
+        var row = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var digit = new TextBlock
+        {
+            Text = number.ToString(),
+            FontFamily = new FontFamily("Consolas, Courier New, monospace"),
+            FontSize = 11,
+            FontWeight = FontWeights.Bold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        digit.SetResourceReference(TextBlock.ForegroundProperty, "WindowIncremental");
+        row.Children.Add(new Border
+        {
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(11),
+            VerticalAlignment = VerticalAlignment.Top,
+            Background = new SolidColorBrush(Color.FromArgb(0x33, 0x2F, 0x7F, 0xE0)),
+            Child = digit,
+        });
+
+        var line = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(10, 2, 0, 0) };
+        line.SetResourceReference(TextBlock.FontSizeProperty, "DialogBodySize");
+        line.SetResourceReference(TextBlock.ForegroundProperty, "UiBodyText");
+        ModDialogChrome.AddMarkedText(line, text);
+        Grid.SetColumn(line, 1);
+        row.Children.Add(line);
+        ResultSteps.Children.Add(row);
+    }
+
+    private void ShowPreview(string variant)
+    {
+        IdBox.Text = "es";
+        NameBox.Text = "Español";
+        AuthorBox.Text = "Gorgo";
+        switch (variant.ToLowerInvariant())
+        {
+            case "exists":
+                ShowVersionExists("1.6.2-r1", "1.6.2-r2");
+                VersionExistsBox.Visibility = Visibility.Visible;
+                break;
+            case "invalid":
+                IdBox.Text = "";
+                GenerateButton_Click(this, new RoutedEventArgs());
+                break;
+            case "result":
+                ShowResult("Español", "Wars of Liberty", "1.6.2-r2", "es", _desktopFolder, "Gorgorito12/wol-translations",
+                    Path.Combine(_desktopFolder, "translations", "es", "1.6.2-r2"), Path.Combine(_desktopFolder, "wol-es.zip"), 318 * 1024, null);
+                ShowIndexResult(Strings.Format("DlgPackagerIndexWritten", Path.Combine(_desktopFolder, "translations-index.json")), error: false);
+                break;
+        }
     }
 
     /// <summary>

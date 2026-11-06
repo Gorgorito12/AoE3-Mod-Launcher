@@ -48,6 +48,7 @@ public partial class UninstallDialog : Window
         string copyLabel, int otherCopies, bool isCopy)
     {
         InitializeComponent();
+        Controls.ModDialogChrome.Attach(this, TitleBarControl);
         _plan = plan;
         _modDisplayName = string.IsNullOrEmpty(modDisplayName) ? "the mod" : modDisplayName;
         _probeFile = string.IsNullOrEmpty(probeFile) ? "(unknown)" : probeFile;
@@ -86,7 +87,11 @@ public partial class UninstallDialog : Window
     {
         Title = Strings.Get("DlgUninstallTitle");
         TitleBarControl.Title = Strings.Get("DlgUninstallTitle");
-        HeaderText.Text = Strings.Format("DlgUninstallQuestion", _copyLabel);
+        // Which copy only when there is more than one to mean: with a single one, the mod's name
+        // says it all and the folder's says less.
+        HeaderText.Text = _otherCopies > 0 && !_plan.OverlayOnly
+            ? Strings.Format("DlgUninstallQuestionCopy", _copyLabel, _modDisplayName)
+            : Strings.Format("DlgUninstallQuestion", _modDisplayName);
         OptionsTitleText.Text = Strings.Get("DlgUninstallAlsoRemove");
         OptShortcutsTitle.Text = Strings.Get("DlgUninstallOptShortcuts");
         OptShortcutsDesc.Text = Strings.Get("DlgUninstallOptShortcutsDesc");

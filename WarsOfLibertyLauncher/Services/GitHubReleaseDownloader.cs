@@ -83,6 +83,42 @@ public class GitHubReleaseDownloader
     /// assets are ignored by <see cref="PickAsset"/> either way.</summary>
     public record ReleaseAsset(string Name, long Size, string Url);
 
+    /// <summary>What "Check on GitHub" in the publish wizard found.</summary>
+    public enum ReleaseCheck { Ready, NoZip, NoRelease, Unreachable }
+
+    /// <summary>
+    /// Does this release exist and carry a mod payload? Asked once, by a modder pressing a
+    /// button. Unlike <see cref="ListAssetsAsync"/> this has to tell "no such release" from
+    /// "could not ask": the first is the modder's to fix, the second says nothing about the
+    /// release at all.
+    /// </summary>
+    public async Task<(ReleaseCheck Check, string? Zip)> CheckReleaseAsync(
+        string sourceRepo, string tag, CancellationToken ct = default)
+    {
+        try
+        {
+            var apiUrl = $"https://api.github.com/repos/{sourceRepo}/releases/tags/{Uri.EscapeDataString(tag)}";
+            using var response = await Http.GetAsync(apiUrl, ct);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return (ReleaseCheck.NoRelease, null);
+            if (!response.IsSuccessStatusCode) return (ReleaseCheck.Unreachable, null);
+
+            var release = await response.Content.ReadFromJsonAsync<GitHubRelease>(cancellationToken: ct);
+            var zip = release?.Assets?
+                .Select(a => a.Name)
+                .FirstOrDefault(n => n != null
+                    && (n.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                        || n.EndsWith(".zip.001", StringComparison.OrdinalIgnoreCase))
+                    && !n.StartsWith("patch-", StringComparison.OrdinalIgnoreCase));
+            return zip != null ? (ReleaseCheck.Ready, zip) : (ReleaseCheck.NoZip, null);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"GitHubReleases: CheckReleaseAsync('{sourceRepo}','{tag}') failed: {ex.Message}");
+            return (ReleaseCheck.Unreachable, null);
+        }
+    }
+
     /// <summary>
     /// Return EVERY asset attached to <paramref name="tag"/>'s release (name/size/url) — the full
     /// list <see cref="ResolveAssetAsync"/> already fetches but collapses to one. Lets the delta

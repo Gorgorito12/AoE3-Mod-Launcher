@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t75" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t75" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">75</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Desinstalar, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">El mismo chasis que Dónde se instala (74): franja con la imagen del mod, resplandor de su color y barra de título teñida. Sigue midiendo 560 de ancho y se ajusta al contenido. Se mantiene lo del turno 49: la barra dice solo «Desinstalar» y la pregunta nombra la copia; la tarjeta de la carpeta con borde rojo; «Age of Empires III no se toca» una sola vez, en la franja verde; y cuando el plan se niega, desaparecen las casillas y el botón rojo, y solo queda «Cerrar». Cambios: la pregunta usa el texto de la Biblioteca unificada («¿Desinstalar la copia «X» de Y?»), «Cancelar» pasa de enlace a botón sólido y las casillas van en el color del mod. Las casillas funcionan.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <sc-for list="{{ cases }}" as="c" hint-placeholder-count="6">
+      <div id="{{ c.id }}" style="display:flex;flex-direction:column;gap:10px;width:560px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#{{ c.id }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ c.id }}</a><span>{{ c.note }}</span></div><dc-import name="DesinstalarDialog" mod="{{ c.mod }}" caso="{{ c.caso }}" transparencia="{{ tr }}" hint-size="560px,520px"></dc-import></div>
+    </sc-for>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      tr: this.props.transparencia ?? 'Media',
+      cases: [
+        { id: '75a', mod: 'Wars of Liberty', caso: 'Copia en uso', note: 'La copia en uso, con más copias del mod. Aparece «Partidas guardadas y perfiles», sin marcar.' },
+        { id: '75b', mod: 'Wars of Liberty', caso: 'Otra copia', note: 'Otra copia. Sin «Partidas guardadas»: todas las copias comparten la misma carpeta de My Games.' },
+        { id: '75c', mod: 'Hundred Days', caso: 'Única copia', note: 'Una sola copia: la franja verde no habla de otras copias.' },
+        { id: '75d', mod: 'Improvement Mod', caso: 'Encima de tu AoE3', note: 'Encima de tu AoE3: la carpeta se queda, solo se quitan los archivos del mod. Sin imagen, solo el resplandor.' },
+        { id: '75e', mod: 'Wars of Liberty', caso: 'No es el mod', note: 'La carpeta no es el mod. Sin casillas ni botón rojo; solo «Cerrar».' },
+        { id: '75f', mod: 'Hundred Days', caso: 'Contiene AoE3', note: 'La carpeta contiene el juego base: el launcher nunca la borra.' },
+        { id: '75g', mod: 'Improvement Mod', caso: 'Nada que desinstalar', note: 'Ya no queda nada en la carpeta.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

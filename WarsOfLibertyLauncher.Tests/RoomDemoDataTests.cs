@@ -37,7 +37,8 @@ public class RoomDemoDataTests
         // long-name duplicates - they draw the same TWO rows on purpose, and what one shows
         // that the other cannot is the name that does not fit, so the key has to carry it.
         var shapes = all
-            .Select(s => (s.Seats, s.Players.Count, Longest: s.Players.Max(p => p.Login.Length)))
+            .Select(s => (s.Seats, s.Players.Count, Longest: s.Players.Max(p => p.Login.Length),
+                s.QuickSearch, s.QuickRadminMissing, s.QuickElapsed))
             .ToList();
         Assert.Equal(shapes.Count, shapes.Distinct().Count());
 

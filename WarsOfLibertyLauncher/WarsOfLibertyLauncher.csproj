@@ -185,6 +185,9 @@
          rebranding the launcher (changing AppIcon.ico) doesn't change
          WoL's tile, and vice versa. -->
     <Resource Include="AppIcon.ico" />
+    <!-- Titles of the design base (BASE.md). Open Font License: Assets/Fonts/SourceSerif4-LICENSE.md -->
+    <Resource Include="Assets\Fonts\SourceSerif4-Bold.ttf" />
+    <Resource Include="Assets\Fonts\SourceSerif4-Semibold.ttf" />
     <Resource Include="AppIcon.png" />
     <Resource Include="WoL.ico" />
 

@@ -97,7 +97,7 @@ public partial class UserDataRestoreDialog : Window
 
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            Services.HarnessMode.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = parent,
                 UseShellExecute = true,

@@ -241,7 +241,7 @@ public static class AoE3SetupPathRedirect
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        using var p = Process.Start(psi);
+        using var p = Services.HarnessMode.Start(psi);
         if (p == null) throw new IOException("Failed to start cmd for mklink");
         p.WaitForExit(10_000);
         if (!p.HasExited || p.ExitCode != 0)

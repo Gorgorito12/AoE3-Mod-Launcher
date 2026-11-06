@@ -117,14 +117,14 @@ public static class AppToast
             {
                 Margin = new Thickness(0, 8, 0, 0),
                 HorizontalAlignment = HorizontalAlignment.Right,
-                MaxWidth = 340,
+                Width = 420,
                 Opacity = 0,
                 RenderTransform = new TranslateTransform(28, 0),
             };
             var halo = new Border
             {
                 Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
-                CornerRadius = new CornerRadius(9),
+                CornerRadius = new CornerRadius(12),
                 IsHitTestVisible = false,
                 // Cached: an empty shadow, so the toast slides in without re-running its blur.
                 CacheMode = new BitmapCache(),
@@ -132,25 +132,20 @@ public static class AppToast
                 {
                     Color = Colors.Black,
                     ShadowDepth = 0,
-                    BlurRadius = 18,
+                    BlurRadius = 36,
                     Opacity = 0.5,
                 },
             };
-            var outer = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
-                CornerRadius = new CornerRadius(9),
-                Padding = new Thickness(1),
-            };
+            var outer = new Border();
             shell.Children.Add(halo);
             shell.Children.Add(outer);
             var card = new Border
             {
-                Background = Res("MpSurface"),
-                BorderBrush = Res("MpDivider"),
-                BorderThickness = new Thickness(2),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(14, 12, 12, 12),
+                Background = Res("LibraryMenuBg"),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x1F, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(14, 14, 14, 12),
             };
             outer.Child = card;
 
@@ -176,19 +171,21 @@ public static class AppToast
             col.Children.Add(new TextBlock
             {
                 Text = opts.Title,
-                FontSize = F("FontSizeBodyStrong"),
+                FontSize = 13.5,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = Res("TextPrimary"),
-                TextWrapping = TextWrapping.Wrap,
+                Foreground = Res("UiTitleText"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
             });
             if (!string.IsNullOrWhiteSpace(opts.Body))
                 col.Children.Add(new TextBlock
                 {
                     Text = opts.Body,
-                    FontSize = F("FontSizeCaption"),
-                    Foreground = Res("TextSecondary"),
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xB9, 0xC9, 0xDE)),
                     TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 2, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxHeight = 36,
+                    Margin = new Thickness(0, 3, 0, 0),
                 });
 
             // Close-on-timeout + manual close share one path.
@@ -210,20 +207,25 @@ public static class AppToast
                 var btnRow = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Margin = new Thickness(0, 10, 0, 0),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Margin = new Thickness(0, 12, 0, 0),
                 };
                 foreach (var a in opts.Actions)
                 {
                     var btn = new Button
                     {
                         Content = a.Label,
-                        Style = (Style)Application.Current.FindResource(
-                            a.IsPrimary ? "MpPrimaryButton" : "MpSecondaryButton"),
-                        MinWidth = 72,
-                        Padding = new Thickness(12, 5, 12, 5),
-                        Margin = new Thickness(0, 0, 8, 0),
-                        FontSize = F("FontSizeCaption"),
+                        Style = (Style)Application.Current.FindResource("LibraryCardButton"),
+                        MinWidth = 96,
+                        Margin = new Thickness(8, 0, 0, 0),
+                        FontSize = 12,
                     };
+                    if (a.IsPrimary)
+                    {
+                        btn.Background = new SolidColorBrush(Color.FromRgb(0x1D, 0x4A, 0x37));
+                        btn.BorderBrush = new SolidColorBrush(Color.FromArgb(0x8C, 0x4F, 0xD6, 0x8A));
+                        btn.Foreground = Brushes.White;
+                    }
                     var act = a.OnClick;
                     var keepOpen = a.KeepOpen;
                     var doneLabel = a.DoneLabel;

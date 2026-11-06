@@ -173,6 +173,7 @@ public static class GameSettingsStore
     public static SettingsImportResult ImportFrom(
         ModProfile source, ModProfile target, LauncherConfig config)
     {
+        if (HarnessMode.BlockUserData($"import settings {source.Id} to {target.Id}")) return SettingsImportResult.Failed;
         var result = ImportFromCore(source, target, config);
         if (result == SettingsImportResult.Imported && SettlePending(config, target.Id, out var superseded))
         {

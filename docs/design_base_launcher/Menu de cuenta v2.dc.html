@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t79" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t79" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">79</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Menú de cuenta y «Conectado ▾», con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Los dos menús globales de la barra van en neutros: el color del mod solo aparece en lo que es del mod, como el subrayado de BIBLIOTECA. Usan el cristal de menú según la transparencia del usuario (Media: rgba(12,22,38,.74) + 28 px), con radio 12 y filas de 32. Se mantiene lo que ya hace el código: cada menú se alinea a la derecha bajo su botón y solo hay uno abierto a la vez. El de cuenta empieza por tu identidad y tu ELO, y la línea del ELO se omite si aún no se conoce. «Conectado ▾» muestra tu IP de Radmin para copiarla y «Ayuda para conectarte», que abre el asistente (<a href="Asistente de Radmin v2.dc.html">78</a>) y no aparece si el asistente está en «Nunca». Cambios: en la cuenta puedes elegir la insignia junto a tu nombre (La más alta · 1v1 · Equipos). Es el mismo selector del Perfil (51c), pero aquí, donde se busca. «Cerrar sesión» va al final, separado. La cabecera de «Conectado» dice a qué estás conectado (Radmin VPN), y la IP se copia en su propia fila: «Copiar» pasa a «✓ Copiada». El chip lleva ▾, como en el código, porque abre algo. «Sin conexión» pasa al naranja fijo de error y dice «Comprobando…» mientras reintenta. Y sin sesión, en vez de un hueco, aparece «Iniciar sesión». Además, la cuenta muestra tus dos clasificaciones (1v1 y Equipos), con la que se ve resaltada. «Cerrar sesión» avisa si te va a sacar de una sala (79g). Y si Radmin está abierto pero no estás en la red AoE3, el chip deja de decir «Conectado»: pasa a «Falta la red», en naranja, y la ayuda sube al principio del menú (79h). La insignia se guarda en el servidor, así que al elegirla la línea de abajo confirma «✓ Guardada». Sin conexión, el selector se desactiva y lo explica (79f). Todo es interactivo: abre los menús, cambia la insignia y copia la IP.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <sc-for list="{{ cases }}" as="c" hint-placeholder-count="6">
+      <div id="{{ c.id }}" style="display:flex;flex-direction:column;gap:10px;width:820px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#{{ c.id }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ c.id }}</a><span>{{ c.note }}</span></div><dc-import name="BarraCuenta" abierto="{{ c.open }}" sesion="{{ c.sesion }}" ip="{{ c.ip }}" sin-conexion="{{ c.off }}" sin-equipos="{{ c.noTeam }}" en-sala="{{ c.room }}" fuera-de-red="{{ c.outNet }}" transparencia="{{ tr }}" hint-size="820px,500px"></dc-import></div>
+    </sc-for>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const C = (id, open, note, x = {}) => ({ id, open, note, sesion: true, ip: true, off: false, noTeam: false, room: false, outNet: false, ...x });
+    return {
+      tr: this.props.transparencia ?? 'Media',
+      cases: [
+        C('79a', 'Cuenta', 'Menú de cuenta. Tu ELO de equipos es más alto, así que «La más alta» muestra el escudo doble. Prueba 1v1.'),
+        C('79b', 'Conexión', '«Conectado ▾»: tu IP de Radmin (pulsa para copiarla) y la ayuda, que abre el asistente.'),
+        C('79c', 'Conexión', 'Sin IP de Radmin: lo dice en una línea, sin fila que copiar.', { ip: false }),
+        C('79d', 'Cuenta', 'Sin partidas de equipo: «Equipos» desactivado, con el motivo.', { noTeam: true }),
+        C('79e', 'Ninguno', 'Sin sesión: «Iniciar sesión» en lugar del hueco. Sin sesión tampoco hay chip de conexión, como hoy.', { sesion: false }),
+        C('79f', 'Cuenta', 'Sin internet: «Sin conexión» en la barra de título, que al pulsarlo dice «Comprobando…». La insignia no se puede cambiar sin conexión, y el menú lo dice.', { off: true }),
+        C('79g', 'Cuenta', 'Estás en una sala: «Cerrar sesión» avisa de que te sacará de ella.', { room: true }),
+        C('79h', 'Conexión', 'Radmin abierto, pero fuera de la red AoE3: el chip pasa a «Falta la red» y la ayuda va primero.', { outNet: true })
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

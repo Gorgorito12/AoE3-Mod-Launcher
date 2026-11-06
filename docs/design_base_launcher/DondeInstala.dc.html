@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:700px;box-sizing:border-box;border-radius:10px;overflow:hidden;color-scheme:dark;box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08);background:{{ bg }};display:flex;flex-direction:column;position:relative;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ barBg }};backdrop-filter:blur({{ barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:{{ icon }}"></span><span style="font:700 14px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">{{ winTitle }}</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">✕</span></div>
+  <div style="padding:26px 22px 20px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;flex-direction:column;gap:7px;padding:0 2px 6px"><span style="font:700 22px/1.2 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 2px 12px rgba(0,0,0,.45);text-wrap:pretty">{{ title }}</span><span style="max-width:60ch;font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-shadow:0 1px 8px rgba(0,0,0,.5);text-wrap:pretty">{{ desc }}</span></div>
+    <div style="border-radius:12px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:16px;display:flex;flex-direction:column;gap:14px">
+      <sc-if value="{{ showSrc }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;gap:8px;min-height:24px"><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Tu AoE3</span><div style="flex:1"></div><span style="flex:none;white-space:nowrap;height:24px;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6"><span style="width:7px;height:7px;border-radius:4px;background:{{ srcDot }}"></span>{{ srcChip }}</span></div>
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:8px">
+            <div style="height:34px;box-sizing:border-box;padding:0 11px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);display:flex;align-items:center;min-width:0;font:400 12.5px/1 Consolas,ui-monospace,monospace;white-space:nowrap">
+              <sc-if value="{{ srcHas }}" hint-placeholder-val="{{ true }}"><span style="flex:none;color:#8ea4c0">{{ src.root }}</span><span style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;color:#6d829d">{{ src.mid }}</span><span style="flex:none;color:#dce7f5;font-weight:600">{{ src.leaf }}</span></sc-if>
+              <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><span style="font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Ninguna carpeta elegida</span></sc-if>
+            </div>
+            <span onClick="{{ pickSrc }}" style="cursor:pointer;height:34px;box-sizing:border-box;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cambiar…</span>
+          </div>
+          <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:2px"><span style="flex:1 1 300px;font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">No encontramos tu AoE3: The Asian Dynasties. Elige la carpeta donde está instalado, la que tiene age3y.exe.</span><span onClick="{{ search }}" style="cursor:pointer;flex:none;white-space:nowrap;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ searchT }}</span></div></sc-if>
+        </div>
+      </sc-if>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;align-items:center;gap:8px;min-height:24px"><sc-if value="{{ nested }}" hint-placeholder-val="{{ true }}"><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#8ea4c0">↳</span></sc-if><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ destLabel }}</span><div style="flex:1"></div><sc-if value="{{ nested }}" hint-placeholder-val="{{ true }}"><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">dentro de la carpeta de arriba</span></sc-if></div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:8px">
+          <div style="position:relative;min-width:0">
+            <input value="{{ dest }}" placeholder="{{ destPh }}" onChange="{{ onDest }}" onFocus="{{ focus }}" onBlur="{{ blur }}" style="width:100%;height:34px;box-sizing:border-box;padding:0 11px;border:0;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);color:#e8eef6;font:400 12.5px/1 Consolas,ui-monospace,monospace;outline:0" style-focus="box-shadow:inset 0 0 0 2px {{ acc }}">
+            <sc-if value="{{ showDisp }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;inset:0;pointer-events:none;box-sizing:border-box;padding:0 11px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);display:flex;align-items:center;min-width:0;font:400 12.5px/1 Consolas,ui-monospace,monospace;white-space:nowrap"><span style="flex:none;color:#8ea4c0">{{ dst.root }}</span><span style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;color:#6d829d">{{ dst.mid }}</span><span style="flex:none;color:#dce7f5;font-weight:600">{{ dst.leaf }}</span></div></sc-if>
+          </div>
+          <span onClick="{{ pickDest }}" style="cursor:pointer;height:34px;box-sizing:border-box;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cambiar…</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;background:{{ spBg }};box-shadow:inset 0 0 0 1px {{ spRing }}"><span style="flex:none;width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:{{ spDot }};font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#0f1c2e">{{ spGlyph }}</span><span style="font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:{{ spC }};text-wrap:pretty">{{ sp.a }}<b style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ sp.n1 }}</b>{{ sp.b }}<b style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ sp.n2 }}</b>{{ sp.c }}</span></div>
+    </div>
+    <sc-if value="{{ firstRun }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 12px;border-radius:10px;background:rgba(244,144,12,.1);box-shadow:inset 0 0 0 1px rgba(244,144,12,.45);font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">Abre el AoE3 original al menos una vez antes de instalar: así crea su carpeta de datos en Documentos\My Games. Puedes instalar igual.</div></sc-if>
+    <sc-if value="{{ showCopy }}" hint-placeholder-val="{{ true }}">
+      <div style="border-radius:12px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span onClick="{{ flipCopy }}" style="cursor:pointer;flex:none;width:16px;height:16px;box-sizing:border-box;border-radius:4px;display:flex;align-items:center;justify-content:center;background:{{ cbBg }};box-shadow:inset 0 0 0 1px {{ cbRing }};font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ onAcc }}">{{ cbTick }}</span><span onClick="{{ flipCopy }}" style="cursor:pointer;font:600 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Copiar gráficos, sonido y teclas de</span><select value="{{ from }}" onChange="{{ onFrom }}" style="height:32px;min-width:170px;box-sizing:border-box;padding:0 10px;border-radius:7px;background:#1a2c48;border:1px solid rgba(130,175,255,.22);color:#dce7f5;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;outline:0;cursor:pointer;opacity:{{ selOp }}"><sc-for list="{{ others }}" as="o" hint-placeholder-count="2"><option value="{{ o }}">{{ o }}</option></sc-for></select></div>
+        <span style="padding-left:26px;font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">Se copian la primera vez que abras el mod, no al instalarlo. Tus partidas guardadas, ciudades de origen y perfil no se tocan.</span>
+      </div>
+    </sc-if>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:4px">
+      <sc-if value="{{ block }}" hint-placeholder-val="{{ false }}"><span style="flex:1;font:400 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-align:right">{{ block }}</span></sc-if>
+      <span style="cursor:pointer;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cancelar</span>
+      <span style="cursor:{{ okCur }};min-width:136px;box-sizing:border-box;height:32px;padding:0 16px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ okBg }};box-shadow:{{ okSh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ okC }};white-space:nowrap">Instalar</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:740,&quot;height&quot;:640},&quot;mod&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Wars of Liberty&quot;,&quot;Hundred Days&quot;,&quot;Improvement Mod&quot;],&quot;default&quot;:&quot;Wars of Liberty&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;caso&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Normal&quot;,&quot;Sin espacio&quot;,&quot;AoE3 no encontrado&quot;,&quot;Encima de tu AoE3&quot;,&quot;Primer mod&quot;,&quot;AoE3 sin abrir&quot;],&quot;default&quot;:&quot;Normal&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { dest: null, focus: false, copy: true, from: null, found: false, searching: false, alt: false };
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const M = { 'Wars of Liberty': { id: 'wol', acc: '#c8102e', hero: true, need: 12 }, 'Hundred Days': { id: 'hundred-days', acc: '#8f9a2e', hero: true, need: 9 }, 'Improvement Mod': { id: 'improvement-mod', acc: '#3a8cd9', hero: false, need: 11 } };
+    const name = M[this.props.mod] ? this.props.mod : 'Wars of Liberty', m = M[name], acc = m.acc;
+    const caso = this.props.caso ?? 'Normal';
+    const overlay = caso === 'Encima de tu AoE3', noAoe = caso === 'AoE3 no encontrado', noSpace = caso === 'Sin espacio';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px' }, 'Media': { bg: 'rgba(10,19,33,.5)', blur: '16px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px' } })[this.props.transparencia ?? 'Media'] || { bg: 'rgba(10,19,33,.5)', blur: '16px' };
+    const hexA = (h, a) => { const n = parseInt(h.slice(1), 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; };
+    const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const Lm = h => { const n = parseInt(h.slice(1), 16); return 0.2126 * lin(n >> 16 & 255) + 0.7152 * lin(n >> 8 & 255) + 0.0722 * lin(n & 255); };
+    const onAcc = 1.05 / (Lm(acc) + 0.05) >= (Lm(acc) + 0.05) / (Lm('#0f1c2e') + 0.05) ? '#ffffff' : '#0f1c2e';
+    const SRC = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Age Of Empires 3';
+    const srcHas = !noAoe || s.found;
+    const defDest = overlay ? SRC : srcHas ? SRC + '\\' + name : '';
+    const dest = s.dest ?? defDest;
+    const split = p => { const r = /^([A-Za-z]:\\|\\\\[^\\]+\\)(.*)$/.exec(p || ''); if (!r) return { root: '', mid: '', leaf: p || '' }; const rest = r[2].replace(/\\+$/, ''); const k = rest.lastIndexOf('\\'); return { root: r[1], mid: k >= 0 ? rest.slice(0, k + 1) : '', leaf: k >= 0 ? rest.slice(k + 1) : rest }; };
+    const drive = ((/^([A-Za-z]):/.exec(dest) || [])[1] || 'C').toUpperCase();
+    const free = drive === 'C' ? (noSpace ? '4,1 GB' : '1,2 TB') : '860 GB';
+    const fits = !(noSpace && drive === 'C');
+    const nested = !overlay && srcHas && dest.toLowerCase().startsWith(SRC.toLowerCase() + '\\');
+    const others = Object.keys(M).filter(k => k !== name), from = others.includes(s.from) ? s.from : others[0];
+    const block = !srcHas ? 'Elige la carpeta de tu AoE3.' : !dest ? 'Elige dónde instalar el mod.' : !fits ? 'No hay espacio suficiente en ' + drive + ':.' : '';
+    const bgImg = m.hero ? ', url(mods/' + m.id + '/hero.jpg) center top/100% auto no-repeat' : '';
+    return {
+      bg: 'radial-gradient(620px 380px at 88% 0%, ' + hexA(acc, .3) + ', transparent 70%), linear-gradient(180deg, rgba(15,28,46,.28) 0px, rgba(15,28,46,.78) 190px, #0f1c2e 320px)' + bgImg + ', #0f1c2e',
+      barBg: (() => { const a = ({ 'Sólida': 1, 'Media': .42, 'Máxima': .3 })[(this.props.transparencia ?? 'Media')] ?? .42, n = parseInt(acc.slice(1), 16), b = [11, 20, 34]; return 'rgba(' + [n >> 16 & 255, n >> 8 & 255, n & 255].map((v, i) => Math.round(v * .22 + b[i] * .78)).join(',') + ',' + a + ')'; })(), barBlur: (this.props.transparencia ?? 'Media') === 'Sólida' ? '0px' : '10px',
+      icon: 'url(mods/' + m.id + '/icon.png) center/contain no-repeat', winTitle: 'Instalar ' + name, acc, onAcc, G,
+      title: overlay ? '¿Dónde está tu AoE3?' : '¿Dónde quieres instalar ' + name + '?',
+      desc: overlay ? 'Tus archivos se añaden a tu instalación de AoE3.' : 'Se instala en una carpeta aparte, como copia de tu AoE3. Tu juego original no se toca.',
+      showSrc: !overlay, srcHas, srcEmpty: !srcHas, src: split(SRC), srcChip: srcHas ? 'Detectado' : 'No encontrado', srcDot: srcHas ? '#4fd68a' : '#F4900C',
+      pickSrc: () => set({ found: true }), search: () => { if (s.searching) return; set({ searching: true }); clearTimeout(this.t1); this.t1 = setTimeout(() => this.setState({ searching: false, found: true }), 1000); }, searchT: s.searching ? 'Buscando…' : 'Buscar en mis discos…',
+      destLabel: overlay ? 'Carpeta de tu AoE3' : 'Carpeta del mod', nested, dest, dst: split(dest), showDisp: !s.focus && !!dest, destPh: 'Elige primero tu AoE3',
+      onDest: e => set({ dest: e.target.value }), focus: () => set({ focus: true }), blur: () => set({ focus: false }),
+      pickDest: () => { const alt = !s.alt; set({ alt, dest: alt ? 'D:\\Juegos\\' + name : defDest }); },
+      sp: fits ? { a: 'Necesita unos ', n1: m.need + ' GB', b: ' y tienes ', n2: free, c: ' libres en ' + drive + ':' } : { a: 'Necesita unos ', n1: m.need + ' GB', b: ' y solo tienes ', n2: free, c: ' libres en ' + drive + ':. Elige otro disco.' },
+      spBg: fits ? 'rgba(79,214,138,.09)' : 'rgba(244,144,12,.1)', spRing: fits ? 'rgba(79,214,138,.3)' : 'rgba(244,144,12,.45)', spDot: fits ? '#4fd68a' : '#F4900C', spGlyph: fits ? '✓' : '!', spC: fits ? '#dce7f5' : '#F5BD76',
+      firstRun: caso === 'AoE3 sin abrir', showCopy: caso !== 'Primer mod',
+      flipCopy: () => set({ copy: !s.copy }), cbBg: s.copy ? acc : 'transparent', cbRing: s.copy ? acc : 'rgba(130,175,255,.45)', cbTick: s.copy ? '✓' : '', selOp: s.copy ? 1 : .5,
+      others, from, onFrom: e => set({ from: e.target.value }),
+      block, okBg: block ? hexA(acc, .35) : acc, okC: block ? 'rgba(255,255,255,.55)' : onAcc, okSh: block ? 'none' : '0 4px 14px ' + hexA(acc, .4), okCur: block ? 'default' : 'pointer'
+    };
+  }
+}
+</script>
+</body>
+</html>

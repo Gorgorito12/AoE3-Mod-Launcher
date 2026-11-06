@@ -717,7 +717,10 @@ internal static class TournamentDemoData
     }
 
     /// <summary>One line of the watched room's chat.</summary>
-    internal sealed record WatchChatLine(string Author, string Text);
+    internal sealed record WatchChatLine(string Author, string Text, string Time = "", bool IsSystem = false);
+
+    /// <summary>The three moments an organiser can open a match in.</summary>
+    internal enum MatchWatchStage { Playing, Waiting, Finished }
 
     /// <summary>
     /// The contents of a room being watched from the bracket, minus its roster.
@@ -729,8 +732,16 @@ internal static class TournamentDemoData
     internal sealed record MatchWatchSample(
         string RoomTitle,
         string ModName,
+        string ModVersion,
         int StartedMinutesAgo,
-        IReadOnlyList<WatchChatLine> Chat);
+        IReadOnlyList<WatchChatLine> Chat,
+        MatchWatchStage Stage = MatchWatchStage.Playing,
+        IReadOnlyList<string>? Sides = null,
+        string ResultAt = "")
+    {
+        /// <summary>The second line of each side in a one-person match, in bracket order.</summary>
+        public IReadOnlyList<string> SideLines => Sides ?? Array.Empty<string>();
+    }
 
     /// <summary>
     /// The sample room behind <see cref="Organiser"/>'s live match.
@@ -739,17 +750,38 @@ internal static class TournamentDemoData
     /// small talk, but the shape of a dispute an organiser might have to settle — which is
     /// what makes it possible to judge whether watching a room is worth building.</para>
     /// </summary>
-    internal static MatchWatchSample WatchSample() => new(
+    internal static MatchWatchSample WatchSample(MatchWatchStage stage = MatchWatchStage.Playing) => new(
         RoomTitle: Strings.Get("MpTournamentDemoWatchRoomTitle"),
         ModName: Strings.Get("MpTournamentDemoWatchMod"),
-        StartedMinutesAgo: 12,
-        Chat: new List<WatchChatLine>
+        ModVersion: "1.6.2",
+        StartedMinutesAgo: stage == MatchWatchStage.Finished ? 4 : 12,
+        Chat: stage switch
         {
-            new(SoloNames[4], Strings.Get("MpTournamentDemoWatchChat1")),
-            new(SoloNames[8], Strings.Get("MpTournamentDemoWatchChat2")),
-            new(SoloNames[4], Strings.Get("MpTournamentDemoWatchChat3")),
-            new(SoloNames[8], Strings.Get("MpTournamentDemoWatchChat4")),
-        });
+            MatchWatchStage.Waiting => new List<WatchChatLine>
+            {
+                new("", Strings.Get("MpTournamentDemoWatchOpened"), IsSystem: true),
+                new(SoloNames[4], Strings.Get("MpTournamentDemoWatchReady"), "20:58"),
+                new("", Strings.Get("MpTournamentDemoWatchOnlyEntrants"), IsSystem: true),
+            },
+            MatchWatchStage.Finished => new List<WatchChatLine>
+            {
+                new("", Strings.Get("MpTournamentDemoWatchStarted"), IsSystem: true),
+                new(SoloNames[8], "gg", "21:34"),
+                new(SoloNames[4], "gg wp", "21:34"),
+                new("", Strings.Get("MpTournamentDemoWatchEnded"), IsSystem: true),
+            },
+            _ => new List<WatchChatLine>
+            {
+                new("", Strings.Get("MpTournamentDemoWatchStarted"), IsSystem: true),
+                new(SoloNames[4], Strings.Get("MpTournamentDemoWatchChat1"), "21:19"),
+                new(SoloNames[8], Strings.Get("MpTournamentDemoWatchChat2"), "21:19"),
+                new(SoloNames[4], Strings.Get("MpTournamentDemoWatchChat3"), "21:20"),
+                new(SoloNames[8], Strings.Get("MpTournamentDemoWatchChat4"), "21:20"),
+            },
+        },
+        Stage: stage,
+        Sides: new[] { "Industrial · 1630 ELO", "Colonial · 1244 ELO" },
+        ResultAt: "21:35");
 
     /// <summary>Every scenario, for tests and for anything that wants to walk them all.</summary>
     internal static IReadOnlyList<TournamentDetail> All() =>

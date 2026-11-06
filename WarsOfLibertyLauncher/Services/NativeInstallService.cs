@@ -2506,6 +2506,7 @@ public class NativeInstallService
     {
         var created = new List<string>();
         startMenuFolder = null;
+        if (HarnessMode.Block($"shortcuts of {profile.Id}")) return created;
 
         try
         {
@@ -2634,6 +2635,7 @@ public class NativeInstallService
     /// </summary>
     public static void TryHealShortcutIcons(ModProfile profile, string installFolder)
     {
+        if (HarnessMode.Block($"shortcut icons of {profile.Id}")) return;
         try
         {
             if (string.IsNullOrEmpty(installFolder) || !Directory.Exists(installFolder))
@@ -2718,6 +2720,7 @@ public class NativeInstallService
     /// </summary>
     internal static void HealLegacyShortcuts(ModProfile profile, string installFolder)
     {
+        if (HarnessMode.Block($"legacy shortcuts of {profile.Id}")) return;
         try
         {
             if (string.IsNullOrEmpty(installFolder) || !Directory.Exists(installFolder)) return;
@@ -3130,6 +3133,7 @@ public class NativeInstallService
     private static void WriteRegistryEntries(
         ModProfile profile, string version, string installFolder, InstallIdentity identity)
     {
+        if (HarnessMode.Block($"uninstall registry entry of {profile.Id}")) return;
         try
         {
             // Write to HKLM (requires admin) first, fall back to HKCU.
@@ -3215,6 +3219,8 @@ public class NativeInstallService
         string linkPath, string targetExe, string workingDir,
         string description, string? iconPath = null)
     {
+        if (HarnessMode.Block($"shortcut {linkPath}")) return;
+
         // Use IWshRuntimeLibrary via dynamic COM interop (available on all Windows)
         var shellType = Type.GetTypeFromProgID("WScript.Shell");
         if (shellType == null) return;

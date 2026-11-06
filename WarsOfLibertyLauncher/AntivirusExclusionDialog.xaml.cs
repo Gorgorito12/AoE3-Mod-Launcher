@@ -39,12 +39,12 @@ public partial class AntivirusExclusionDialog : Window
     /// does — the same thing the user would reach through the four steps by hand.</summary>
     internal const string WindowsSecurityUri = "windowsdefender://threatsettings";
 
-    private readonly string _clipboardText;
     private DispatcherTimer? _flashTimer;
 
     internal AntivirusExclusionDialog(string modDisplayName, string file, string installFolder, bool preventive)
     {
         InitializeComponent();
+        Controls.ModDialogChrome.Attach(this, Chrome);
 
         var hasInstallFolder = !string.IsNullOrWhiteSpace(installFolder);
 
@@ -69,11 +69,12 @@ public partial class AntivirusExclusionDialog : Window
         ApplyShield(preventive);
 
         FoldersTitle.Text = Strings.Get("DlgAntivirusFoldersTitle");
-        CopyButton.Content = Strings.Get(hasInstallFolder ? "DlgAntivirusCopyBoth" : "DlgAntivirusCopyOne");
+        CopyTempButton.Content = Strings.Get("DlgAntivirusCopyRow");
+        CopyInstallButton.Content = Strings.Get("DlgAntivirusCopyRow");
+        OtherAntivirusText.Text = Strings.Get("DlgAntivirusOtherAv");
         TempRowLabel.Text = Strings.Get("DlgAntivirusRowDownload");
         InstallRowLabel.Text = Strings.Get("DlgAntivirusRowModFolder");
         StepsTitle.Text = Strings.Get("DlgAntivirusStepsTitle");
-        OpenSecurityButton.Content = Strings.Get("DlgAntivirusOpenSecurity");
         BuildSteps();
         SupportLinkHost.Content = Controls.SupportLink.Build();
 
@@ -86,11 +87,10 @@ public partial class AntivirusExclusionDialog : Window
         InstallPathText.Text = hasInstallFolder ? PathDisplay.BreakAtSeparators(installFolder) : "";
         InstallRow.Visibility = hasInstallFolder ? Visibility.Visible : Visibility.Collapsed;
 
-        // The clipboard gets the untouched paths: the display text carries invisible
-        // break marks that would make a pasted path look right and not resolve.
-        _clipboardText = hasInstallFolder
-            ? tempRoot + Environment.NewLine + installFolder
-            : tempRoot;
+        // The clipboard gets the untouched paths: the display text carries invisible break marks
+        // that would make a pasted path look right and not resolve.
+        CopyTempButton.Tag = tempRoot;
+        CopyInstallButton.Tag = installFolder;
 
         if (preventive)
         {
@@ -109,45 +109,77 @@ public partial class AntivirusExclusionDialog : Window
         }
     }
 
-    /// <summary>Amber shield with "!" before installing; red with "✕" once a file is gone.
-    /// It used to be the lock glyph, which says "all safe" — the opposite of the notice.</summary>
+    /// <summary>The base's fixed error orange in both modes, because red is kept for what destroys
+    /// something; "!" before installing and "\u2715" once a file is gone.</summary>
     private void ApplyShield(bool preventive)
     {
-        var (top, bottom, ink, glyph) = preventive
-            ? (Color.FromRgb(0xF0, 0xC5, 0x6A), Color.FromRgb(0xB8, 0x80, 0x1F), Color.FromRgb(0x2B, 0x1A, 0x02), "!")
-            : (Color.FromRgb(0xE0, 0x85, 0x8B), Color.FromRgb(0x9C, 0x3A, 0x42), Color.FromRgb(0x2A, 0x05, 0x08), "✕");
-        ShieldPath.Fill = new LinearGradientBrush(top, bottom, 90);
-        ShieldGlyph.Text = glyph;
-        ShieldGlyph.Foreground = new SolidColorBrush(ink);
+        ShieldPath.Fill = new LinearGradientBrush(
+            Color.FromRgb(0xF4, 0x90, 0x0C), Color.FromRgb(0xB8, 0x68, 0x06), 90);
+        ShieldGlyph.Text = preventive ? "!" : "\u2715";
+        ShieldGlyph.Foreground = new SolidColorBrush(Color.FromRgb(0x2B, 0x1A, 0x05));
     }
 
-    /// <summary>The four steps in Windows Security, numbered, instead of one arrow sentence.</summary>
+    /// <summary>Three numbered steps. The first is the one the launcher can do for the player, so
+    /// "Abrir" sits on it; when Windows Security does not open, its text says where to go.</summary>
     private void BuildSteps()
     {
         StepsHost.Children.Clear();
-        for (int i = 1; i <= 4; i++)
+        for (int i = 1; i <= 3; i++)
         {
-            var row = new Grid { Margin = new Thickness(0, i == 1 ? 0 : 5, 0, 0) };
+            var row = new Grid { Margin = new Thickness(0, i == 1 ? 0 : 8, 0, 0) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.Children.Add(new TextBlock
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var number = new Border
             {
-                Text = i.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                FontFamily = (FontFamily)FindResource("MonoFont"),
-                FontSize = (double)FindResource("SetGroupLabelSize"),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("UiTextGhost"),
-                Margin = new Thickness(0, 1, 10, 0),
-            });
+                Width = 22,
+                Height = 22,
+                CornerRadius = new CornerRadius(11),
+                BorderThickness = new Thickness(1),
+                BorderBrush = (Brush)FindResource("UiCardRim"),
+                Margin = new Thickness(0, 0, 10, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+                Child = new TextBlock
+                {
+                    Text = i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    FontFamily = (FontFamily)FindResource("MonoFont"),
+                    FontSize = (double)FindResource("SetGroupLabelSize"),
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource("UiTextDim"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            };
+            row.Children.Add(number);
+
             var text = new TextBlock
             {
                 FontSize = (double)FindResource("SetControlSize"),
                 Foreground = (Brush)FindResource("MpTextBody"),
                 TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
             };
             Controls.MarkedText.Set(text, Strings.Get("DlgAntivirusStep" + i));
             Grid.SetColumn(text, 1);
             row.Children.Add(text);
+
+            if (i == 1)
+            {
+                var open = new Button
+                {
+                    Name = "OpenSecurityButton",
+                    Content = Strings.Get("DlgAntivirusOpenShort"),
+                    Style = (Style)FindResource("WindowSecondaryButton"),
+                    MinWidth = 96,
+                    Margin = new Thickness(12, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                open.Click += OpenSecurityButton_Click;
+                Grid.SetColumn(open, 2);
+                row.Children.Add(open);
+            }
+
             StepsHost.Children.Add(row);
         }
     }
@@ -187,32 +219,32 @@ public partial class AntivirusExclusionDialog : Window
         dlg.ShowDialog();
     }
 
-    private void CopyButton_Click(object sender, RoutedEventArgs e)
+    private void CopyPath_Click(object sender, RoutedEventArgs e)
     {
+        var button = (Button)sender;
         try
         {
-            Clipboard.SetText(_clipboardText);
+            Clipboard.SetText((string)button.Tag);
         }
         catch (Exception ex)
         {
-            // Another process can hold the clipboard open; failing to copy must not
-            // kill the dialog.
-            DiagnosticLog.Write($"Antivirus dialog: could not copy paths: {ex.Message}");
+            // Another process can hold the clipboard open; failing to copy must not kill the
+            // dialog.
+            DiagnosticLog.Write($"Antivirus dialog: could not copy a path: {ex.Message}");
             return;
         }
 
-        var idle = CopyButton.Content;
-        CopyButton.Content = Strings.Get("DlgAntivirusCopied");
-        CopyButton.Tag = "ok";
+        button.Content = Strings.Get("DlgAntivirusCopied");
 
+        // One timer for both buttons: whichever was pressed last, both read "Copiar" again.
         _flashTimer?.Stop();
         _flashTimer = new DispatcherTimer { Interval = CopiedFlash };
         _flashTimer.Tick += (_, _) =>
         {
             _flashTimer?.Stop();
             _flashTimer = null;
-            CopyButton.Content = idle;
-            CopyButton.Tag = null;
+            CopyTempButton.Content = Strings.Get("DlgAntivirusCopyRow");
+            CopyInstallButton.Content = Strings.Get("DlgAntivirusCopyRow");
         };
         _flashTimer.Start();
     }
@@ -221,7 +253,7 @@ public partial class AntivirusExclusionDialog : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo(WindowsSecurityUri) { UseShellExecute = true });
+            Services.HarnessMode.Start(new ProcessStartInfo(WindowsSecurityUri) { UseShellExecute = true });
             DiagnosticLog.Write("Antivirus dialog: opened Windows Security.");
         }
         catch (Exception ex)

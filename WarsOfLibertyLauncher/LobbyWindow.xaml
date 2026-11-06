@@ -128,6 +128,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>   <!-- Sub-header (rich) -->
                     <RowDefinition Height="*"/>      <!-- Body (Players | Chat) -->
+                    <RowDefinition Height="Auto"/>   <!-- Quick match footer (0 px at rest) -->
                 </Grid.RowDefinitions>
 
                 <!-- ========== Sub-header strip ==========
@@ -282,6 +283,48 @@
                     </Grid>
                 </Border>
 
+                <!-- The room's footer while it is only a quick match's search (design 96). -->
+                <Border Grid.Row="2" x:Name="QuickSearchFooter"
+                        Visibility="Collapsed"
+                        Background="{DynamicResource GlassFooter}"
+                        BorderBrush="{DynamicResource WindowFooterRule}"
+                        BorderThickness="0,1,0,0"
+                        Padding="28,13,28,13">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                            <StackPanel Orientation="Horizontal">
+                                <controls:WindowSpinner/>
+                                <TextBlock x:Name="QuickFooterTitle"
+                                           FontSize="{DynamicResource SetBodySize}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource WindowStrongText}"
+                                           Margin="9,0,0,0"/>
+                            </StackPanel>
+                            <TextBlock x:Name="QuickFooterNote"
+                                       FontSize="{DynamicResource SetControlSize}"
+                                       Foreground="{DynamicResource WindowMuted}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" x:Name="QuickStopButton"
+                                Style="{StaticResource WindowSecondaryButton}"
+                                MinWidth="136"
+                                VerticalAlignment="Center"
+                                Click="QuickStopButton_Click"/>
+                        <Button Grid.Column="2" x:Name="QuickRadminButton"
+                                Style="{StaticResource WindowBrowseButton}"
+                                Visibility="Collapsed"
+                                VerticalAlignment="Center"
+                                Margin="8,0,0,0"
+                                Click="QuickRadminButton_Click"/>
+                    </Grid>
+                </Border>
+
                 <!-- ========== Body: Left (players + checklist + actions) | Right (chat) ========== -->
                 <Grid Grid.Row="1" Margin="14,13,14,14">
                     <Grid.ColumnDefinitions>
@@ -336,6 +379,46 @@
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                           <StackPanel>
+
+                          <!-- A quick match waiting for its rival (design 96): the clock, and what
+                               the player can do meanwhile. Gone the moment somebody joins. -->
+                          <Border x:Name="QuickSearchCard"
+                                  Visibility="Collapsed"
+                                  Background="{DynamicResource MpPanel}"
+                                  BorderBrush="{DynamicResource MpRimSoft}"
+                                  BorderThickness="1"
+                                  CornerRadius="{StaticResource RadiusPanel}"
+                                  Padding="15,12"
+                                  Margin="0,0,0,11">
+                              <StackPanel>
+                                  <TextBlock x:Name="QuickSearchLabel"
+                                             FontSize="{DynamicResource SetCaptionSize}"
+                                             FontWeight="Bold"
+                                             Foreground="{DynamicResource UiTextFaint}"/>
+                                  <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                      <TextBlock x:Name="QuickSearchClock"
+                                                 FontFamily="Consolas, Courier New, monospace"
+                                                 FontSize="{DynamicResource DialogCodeSize}"
+                                                 FontWeight="Bold"
+                                                 Foreground="{DynamicResource WindowStrongText}"/>
+                                      <TextBlock x:Name="QuickSearchSince"
+                                                 FontSize="{DynamicResource SetControlSize}"
+                                                 Foreground="{DynamicResource WindowMuted}"
+                                                 VerticalAlignment="Bottom"
+                                                 Margin="10,0,0,6"/>
+                                  </StackPanel>
+                                  <TextBlock x:Name="QuickSearchBody"
+                                             FontSize="{DynamicResource DialogBodySize}"
+                                             Foreground="{DynamicResource UiBodyText}"
+                                             TextWrapping="Wrap"
+                                             Margin="0,8,0,0"/>
+                                  <TextBlock x:Name="QuickSearchNote"
+                                             FontSize="{DynamicResource SetControlSize}"
+                                             Foreground="{DynamicResource WindowFineText}"
+                                             TextWrapping="Wrap"
+                                             Margin="0,10,0,0"/>
+                              </StackPanel>
+                          </Border>
 
                           <!-- PLAYERS. The header moved INSIDE the card, which is what lets
                                the roster take the height it needs instead of sitting under a
@@ -598,7 +681,7 @@
                           </StackPanel>
                         </ScrollViewer>
 
-                        <StackPanel Grid.Row="1">
+                        <StackPanel Grid.Row="1" x:Name="LobbyActions">
                             <Button x:Name="StartButton"
                                     Click="StartButton_Click"
                                     Style="{StaticResource MpPrimaryButton}"

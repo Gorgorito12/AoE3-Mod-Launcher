@@ -57,6 +57,11 @@ public partial class MultiplayerTab
     /// </summary>
     public void ShowDemoElo(string? scene = null)
     {
+        if (scene?.StartsWith("profile:", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            ShowProfileVariant(scene["profile:".Length..]);
+            return;
+        }
         var picked = EloDemoData.SceneByName(scene);
 
         _eloPreview = true;
@@ -105,6 +110,30 @@ public partial class MultiplayerTab
         }
     }
 
+    /// <summary>Design 95's other states, for <c>--demo-elo=profile:&lt;state&gt;</c>.</summary>
+    private void ShowProfileVariant(string state)
+    {
+        _eloPreview = true;
+        _demoStats = true;
+        ApplyDemoStats();
+        _previewHistoryState = state is "history-loading" or "history-error" ? state : null;
+        _previewRatingState = state is "loading" or "error" ? state : null;
+        if (_previewHistoryState != null) _profileSection = ProfileSection.History;
+        ShowDemoEloProfile(state switch
+        {
+            "nogames" => EloDemoData.ProfileNoGames(),
+            "placing" => EloDemoData.ProfilePlacing(),
+            "inactive" => EloDemoData.ProfileLimits(),
+            _ => EloDemoData.Profile(),
+        });
+    }
+
+    /// <summary>What the sample history is pretending to be: still loading, failed, or there.</summary>
+    private string? _previewHistoryState;
+
+    /// <summary>The same for the standing, which is what designs 95e and 95f are about.</summary>
+    private string? _previewRatingState;
+
     /// <summary>The ranking page.</summary>
     private void ShowPreviewRanking()
     {
@@ -119,9 +148,17 @@ public partial class MultiplayerTab
     {
         var sample = EloDemoData.Profile();
         if (refund) sample.Standing.Refunds = new() { EloDemoData.Refund() };
-        if (history) sample = sample with { History = EloDemoData.History() };
+        // Every section reads the history, so the preview has one in all of them.
+        sample = sample with { History = EloDemoData.History() };
+
+        // The decks are the player's own files; the preview brings its own.
+        _mpDeckProfiles.Clear();
+        _mpDeckProfiles.AddRange(EloDemoData.Decks());
+        _mpDecksLoaded = true;
+        _mpDecksModId = ProfileDeckMod()?.Id;
         _eloPreviewProfile = sample;
         _eloPreviewWantsHistory = history;
+        if (history) _profileSection = ProfileSection.History;
         if (_profileWindow != null || ProfileBodyOverride != null)
         {
             RenderProfileTab();
@@ -237,8 +274,12 @@ public partial class MultiplayerTab
         var standing = _cachedStanding;
         var history = _historyRows;
         _renderingPreviewProfile = true;
-        _cachedStanding = sample.Standing;
-        _historyRows = sample.History.ToList();
+        var (historyError, refreshing, ratingFailed) = (_historyError, _isRefreshingHistory, _standingFailed);
+        _cachedStanding = _previewRatingState == null ? sample.Standing : null;
+        _standingFailed = _previewRatingState == "error";
+        _historyRows = _previewHistoryState == null ? sample.History.ToList() : null;
+        if (_previewHistoryState == "history-loading") _isRefreshingHistory = true;
+        if (_previewHistoryState == "history-error") _historyError = "The server did not answer.";
         try
         {
             RenderProfileTab();
@@ -247,6 +288,9 @@ public partial class MultiplayerTab
         {
             _cachedStanding = standing;
             _historyRows = history;
+            _historyError = historyError;
+            _isRefreshingHistory = refreshing;
+            _standingFailed = ratingFailed;
             _renderingPreviewProfile = false;
         }
 

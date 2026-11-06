@@ -258,6 +258,39 @@
             <RowDefinition Height="*"/>      <!-- App content -->
         </Grid.RowDefinitions>
 
+        <!-- The Library's image runs behind the title bar and the tabs, so it lives here rather
+             than in PlayView. Nothing in it takes a click. The blurred layer is one image decoded
+             small and blurred once, clipped to the panels: a live BlurEffect behind them would be
+             recomputed on every frame anything moves. -->
+        <Grid x:Name="LibraryBackdrop" Grid.RowSpan="3" IsHitTestVisible="False" ClipToBounds="True">
+            <Border x:Name="DashboardBgFill"
+                    RenderOptions.BitmapScalingMode="HighQuality"
+                    Background="{DynamicResource MpAppBg}"/>
+            <Border x:Name="DashboardBgFillB"
+                    RenderOptions.BitmapScalingMode="HighQuality"
+                    Opacity="0"/>
+            <Border x:Name="LibraryBlurLayer" RenderOptions.BitmapScalingMode="Linear" Visibility="Collapsed"/>
+            <Rectangle x:Name="LibraryShadeSide"/>
+            <Rectangle>
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
+                        <GradientStop Color="#EB0F1C2E" Offset="0"/>
+                        <GradientStop Color="#000F1C2E" Offset=".5"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+            <Rectangle>
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#8C0A1321" Offset="0"/>
+                        <GradientStop Color="#000A1321" Offset=".22"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+            <Rectangle Fill="{DynamicResource ModAccentWash}"/>
+        </Grid>
+
+
         <!-- =============================================================
              ROW 0 - TITLE BAR (36px). Deliberately almost empty: the brand,
              the version chip, and the three chrome affordances that belong
@@ -289,7 +322,7 @@
              layout's. -->
         <controls:TitleBar Grid.Row="0"
                            x:Name="MainTitleBar"
-                           Background="{DynamicResource ChromeTitleBg}"
+                           Background="{DynamicResource ModTitleBar}"
                            Height="{StaticResource TitleBarHeightMain}"
                            ButtonWidth="{StaticResource TitleBarButtonWidthMain}"
                            GlyphSize="10"
@@ -344,7 +377,7 @@
                                  one taken without it. Pressed/open stop at pure white so
                                  the three states remain three — the chevron flip is the
                                  only other signal that the menu is open. -->
-                            <Setter Property="Foreground" Value="{DynamicResource ChromeTextDim}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource UiBodyText}"/>
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="Button">
@@ -558,62 +591,6 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Persistent, non-invasive launcher self-update reminder.
-                     Replaces the old auto-modal that got permanently silenced
-                     on Cancel (SkippedLauncherTag). Shown whenever a newer
-                     launcher version exists; stays visible on EVERY launch until
-                     the user updates (no permanent dismiss). Click opens the
-                     existing download/restart dialog. Gold pill with dark text
-                     for contrast; pulses once per session (LauncherUpdatePillScale).
-                     Self-contained template so the global Button style doesn't
-                     flatten the pill look. IsHitTestVisibleInChrome=True so the
-                     window-drag handler doesn't swallow the click. Text + tooltip
-                     are localized from code-behind. -->
-                <Button x:Name="LauncherUpdatePill"
-                        Grid.Column="4"
-                        Visibility="Collapsed"
-                        Cursor="Hand"
-                        VerticalAlignment="Center"
-                        Margin="0,0,10,0"
-                        FontFamily="{DynamicResource BodyFont}"
-                        FontSize="{DynamicResource FontSizeCaption}"
-                        Click="LauncherUpdatePill_Click"
-                        shell:WindowChrome.IsHitTestVisibleInChrome="True"
-                        RenderTransformOrigin="0.5,0.5">
-                    <Button.RenderTransform>
-                        <ScaleTransform x:Name="LauncherUpdatePillScale" ScaleX="1" ScaleY="1"/>
-                    </Button.RenderTransform>
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <!-- The text comes from the Button's Content (set in
-                                 code-behind) via the ContentPresenter — x:Name'd
-                                 elements inside a ControlTemplate live in their own
-                                 namescope and aren't reachable from code-behind, so
-                                 we drive the label through Content instead. -->
-                            <Border x:Name="pillBorder"
-                                    Background="{DynamicResource AccentBrush}"
-                                    CornerRadius="{StaticResource RadiusMd}"
-                                    Padding="10,3">
-                                <StackPanel Orientation="Horizontal"
-                                            VerticalAlignment="Center"
-                                            TextElement.Foreground="#1A1A1A"
-                                            TextElement.FontWeight="SemiBold">
-                                    <TextBlock Text="&#xE777;"
-                                               FontFamily="Segoe MDL2 Assets"
-                                               FontSize="11"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,6,0"/>
-                                    <ContentPresenter VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="pillBorder" Property="Opacity" Value="0.88"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
 
                 <Button x:Name="OfflineChip"
                         Grid.Column="5"
@@ -630,11 +607,12 @@
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="chipBorder"
-                                Background="#33201A18"
-                                BorderBrush="{DynamicResource MpStatusOffline}"
+                                Background="#24F4900C"
+                                BorderBrush="#80F4900C"
                                 BorderThickness="1"
-                                CornerRadius="{StaticResource RadiusSm}"
-                                Padding="8,2">
+                                Height="24"
+                                CornerRadius="12"
+                                Padding="10,0">
                             <!-- Label comes from the Button's Content (set in
                                  code-behind) — an x:Name'd element inside a
                                  ControlTemplate lives in its own namescope and
@@ -642,9 +620,10 @@
                                  text through Content + ContentPresenter, like the
                                  launcher-update pill above. -->
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                        TextElement.Foreground="{DynamicResource MpStatusOffline}">
-                                <Ellipse Width="8" Height="8"
-                                         Fill="{DynamicResource MpStatusOffline}"
+                                        TextElement.Foreground="#F5BD76"
+                                        TextElement.FontWeight="SemiBold">
+                                <Ellipse Width="7" Height="7"
+                                         Fill="#F4900C"
                                          VerticalAlignment="Center"
                                          Margin="0,0,6,0"/>
                                 <ContentPresenter VerticalAlignment="Center"/>
@@ -694,15 +673,21 @@
                     </Path>
                     <!-- Small unread indicator dot (7px), top-right corner. Thin
                          dark ring separates it from the bell / bar. -->
-                    <Ellipse x:Name="NotificationDot"
-                             Width="7" Height="7"
-                             Fill="#E5484D"
-                             Stroke="{DynamicResource ChromeTitleBg}"
-                             StrokeThickness="1"
-                             HorizontalAlignment="Right"
-                             VerticalAlignment="Top"
-                             Margin="0,0,-1,0"
-                             Visibility="Collapsed"/>
+<Border x:Name="NotificationDot"
+                            MinWidth="16" Height="16"
+                            Padding="4,0"
+                            CornerRadius="8"
+                            Background="{DynamicResource MpAction}"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,-5,-6,0"
+                            Visibility="Collapsed">
+                        <TextBlock x:Name="NotificationCount"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Border>
                 </Grid>
             </Button>
 
@@ -717,300 +702,6 @@
             <!-- Dropdown panel. Right-aligned under the bell (HorizontalOffset
                  shifts the 360-wide card left so its right edge lands near the
                  bell). Items + empty-state visibility are wired in code-behind. -->
-            <Popup x:Name="NotificationPopup"
-                   PlacementTarget="{Binding ElementName=NotificationBellButton}"
-                   Placement="Bottom"
-                   StaysOpen="True"
-                   AllowsTransparency="True"
-                   PopupAnimation="Fade"
-                   HorizontalOffset="-316"
-                   VerticalOffset="2">
-                <!-- Same two-tone rim + surface as the brand and MODS menus: the three
-                     hang off this one bar and used to disagree on surface, rim, radius
-                     and shadow all at once. The shadow rides the OUTER band so it skirts
-                     the whole composite rim instead of being clipped behind it. -->
-                <Border Margin="8"
-                        Background="{DynamicResource MenuBorderOuter}"
-                        CornerRadius="{StaticResource RadiusPopupOuter}"
-                        Padding="1"
-                        SnapsToDevicePixels="True">
-                    <Border.Effect>
-                        <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="4" Opacity="0.6"/>
-                    </Border.Effect>
-                <Border Width="360"
-                        Background="{DynamicResource ChromePopupBg}"
-                        BorderBrush="{DynamicResource MenuBorder}"
-                        BorderThickness="2"
-                        CornerRadius="{StaticResource RadiusPopupInner}">
-                    <DockPanel LastChildFill="True">
-                        <!-- Header -->
-                        <Grid DockPanel.Dock="Top" Margin="14,12,10,8">
-                            <TextBlock x:Name="NotificationPanelTitle"
-                                       Text="Notifications"
-                                       Foreground="{DynamicResource ChromeTextStrong}"
-                                       FontFamily="{DynamicResource DisplayFont}"
-                                       FontSize="{DynamicResource FontSizeBody}"
-                                       FontWeight="SemiBold"
-                                       VerticalAlignment="Center"/>
-                            <StackPanel Orientation="Horizontal"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Center">
-                                <Button x:Name="NotificationMarkAllRead"
-                                        Click="NotificationMarkAllRead_Click"
-                                        Content="Mark all read"
-                                        Style="{StaticResource NotifLinkButton}"/>
-                                <TextBlock Text="·"
-                                           Foreground="{DynamicResource ChromeTextDim}"
-                                           Margin="6,0"
-                                           VerticalAlignment="Center"/>
-                                <Button x:Name="NotificationClearAll"
-                                        Click="NotificationClearAll_Click"
-                                        Content="Clear"
-                                        Style="{StaticResource NotifLinkButton}"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <Border DockPanel.Dock="Top"
-                                Height="1"
-                                Background="{DynamicResource MpDivider}"/>
-
-                        <!-- Empty state -->
-                        <TextBlock x:Name="NotificationEmptyText"
-                                   DockPanel.Dock="Top"
-                                   Text="No notifications"
-                                   Foreground="{DynamicResource ChromeTextDim}"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,28,0,30"
-                                   Visibility="Collapsed"/>
-
-                        <!-- Items -->
-                        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                      MaxHeight="380">
-                            <ItemsControl x:Name="NotificationList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Tag="{Binding}"
-                                                Click="NotificationItem_Click"
-                                                HorizontalContentAlignment="Stretch"
-                                                Style="{StaticResource NotifRowButton}">
-                                            <Grid Margin="14,9,12,9">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <!-- Mod icon + kind badge. The icon says WHICH mod,
-                                                     the badge says WHAT happened; the badge reuses the
-                                                     same per-kind glyph and colour the big fallback
-                                                     glyph uses, so the two can't drift. -->
-                                                <Grid Grid.Column="0"
-                                                      Width="34" Height="34"
-                                                      VerticalAlignment="Top"
-                                                      Margin="0,1,10,0"
-                                                      Visibility="{Binding ModId, Converter={StaticResource ModIconPresentConv}}">
-                                                    <Border CornerRadius="6"
-                                                            Background="{Binding ModId, Converter={StaticResource ModIconConv}}"
-                                                            BorderBrush="{DynamicResource BorderSubtle}"
-                                                            BorderThickness="1"/>
-                                                    <Border HorizontalAlignment="Right"
-                                                            VerticalAlignment="Bottom"
-                                                            Width="15" Height="15"
-                                                            Margin="0,0,-3,-3"
-                                                            CornerRadius="7.5"
-                                                            Background="{DynamicResource BgPanel}"
-                                                            BorderBrush="{DynamicResource BgBase}"
-                                                            BorderThickness="1.5">
-                                                        <TextBlock HorizontalAlignment="Center"
-                                                                   VerticalAlignment="Center"
-                                                                   FontFamily="Segoe MDL2 Assets"
-                                                                   FontSize="8"
-                                                                   Foreground="{DynamicResource ChromeTextDim}">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
-                                                                    <Setter Property="Text" Value="&#xEA8F;"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="UpdateAvailable">
-                                                                            <Setter Property="Text" Value="&#xE896;"/>
-                                                                            <Setter Property="Foreground" Value="#5AA9E6"/>
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="UpdateFinished">
-                                                                            <Setter Property="Text" Value="&#xE930;"/>
-                                                                            <Setter Property="Foreground" Value="#62C462"/>
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="NewTranslation">
-                                                                            <Setter Property="Text" Value="&#xF2B7;"/>
-                                                                            <Setter Property="Foreground" Value="#D8B66A"/>
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="NewMod">
-                                                                            <Setter Property="Text" Value="&#xE710;"/>
-                                                                            <Setter Property="Foreground" Value="#B48AD8"/>
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="Installed">
-                                                                            <Setter Property="Text" Value="&#xE73E;"/>
-                                                                            <Setter Property="Foreground" Value="#62C462"/>
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="RoomCreated">
-                                                                            <Setter Property="Text" Value="&#xE902;"/>
-                                                                            <Setter Property="Foreground" Value="#5AA9E6"/>
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="MatchRated">
-                                                                            <Setter Property="Text" Value="&#xE735;"/>
-                                                                            <Setter Property="Foreground" Value="#E0B44C"/>
-                                                                        </DataTrigger>
-                                                                        <!-- Points given back after a ban (55n): the
-                                                                             curved arrow, green like the gain it is. -->
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="RatingRefund">
-                                                                            <Setter Property="Text" Value="&#xE7A7;"/>
-                                                                            <Setter Property="Foreground" Value="#4FD68A"/>
-                                                                        </DataTrigger>
-                                                                        <!-- A rating season ended. Its own glyph (a
-                                                                             calendar), because without a trigger a new
-                                                                             kind falls back to the plain bell. -->
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="SeasonEnded">
-                                                                            <Setter Property="Text" Value="&#xE787;"/>
-                                                                            <Setter Property="Foreground" Value="#E0B44C"/>
-                                                                        </DataTrigger>
-                                                                        <!-- Project news. Without a trigger a new kind
-                                                                             silently falls back to the default bell
-                                                                             glyph, which reads as an ordinary update. -->
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="Announcement">
-                                                                            <Setter Property="Text" Value="&#xE789;"/>
-                                                                            <Setter Property="Foreground" Value="#E6A54C"/>
-                                                                        </DataTrigger>
-                                                                        <!-- A patch for a mod that is NOT installed. Its
-                                                                             own glyph, because it is not the same claim
-                                                                             as UpdateAvailable: there is nothing here to
-                                                                             update, only something published. -->
-                                                                        <DataTrigger Binding="{Binding Kind}" Value="ModPatchPublished">
-                                                                            <Setter Property="Text" Value="&#xE7B8;"/>
-                                                                            <Setter Property="Foreground" Value="#5AA9E6"/>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </TextBlock.Style>
-                                                        </TextBlock>
-                                                    </Border>
-                                                </Grid>
-
-                                                <!-- Fallback: no mod to show (launcher update, connectivity)
-                                                     or the mod is gone from the catalog. Notifications persist
-                                                     across sessions, so this case is normal, not an error. -->
-                                                <TextBlock Grid.Column="0"
-                                                           VerticalAlignment="Top"
-                                                           Margin="0,1,10,0"
-                                                           FontFamily="Segoe MDL2 Assets"
-                                                           FontSize="16"
-                                                           Visibility="{Binding ModId, Converter={StaticResource ModIconPresentConv}, ConverterParameter=invert}"
-                                                           Foreground="{DynamicResource ChromeTextDim}">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Text" Value="&#xEA8F;"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="UpdateAvailable">
-                                                                    <Setter Property="Text" Value="&#xE896;"/>
-                                                                    <Setter Property="Foreground" Value="#5AA9E6"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="UpdateFinished">
-                                                                    <Setter Property="Text" Value="&#xE930;"/>
-                                                                    <Setter Property="Foreground" Value="#62C462"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="NewTranslation">
-                                                                    <Setter Property="Text" Value="&#xF2B7;"/>
-                                                                    <Setter Property="Foreground" Value="#D8B66A"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="LauncherUpdate">
-                                                                    <Setter Property="Text" Value="&#xE777;"/>
-                                                                    <Setter Property="Foreground" Value="#D4A04A"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="Connectivity">
-                                                                    <Setter Property="Text" Value="&#xE774;"/>
-                                                                    <Setter Property="Foreground" Value="#8AA0B4"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="NewMod">
-                                                                    <Setter Property="Text" Value="&#xE710;"/>
-                                                                    <Setter Property="Foreground" Value="#B48AD8"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="Installed">
-                                                                    <Setter Property="Text" Value="&#xE73E;"/>
-                                                                    <Setter Property="Foreground" Value="#62C462"/>
-                                                                </DataTrigger>
-                                                                <!-- The kinds below carry no mod, or one that may have left
-                                                                     the catalog, so THIS is the glyph they show. They used to
-                                                                     be missing here and fell back to the plain bell, which
-                                                                     made "Season 2 is over" read as an ordinary update. Same
-                                                                     glyph and colour as the badge above, so the two can't
-                                                                     drift (pinned by RefundTests.EveryKindHasItsOwnGlyphInTheBell). -->
-                                                                <DataTrigger Binding="{Binding Kind}" Value="RoomCreated">
-                                                                    <Setter Property="Text" Value="&#xE902;"/>
-                                                                    <Setter Property="Foreground" Value="#5AA9E6"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="MatchRated">
-                                                                    <Setter Property="Text" Value="&#xE735;"/>
-                                                                    <Setter Property="Foreground" Value="#E0B44C"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="RatingRefund">
-                                                                    <Setter Property="Text" Value="&#xE7A7;"/>
-                                                                    <Setter Property="Foreground" Value="#4FD68A"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="SeasonEnded">
-                                                                    <Setter Property="Text" Value="&#xE787;"/>
-                                                                    <Setter Property="Foreground" Value="#E0B44C"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="Announcement">
-                                                                    <Setter Property="Text" Value="&#xE789;"/>
-                                                                    <Setter Property="Foreground" Value="#E6A54C"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Kind}" Value="ModPatchPublished">
-                                                                    <Setter Property="Text" Value="&#xE7B8;"/>
-                                                                    <Setter Property="Foreground" Value="#5AA9E6"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <!-- Title + body + time -->
-                                                <StackPanel Grid.Column="1">
-                                                    <TextBlock Text="{Binding Title}"
-                                                               Foreground="{DynamicResource ChromeTextStrong}"
-                                                               FontWeight="SemiBold"
-                                                               TextWrapping="Wrap"/>
-                                                    <TextBlock Text="{Binding Body}"
-                                                               Foreground="{DynamicResource ChromeTextDim}"
-                                                               FontSize="12"
-                                                               TextWrapping="Wrap"
-                                                               Margin="0,1,0,0"/>
-                                                    <TextBlock Text="{Binding CreatedLocal, StringFormat='{}{0:dd MMM, HH:mm}'}"
-                                                               Foreground="{DynamicResource ChromeTextDim}"
-                                                               FontSize="11"
-                                                               Margin="0,3,0,0"/>
-                                                </StackPanel>
-                                                <!-- Unread dot -->
-                                                <Ellipse Grid.Column="2"
-                                                         Width="8" Height="8"
-                                                         Margin="8,4,0,0"
-                                                         VerticalAlignment="Top"
-                                                         Fill="#E5484D">
-                                                    <Ellipse.Style>
-                                                        <Style TargetType="Ellipse">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Read}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Hidden"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Ellipse.Style>
-                                                </Ellipse>
-                                            </Grid>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </DockPanel>
-                </Border>
-                </Border>
-            </Popup>
         </Grid>
 
         <!-- =============================================================
@@ -1031,8 +722,8 @@
         <Border Grid.Row="1"
                 x:Name="MainNav"
                 Height="{StaticResource MainNavHeight}"
-                Background="{DynamicResource ChromeNavBg}"
-                BorderBrush="{DynamicResource ChromeNavRule}"
+                Background="{DynamicResource LibraryNavBg}"
+                BorderBrush="{DynamicResource TitleBarLine}"
                 BorderThickness="0,0,0,1">
             <Grid x:Name="MainNavGrid" Margin="{StaticResource MainNavPadding}">
                 <Grid.ColumnDefinitions>
@@ -1063,7 +754,10 @@
                             <TextBlock x:Name="SidebarLabelDashboard" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    <!-- The Workshop is inside the Library now (design 68a). Hidden rather than
+                         removed: ApplyTopTabOrder and a saved tab order still name it. -->
                     <Button x:Name="TopTabMods"
+                            Visibility="Collapsed"
                             Style="{StaticResource NavTabButton}"
                             Click="TopTabMods_Click">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1076,6 +770,19 @@
                         <Grid>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>
+                                <Border x:Name="MultiplayerTabDot"
+                                        MinWidth="18" Height="18"
+                                        Padding="5,0"
+                                        Margin="8,0,0,0"
+                                        CornerRadius="9"
+                                        Background="{DynamicResource MpAction}"
+                                        Visibility="Collapsed">
+                                    <TextBlock x:Name="MultiplayerTabCount"
+                                               FontSize="10.5" FontWeight="Bold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
                             </StackPanel>
                             <!-- "New room created" dot: set from PollNewRoomsAsync,
                                  cleared when the user switches to Multiplayer. Its
@@ -1083,21 +790,102 @@
                                  sits on, so the ring reads as a cut-out and not a halo - hence the NAV
                                  row's brush, not the title bar's. It has moved once
                                  already; move it again if the tabs do. -->
-                            <Ellipse x:Name="MultiplayerTabDot"
-                                     Width="7" Height="7"
-                                     Fill="#E5484D"
-                                     Stroke="{DynamicResource ChromeNavBg}"
-                                     StrokeThickness="1"
-                                     HorizontalAlignment="Right"
-                                     VerticalAlignment="Top"
-                                     Margin="0,-2,-4,0"
-                                     Visibility="Collapsed"/>
+
                         </Grid>
                     </Button>
                 </StackPanel>
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
+                    <Button x:Name="LibraryDownloadPill"
+                            Style="{StaticResource LibraryDownloadPill}"
+                            Margin="0,0,30,0"
+                            Visibility="Collapsed"
+                            Click="LibraryDownloadPill_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Border x:Name="LibraryDownloadDisc" Width="20" Height="20" CornerRadius="10"
+                                    Background="{DynamicResource ModAccentSoft}">
+                                <TextBlock x:Name="LibraryDownloadGlyph" Text="&#x2193;"
+                                           FontSize="11" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource ModAccentText}"/>
+                            </Border>
+                            <StackPanel Margin="10,0,10,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="LibraryDownloadLabel"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           MaxWidth="120" TextTrimming="CharacterEllipsis"
+                                           Foreground="#F0F5FB"/>
+                                <ProgressBar x:Name="LibraryDownloadBar"
+                                             Style="{StaticResource LibraryProgressBar}"
+                                             Width="120" Height="3" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBlock x:Name="LibraryDownloadPercent"
+                                       FontFamily="{DynamicResource MonoFont}"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource ModAccentText}"/>
+                            <TextBlock Text="&#x25BC;" FontSize="9" Margin="10,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource UiDimText}"/>
+                        </StackPanel>
+                    </Button>
+                    <!-- Persistent, non-invasive launcher self-update reminder.
+                         Replaces the old auto-modal that got permanently silenced
+                         on Cancel (SkippedLauncherTag). Shown whenever a newer
+                         launcher version exists; stays visible on EVERY launch until
+                         the user updates (no permanent dismiss). Click opens the
+                         existing download/restart dialog. Blue, the shape of the
+                         "Connected" chip (design 77k); says "restart" once downloaded.
+                         Self-contained template so the global Button style doesn't
+                         flatten the pill look. Text + tooltip
+                         are localized from code-behind. -->
+                    <Button x:Name="LauncherUpdatePill"
+                            Visibility="Collapsed"
+                            Cursor="Hand"
+                            VerticalAlignment="Center"
+                            Margin="0,0,12,0"
+                            FontFamily="{DynamicResource BodyFont}"
+                            FontSize="{DynamicResource SetRowDescSize}"
+                            Click="LauncherUpdatePill_Click"
+                            RenderTransformOrigin="0.5,0.5">
+                        <Button.RenderTransform>
+                            <ScaleTransform x:Name="LauncherUpdatePillScale" ScaleX="1" ScaleY="1"/>
+                        </Button.RenderTransform>
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <!-- The text comes from the Button's Content (set in
+                                     code-behind) via the ContentPresenter — x:Name'd
+                                     elements inside a ControlTemplate live in their own
+                                     namescope and aren't reachable from code-behind, so
+                                     we drive the label through Content instead. -->
+                                <Border x:Name="pillBorder"
+                                        Background="#2455ACEE"
+                                        BorderBrush="#7355ACEE"
+                                        BorderThickness="1"
+                                        Height="28"
+                                        CornerRadius="14"
+                                        Padding="12,0">
+                                    <StackPanel Orientation="Horizontal"
+                                                VerticalAlignment="Center"
+                                                TextElement.Foreground="#9FD2F6"
+                                                TextElement.FontWeight="SemiBold">
+                                        <TextBlock Text="{TemplateBinding Tag}"
+                                                   FontSize="12"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,7,0"/>
+                                        <ContentPresenter VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="pillBorder" Property="Opacity" Value="0.88"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+
                     <!-- Connection capsule. Radmin's full-width green banner used to sit
                          permanently in the Multiplayer tab restating "everything is
                          fine"; it collapses to this, and the banner only returns when
@@ -1158,7 +946,7 @@
                             </ControlTemplate>
                         </Button.Template>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="7" Height="7"
+                            <Ellipse x:Name="ConnectionChipDot" Width="7" Height="7"
                                      Fill="{DynamicResource MpOk}"
                                      VerticalAlignment="Center"
                                      Margin="0,0,7,0"/>
@@ -1196,6 +984,13 @@
 
                          No chevron: the reference doesn't draw one. It is still a
                          button and still lifts on hover, which is the affordance. -->
+                    <!-- Design 79e: with no session the account block is this. -->
+                    <Button x:Name="SignInChip"
+                            Style="{StaticResource WindowSecondaryButton}"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Center"
+                            Click="SignInChip_Click"/>
+
                     <Button x:Name="AccountButton"
                             Visibility="Collapsed"
                             VerticalAlignment="Center"
@@ -1301,461 +1096,384 @@
                  controls' click handlers.
                  ============================================================ -->
             <Grid x:Name="PlayView">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
-                <!-- Layer 1: the hero painted Stretch=Fill (the brush is
-                     built in code in RefreshActiveMod) so it fills the whole
-                     panel edge-to-edge with NO side bands and NO crop — at the
-                     cost of distorting the hero's aspect ratio in a non-16:9
-                     window. The maintainer picked stretch-to-fill over both
-                     the old two-layer blurred-margin design (read as side
-                     bands, "franjas") and a UniformToFill cover (disliked the
-                     top/bottom crop). Fallback when no hero is a neutral dark
-                     gradient, also set in RefreshActiveMod.
-                     HighQuality scaling keeps 4K heroes crisp when decoded down.
-                     DashboardBgFill is the BASE; DashboardBgFillB is the crossfade
-                     overlay (opacity 0 at rest) for the rotating-hero feature —
-                     ApplyDashboardHero owns both. Keep B right here, BEFORE the
-                     dim gradients, or the overlay would cover the readability
-                     scrims. -->
-                <Border x:Name="DashboardBgFill"
-                        RenderOptions.BitmapScalingMode="HighQuality"
-                        Background="{DynamicResource BgPanelAlt}"/>
-                <Border x:Name="DashboardBgFillB"
-                        RenderOptions.BitmapScalingMode="HighQuality"
-                        Opacity="0"/>
-
-                <!-- Layer 2: vertical gradient — transparent at top,
-                     opaque at bottom — so the title/desc/buttons at the
-                     bottom-left stay readable on any hero image. -->
-                <Rectangle IsHitTestVisible="False">
-                    <Rectangle.Fill>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Color="#66000000" Offset="0.0"/>
-                            <GradientStop Color="#22000000" Offset="0.40"/>
-                            <GradientStop Color="#ee131313" Offset="1.0"/>
-                        </LinearGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <!-- Layer 2b: horizontal left-side dim so the title
-                     reads even on bright images. -->
-                <Rectangle IsHitTestVisible="False"
-                           HorizontalAlignment="Left"
-                           Width="640">
-                    <Rectangle.Fill>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Color="#cc000000" Offset="0.0"/>
-                            <GradientStop Color="#00000000" Offset="1.0"/>
-                        </LinearGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-
-                <!-- (Layer 3 removed — the top-right utility row with the
-                     gear-cog Launcher Settings button and EN/ES language
-                     toggles was retired per user request. Both flows are
-                     still reachable from the title-bar brand menu
-                     (🛡 AoE3 Mod Launcher ▼ → "Launcher settings"),
-                     where the LauncherSettingsDialog hosts the language
-                     combo too. The handlers stay in code-behind because
-                     LauncherSettingsButton_Click is reused by the brand
-                     menu wiring.) -->
-
-                <!-- Layer 4: hero content — title, description, action
-                     row, and the progress strip. Anchored bottom-left
-                     so it sits over the dimmest part of the overlay.
-
-                     The whole block is wrapped in HeroScaleTransform so it
-                     auto-fits the resolution: 1:1 on a 1600x900-or-larger
-                     screen and shrinking gently on anything smaller
-                     (so the text isn't oversized on small laptops).
-                     UpdateHeroScale() in code-behind divides the live
-                     footprint by a FIXED ~1600x900 reference and drives
-                     ScaleX/ScaleY off SizeChanged. RenderTransform
-                     (not LayoutTransform) with RenderTransformOrigin="0,1"
-                     pins the bottom-left corner so the block shrinks in
-                     place over the dim corner of the hero image without
-                     reflowing or nudging the layers behind it.
-
-                     Text crispness: the global HiDPI setup renders all text
-                     in TextFormattingMode=Display (pixel-snapped), which looks
-                     crisp at 1:1 but BLURRY once a ScaleTransform shrinks it.
-                     UpdateHeroScale() flips this subtree to Ideal + Animated
-                     hinting whenever scale < 1.0 (smooth under transform) and
-                     back to Display at exactly 1.0 (maximized) so the full-
-                     size hero keeps its pixel-crisp look. -->
-                <!-- Hero block. The window-size scale + bottom-left render-pin
-                     are installed in code by UiScale.Attach(... Kind.Render,
-                     origin 0,1) — see the constructor. Keep this subtree free of
-                     a static RenderTransform so the scaler owns it. -->
-                <Grid x:Name="HeroContentGrid"
-                      Margin="48,0,48,32" VerticalAlignment="Bottom">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <!-- Title + description block. Narrow column (was 900):
-                         keeps the hero copy reading vertically instead of
-                         sprawling across the panel, and lets multi-line
-                         "Game: Subtitle" titles stack cleanly. -->
-                    <!-- The scrim that replaces the two DropShadowEffects that used to sit
-                         ON the title and the paragraph. An Effect on a TextBlock pushes its
-                         glyphs through a composition pass and disables ClearType — measured
-                         at 17.8 mean |R-B| on the paragraph's edges against 73 for chrome
-                         text of the same family. The shadow was NOT decoration, though: this
-                         copy sits over whatever hero image a mod ships, so it is replaced
-                         rather than dropped. Sized off the block itself and blown outward by
-                         a RenderTransform (no layout maths, and a transform on a Rectangle
-                         costs nothing — there is no text under it). -->
-                    <Rectangle Grid.Row="0" IsHitTestVisible="False"
-                               HorizontalAlignment="Left" VerticalAlignment="Center"
-                               RenderTransformOrigin="0.5,0.5"
-                               Width="{Binding ElementName=DashboardCopyBlock, Path=ActualWidth}"
-                               Height="{Binding ElementName=DashboardCopyBlock, Path=ActualHeight}">
-                        <Rectangle.RenderTransform>
-                            <!-- Big on purpose. The gradient has to reach ZERO alpha before
-                                 it reaches the Rectangle's own edge or the fill stops on a hard
-                                 cut, which reads as a soft vertical seam across the hero image
-                                 (it did, at the first attempt). Centre 0.5 + radius 0.5 puts the
-                                 transparent stop exactly on the edge midpoints, so the scrim has
-                                 to be roughly twice the copy block for its opaque core to still
-                                 cover the text. -->
-                            <ScaleTransform ScaleX="2.0" ScaleY="2.6"/>
-                        </Rectangle.RenderTransform>
-                        <Rectangle.Fill>
-                            <RadialGradientBrush Center="0.5,0.5" GradientOrigin="0.5,0.5"
-                                                 RadiusX="0.5" RadiusY="0.5">
-                                <GradientStop Color="#A6000000" Offset="0.0"/>
-                                <GradientStop Color="#7A000000" Offset="0.45"/>
-                                <GradientStop Color="#00000000" Offset="1.0"/>
-                            </RadialGradientBrush>
-                        </Rectangle.Fill>
-                    </Rectangle>
-                    <StackPanel x:Name="DashboardCopyBlock" Grid.Row="0" MaxWidth="640" HorizontalAlignment="Left">
-                        <!-- Mod/game icon (catalog icon.png or built-in packed
-                             icon). Filled + shown by RefreshActiveModBanner;
-                             collapsed when the active mod has no icon. -->
-                        <Border x:Name="DashboardIconHost"
-                                Width="64" Height="64"
-                                CornerRadius="{StaticResource RadiusLg}"
-                                HorizontalAlignment="Left"
-                                Margin="0,0,0,14"
-                                Visibility="Collapsed">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="12" ShadowDepth="2" Color="Black" Opacity="0.6"/>
-                            </Border.Effect>
+                <!-- The toolbar (design 68a). The right group is docked first so the filters wrap
+                     under the search on a narrow window instead of sliding beneath it. -->
+                <DockPanel x:Name="LibraryToolbar" Grid.Row="0" Margin="16,14,16,14">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                        <Button x:Name="LibrarySortButton"
+                                Style="{StaticResource LibraryBarButton}"
+                                Margin="12,0,0,0"
+                                Click="LibrarySortButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="LibrarySortText" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#x25BC;" FontSize="9" Margin="10,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource UiDimText}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="LibraryRefreshButton"
+                                Style="{StaticResource LibraryBarButton}"
+                                Width="34" Padding="0"
+                                Margin="12,0,0,0"
+                                FontSize="15" FontWeight="Normal"
+                                Foreground="{DynamicResource UiSoftText}"
+                                Content="&#x21BB;"
+                                Click="LibraryRefreshButton_Click"/>
+                        <Button x:Name="LibraryPublishButton"
+                                Style="{StaticResource LibraryPublishButton}"
+                                Margin="12,0,0,0"
+                                Click="LibraryPublishButton_Click"/>
+                    </StackPanel>
+                    <WrapPanel x:Name="LibraryFilterRow" Orientation="Horizontal">
+                        <Border x:Name="LibrarySearchShell"
+                                Height="34"
+                                Margin="0,0,12,0"
+                                CornerRadius="8"
+                                Background="{DynamicResource LibraryControl}"
+                                BorderBrush="{DynamicResource GlassRim}"
+                                BorderThickness="1">
+                            <Grid Margin="10,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Width="13" Height="13" Stretch="None" VerticalAlignment="Center"
+                                      Stroke="{DynamicResource UiDimText}" StrokeThickness="1.5"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Data="M5.5,1 A4.5,4.5 0 1 1 5.49,1 Z M9,9 L12,12"/>
+                                <TextBlock x:Name="LibrarySearchHint"
+                                           Grid.Column="1" Margin="10,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontSize="13"
+                                           IsHitTestVisible="False"
+                                           Foreground="{DynamicResource UiDimText}"/>
+                                <TextBox x:Name="LibrarySearchBox"
+                                         Grid.Column="1" Margin="8,0,0,0"
+                                         VerticalAlignment="Center"
+                                         FontSize="13"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Padding="0"
+                                         Foreground="{DynamicResource UiBodyText}"
+                                         CaretBrush="{DynamicResource UiBodyText}"
+                                         TextChanged="LibrarySearchBox_TextChanged"/>
+                            </Grid>
                         </Border>
-                        <TextBlock x:Name="DashboardTitleText"
-                                   FontFamily="{DynamicResource DisplayFont}"
-                                   FontSize="48"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource AccentBrush}"
-                                   LineHeight="56"
-                                   LineStackingStrategy="BlockLineHeight"
-                                   TextWrapping="Wrap"/>
-                        <!-- Version chip — installed-version of the active
-                             mod. Painted in the green Status-Installed
-                             palette (same as the Catalog "Installed"
-                             badge) so the colour itself reads as "you
-                             have this version on disk, everything's
-                             healthy" — green = good, like the rest of
-                             the app's status badges. Hidden by code-
-                             behind when no version is known (fresh
-                             machine before CheckAsync ran, or for mods
-                             that haven't been installed yet). -->
-                        <StackPanel Orientation="Horizontal"
+                    </WrapPanel>
+                </DockPanel>
+
+                <Grid x:Name="LibraryBody" Grid.Row="1" Margin="16,0,16,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="LibraryRailColumn" Width="320"/>
+                        <ColumnDefinition x:Name="LibraryGapColumn" Width="20"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <controls:ModRail x:Name="LibraryRail" Grid.Column="0"/>
+
+                    <!-- The cover, bottom-aligned. A ScrollViewer arranges its content at least as
+                         tall as the viewport, which is what makes VerticalAlignment=Bottom work. -->
+                    <ScrollViewer x:Name="LibraryDetailScroll"
+                                  Grid.Column="2"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="0"
+                                  Focusable="False">
+                        <StackPanel x:Name="HeroContentGrid"
+                                    VerticalAlignment="Bottom"
                                     HorizontalAlignment="Left"
-                                    Margin="0,10,0,0">
-                            <Border x:Name="DashboardVersionChip"
-                                    Padding="10,3"
-                                    VerticalAlignment="Center"
-                                    CornerRadius="{StaticResource RadiusLg}"
-                                    BorderBrush="{DynamicResource StatusInstalledFg}"
-                                    BorderThickness="1"
-                                    Background="{DynamicResource StatusInstalledBg}"
-                                    Visibility="Collapsed">
-                                <TextBlock x:Name="DashboardVersionText"
+                                    MaxWidth="1000"
+                                    Margin="0,0,0,4">
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                <Border x:Name="LibraryIconTile"
+                                        Width="64" Height="64"
+                                        CornerRadius="15"
+                                        Background="{DynamicResource LibraryControl}"
+                                        BorderBrush="#24FFFFFF"
+                                        BorderThickness="1">
+                                    <Border x:Name="DashboardIconHost"
+                                            Width="52" Height="52"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                                </Border>
+                                <WrapPanel VerticalAlignment="Center" Margin="14,0,0,0">
+                                    <Border x:Name="LibraryStatusChip"
+                                            Height="24" Margin="0,0,6,0"
+                                            CornerRadius="12" Padding="10,0"
+                                            Background="{DynamicResource LibraryControl}"
+                                            BorderBrush="{DynamicResource LibraryChipRim}"
+                                            BorderThickness="1">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse x:Name="LibraryStatusDot" Width="6" Height="6"
+                                                     VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <TextBlock x:Name="LibraryStatusText"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="#E8EEF6"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border x:Name="DashboardVersionChip"
+                                            Height="24"
+                                            CornerRadius="12" Padding="8,0,10,0"
+                                            Background="{DynamicResource LibraryControl}"
+                                            BorderBrush="{DynamicResource LibraryChipRim}"
+                                            BorderThickness="1"
+                                            Visibility="Collapsed">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Width="12" Height="12" Stretch="Uniform"
+                                                  VerticalAlignment="Center"
+                                                  Stroke="{DynamicResource UiVersionIcon}"
+                                                  StrokeThickness="1.3"
+                                                  StrokeLineJoin="Round"
+                                                  Data="M1.5,8.6 V2.2 C1.5,1.8 1.8,1.5 2.2,1.5 H8.6 L14.6,7.5 C14.9,7.8 14.9,8.2 14.6,8.5 L8.9,14.2 C8.6,14.5 8.2,14.5 7.9,14.2 Z M6.2,5 A1.2,1.2 0 1 1 6.19,5 Z"/>
+                                            <TextBlock x:Name="DashboardVersionText"
+                                                       Margin="6,0,0,0"
+                                                       FontFamily="{DynamicResource MonoFont}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource LibraryVersionText}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </WrapPanel>
+                            </StackPanel>
+
+                            <!-- The shadows are blurred COPIES behind the text, cached once: an Effect
+                                 on the text itself would turn ClearType off for every glyph. -->
+                            <Grid x:Name="LibraryTitleBlock">
+                                <TextBlock x:Name="LibraryTitleShadow"
                                            FontFamily="{DynamicResource DisplayFont}"
-                                           FontSize="11"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource StatusInstalledFg}"/>
-                            </Border>
-                            <!-- Active-copy chip: only visible when the mod has 2+ installed
-                                 copies (HasMultipleInstalls). Shows the active copy's real
-                                 FOLDER name so the user always knows which copy they'll play;
-                                 clicking it opens the same copy switcher as the MODS button
-                                 (reuses DashboardChangeModButton_Click, anchored to this chip). -->
-                            <Button x:Name="DashboardCopyChip"
-                                    Style="{StaticResource DashboardSecondaryButton}"
-                                    Margin="8,0,0,0"
-                                    VerticalAlignment="Center"
-                                    Padding="10,3"
-                                    Background="{DynamicResource TintGoldHover}"
-                                    BorderBrush="{DynamicResource AccentBrush}"
-                                    BorderThickness="1"
+                                           FontWeight="Bold"
+                                           TextWrapping="Wrap"
+                                           Foreground="#8C000000"
+                                           Margin="0,3,0,0"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Effect>
+                                        <BlurEffect Radius="16" RenderingBias="Performance"/>
+                                    </TextBlock.Effect>
+                                    <TextBlock.CacheMode>
+                                        <BitmapCache/>
+                                    </TextBlock.CacheMode>
+                                </TextBlock>
+                                <TextBlock x:Name="DashboardTitleText"
+                                           FontFamily="{DynamicResource DisplayFont}"
+                                           FontWeight="Bold"
+                                           TextWrapping="Wrap"
+                                           Foreground="#FFFFFF"/>
+                            </Grid>
+                            <TextBlock x:Name="LibraryAuthorText"
+                                       Margin="0,8,0,0"
+                                       FontWeight="Medium"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource ModAccentText}"/>
+
+                            <TextBlock x:Name="DashboardDescText"
+                                       Margin="0,14,0,0"
+                                       HorizontalAlignment="Left"
+                                       TextWrapping="Wrap"
+                                       TextTrimming="CharacterEllipsis"
+                                       LineStackingStrategy="BlockLineHeight"
+                                       Foreground="#D6E1EE"/>
+                            <Button x:Name="LibraryMoreButton"
+                                    Style="{StaticResource LibraryTextLink}"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,6,0,0"
                                     Visibility="Collapsed"
-                                    Click="DashboardChangeModButton_Click">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE8B7;"
-                                               FontFamily="Segoe MDL2 Assets"
-                                               FontSize="11"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,6,0"
-                                               Foreground="{DynamicResource AccentBrush}"/>
-                                    <TextBlock x:Name="DashboardCopyText"
-                                               FontFamily="{DynamicResource DisplayFont}"
-                                               FontSize="11"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource AccentBrush}"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis"
-                                               MaxWidth="260"/>
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                        <!-- Description copy: SecondaryFixed (#d2e4fb)
-                             — bright cool body tone so the paragraph
-                             reads against the dim hero background
-                             without competing with the dorado title. -->
-                        <TextBlock x:Name="DashboardDescText"
-                                   FontFamily="{DynamicResource BodyFont}"
-                                   FontSize="14"
-                                   Foreground="{DynamicResource SecondaryFixed}"
-                                   LineHeight="22"
-                                   TextWrapping="Wrap"
-                                   MaxWidth="780"
-                                   Margin="0,14,0,0"/>
-                    </StackPanel>
+                                    Click="LibraryMoreButton_Click"/>
 
-                    <!-- Action row: PLAY (gold gradient + glow) +
-                         settings gear + change mod. -->
-                    <StackPanel Grid.Row="1"
-                                Orientation="Horizontal"
-                                Margin="0,28,0,0">
-                        <Button x:Name="DashboardPlayButton"
-                                Style="{StaticResource SidebarPrimaryButton}"
-                                MinWidth="220"
-                                Padding="34,16"
-                                Click="DashboardPlayButton_Click">
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <TextBlock Text="&#xE768;"
-                                           FontFamily="Segoe MDL2 Assets"
-                                           FontSize="20"
-                                           VerticalAlignment="Center"/>
-                                <TextBlock x:Name="DashboardPlayButtonText"
-                                           Margin="12,0,0,0"
-                                           VerticalAlignment="Center"
-                                           FontSize="18"/>
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="DashboardSettingsButton"
-                                Style="{StaticResource DashboardSecondaryButton}"
-                                Width="64"
-                                Margin="14,0,0,0"
-                                Padding="0"
-                                Click="DashboardSettingsButton_Click">
-                            <TextBlock Text="&#xE713;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22"
-                                       HorizontalAlignment="Center"/>
-                        </Button>
-                        <Button x:Name="DashboardChangeModButton"
-                                Style="{StaticResource DashboardSecondaryButton}"
-                                Margin="14,0,0,0"
-                                Padding="22,0"
-                                Click="DashboardChangeModButton_Click">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE8FD;"
-                                           FontFamily="Segoe MDL2 Assets"
-                                           FontSize="18"
-                                           VerticalAlignment="Center"/>
-                                <TextBlock x:Name="DashboardChangeModButtonText"
-                                           Margin="12,0,0,0"
-                                           VerticalAlignment="Center"
-                                           FontFamily="{DynamicResource DisplayFont}"
-                                           FontSize="13"
-                                           FontWeight="SemiBold"/>
-                            </StackPanel>
-                        </Button>
-                        <!-- Shown only when an isolated-folder mod (WoL) reads as
-                             NOT installed: lets a user who already has it point the
-                             launcher at it instead of re-downloading via Install.
-                             Collapsed by default; ApplyCheckResult toggles it. -->
-                        <Button x:Name="DashboardSearchInstallButton"
-                                Style="{StaticResource DashboardSecondaryButton}"
-                                Margin="14,0,0,0"
-                                Padding="22,0"
-                                Visibility="Collapsed"
-                                Click="DashboardSearchInstallButton_Click">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE721;"
-                                           FontFamily="Segoe MDL2 Assets"
-                                           FontSize="18"
-                                           VerticalAlignment="Center"/>
-                                <TextBlock x:Name="DashboardSearchInstallButtonText"
-                                           Margin="12,0,0,0"
-                                           VerticalAlignment="Center"
-                                           FontFamily="{DynamicResource DisplayFont}"
-                                           FontSize="13"
-                                           FontWeight="SemiBold"/>
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-
-                    <!-- Progress strip. Always visible; the label flips
-                         between "Ready for operations" (idle) and the
-                         live update label (running). Speed/Eta/Pct cells
-                         show "—" when idle.
-                         Capped at MaxWidth so the bar doesn't stretch
-                         the full hero width — the HTML mock has a much
-                         tighter progress footprint that lives next to
-                         the bottom-left content column, not flush to
-                         the right edge of the panel. -->
-                    <StackPanel Grid.Row="2"
-                                x:Name="DashboardProgressContainer"
-                                HorizontalAlignment="Left"
-                                MaxWidth="860"
-                                Margin="0,28,0,0">
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <!-- Pause / Cancel column. Only visible
-                                     while an op is running; the
-                                     SyncDashboardProgressFromLegacyPanel
-                                     pump flips its visibility from the
-                                     legacy ProgressRunningActions row. -->
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="DashboardProgressIcon"
-                                               Text="&#xE73E;"
-                                               FontFamily="Segoe MDL2 Assets"
-                                               FontSize="14"
-                                               Foreground="{DynamicResource AccentBrush}"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,8,0"/>
-                                    <TextBlock x:Name="DashboardProgressLabel"
-                                               Foreground="{DynamicResource AccentBrush}"
-                                               FontFamily="{DynamicResource DisplayFont}"
-                                               FontSize="12"
-                                               FontWeight="SemiBold"
-                                               VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <!-- Cool secondary tone for the subtitle "Listo
-                                     para operaciones / Descargando…" so the
-                                     bigger gold label above carries the
-                                     visual weight. -->
-                                <TextBlock x:Name="DashboardProgressSubtitle"
-                                           Foreground="{DynamicResource OnSecondaryContainer}"
-                                           FontSize="11"
-                                           Margin="22,2,0,0"/>
-                            </StackPanel>
-                            <!-- Column-header microtype labels switch to the
-                                 cool Secondary tone so they read as quiet
-                                 metadata. Data values stay dorado so the
-                                 user's eye locks onto the actual numbers. -->
-                            <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                                <TextBlock x:Name="DashboardProgressSpeedLabel"
-                                           Foreground="{DynamicResource Secondary}"
-                                           FontSize="11"
-                                           FontWeight="SemiBold"/>
-                                <!-- Data values use SecondaryFixed (cool
-                                     bright blue-white) so progress reads
-                                     as informational metadata. Dorado is
-                                     reserved for the main progress label
-                                     + the indicator bar. -->
-                                <TextBlock x:Name="DashboardProgressSpeed"
-                                           Foreground="{DynamicResource SecondaryFixed}"
-                                           FontSize="13"
-                                           Text="—"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Margin="14,0,0,0">
-                                <TextBlock x:Name="DashboardProgressEtaLabel"
-                                           Foreground="{DynamicResource Secondary}"
-                                           FontSize="11"
-                                           FontWeight="SemiBold"/>
-                                <TextBlock x:Name="DashboardProgressEta"
-                                           Foreground="{DynamicResource SecondaryFixed}"
-                                           FontSize="13"
-                                           Text="—"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="3" Margin="14,0,0,0">
-                                <TextBlock x:Name="DashboardProgressPercentLabel"
-                                           Foreground="{DynamicResource Secondary}"
-                                           FontSize="11"
-                                           FontWeight="SemiBold"/>
-                                <TextBlock x:Name="DashboardProgressPercent"
-                                           Foreground="{DynamicResource SecondaryFixed}"
-                                           FontSize="13"
-                                           Text="—"/>
-                            </StackPanel>
-
-                            <!-- Pause + Cancel for the currently running
-                                 operation. Hidden in idle state; visible
-                                 only when ProgressRunningActions on the
-                                 legacy panel is visible. Clicks are
-                                 forwarded to the legacy buttons so the
-                                 existing pause/resume/cancel logic in
-                                 PauseButton_Click / CancelButton_Click
-                                 keeps owning the decisions. -->
-                            <StackPanel Grid.Column="4"
-                                        x:Name="DashboardProgressActions"
-                                        Orientation="Horizontal"
-                                        Margin="16,0,0,0"
-                                        VerticalAlignment="Center"
-                                        Visibility="Collapsed">
-                                <Button x:Name="DashboardPauseButton"
-                                        Style="{StaticResource DashboardSecondaryButton}"
-                                        Width="36" Height="36"
-                                        Padding="0"
-                                        Click="DashboardPauseButton_Click">
-                                    <TextBlock x:Name="DashboardPauseButtonIcon"
-                                               Text="&#xE769;"
-                                               FontFamily="Segoe MDL2 Assets"
-                                               FontSize="13"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"/>
+                            <WrapPanel x:Name="LibraryActions" Margin="0,14,0,0">
+                                <Button x:Name="DashboardPlayButton"
+                                        Style="{StaticResource LibraryPrimaryButton}"
+                                        Margin="0,0,10,10"
+                                        Click="DashboardPlayButton_Click">
+                                    <TextBlock x:Name="DashboardPlayButtonText" VerticalAlignment="Center"/>
                                 </Button>
-                                <Button x:Name="DashboardCancelButton"
-                                        Style="{StaticResource DashboardSecondaryButton}"
-                                        Width="36" Height="36"
-                                        Padding="0"
-                                        Margin="8,0,0,0"
-                                        Click="DashboardCancelButton_Click">
-                                    <TextBlock Text="&#xE711;"
-                                               FontFamily="Segoe MDL2 Assets"
-                                               FontSize="13"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"/>
-                                </Button>
-                                <!-- Retry after a failed/cancelled operation. The legacy panel's
-                                     Retry lives inside the collapsed LegacyPlayContent, so without
-                                     this mirror a failure offered no way to try again anywhere the
-                                     player could see. Forwards to ProgressActionRetry_Click. -->
-                                <Button x:Name="DashboardRetryButton"
-                                        Style="{StaticResource DashboardSecondaryButton}"
-                                        Width="36" Height="36"
-                                        Padding="0"
-                                        Margin="8,0,0,0"
+                                <Button x:Name="LibraryPlayAnywayButton"
+                                        Style="{StaticResource LibraryGlassButton}"
+                                        Margin="0,0,10,10"
                                         Visibility="Collapsed"
-                                        Click="DashboardRetryButton_Click">
-                                    <TextBlock Text="&#xE72C;"
-                                               FontFamily="Segoe MDL2 Assets"
-                                               FontSize="13"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"/>
+                                        Click="LibraryPlayAnywayButton_Click"/>
+                                <Button x:Name="DashboardSearchInstallButton"
+                                        Style="{StaticResource LibraryGlassButton}"
+                                        Margin="0,0,10,10"
+                                        Visibility="Collapsed"
+                                        Click="DashboardSearchInstallButton_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Width="18" Height="15" Stretch="Uniform"
+                                              VerticalAlignment="Center" Margin="0,0,9,0"
+                                              Stroke="{DynamicResource UiBodyText}" StrokeThickness="1.4"
+                                              StrokeLineJoin="Round"
+                                              Data="M1,3 C1,2 2,1 3,1 H6.5 L8.5,3.5 H15 C16,3.5 17,4.5 17,5.5 V12 C17,13 16,14 15,14 H3 C2,14 1,13 1,12 Z"/>
+                                        <TextBlock x:Name="DashboardSearchInstallButtonText" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </Button>
-                            </StackPanel>
-                        </Grid>
-                        <ProgressBar x:Name="DashboardProgressBar"
-                                     Style="{StaticResource ShimmerProgressBar}"
-                                     Height="4"
-                                     Value="0"/>
-                    </StackPanel>
+                                <Button x:Name="DashboardCopyChip"
+                                        Style="{StaticResource LibraryGlassButton}"
+                                        Padding="14,0"
+                                        Margin="0,0,10,10"
+                                        Visibility="Collapsed"
+                                        Click="DashboardCopyChip_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Width="18" Height="15" Stretch="Uniform"
+                                              VerticalAlignment="Center"
+                                              Stroke="{DynamicResource UiBodyText}" StrokeThickness="1.4"
+                                              StrokeLineJoin="Round"
+                                              Data="M1,3 C1,2 2,1 3,1 H6.5 L8.5,3.5 H15 C16,3.5 17,4.5 17,5.5 V12 C17,13 16,14 15,14 H3 C2,14 1,13 1,12 Z"/>
+                                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LibraryCopyCaption" FontSize="11"
+                                                       FontWeight="Normal"
+                                                       Foreground="{DynamicResource UiMutedText}"/>
+                                            <TextBlock x:Name="DashboardCopyText" FontSize="14"
+                                                       FontWeight="SemiBold" Margin="0,3,0,0"
+                                                       Foreground="#F0F5FB"/>
+                                        </StackPanel>
+                                        <TextBlock Text="&#x25B2;" FontSize="9" Margin="12,0,2,0"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource UiDimText}"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="DashboardSettingsButton"
+                                        Style="{StaticResource LibraryGlassButton}"
+                                        Width="52" Padding="0"
+                                        Margin="0,0,10,10"
+                                        Click="DashboardSettingsButton_Click">
+                                    <TextBlock Text="&#xE713;"
+                                               FontFamily="Segoe MDL2 Assets" FontSize="20"
+                                               Foreground="{DynamicResource UiBodyText}"/>
+                                </Button>
+                                <!-- Retired by the list on the left; kept collapsed because the
+                                     operation gate still writes to it. -->
+                                <Button x:Name="DashboardChangeModButton"
+                                        Visibility="Collapsed"
+                                        Click="DashboardChangeModButton_Click">
+                                    <TextBlock x:Name="DashboardChangeModButtonText"/>
+                                </Button>
+                            </WrapPanel>
+
+                            <TextBlock x:Name="LibraryStatusLine"
+                                       Margin="0,0,0,10"
+                                       FontSize="12.5"
+                                       TextWrapping="Wrap"
+                                       MaxWidth="660"
+                                       HorizontalAlignment="Left"
+                                       Foreground="{DynamicResource UiMutedText}"
+                                       Visibility="Collapsed"/>
+
+                            <Border x:Name="DashboardProgressContainer"
+                                    MaxWidth="660"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,14,0,14"
+                                    Padding="18,16"
+                                    CornerRadius="12"
+                                    Background="{DynamicResource LibraryCard}"
+                                    BorderBrush="{DynamicResource ModAccentLine}"
+                                    BorderThickness="1"
+                                    Visibility="Collapsed">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="34"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border x:Name="LibraryProgressDisc"
+                                                Width="34" Height="34" CornerRadius="17"
+                                                Background="{DynamicResource ModAccentSoft}">
+                                            <TextBlock x:Name="DashboardProgressIcon"
+                                                       FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="14"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource ModAccentText}"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="DashboardProgressLabel"
+                                                       FontSize="14.5" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#F4F8FC"/>
+                                            <TextBlock x:Name="DashboardProgressSubtitle"
+                                                       FontSize="12.5" Margin="0,4,0,0"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource UiMutedText}"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="DashboardProgressPercent"
+                                                   Grid.Column="2"
+                                                   FontFamily="{DynamicResource MonoFont}"
+                                                   FontSize="24" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource ModAccentText}"/>
+                                    </Grid>
+                                    <ProgressBar x:Name="DashboardProgressBar"
+                                                 Style="{StaticResource LibraryProgressBar}"
+                                                 Margin="0,12,0,12"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="LibraryProgressFoot"
+                                                   FontSize="12.5"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource UiMutedText}"/>
+                                        <StackPanel x:Name="DashboardProgressActions"
+                                                    Grid.Column="1"
+                                                    Orientation="Horizontal">
+                                            <Button x:Name="DashboardRetryButton"
+                                                    Style="{StaticResource LibraryCardPrimary}"
+                                                    Margin="14,0,0,0"
+                                                    Visibility="Collapsed"
+                                                    Click="DashboardRetryButton_Click"/>
+                                            <Button x:Name="DashboardPauseButton"
+                                                    Style="{StaticResource LibraryCardButton}"
+                                                    Margin="14,0,0,0"
+                                                    Click="DashboardPauseButton_Click">
+                                                <TextBlock x:Name="DashboardPauseButtonIcon"/>
+                                            </Button>
+                                            <Button x:Name="DashboardCancelButton"
+                                                    Style="{StaticResource LibraryCardDanger}"
+                                                    Margin="14,0,0,0"
+                                                    Click="DashboardCancelButton_Click"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <!-- Still written by the operation code; the foot line says this. -->
+                                    <StackPanel Visibility="Collapsed">
+                                        <TextBlock x:Name="DashboardProgressSpeedLabel"/>
+                                        <TextBlock x:Name="DashboardProgressSpeed"/>
+                                        <TextBlock x:Name="DashboardProgressEtaLabel"/>
+                                        <TextBlock x:Name="DashboardProgressEta"/>
+                                        <TextBlock x:Name="DashboardProgressPercentLabel"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="LibraryFacts"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,4,0,14"
+                                    Padding="16,9"
+                                    CornerRadius="10"
+                                    Background="{DynamicResource GlassTile}"
+                                    BorderBrush="{DynamicResource GlassRim}"
+                                    BorderThickness="1">
+                                <WrapPanel x:Name="LibraryFactsRow"/>
+                            </Border>
+
+                            <WrapPanel x:Name="LibraryShots" Margin="0,0,0,14" Visibility="Collapsed"/>
+
+                            <WrapPanel x:Name="LibraryLinks" Visibility="Collapsed">
+                                <TextBlock x:Name="LibraryLinksCaption"
+                                           FontSize="12"
+                                           Margin="0,0,12,6"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource UiMutedText}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Grid>
 
                 <!-- LEGACY COMPAT: hidden but tree-attached so the
@@ -1811,6 +1529,61 @@
              cards in the bottom-right that float over ANY tab. Spans all rows;
              Background is null so it only intercepts clicks on the cards themselves
              (empty areas stay click-through to the content below). -->
+        <!-- The bell's panel (design 70a). In the window, not a Popup: a transparent Popup loses
+             ClearType. The veil only closes it. It starts under the caption so the bell can
+             still be pressed to toggle it. -->
+        <Grid x:Name="NotificationHost" Grid.RowSpan="3" Margin="0,40,0,0" Visibility="Collapsed">
+            <Border Background="Transparent" MouseLeftButtonDown="NotificationVeil_MouseLeftButtonDown"/>
+            <controls:NotificationPanel x:Name="NotificationPanelView"
+                                        HorizontalAlignment="Right"
+                                        Margin="0,4,12,12"/>
+        </Grid>
+
+        <!-- A screenshot of the selected mod, over everything (design 68a). -->
+        <Grid x:Name="LibraryShotViewer"
+              Grid.RowSpan="3"
+              Background="#E6050A12"
+              Visibility="Collapsed"
+              MouseLeftButtonUp="LibraryShotViewer_MouseLeftButtonUp">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="11*"/>
+                <ColumnDefinition Width="78*" MaxWidth="1500"/>
+                <ColumnDefinition Width="11*"/>
+            </Grid.ColumnDefinitions>
+            <Image x:Name="LibraryShotImage"
+                   Grid.Column="1"
+                   RenderOptions.BitmapScalingMode="HighQuality"/>
+            <TextBlock x:Name="LibraryShotTitle"
+                       Grid.ColumnSpan="3"
+                       HorizontalAlignment="Left" VerticalAlignment="Top"
+                       Margin="20,20,0,0"
+                       FontSize="13" FontWeight="SemiBold"
+                       Foreground="#F0F5FB"/>
+            <Button x:Name="LibraryShotClose"
+                    Grid.Column="2"
+                    Style="{StaticResource LibraryBarButton}"
+                    Width="34" Padding="0"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,20,20,0"
+                    Content="&#x2715;"
+                    Click="LibraryShotClose_Click"/>
+            <Button x:Name="LibraryShotPrev"
+                    Style="{StaticResource LibraryBarButton}"
+                    Width="34" Padding="0"
+                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                    Margin="20,0,0,0"
+                    Content="&#x2039;"
+                    Click="LibraryShotPrev_Click"/>
+            <Button x:Name="LibraryShotNext"
+                    Grid.Column="2"
+                    Style="{StaticResource LibraryBarButton}"
+                    Width="34" Padding="0"
+                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Margin="0,0,20,0"
+                    Content="&#x203A;"
+                    Click="LibraryShotNext_Click"/>
+        </Grid>
+
         <StackPanel x:Name="ToastHost"
                     Grid.Row="0" Grid.RowSpan="3"
                     VerticalAlignment="Bottom"

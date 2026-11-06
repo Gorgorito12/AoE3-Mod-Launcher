@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}input::placeholder{color:#8C9CB1}</style></helmet>
+<section id="t72" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t72" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">72</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Ajustes del launcher, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px">Las mismas 5 secciones de hoy (General, Interfaz, Partidas, Mods y actualizaciones, Avanzado). Es una ventana de todo el launcher, así que usa neutros y el azul de acción, sin imagen ni color de ningún mod. La transparencia que elijas en Interfaz se aplica en vivo a esta misma ventana. Prueba: busca un ajuste, apaga «Marcar Record Game» (aparece el aviso y el punto ámbar en Partidas). Avanzado › Desarrollador trae todas las herramientas de hoy; apaga «desarrollador» en Tweaks para verlo como un jugador normal, y reaparece al tocar 7 veces la versión del pie del menú. Activa «instalado» para ver la ventana de un launcher ya instalado, sin «Instalar en este PC».</div>
+  <div id="72a" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#72a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">72a</a><span>Interactivo.</span></div>
+    <div style="width:{{ fw }};height:{{ fh }};container-type:inline-size;color-scheme:dark;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.32);background:radial-gradient(1000px 600px at 92% -12%, rgba(47,127,224,.18), transparent 65%), radial-gradient(800px 500px at -10% 110%, rgba(47,127,224,.08), transparent 70%), #0f1c2e;display:flex;flex-direction:column">
+      <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 6px 0 14px;background:{{ barBg }};backdrop-filter:blur({{ barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:700 14px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">Ajustes del launcher</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;display:flex;gap:26px;padding:0 10px"><span>—</span><span>❐</span><span>✕</span></span></div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(clamp(220px,15cqw,280px),max-content) minmax(0,1fr);gap:16px;padding:16px">
+        <div style="min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:12px;padding:8px;border-radius:14px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)">
+          <div style="height:34px;flex:none;box-sizing:border-box;border-radius:8px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);display:flex;align-items:center;gap:8px;padding:0 10px"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#8C9CB1" stroke-width="1.5" stroke-linecap="round"><circle cx="5.5" cy="5.5" r="4.2"></circle><path d="M8.7 8.7 12 12"></path></svg><input value="{{ q }}" onChange="{{ onQ }}" placeholder="Buscar ajustes" style="flex:1;min-width:0;background:transparent;border:0;outline:0;color:#f0f5fb;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif"><sc-if value="{{ hasQ }}" hint-placeholder-val="{{ false }}"><span onClick="{{ clearQ }}" style="cursor:pointer;flex:none;width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">✕</span></sc-if></div>
+          <sc-if value="{{ noMatch }}" hint-placeholder-val="{{ false }}"><span style="padding:6px 8px;font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ noMatch }}</span></sc-if>
+          <div style="flex:0 1 auto;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;display:flex;flex-direction:column;gap:2px">
+            <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5"><div onClick="{{ n.pick }}" style="cursor:pointer;height:38px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:8px;background:{{ n.bg }}"><span style="flex:none;width:18px;text-align:center;font:400 15px/1 'Segoe Fluent Icons','Segoe MDL2 Assets';color:{{ n.c }}">{{ n.glyph }}</span><span style="flex:1 0 auto;white-space:nowrap;font:{{ n.w }} 13.5px/1.2 'Segoe UI',system-ui,sans-serif;color:{{ n.c }}">{{ n.t }}</span><sc-if value="{{ n.dot }}" hint-placeholder-val="{{ false }}"><span style="flex:none;width:7px;height:7px;border-radius:4px;background:#F4900C"></span></sc-if><sc-if value="{{ n.count }}" hint-placeholder-val="{{ false }}"><span style="flex:none;min-width:20px;height:20px;box-sizing:border-box;padding:0 6px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.12);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ n.count }}</span></sc-if></div></sc-for>
+          </div>
+          <div style="flex:1"></div>
+          <div style="flex:none;padding:12px 6px 4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);display:flex;flex-direction:column;gap:4px"><span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">AoE3 Mod Launcher</span><span onClick="{{ tap }}" style="font:400 11.5px/1.2 Consolas,ui-monospace,monospace;color:#8C9CB1">v1.0.16e</span></div>
+        </div>
+        <div style="min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;padding:4px 6px 8px 4px">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:6px"><span style="font:700 clamp(22px,1.5cqw,30px)/1.15 'Source Serif 4',Georgia,serif;color:#ffffff">{{ secTitle }}</span><sc-if value="{{ secIntro }}" hint-placeholder-val="{{ false }}"><span style="max-width:84ch;font:400 13px/1.55 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ secIntro }}</span></sc-if></div>
+            <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-if value="{{ g.hasHead }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding:0 4px;min-height:32px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ g.label }}</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ g.note }}</span><div style="flex:1"></div><sc-if value="{{ g.hasAction }}" hint-placeholder-val="{{ false }}"><span onClick="{{ g.act }}" style="cursor:pointer;flex:none;white-space:nowrap;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ g.action }}</span></sc-if></div></sc-if>
+                <div style="border-radius:12px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px {{ g.ring }};overflow:hidden">
+                  <sc-if value="{{ g.isPreview }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 14px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.07)"><div style="position:relative;height:130px;border-radius:8px;overflow:hidden;background:{{ P.bg }}"><div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,28,46,.85),rgba(15,28,46,.3))"></div><div style="position:absolute;left:10px;top:10px;bottom:10px;width:140px;border-radius:7px;background:{{ P.rail }};backdrop-filter:blur({{ P.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:6px;display:flex;flex-direction:column;gap:3px"><sc-for list="{{ P.rows }}" as="p" hint-placeholder-count="3"><div style="height:24px;border-radius:5px;display:flex;align-items:center;gap:6px;padding:0 6px;background:{{ p.bg }}"><span style="width:14px;height:14px;background:{{ p.icon }}"></span><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.t }}</span></div></sc-for></div><div style="position:absolute;left:166px;bottom:14px;display:flex;flex-direction:column;gap:8px"><span style="font:700 20px/1 'Source Serif 4',Georgia,serif;color:#fff">Wars of Liberty</span><span style="align-self:flex-start;height:26px;padding:0 14px;border-radius:6px;display:flex;align-items:center;background:{{ P.acc }};font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#fff">▶ Jugar</span></div><span style="position:absolute;right:10px;top:10px;height:20px;padding:0 8px;border-radius:10px;display:flex;align-items:center;background:rgba(10,19,33,.6);font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">VISTA PREVIA</span></div></div></sc-if>
+                  <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2">
+                    <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 24px;align-items:center;padding:14px 16px;box-shadow:{{ r.line }}">
+                      <div style="min-width:0;display:flex;align-items:center;gap:12px">
+                        <sc-if value="{{ r.hasIcon }}" hint-placeholder-val="{{ false }}"><span style="flex:none;width:30px;height:30px;background:{{ r.icon }}"></span></sc-if>
+                        <div style="min-width:0;display:flex;flex-direction:column;gap:5px">
+                          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px"><span style="font:600 13.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb"><sc-for list="{{ r.tP }}" as="p" hint-placeholder-count="1"><span style="background:{{ p.bg }};color:{{ p.c }};border-radius:3px">{{ p.t }}</span></sc-for></span><sc-if value="{{ r.ver }}" hint-placeholder-val="{{ false }}"><span style="flex:none;white-space:nowrap;height:22px;padding:0 9px;border-radius:11px;display:flex;align-items:center;gap:5px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:600 11px/1 Consolas,ui-monospace,monospace;color:#e8eef6"><svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="#7ee08b" stroke-width="1.4" stroke-linejoin="round"><path d="M1 1h4.5L10 5.5 5.5 10 1 5.5z"></path></svg>{{ r.ver }}</span></sc-if><sc-for list="{{ r.chips }}" as="c" hint-placeholder-count="0"><span style="flex:none;white-space:nowrap;height:22px;padding:0 9px;border-radius:11px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6"><span style="width:6px;height:6px;border-radius:3px;background:{{ c.dot }}"></span>{{ c.t }}</span></sc-for></div>
+                          <sc-if value="{{ r.d }}" hint-placeholder-val="{{ true }}"><span style="max-width:84ch;font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty"><sc-for list="{{ r.dP }}" as="p" hint-placeholder-count="1"><span style="background:{{ p.bg }};color:{{ p.c }};border-radius:3px">{{ p.t }}</span></sc-for></span></sc-if>
+                          <sc-if value="{{ r.note }}" hint-placeholder-val="{{ false }}"><span style="max-width:84ch;font:400 12px/1.5 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty"><sc-for list="{{ r.nP }}" as="p" hint-placeholder-count="1"><span style="background:{{ p.bg }};color:{{ p.c }};border-radius:3px">{{ p.t }}</span></sc-for></span></sc-if><sc-if value="{{ r.mono }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px/1.3 Consolas,ui-monospace,monospace;color:#c3d2e5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.mono }}</span></sc-if>
+                          <sc-if value="{{ r.box }}" hint-placeholder-val="{{ false }}"><div style="margin-top:4px;padding:9px 12px;border-radius:8px;background:{{ r.boxBg }};box-shadow:inset 0 0 0 1px {{ r.boxRing }};font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:{{ r.boxC }};text-wrap:pretty">{{ r.box }}</div></sc-if>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+                        <sc-if value="{{ r.hasSelect }}" hint-placeholder-val="{{ false }}"><select value="{{ r.selVal }}" onChange="{{ r.onSel }}" style="height:32px;min-width:200px;box-sizing:border-box;padding:0 10px;border-radius:7px;background:#1a2c48;border:1px solid rgba(130,175,255,.22);color:#dce7f5;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;outline:0;cursor:pointer"><sc-for list="{{ r.opts }}" as="o" hint-placeholder-count="0"><option value="{{ o }}">{{ o }}</option></sc-for></select></sc-if><sc-for list="{{ r.btns }}" as="b" hint-placeholder-count="0"><span onClick="{{ b.act }}" style="cursor:pointer;flex:none;white-space:nowrap;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ b.bg }};box-shadow:inset 0 0 0 1px {{ b.ring }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.c }}">{{ b.t }}</span></sc-for>
+                        <sc-if value="{{ r.isSeg }}" hint-placeholder-val="{{ false }}"><div style="flex:none;display:flex;gap:2px;padding:2px;border-radius:9px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)"><sc-for list="{{ r.seg }}" as="o" hint-placeholder-count="2"><span onClick="{{ o.pick }}" style="cursor:pointer;white-space:nowrap;height:28px;padding:0 12px;border-radius:7px;display:flex;align-items:center;background:{{ o.bg }};font:{{ o.w }} 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ o.c }}">{{ o.t }}</span></sc-for></div></sc-if>
+                        <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.flip }}" style="cursor:pointer;flex:none;width:38px;height:22px;box-sizing:border-box;padding:2px;border-radius:11px;display:flex;justify-content:{{ r.just }};background:{{ r.tbg }};transition:background .2s"><span style="width:18px;height:18px;border-radius:9px;background:{{ r.knob }}"></span></span></sc-if>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      <div style="height:52px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px;background:rgba(8,15,27,.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)"><span style="flex:1;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Los cambios se aplican al instante</span><span style="cursor:pointer;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cerrar</span></div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;ventana&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;1120×720&quot;,&quot;1600×960&quot;,&quot;2200×1240&quot;],&quot;default&quot;:&quot;1120×720&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;desarrollador&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;instalado&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { sec: 'general', q: '', lang: 'es', radmin: 'auto', tr: 'mid', fx: 'auto', rail: 'auto', text: '100', start: 'bib', taps: 0, cache: false, temp: false, refresh: false, snd: false, demo: 'Clasificación · Tabla',
+    t: { win: true, tray: false, close: false, rooms: true, inv: true, toast: true, sounds: true, join: true, rec: true, remind: true, share: true, auto: true, sig: true, diag: false, decks: true, dev: true, img: true, col: true } };
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const [W, H] = ({ '1120×720': [1120, 720], '1600×960': [1600, 960], '2200×1240': [2200, 1240] })[this.props.ventana ?? '1120×720'] || [1120, 720];
+    const G = ({ solid: { bg: 'rgba(12,22,38,.86)', blur: '0px' }, mid: { bg: 'rgba(10,19,33,.5)', blur: '16px' }, max: { bg: 'rgba(10,19,33,.28)', blur: '8px' } })[s.tr];
+    const T = k => ({ isToggle: true, flip: () => set({ t: { ...this.state.t, [k]: !this.state.t[k] } }), just: s.t[k] ? 'flex-end' : 'flex-start', tbg: s.t[k] ? '#2f7fe0' : 'rgba(255,255,255,.14)', knob: s.t[k] ? '#ffffff' : '#8ea4c0' });
+    const SEG = (key, opts) => ({ isSeg: true, seg: opts.map(([v, t]) => { const on = s[key] === v; return { t, pick: () => set({ [key]: v }), bg: on ? '#2f7fe0' : 'transparent', c: on ? '#ffffff' : '#c3d2e5', w: on ? 600 : 500 }; }) });
+    const B = (t, act, kind) => ({ t, act: act || (() => {}), bg: kind === 'blue' ? '#2f7fe0' : '#1a2c48', ring: kind ? 'rgba(0,0,0,0)' : 'rgba(130,175,255,.22)', c: kind ? '#ffffff' : '#dce7f5' });
+    const REC = { t: 'RECOMENDADO', dot: '#4fd68a' };
+    const AMB = { boxBg: 'rgba(244,144,12,.1)', boxRing: 'rgba(244,144,12,.38)', boxC: '#F5BD76' };
+    const norm = rows => rows.map((r, i, a) => ({ chips: [], d: '', mono: '', box: '', btns: [], seg: [], isSeg: false, isToggle: false, icon: '', note: '', ver: '', hasSelect: false, opts: [], selVal: '', onSel: null, find: '', ...r, hasIcon: !!r.icon, line: i < a.length - 1 ? 'inset 0 -1px 0 rgba(255,255,255,.07)' : 'none' }));
+    const grp = (label, rows, x) => Object.assign({ label, note: '', action: '', act: () => {}, ring: 'rgba(255,255,255,.1)', isPreview: false }, x || {}, { hasHead: !!(label || (x && x.action)), hasAction: !!(x && x.action), rows: norm(rows) });
+    const ic = id => `url(mods/${id}/icon.png) center/contain no-repeat`;
+    const devOn = (this.props.desarrollador ?? true) || s.taps >= 7;
+    const fq0 = String(s.q || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const PV = { 'Avisos de sala': 'Muestra una invitación a sala y un aviso de sala nueva de ejemplo, en el mismo sitio y con el mismo aspecto que los reales, para que los revises sin esperar a otro jugador.', 'Torneos': 'Llena la pestaña Torneos con siete torneos de ejemplo que puedes jugar de la primera partida al campeón. No se envía nada.', 'Estadísticas': 'Llena la página Estadísticas con cifras de ejemplo de la comunidad. La tabla real de civilizaciones necesita cientos de partidas puntuadas con civilización, así que todavía no se puede ver jugando.', 'Sala': 'Abre la ventana de sala con una sala inventada y los botones desactivados. El panel de jugadores es lo único que necesita a otras personas para verse, así que no se puede revisar jugando solo.' };
+    ['Tabla', 'Posicionamiento', 'Perfil', 'Sala 1v1', 'Sala de equipos', 'Cuenta atrás de equipos', 'Tarjetas de resultado', 'Historial', 'Destacados del mes', 'Devolución'].forEach(x => { PV['Clasificación · ' + x] = 'Muestra las pantallas de la clasificación con datos inventados: la tabla, el posicionamiento, el perfil, las dos salas, la cuenta atrás de equipos, las tarjetas de resultado, el Historial, los destacados del mes y una devolución. No se guarda ni se envía nada, y dura hasta que reinicies el launcher.'; });
+    const pvSel = (fq0 && Object.keys(PV).find(k => (k + ' ' + PV[k]).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(fq0))) || s.demo;
+    const S = {
+      general: { t: 'General', intro: '', groups: [
+        grp('', [{ t: 'Idioma del launcher', d: 'Se aplica al instante.', ...SEG('lang', [['en', 'English'], ['es', 'Español']]) }]),
+        grp('INICIO', [
+          { t: 'Arrancar con Windows', chips: [REC], d: 'Arranca en segundo plano: apareces conectado sin abrirlo.', ...T('win') },
+          { t: 'Minimizar a la bandeja al cerrar', d: 'La ✕ lo deja en la bandeja del sistema en vez de cerrarlo.', ...T('tray') },
+          { t: 'Cerrar el launcher al empezar la partida', ...T('close') }
+        ]),
+        grp('AVISOS', [
+          { t: 'Avisarme cuando alguien abre una sala', chips: [REC], d: 'Solo de mods que tienes instalados.', ...T('rooms') },
+          { t: 'Dejar que me inviten', d: 'Otros jugadores pueden invitarte a su sala.', ...T('inv') },
+          { t: 'Mostrar avisos flotantes', ...T('toast') },
+          { t: 'Sonidos', d: 'Al recibir un mensaje o una invitación.', btns: [B(s.snd ? 'Sonando…' : 'Probar', () => { set({ snd: true }); clearTimeout(this.t1); this.t1 = setTimeout(() => set({ snd: false }), 900); })], ...T('sounds') }
+        ]),
+        grp('CONEXIÓN', [
+          { t: 'Enlaces «Unirse» de Discord', d: 'Abre el launcher en la sala al pulsar un enlace.', ...T('join') },
+          { t: 'Asistente de Radmin VPN', d: 'Te ayuda a conectar Radmin VPN antes de unirte a una sala.', ...SEG('radmin', [['auto', 'Automático'], ['always', 'Siempre'], ['never', 'Nunca']]) }
+        ])
+      ] },
+      ui: { t: 'Interfaz', intro: '', groups: [
+        grp('APARIENCIA', [
+          { t: 'Transparencia', d: 'Cuánto deja ver la imagen del mod detrás de los paneles. Predeterminada: Media.', ...SEG('tr', [['solid', 'Sólida'], ['mid', 'Media'], ['max', 'Máxima']]) },
+          { t: 'Imagen del mod de fondo', d: 'Desactivada, solo queda el resplandor de su color.', ...T('img') },
+          { t: 'Color de cada mod', d: 'Desactivado, se usa siempre el azul del launcher.', ...T('col') },
+          { t: 'Efectos y animaciones', d: 'Automático los reduce si Windows tiene las animaciones desactivadas.', ...SEG('fx', [['auto', 'Automático'], ['full', 'Completos'], ['low', 'Reducidos']]) },
+          { t: 'Lista de mods', d: 'Automática: plegada a solo iconos en ventanas de menos de 1400 px.', ...SEG('rail', [['auto', 'Automática'], ['open', 'Desplegada'], ['closed', 'Plegada']]) }
+        ], { isPreview: true, action: 'Restablecer', act: () => set({ tr: 'mid', fx: 'auto', rail: 'auto', t: { ...this.state.t, img: true, col: true } }) }),
+        grp('TEXTO Y PESTAÑAS', [
+          { t: 'Tamaño del texto', d: 'Se aplica a todo el launcher.', ...SEG('text', [['100', '100 %'], ['110', '110 %'], ['125', '125 %']]) },
+          { t: 'Pestaña al abrir', ...SEG('start', [['mp', 'Multijugador'], ['bib', 'Biblioteca']]) }
+        ])
+      ] },
+      games: { t: 'Partidas', intro: 'Sin grabación no se puede saber quién ganó, y la partida no cuenta para el ranking.', groups: [
+        ...(s.t.rec ? [] : [grp('', [{ t: 'AoE3 no va a grabar tus partidas', d: 'Tus partidas competitivas no puntuarán hasta que lo actives.', btns: [B('Activar', () => set({ t: { ...this.state.t, rec: true } }), 'blue')] }], { ring: 'rgba(244,144,12,.5)' })]),
+        grp('GRABACIÓN', [
+          { t: 'Marcar Record Game automáticamente', chips: [REC], d: 'El launcher deja activada la grabación de AoE3 antes de cada partida.', ...T('rec') },
+          { t: 'Recordarme grabar', d: 'Un aviso al empezar si la grabación está apagada.', ...T('remind') }
+        ]),
+        grp('RANKING', [{ t: 'Subir mis grabaciones competitivas', d: 'Al terminar, se suben para que cualquiera pueda descargarlas durante un año.', ...T('share') }])
+      ] },
+      mods: { t: 'Mods y actualizaciones', intro: '', groups: [
+        grp('', [{ t: 'Hay una versión nueva del launcher: v1.0.17', d: 'Se instala al reiniciar el launcher.', btns: [B('Ver cambios'), B('Reiniciar y actualizar', null, 'blue')] }], { ring: 'rgba(85,172,238,.5)' }),
+        grp('ACTUALIZACIONES', [{ t: 'Actualizar mods automáticamente', chips: [REC], d: 'Si tu versión no coincide con la del anfitrión, no puedes entrar en su sala.', ...T('auto') }]),
+        grp('MODS INSTALADOS', [
+          { t: 'Wars of Liberty', icon: ic('wol'), mono: 'v1.2.0e · 6,8 GB', chips: [{ t: 'HUELLA OK', dot: '#4fd68a' }], btns: [B('Ajustes del mod…')] },
+          { t: 'Hundred Days', icon: ic('hundred-days'), mono: 'vbeta-0.10 · 3,1 GB', chips: [{ t: 'HUELLA DISTINTA', dot: '#F4900C' }], d: 'Hay archivos tocados a mano. Puedes repararlos en Ajustes del mod › Archivos.', btns: [B('Ajustes del mod…')] },
+          { t: 'Improvement Mod', icon: ic('improvement-mod'), mono: 'v16.10.2026 · 5,4 GB', chips: [{ t: 'HUELLA OK', dot: '#4fd68a' }], btns: [B('Ajustes del mod…')] }
+        ], { note: '3 · 15,3 GB' }),
+        grp('CATÁLOGO', [
+          { t: 'Origen', mono: 'github.com/Gorgorito12/aoe3-mods-catalog', btns: [B('Cambiar…')] },
+          { t: 'Refrescar el catálogo', mono: s.refresh ? 'Actualizado ahora · 15 mods disponibles' : 'Actualizado hace 12 min · 15 mods disponibles', btns: [B('Refrescar', () => set({ refresh: true }))] },
+          { t: 'Verificar la firma de las descargas', chips: [REC], ...T('sig') }
+        ])
+      ] },
+      adv: { t: 'Avanzado', intro: '', groups: [
+        grp('MANTENIMIENTO', [
+          { t: 'Vaciar la caché de iconos', d: 'Solo si ves imágenes de mods rotas o desactualizadas.', mono: s.cache ? 'Vaciada' : '', btns: [B('Vaciar', () => set({ cache: true }))] },
+          { t: 'Borrar archivos temporales', d: 'Descargas interrumpidas.', mono: s.temp ? 'Borrados' : '', btns: [B('Borrar', () => set({ temp: true }))] },
+          { t: 'Carpeta de datos', mono: 'C:\\Users\\Jeison\\AppData\\Local\\AoE3ModLauncher', btns: [B('Abrir')] },
+          { t: 'Versión del launcher', ver: 'v1.0.16e', d: 'Pregunta a GitHub si hay una más nueva.', btns: [B('Comprobar')] }
+        ]),
+        ...(this.props.instalado ? [] : [grp('', [{ t: 'Instalar en este PC', d: 'Deja accesos directos en el Escritorio y en el menú Inicio, y se sigue actualizando solo.', btns: [B('Instalar', null, 'blue')] }], { ring: 'rgba(85,172,238,.45)' })]),
+        grp('PRIVACIDAD', [
+          { t: 'Registro de diagnóstico local', d: 'Un archivo en tu PC que ayuda a diagnosticar problemas de multijugador. No se envía a ningún sitio.', ...T('diag') },
+          { t: 'Compartir mis barajas con la tabla de la comunidad', d: 'Activado por defecto. Envía los nombres de las cartas de tus barajas, por civilización, para que Multijugador › Estadísticas muestre qué cartas lleva la gente. Sin nombres de barajas, sin partidas y sin fechas. Al desactivarlo se deja de enviar; lo que ya enviaste se reemplaza la próxima vez que compartas y, si no, se queda como está.', ...T('decks') },
+          { t: 'Política de privacidad', d: 'El launcher no recoge analíticas. Multijugador solo envía al servidor lo que esas funciones necesitan.', btns: [B('Ver')] }
+        ]),
+        ...(devOn ? [
+          grp('DESARROLLADOR', [
+            { t: 'Herramientas de mods y traducciones', d: 'Probar un mod.json, empaquetar una traducción y generar parches incrementales.', ...T('dev') },
+            { t: 'Probar un mod.json', d: 'Carga un mod.json de tu PC con el mismo formato que el catálogo, para que veas cómo se verá tu mod antes de publicarlo. Edita el archivo y pulsa «Refrescar el catálogo» en el Taller para ver los cambios. No se sube nada.', note: 'Todavía no hay manifiestos locales.', btns: [B('Elegir archivo…')] },
+            { t: 'Herramientas de traducción', d: 'Crea un paquete de traducción listo para publicar a partir de una carpeta de archivos XML traducidos. Sirve para cualquier mod instalado: el mod se elige en el diálogo de empaquetado. El launcher calcula las huellas de los archivos, escribe el manifiesto y lo comprime todo para subirlo a una versión de GitHub.', btns: [B('Abrir')] },
+            { t: 'Generador de parches incrementales', d: 'Para autores de mods en GitHub Releases que activaron los parches delta: crea los parches pequeños, solo con los archivos cambiados, de tu nueva versión. Así los jugadores descargan solo lo que cambió y tú no vuelves a subir el mod entero cada vez.', btns: [B('Abrir')] },
+            { t: 'Vistas previas', d: PV[pvSel] || '', hasSelect: true, opts: Object.keys(PV), selVal: pvSel, onSel: e => set({ demo: e.target.value }), find: [...new Set(Object.values(PV))].join(' '), btns: [B('Mostrar')] }
+          ])
+        ] : [])
+      ] }
+    };
+    const NAV = [['general', 'General', 0xE713], ['ui', 'Interfaz', 0xE8A1], ['games', 'Partidas', 0xE768], ['mods', 'Mods y actualizaciones', 0xE895], ['adv', 'Avanzado', 0xE7C1]];
+    const fold = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const q = fold(s.q.trim());
+    const rowText = r => [r.t, r.d, r.mono, r.note, r.ver, r.find].concat(r.btns.map(b => b.t), r.chips.map(c => c.t), r.opts).join(' ');
+    const split = text => { const t = String(text || ''); if (!q || !t) return [{ t, bg: 'transparent', c: 'inherit' }]; const lo = fold(t), out = []; let i = 0; for (;;) { const k = lo.indexOf(q, i); if (k < 0) { out.push({ t: t.slice(i), bg: 'transparent', c: 'inherit' }); break; } if (k > i) out.push({ t: t.slice(i, k), bg: 'transparent', c: 'inherit' }); out.push({ t: t.slice(k, k + q.length), bg: 'rgba(47,127,224,.45)', c: '#ffffff' }); i = k + q.length; } return out.filter(p => p.t); };
+    const parts = r => ({ ...r, tP: split(r.t), dP: split(r.d), nP: split(r.note) });
+    const results = [];
+    if (q) NAV.forEach(([k, st]) => { const x = S[k], secHit = fold(x.t).includes(q); x.groups.forEach(g => { const gHit = secHit || fold(g.label).includes(q); const rows = g.rows.filter(r => gHit || fold(rowText(r)).includes(q)); if (rows.length) results.push({ k, st, g, rows }); }); });
+    const countOf = k => results.filter(x => x.k === k).reduce((n, x) => n + x.rows.length, 0);
+    const total = results.reduce((n, x) => n + x.rows.length, 0), nSec = new Set(results.map(x => x.k)).size;
+    const clearQ = () => set({ q: '' });
+    const fix = rows => rows.map((r, i, a) => ({ ...parts(r), line: i < a.length - 1 ? 'inset 0 -1px 0 rgba(255,255,255,.07)' : 'none' }));
+    let title, intro, groups;
+    if (!q) { const sec = S[s.sec]; title = sec.t; intro = sec.intro; groups = sec.groups.map(g => ({ ...g, rows: g.rows.map(parts) })); }
+    else if (!total) { title = 'Sin resultados'; intro = ''; groups = [grp('', [{ t: 'Ningún ajuste coincide con «' + s.q.trim() + '»', d: 'Prueba con otra palabra, por ejemplo «grabación», «idioma» o «caché».', btns: [B('Borrar la búsqueda', clearQ)] }])].map(g => ({ ...g, rows: fix(g.rows) })); }
+    else { title = 'Resultados de «' + s.q.trim() + '»'; intro = total + (total === 1 ? ' ajuste' : ' ajustes') + (nSec === 1 ? ' en 1 sección' : ' en ' + nSec + ' secciones') + '. Puedes cambiarlos desde aquí.'; groups = results.map(({ k, st, g, rows }) => ({ ...g, isPreview: false, hasHead: true, label: (st + (g.label ? ' › ' + g.label : '')).toUpperCase(), note: '', hasAction: true, action: 'Ver sección', act: () => set({ sec: k, q: '' }), rows: fix(rows) })); }
+    const nav = NAV.map(([k, t, gl]) => { const a = !q && s.sec === k, n = q ? countOf(k) : 0; return { t, glyph: String.fromCharCode(gl), pick: () => set({ sec: k, q: '' }), bg: a ? '#233a5c' : 'transparent', c: a ? '#ffffff' : (q && !n ? '#61779a' : '#c3d2e5'), w: a ? 600 : 500, dot: !q && k === 'games' && !s.t.rec, count: q ? n : (k === 'mods' ? 1 : 0) }; });
+    const acc = s.t.col ? '#c8102e' : '#2f7fe0';
+    const P = { bg: s.t.img ? 'url(mods/wol/hero.jpg) center 30%/cover no-repeat' : `radial-gradient(120% 120% at 90% 0%, ${s.t.col ? 'rgba(200,16,46,.45)' : 'rgba(47,127,224,.45)'}, transparent 70%), #0f1c2e`, rail: G.bg, blur: s.fx === 'low' ? '0px' : G.blur, acc,
+      rows: [['wol', 'Wars of Liberty', true], ['hundred-days', 'Hundred Days'], ['improvement-mod', 'Improvement Mod']].map(([id, t, on]) => ({ t, icon: ic(id), bg: on ? (s.t.col ? '#5d172e' : '#1d3a63') : 'transparent' })) };
+    return {
+      fw: W + 'px', fh: H + 'px', G, P, barBg: 'rgba(11,20,34,' + ({ solid: 1, mid: .42, max: .3 })[s.tr] + ')', barBlur: s.tr === 'solid' ? '0px' : '10px', q: s.q, onQ: e => set({ q: e.target.value }), hasQ: !!s.q, clearQ,
+      noMatch: '', nav, tap: () => set({ taps: s.taps + 1 }),
+      secTitle: title, secIntro: intro, groups
+    };
+  }
+}
+</script>
+</body>
+</html>

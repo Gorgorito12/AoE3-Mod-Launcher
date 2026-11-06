@@ -360,13 +360,28 @@ public class LauncherUpdateService
         string downloadUrl,
         string? expectedSha256 = null,
         IProgress<DownloadProgress>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action? onVerifying = null)
     {
         var currentExe = Environment.ProcessPath;
         if (string.IsNullOrEmpty(currentExe))
             throw new InvalidOperationException("Cannot determine current executable path.");
 
+        await DownloadUpdateForAsync(currentExe, downloadUrl, expectedSha256, progress, ct, onVerifying);
+    }
+
+    /// <summary>The download, for a named executable: the integration test runs it on a
+    /// disposable copy, because the real one would be the test host.</summary>
+    internal static async Task DownloadUpdateForAsync(
+        string currentExe,
+        string downloadUrl,
+        string? expectedSha256,
+        IProgress<DownloadProgress>? progress,
+        CancellationToken ct,
+        Action? onVerifying)
+    {
         var newExe = GetPendingUpdatePath(currentExe);
+        s_stagedTag = null;
 
         DiagnosticLog.Write($"Downloading launcher update from: {downloadUrl}");
         DiagnosticLog.Write($"  -> {newExe}");
@@ -402,6 +417,7 @@ public class LauncherUpdateService
         await downloader.DownloadFileAsync(downloadUrl, newExe, progress, ct);
 
         DiagnosticLog.Write("Launcher update download complete; verifying.");
+        onVerifying?.Invoke();
 
         try
         {
@@ -418,6 +434,26 @@ public class LauncherUpdateService
         DiagnosticLog.Write("Launcher update verified.");
     }
 
+    /// <summary>The release this session downloaded and verified, if any. Deliberately not kept
+    /// across launches: <see cref="CleanupOldVersion"/> sweeps the staged file at every startup,
+    /// because nothing proves a file left beside the exe is the one that was checked.</summary>
+    private static string? s_stagedTag;
+
+    /// <summary>Remembers that the staged file is <paramref name="tag"/>, verified.</summary>
+    internal static void MarkStaged(string? tag) => s_stagedTag = tag;
+
+    /// <summary>True when "later" can skip the download: <paramref name="tag"/> is already beside
+    /// the exe, verified, and ready for <see cref="RelaunchUpdated"/>.</summary>
+    internal static bool IsStaged(string? tag)
+    {
+        var pending = GetPendingUpdatePath();
+        return IsStagedFor(s_stagedTag, tag, pending != null && File.Exists(pending));
+    }
+
+    internal static bool IsStagedFor(string? stagedTag, string? tag, bool fileExists) =>
+        fileExists && !string.IsNullOrEmpty(tag)
+        && string.Equals(stagedTag, tag, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Verifies the freshly-downloaded launcher binary before it can replace the
     /// running one. Two independent checks:
@@ -432,7 +468,7 @@ public class LauncherUpdateService
     ///     setup) we can't establish an expected signer, so we only warn.
     /// Either failed check throws <see cref="UpdateVerificationException"/>.
     /// </summary>
-    private static async Task VerifyDownloadAsync(
+    internal static async Task VerifyDownloadAsync(
         string newExe, string currentExe, string? expectedSha256, CancellationToken ct)
     {
         // 1. Integrity: SHA-256.
@@ -519,6 +555,25 @@ public class LauncherUpdateService
         if (string.IsNullOrEmpty(currentExe))
             throw new InvalidOperationException("Cannot determine current executable path.");
 
+        SwapIn(currentExe);
+
+        DiagnosticLog.Write(
+            "Starting updated launcher..." +
+            (string.IsNullOrWhiteSpace(arguments) ? "" : $" (args: {arguments})"));
+        Services.HarnessMode.Start(new ProcessStartInfo
+        {
+            FileName = currentExe,
+            Arguments = arguments ?? "",
+            UseShellExecute = true
+        });
+    }
+
+    /// <summary>
+    /// Everything up to the restart: the executable moves aside and the staged one takes its
+    /// place, or the original goes back. Apart so it can be run on a disposable copy.
+    /// </summary>
+    internal static void SwapIn(string currentExe)
+    {
         // We are about to RENAME this file. Refuse unless it is our own executable.
         //
         // The smoke test this repository documents is `dotnet bin/Release/net8.0-windows/
@@ -575,16 +630,6 @@ public class LauncherUpdateService
             throw new InvalidOperationException(
                 "Could not replace the launcher executable; the original was restored.", ex);
         }
-
-        DiagnosticLog.Write(
-            "Starting updated launcher..." +
-            (string.IsNullOrWhiteSpace(arguments) ? "" : $" (args: {arguments})"));
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = currentExe,
-            Arguments = arguments ?? "",
-            UseShellExecute = true
-        });
     }
 
     /// <summary>

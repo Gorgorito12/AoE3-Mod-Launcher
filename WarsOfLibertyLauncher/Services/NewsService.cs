@@ -28,10 +28,7 @@ public class NewsService
     /// </summary>
     public static TimeSpan CacheTtl { get; } = TimeSpan.FromHours(1);
 
-    public static string CacheFilePath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "AoE3ModLauncher",
-        "news-cache.json");
+    public static string CacheFilePath { get; } = Path.Combine(AppPaths.DataDir, "news-cache.json");
 
     /// <summary>
     /// Fetches the news feed. Returns the fresh feed on success, the cached

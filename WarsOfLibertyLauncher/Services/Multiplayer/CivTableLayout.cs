@@ -93,7 +93,7 @@ public static class CivTableLayout
     {
         CivColumn.Civ => "MpCivColCiv",
         CivColumn.Played => "MpCivColPlayed",
-        CivColumn.Record => "MpRankColRecord",
+        CivColumn.Record => "MpStatsColRecord",
         CivColumn.WinBar => "MpStatsColWins",
         CivColumn.Percent => "MpActivityRankColPct",
         CivColumn.Length => "MpCivColLength",

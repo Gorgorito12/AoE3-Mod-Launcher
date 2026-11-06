@@ -25,6 +25,7 @@ public static partial class Strings
         // (Strings.QuickMatch.cs), merged the same way.
         foreach (var kv in PlacementTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in QuickMatchTable) Table.Add(kv.Key, kv.Value);
+        foreach (var kv in LibraryTable) Table.Add(kv.Key, kv.Value);
     }
 
     private static readonly Dictionary<string, Dictionary<string, string>> RatingTable = new()
@@ -275,7 +276,7 @@ public static partial class Strings
         },
 
         // ---------------------------------------------------------------- 55k history
-        ["MpHistUnrated"] = new() { [LangEn] = "UNRATED", [LangEs] = "NO PUNTUADA" },
+        ["MpHistUnrated"] = new() { [LangEn] = "UNRATED", [LangEs] = "NO CONTÓ" },
         ["MpHistTournament"] = new() { [LangEn] = "TOURNAMENT", [LangEs] = "TORNEO" },
         ["MpHistFarmPct"] = new() { [LangEn] = "· {0}%", [LangEs] = "· {0} %" },
         ["MpHistReasonTeams"] = new() { [LangEn] = "The in-game teams didn't match the room's.", [LangEs] = "Los equipos del juego no coincidieron con los de la sala." },

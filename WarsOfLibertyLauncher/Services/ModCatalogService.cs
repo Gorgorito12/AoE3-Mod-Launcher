@@ -82,10 +82,7 @@ public class ModCatalogService
     /// so we can write without UAC, and so the cache survives launcher
     /// upgrades that may overwrite the install folder.
     /// </summary>
-    public static string CacheFilePath { get; } = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "AoE3ModLauncher",
-        "catalog-cache.json");
+    public static string CacheFilePath { get; } = System.IO.Path.Combine(AppPaths.DataDir, "catalog-cache.json");
 
     /// <summary>
     /// Fetches the manifest of every mod folder in <paramref name="repo"/>'s

@@ -134,6 +134,14 @@ public static class QuickMatchPlanner
     /// <summary>How long a search waits in its own room before giving up and closing it.</summary>
     public static readonly TimeSpan GiveUpAfter = TimeSpan.FromMinutes(30);
 
+    /// <summary>
+    /// Whether the room is still only a search (design 96): searching in this very room with nobody
+    /// else in it. There is nothing to lose by leaving it, so leaving asks nothing; the moment a
+    /// rival is in, it is a competitive room like any other.
+    /// </summary>
+    public static bool WaitsAlone(bool searchingInThisRoom, int playersInRoom)
+        => searchingInThisRoom && playersInRoom < 2;
+
     /// <summary>"02:13" — the time searched, minutes and seconds; hours fold into the minutes.</summary>
     public static string Elapsed(TimeSpan span)
     {

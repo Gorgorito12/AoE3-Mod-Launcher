@@ -143,6 +143,7 @@ public static class SelfInstallService
     /// </summary>
     public static (bool ok, string message) Install()
     {
+        if (HarnessMode.Block("self install")) return (false, HarnessMode.BlockedPrefix);
         try
         {
             if (IsInstalled())
@@ -234,7 +235,7 @@ public static class SelfInstallService
             if (!File.Exists(CanonicalExe))
                 return false;
 
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = CanonicalExe,
                 Arguments = FromInstallArg,
@@ -624,6 +625,7 @@ public static class SelfInstallService
     /// the application down directly.</param>
     public static bool UninstallAndExit(LauncherConfig config, bool removeUserData, Func<bool>? exitLauncher)
     {
+        if (HarnessMode.Block($"self uninstall removeUserData={removeUserData}")) return false;
         Process? script = null;
         string? scriptPath = null;
         try
@@ -697,7 +699,7 @@ public static class SelfInstallService
         };
         foreach (var (name, value) in delete.Variables) psi.Environment[name] = value;
         psi.Environment["AOE3ML_SCRIPT"] = scriptPath;
-        return Process.Start(psi) ?? throw new IOException("cmd.exe did not start.");
+        return Services.HarnessMode.Start(psi) ?? throw new IOException("cmd.exe did not start.");
     }
 
     /// <summary>Stops the delete script before it can act, and drops its lock and its file.</summary>
@@ -745,6 +747,7 @@ public static class SelfInstallService
     /// </summary>
     public static bool RestoreGameFolders()
     {
+        if (HarnessMode.Block("restore game folders")) return true;
         AoE3UserDataRedirect.EnsureDefault();
         AoE3SetupPathRedirect.EnsureDefault();
         var savesStillMoved = AoE3UserDataRedirect.HasOwnedRedirect();
@@ -769,6 +772,26 @@ public static class SelfInstallService
     /// <param name="LeftoverKeys">How many leftover mod keys go (<see cref="PrivateKeySweep"/>).</param>
     /// <param name="PendingUploads">Competitive recordings still waiting to upload.</param>
     /// <param name="HasRepairBackups">Repair kept backups of replaced game files.</param>
+    /// <summary>What <see cref="CopyPayload"/> would write: the whole build folder when the running
+    /// exe is a stub beside its DLLs, the exe alone when it is the single-file bundle.</summary>
+    public static long PayloadBytes() => PayloadBytes(Environment.ProcessPath ?? "");
+
+    internal static long PayloadBytes(string sourceExe)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(sourceExe);
+            if (string.IsNullOrEmpty(dir) || !File.Exists(sourceExe)) return 0;
+            if (!File.Exists(Path.Combine(dir, "Aoe3ModLauncher.dll"))) return new FileInfo(sourceExe).Length;
+            return new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"SelfInstall: could not measure the copy: {ex.Message}");
+            return 0;
+        }
+    }
+
     public sealed record UninstallFacts(
         bool RunningInstalledCopy,
         string RunningExe,

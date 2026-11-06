@@ -51,7 +51,6 @@ public class TranslationLanguageTabTests
             openRepair: () => { },
             checkForUpdates: () => Task.FromResult<UpdateService.CheckResult?>(null),
             openAoE3Folder: () => { },
-            changeModFolder: () => { },
             changeAoE3Folder: () => { },
             openUserDataFolder: () => { },
             createBackup: () => null,
@@ -130,7 +129,7 @@ public class TranslationLanguageTabTests
                 // The active card (Juan's) is first after English, and it names its source.
                 var texts = TextsUnder(dlg.LanguageCardList.Children[1]).ToList();
                 Assert.Contains(texts, t => t.Contains("Traducciones de Juan"));
-                Assert.Contains(texts, t => t.Contains(Strings.Get("LangCardUnofficial")));
+                Assert.Contains(texts, t => t.Contains(Strings.Get("TxSrcUnofficialBadge")));
 
                 Assert.Equal(Visibility.Visible, dlg.TxSourcesSection.Visibility);
                 Assert.Equal(3, dlg.TxSourceRows.Children.Count);

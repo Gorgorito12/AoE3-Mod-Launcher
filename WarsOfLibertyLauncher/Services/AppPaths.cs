@@ -49,10 +49,13 @@ public static class AppPaths
     {
         var overridden = Environment.GetEnvironmentVariable(DataDirOverrideVariable);
         if (!string.IsNullOrWhiteSpace(overridden)) return overridden;
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "AoE3ModLauncher");
+        return DefaultDataDir;
     }
+
+    /// <summary>The player's folder, whatever <see cref="DataDirOverrideVariable"/> says.</summary>
+    internal static string DefaultDataDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "AoE3ModLauncher");
 
     internal const string ConfigFileName = "launcher-config.json";
 

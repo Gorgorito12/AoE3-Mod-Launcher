@@ -501,6 +501,25 @@ public sealed class NotificationCenter
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>The ✕ on one row.</summary>
+    public void Remove(NotificationItem item)
+    {
+        if (item == null || !Items.Remove(item)) return;
+        Persist();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>"Clear the read ones": only what the bell shows, so a multiplayer item it does
+    /// not draw is not deleted unseen.</summary>
+    public void ClearRead()
+    {
+        var gone = Items.Where(i => i.Read && NotificationView.BelongsInTheBell(i.Kind)).ToList();
+        if (gone.Count == 0) return;
+        foreach (var item in gone) Items.Remove(item);
+        Persist();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Clears the whole history.</summary>
     public void Clear()
     {

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t100" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t100" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">100</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">El launcher en este PC: instalar una copia estable y desinstalarlo, con la base</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Dos diálogos globales que hablan del propio launcher, no de un mod: van en neutros con el resplandor azul, como Actualizar launcher v2. El primero es SelfInstallPromptDialog (10a), 460 de ancho: sale al activar «Arrancar con Windows» desde un exe portátil, y mantiene la corrección de 10a: el titular y el botón nombran lo que de verdad hace (instalar una copia fija), no el arranque, que ya estaba activado. El segundo es SelfUninstallDialog (Ajustes › Avanzado › Desinstalar el launcher), 560 de ancho, hermano de Desinstalar v2 (75): lo que se va en una tarjeta con borde rojo, lo que se queda en la franja verde debajo, y la única opción irreversible (tu carpeta de datos) desmarcada. Todo lo que lista sale de SelfInstallService.UninstallFacts: si algo no está en este PC, no aparece.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="6">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px;width:{{ f.w }}">
+        <div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <div style="width:{{ f.w }};box-sizing:border-box;border-radius:10px;overflow:hidden;color-scheme:dark;box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08);background:radial-gradient(520px 340px at 88% 0%, rgba(47,127,224,.22), transparent 70%), radial-gradient(420px 300px at 0% 100%, rgba(47,127,224,.08), transparent 70%), #0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+          <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ f.barBg }};backdrop-filter:blur({{ f.barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 14px/1.4 'Source Serif 4',Georgia,serif;color:#f4f8fc">{{ f.barT }}</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">✕</span></div>
+          <div style="padding:24px 22px 20px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font:700 21px/1.25 'Source Serif 4',Georgia,serif;color:#ffffff;text-wrap:pretty">{{ f.headline }}</span>
+              <sc-if value="{{ f.hasLead }}" hint-placeholder-val="{{ true }}"><span style="font:400 13px/1.55 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty">{{ f.lead }}</span></sc-if>
+            </div>
+            <sc-if value="{{ f.isInstall }}" hint-placeholder-val="{{ true }}">
+              <div style="border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:12px 16px;display:flex;flex-direction:column;gap:9px">
+                <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">QUÉ HACE</span>
+                <sc-for list="{{ f.steps }}" as="x" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:14px minmax(0,1fr);gap:8px;align-items:start"><span style="width:14px;height:14px;margin-top:2px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:rgba(79,214,138,.16);font:700 9px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a">✓</span><span style="font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ x.a }}<b style="font-weight:600;color:#ffffff">{{ x.b }}</b>{{ x.c }}<span style="font:400 12.5px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ x.m }}</span>{{ x.d }}</span></div></sc-for>
+              </div>
+              <div style="padding:10px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);display:flex;flex-direction:column;gap:5px"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#61779a">SE COPIA A</span><span style="font:400 12.5px/1.45 Consolas,ui-monospace,monospace;color:#dce7f5;overflow-wrap:anywhere">{{ f.destPath }}</span><span style="font:400 12px/1.3 Consolas,ui-monospace,monospace;color:#a8bcd2">{{ f.destSize }}</span></div>
+              <sc-if value="{{ f.hasWarn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:8px;background:rgba(244,144,12,.1);box-shadow:inset 0 0 0 1px rgba(244,144,12,.45)"><span style="flex:none;width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#F4900C;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#0f1c2e">!</span><span style="padding-top:1px;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">{{ f.warn }}</span></div></sc-if>
+              <span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">Si dices «Ahora no», el arranque se queda como está: funciona mientras no muevas ni borres esta carpeta. Puedes volver a esto desde Ajustes › General.</span>
+            </sc-if>
+            <sc-if value="{{ f.isUninstall }}" hint-placeholder-val="{{ false }}">
+              <div style="border-radius:12px;overflow:hidden;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(200,74,74,.6)">
+                <div style="padding:13px 16px;display:flex;flex-direction:column;gap:8px">
+                  <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#f0a6a6">SE QUITA DE ESTE PC</span>
+                  <sc-for list="{{ f.removed }}" as="x" hint-placeholder-count="4"><div style="display:grid;grid-template-columns:8px minmax(0,1fr);gap:9px;align-items:start"><span style="width:5px;height:5px;margin:7px 0 0 1px;border-radius:3px;background:#f0a6a6"></span><div style="min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:500 13.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;text-wrap:pretty">{{ x.t }}</span><sc-if value="{{ x.hasPath }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px/1.45 Consolas,ui-monospace,monospace;color:#a8bcd2;overflow-wrap:anywhere">{{ x.path }}</span></sc-if><sc-if value="{{ x.hasNote }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ x.note }}</span></sc-if></div></div></sc-for>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:9px;padding:10px 16px;background:rgba(79,214,138,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)"><span style="flex:none;font:700 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#4fd68a">✓</span><div style="display:flex;flex-direction:column;gap:4px"><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty">{{ f.safe }}</span><sc-if value="{{ f.hasModsHint }}" hint-placeholder-val="{{ true }}"><span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">Los mods se siguen abriendo desde AoE3 sin el launcher. Si quieres quitar alguno, hazlo antes desde la Biblioteca.</span></sc-if></div></div>
+              </div>
+              <sc-if value="{{ f.portable }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);display:flex;flex-direction:column;gap:5px"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#61779a">SE QUEDA · EL ARCHIVO QUE ABRISTE</span><span style="font:400 12.5px/1.45 Consolas,ui-monospace,monospace;color:#dce7f5;overflow-wrap:anywhere">{{ f.exePath }}</span><span style="font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">Es tuyo y el launcher no lo borra. Puedes eliminarlo a mano cuando cierres.</span></div></sc-if>
+              <sc-if value="{{ f.hasData }}" hint-placeholder-val="{{ true }}">
+                <span style="padding:4px 4px 0;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">TUS DATOS</span>
+                <div onClick="{{ f.flipData }}" style="cursor:pointer;border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);display:grid;grid-template-columns:16px minmax(0,1fr);gap:12px;align-items:start;padding:12px 16px">
+                  <span style="width:16px;height:16px;box-sizing:border-box;margin-top:1px;border-radius:4px;display:flex;align-items:center;justify-content:center;background:{{ f.cbBg }};box-shadow:inset 0 0 0 1px {{ f.cbRing }};font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ f.cbTick }}</span>
+                  <div style="min-width:0;display:flex;flex-direction:column;gap:5px">
+                    <span style="font:600 13.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Borrar también mi carpeta de datos</span>
+                    <span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">Ajustes, notificaciones, la lista de mods instalados y las grabaciones que descargaste desde el launcher. No se puede deshacer.</span>
+                    <span style="font:400 12px/1.45 Consolas,ui-monospace,monospace;color:#8C9CB1;overflow-wrap:anywhere">{{ f.dataPath }}</span>
+                    <sc-if value="{{ f.hasPending }}" hint-placeholder-val="{{ false }}"><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">{{ f.pending }}</span></sc-if>
+                    <sc-if value="{{ f.hasBackups }}" hint-placeholder-val="{{ false }}"><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">Incluye las copias de seguridad que hizo «Reparar»: si un mod quedó a medias, se pierde la forma de volver atrás.</span></sc-if>
+                  </div>
+                </div>
+              </sc-if>
+              <span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">Si tu antivirus tiene una exclusión para el launcher, quítala tú desde Seguridad de Windows: el launcher no puede tocarla.</span>
+            </sc-if>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:2px">
+              <sc-for list="{{ f.btns }}" as="b" hint-placeholder-count="2"><span style="cursor:pointer;min-width:{{ b.mw }};box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ b.bg }};box-shadow:{{ b.sh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.c }};white-space:nowrap">{{ b.t }}</span></sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:34px;max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><b>Para Claude Code.</b> <b>SelfInstallPromptDialog</b> (460, alto al contenido): la barra de título y el titular dejan de decir «arrancar con Windows»; el texto va en DlgSettingsBgInstallPrompt* como hoy, pero con los textos de 10a. Añade la tarjeta «Qué hace» (tres hechos de SelfInstallService: copia a %LocalAppData%, sin servicio ni administrador, entrada de inicio <code>Aoe3ModLauncher</code>), la caja con la carpeta de destino y el tamaño (hoy no se dicen y es lo primero que se pregunta quien lee «copia»), y el aviso de poco espacio si DiskSpaceService lo detecta (100b), con el botón apagado. Los botones pasan a 32: «Ahora no» sólido #1a2c48 y «Instalar copia estable» azul; el glifo ℹ dorado desaparece. <b>SelfUninstallDialog</b> (560, cuerpo con desplazamiento y pie fijo como hoy): conserva HeaderText, RemovedList (una viñeta por hecho de UninstallFacts, con la ruta en Consolas cuando la hay y la nota del UAC en las claves del registro si no eres administrador), la franja verde con DlgSelfUninstallSafeMods (los mods por nombre) y ModsHint, PortablePanel con la ruta del exe cuando no es la copia instalada, DataPanel con OptDeleteData desmarcada, OptDataPending y OptDataBackups, y la nota del antivirus. Cambios: los textos pasan a tuteo y la tarjeta roja y la franja verde comparten chasis con Desinstalar v2; «Cancelar» es el botón por defecto (Enter y Esc), sólido en vez de enlace; el destructivo en #c84a4a dice «Desinstalar el launcher» o, portátil, «Quitar lo instalado», y con la casilla de datos marcada pasa a «Desinstalar y borrar mis datos», para que lo irreversible se lea en el botón que se pulsa. Por confirmar: el tamaño real de la copia instalada (aquí 48 MB) y si UninstallFacts trae el tamaño de la carpeta de datos para mostrarlo junto a la ruta.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { data: false };
+  renderVals() {
+    const p = this.props, s = this.state;
+    const lvl = p.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px', bar: 1 }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px', bar: .3 } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px', bar: .42 };
+    const barBg = 'rgba(11,20,34,' + G.bar + ')', barBlur = lvl === 'Sólida' ? '0px' : '10px';
+    const brk = t => t.replace(/\\/g, '\\\u200B');
+    const SEC = { bg: '#1a2c48', sh: 'inset 0 0 0 1px rgba(130,175,255,.22)', c: '#dce7f5', mw: '112px' };
+    const PRI = { bg: '#2f7fe0', sh: '0 6px 18px rgba(47,127,224,.35)', c: '#ffffff', mw: '136px' };
+    const DNG = { bg: '#c84a4a', sh: '0 4px 14px rgba(200,74,74,.35)', c: '#ffffff', mw: '136px' };
+    const OFF = { bg: 'rgba(47,127,224,.35)', sh: 'none', c: 'rgba(255,255,255,.55)', mw: '136px' };
+    const btn = (t, k) => ({ t, ...k });
+    const step = (a, b, c, m, d) => ({ a, b: b || '', c: c || '', m: m || '', d: d || '' });
+    const STEPS = [step('Copia el launcher a una carpeta de ', 'tu usuario', ' y apunta el arranque ahí.'), step('Sin servicio, sin tarea programada, sin permisos de administrador.'), step('La entrada de inicio se llama ', '', '', 'Aoe3ModLauncher', ' y puedes quitarla en Ajustes › General.')];
+    const build = c => {
+      const inst = c.kind === 'install', portable = !!c.portable, lowDisk = !!c.lowDisk;
+      let removed = [], safe = '', btns, headline, lead;
+      if (inst) {
+        headline = 'Para que el arranque con Windows siga funcionando, el launcher necesita una copia fija';
+        lead = 'Ahora se está ejecutando desde una carpeta portátil. Si la mueves o la borras, Windows seguirá intentando abrir algo que ya no está ahí.';
+        btns = [btn('Ahora no', SEC), btn('Instalar copia estable', lowDisk ? OFF : PRI)];
+      } else {
+        headline = portable ? 'Quitar lo que el launcher instaló en este PC' : 'Desinstalar el launcher de este PC';
+        lead = portable ? 'Estás ejecutando el archivo portátil, pero hay una copia instalada y entradas de inicio que dejó una vez anterior. Esto las quita; el archivo que abriste se queda.' : 'El launcher se cierra y se borra. Tus mods y tu Age of Empires III no se tocan.';
+        removed = [
+          { t: portable ? 'La otra copia instalada del launcher' : 'El programa', hasPath: true, path: brk('C:\\Users\\Gorgo\\AppData\\Local\\Aoe3ModLauncher'), hasNote: false },
+          { t: 'Los accesos directos del escritorio y del menú Inicio', hasPath: false, hasNote: false },
+          { t: 'La entrada «Arrancar con Windows»', hasPath: false, hasNote: false },
+          { t: 'Los archivos temporales de instalaciones', hasPath: false, hasNote: false }
+        ];
+        if (c.leftovers) removed.push({ t: 'Restos de una actualización anterior', hasPath: false, hasNote: false }, { t: '2 claves del registro de una versión vieja', hasPath: false, hasNote: !c.elevated, note: 'Windows te pedirá permiso de administrador para quitarlas.' });
+        safe = c.noMods ? 'No hay mods instalados desde el launcher. Age of Empires III no se toca.' : 'Se quedan: Wars of Liberty y Hundred Days, con sus ciudades, partidas guardadas y grabaciones. Age of Empires III no se toca.';
+        btns = [btn('Cancelar', SEC), btn(c.dataOn ? 'Desinstalar y borrar mis datos' : portable ? 'Quitar lo instalado' : 'Desinstalar el launcher', { ...DNG, mw: '160px' })];
+      }
+      return {
+        id: c.id, href: '#' + c.id, label: c.label, w: (inst ? 460 : 560) + 'px', barBg, barBlur, gBg: G.bg, gBlur: G.blur,
+        barT: inst ? 'Instalar una copia estable' : 'Desinstalar el launcher', headline, hasLead: true, lead,
+        isInstall: inst, steps: STEPS, destPath: brk('C:\\Users\\Gorgo\\AppData\\Local\\Aoe3ModLauncher'), destSize: lowDisk ? '48 MB · quedan 31 MB en C:' : '48 MB · quedan 12,4 GB en C:',
+        hasWarn: lowDisk, warn: 'No hay sitio en C: para la copia. Libera al menos 50 MB y vuelve a intentarlo, o deja el arranque como está.',
+        isUninstall: !inst, removed, safe, hasModsHint: !inst && !c.noMods, portable, exePath: brk('D:\\Juegos\\Portables\\Aoe3ModLauncher.exe'),
+        hasData: !inst && c.data !== false, flipData: c.interactive ? () => this.setState({ data: !s.data }) : undefined, cbBg: c.dataOn ? '#c84a4a' : 'rgba(255,255,255,.06)', cbRing: c.dataOn ? '#c84a4a' : 'rgba(255,255,255,.3)', cbTick: c.dataOn ? '✓' : '',
+        dataPath: brk('C:\\Users\\Gorgo\\AppData\\Roaming\\Aoe3ModLauncher'), hasPending: !!c.pending, pending: c.pending === 1 ? 'Hay 1 grabación pendiente de enviar al servidor: si borras la carpeta, esa partida no contará.' : 'Hay ' + c.pending + ' grabaciones pendientes de enviar al servidor: si borras la carpeta, esas partidas no contarán.', hasBackups: !!c.backups,
+        btns
+      };
+    };
+    const frames = [
+      build({ id: '100a', kind: 'install', label: 'Al activar «Arrancar con Windows» desde un exe portátil. El titular y el botón dicen lo que pasa de verdad (instalar una copia fija); debajo, qué hace, a dónde se copia y cuánto ocupa, y qué pasa si dices que no.' }),
+      build({ id: '100b', kind: 'install', lowDisk: true, label: 'Sin sitio en C: el aviso ámbar lo dice y «Instalar copia estable» queda apagado. «Ahora no» sigue disponible.' }),
+      build({ id: '100c', kind: 'uninstall', interactive: true, dataOn: s.data, label: 'Interactivo. Desinstalar el launcher desde Ajustes › Avanzado: lo que se quita en rojo, lo que se queda (tus mods, por nombre) en verde, y tu carpeta de datos como opción aparte, desmarcada. Pulsa la casilla: al marcarse va en rojo y el botón pasa a decir «Desinstalar y borrar mis datos», porque no se deshace. «Cancelar» es el botón por defecto.' }),
+      build({ id: '100d', kind: 'uninstall', dataOn: false, pending: 2, backups: true, leftovers: true, label: 'Con avisos en la carpeta de datos: grabaciones pendientes de enviar y copias de seguridad de «Reparar». Y en la lista, restos de una actualización y claves del registro, con la nota de que Windows pedirá permiso.' }),
+      build({ id: '100e', kind: 'uninstall', portable: true, dataOn: false, label: 'Ejecutando el exe portátil con una copia instalada de antes: el titular cambia, el archivo que abriste se queda (con su ruta) y el botón dice «Quitar lo instalado».' }),
+      build({ id: '100f', kind: 'uninstall', noMods: true, data: false, label: 'Sin mods instalados y sin carpeta de datos que quitar (CanRemoveUserData falso): la franja verde lo dice y la opción de datos no aparece.' })
+    ];
+    return { frames };
+  }
+}
+</script>
+</body>
+</html>

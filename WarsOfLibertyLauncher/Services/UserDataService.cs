@@ -127,6 +127,12 @@ public static class UserDataService
                 result.Add(path);
         }
 
+        if (HarnessMode.DocumentsRoot is { } testRoot)
+        {
+            Add(testRoot);
+            return result;
+        }
+
         try { Add(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)); } catch { }
         try
         {
@@ -615,6 +621,7 @@ public static class UserDataService
     /// </summary>
     public static string? BackupUserData(string folderName)
     {
+        if (HarnessMode.BlockUserData($"back up user data {folderName}")) return null;
         var folder = GetUserDataFolder(folderName);
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return null;
 
@@ -645,7 +652,7 @@ public static class UserDataService
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return;
         try
         {
-            Process.Start(new ProcessStartInfo
+            Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = folder,
                 UseShellExecute = true,
@@ -744,6 +751,7 @@ public static class UserDataService
     /// </returns>
     public static string? RestoreBackup(string folderName, string backupPath)
     {
+        if (HarnessMode.BlockUserData($"restore user data {folderName}")) return null;
         if (string.IsNullOrEmpty(backupPath) || !Directory.Exists(backupPath))
             throw new DirectoryNotFoundException($"Backup not found: {backupPath}");
 

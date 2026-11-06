@@ -98,7 +98,7 @@ public static class DiskSpaceService
     public const int AddonFactor = 2;
 
     /// <summary>
-    /// Room for what msiexec expands into Program Files, on top of the Radmin MSI itself. Fixed
+    /// Room for what the installer expands into Program Files, on top of the Radmin installer itself. Fixed
     /// because the installed footprint isn't reported anywhere we can read before running it.
     /// </summary>
     public const long RadminInstallAllowanceBytes = 300 * MiB;

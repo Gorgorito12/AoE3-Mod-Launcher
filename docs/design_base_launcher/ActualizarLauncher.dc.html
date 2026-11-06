@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:540px;box-sizing:border-box;border-radius:10px;overflow:hidden;color-scheme:dark;box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08);background:radial-gradient(520px 340px at 88% 0%, rgba(47,127,224,.22), transparent 70%), radial-gradient(420px 300px at 0% 100%, rgba(47,127,224,.08), transparent 70%), #0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ barBg }};backdrop-filter:blur({{ barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:700 14px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">Actualización del launcher</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">✕</span></div>
+  <div style="padding:24px 22px 20px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:flex-start;gap:13px">
+      <sc-if value="{{ fail }}" hint-placeholder-val="{{ false }}"><span style="flex:none;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(244,144,12,.2);box-shadow:inset 0 0 0 1px rgba(244,144,12,.5);font:700 15px/1 'Segoe UI',system-ui,sans-serif;color:#F5BD76">!</span></sc-if>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
+        <span style="font:700 21px/1.25 'Source Serif 4',Georgia,serif;color:#ffffff;text-wrap:pretty">{{ headline }}</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="height:24px;padding:0 9px;border-radius:12px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.55);backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#7ee08b" stroke-width="1.7" stroke-linejoin="round"><path d="M1.5 8.6V2.2c0-.4.3-.7.7-.7h6.4l6 6c.3.3.3.7 0 1l-5.7 5.7c-.3.3-.7.3-1 0z"></path><circle cx="5" cy="5" r="1.2"></circle></svg><span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:#c3d2e5">v1.0.16b</span></span>
+          <span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">→</span>
+          <span style="height:24px;padding:0 9px;border-radius:12px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.55);backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#7ee08b" stroke-width="1.7" stroke-linejoin="round"><path d="M1.5 8.6V2.2c0-.4.3-.7.7-.7h6.4l6 6c.3.3.3.7 0 1l-5.7 5.7c-.3.3-.7.3-1 0z"></path><circle cx="5" cy="5" r="1.2"></circle></svg><span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:#ffffff">v1.0.16e</span></span>
+          <span style="font:400 12px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">· 170 MB</span>
+        </div>
+        <sc-if value="{{ hasT }}" hint-placeholder-val="{{ false }}"><span style="font:400 13px/1.55 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty">{{ t.a }}<span style="font:500 12.5px/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ t.m1 }}</span>{{ t.b }}<span style="font:500 12.5px/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ t.m2 }}</span>{{ t.c }}</span></sc-if>
+        <sc-if value="{{ hasPath }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);font:400 12.5px/1.45 Consolas,ui-monospace,monospace;color:#dce7f5;overflow-wrap:anywhere">{{ path }}</div></sc-if>
+      </div>
+    </div>
+    <sc-if value="{{ notesText }}" hint-placeholder-val="{{ false }}">
+      <div style="border-radius:12px;overflow:hidden;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)">
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 16px 8px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">NOVEDADES</span><div style="flex:1"></div><span style="cursor:pointer;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;white-space:nowrap">Ver en GitHub ↗</span></div>
+        <div style="max-height:196px;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;padding:0 16px 14px;display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ notes }}" as="sec" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span style="font:600 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ sec.h }}</span>
+              <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:10px minmax(0,1fr);gap:6px"><span style="font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">•</span><span style="font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty"><b style="font-weight:600;color:#ffffff">{{ it.b }}</b>{{ it.t }}</span></div></sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ notesLink }}" hint-placeholder-val="{{ false }}">
+      <div style="border-radius:12px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:12px 12px 12px 16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center">
+        <div style="display:flex;flex-direction:column;gap:6px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">NOVEDADES</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">Están en la página de esta versión, en GitHub.</span></div>
+        <span style="cursor:pointer;white-space:nowrap;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Ver las novedades ↗</span>
+      </div>
+    </sc-if>
+    <sc-if value="{{ lowDisk }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:8px;background:rgba(244,144,12,.1);box-shadow:inset 0 0 0 1px rgba(244,144,12,.45)"><span style="flex:none;width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#F4900C;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#0f1c2e">!</span><span style="padding-top:1px;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">Necesita unos <b style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#ffffff">340 MB</b> libres en C: y solo tienes <b style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#ffffff">210 MB</b>. Puedes intentarlo igual.</span></div></sc-if>
+    <sc-if value="{{ prog }}" hint-placeholder-val="{{ false }}">
+      <div style="border-radius:12px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 20px/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ pctT }}</span><div style="flex:1"></div><span style="font:400 12.5px/1 Consolas,ui-monospace,monospace;color:#c3d2e5">{{ bytesT }}</span></div>
+        <div style="height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden"><div style="height:100%;width:{{ w }};border-radius:4px;background:#2f7fe0;opacity:{{ barOp }}"></div></div>
+        <div style="display:flex;align-items:center;gap:10px"><span style="font:400 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ leftT }}</span><div style="flex:1"></div><span style="font:400 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ rightT }}</span></div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ ready }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:rgba(79,214,138,.1);box-shadow:inset 0 0 0 1px rgba(79,214,138,.35)"><span style="flex:none;width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#4fd68a;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#0f1c2e">✓</span><span style="padding-top:1px;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty">{{ readyT }}</span></div></sc-if>
+    <sc-if value="{{ gameWarn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:8px;background:rgba(244,144,12,.1);box-shadow:inset 0 0 0 1px rgba(244,144,12,.45)"><span style="flex:none;width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#F4900C;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#0f1c2e">!</span><span style="padding-top:1px;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">Estás en una partida. Reinicia cuando termine: el launcher tiene que seguir abierto para enviar el resultado.</span></div></sc-if>
+    <sc-if value="{{ dlWarn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:8px;background:rgba(244,144,12,.1);box-shadow:inset 0 0 0 1px rgba(244,144,12,.45)"><span style="flex:none;width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#F4900C;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#0f1c2e">!</span><span style="padding-top:1px;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">Al reiniciar se detendrá la descarga de <b style="font-weight:600;color:#ffffff">Hundred Days</b>.</span></div></sc-if>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:6px">
+      <sc-for list="{{ btns }}" as="b" hint-placeholder-count="2"><span onClick="{{ b.act }}" style="cursor:{{ b.cur }};min-width:{{ b.mw }};box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ b.bg }};box-shadow:{{ b.sh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.c }};white-space:nowrap">{{ b.t }}</span></sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:580,&quot;height&quot;:640},&quot;caso&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Hay versión nueva&quot;,&quot;Descargando&quot;,&quot;Comprobando&quot;,&quot;Lista&quot;,&quot;Fallo de descarga&quot;,&quot;Carpeta bloqueada&quot;,&quot;Fallo de comprobación&quot;,&quot;Fallo al reiniciar&quot;,&quot;Nombre del archivo&quot;],&quot;default&quot;:&quot;Hay versión nueva&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;soloEnlace&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;pocoEspacio&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;juego&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;descarga&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { phase: null, pct: null };
+  componentWillUnmount() { clearInterval(this.iv); clearTimeout(this.to); }
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const C = { 'Hay versión nueva': 'idle', 'Descargando': 'down', 'Comprobando': 'verify', 'Lista': 'ready', 'Fallo de descarga': 'fdown', 'Carpeta bloqueada': 'fblock', 'Fallo de comprobación': 'fverify', 'Fallo al reiniciar': 'frestart', 'Nombre del archivo': 'fname' };
+    const phase = s.phase ?? C[this.props.caso] ?? 'idle';
+    const lvl = this.props.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px' }, 'Media': { bg: 'rgba(10,19,33,.5)', blur: '16px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px' } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px' };
+    const TOTAL = 170, NEW = 'v1.0.16e';
+    const stop = () => { clearInterval(this.iv); clearTimeout(this.to); };
+    const start = () => { stop(); set({ phase: 'down', pct: 0 }); this.iv = setInterval(() => { const p = Math.min(100, (this.state.pct ?? 0) + 2.2); if (p >= 100) { clearInterval(this.iv); this.setState({ phase: 'verify', pct: 100 }); this.to = setTimeout(() => this.setState({ phase: 'ready' }), 1400); } else this.setState({ pct: p }); }, 110); };
+    const cancel = () => { stop(); set({ phase: 'idle', pct: null }); };
+    const pct = s.pct ?? (phase === 'down' ? 42 : 100);
+    const num = n => n.toFixed(1).replace('.', ',');
+    const got = TOTAL * pct / 100, speed = 12.4 + Math.sin(pct / 7) * 0.6, eta = Math.max(0, Math.round((TOTAL - got) / speed));
+    const etaT = eta >= 60 ? 'quedan ' + Math.floor(eta / 60) + ' min ' + String(eta % 60).padStart(2, '0') + ' s' : 'quedan ' + eta + ' s';
+    const brk = p => p.replace(/\\/g, '\\\u200B');
+    const H = { idle: 'Hay una versión nueva del launcher', down: 'Descargando la versión nueva', verify: 'Comprobando la descarga', ready: 'Lista para instalar', fdown: 'No se pudo descargar la actualización', fblock: 'No se pudo guardar la descarga', fverify: 'La descarga no pasó la comprobación', frestart: 'No se pudo reiniciar el launcher', fname: 'El launcher no puede reemplazarse a sí mismo' };
+    const T = ({
+      fdown: { a: 'La descarga se interrumpió. Vuelve a intentarlo, o descárgala a mano desde GitHub.' },
+      fblock: { a: 'Windows no dejó guardarla en la carpeta del launcher. Suele deberse al antivirus o al acceso controlado a carpetas.', path: 'C:\\Users\\Jeison\\Desktop' },
+      fverify: { a: 'El archivo descargado no coincide con el publicado, así que se borró. No se instaló nada.' },
+      frestart: { a: 'La versión nueva se descargó, pero no se pudo abrir. Descárgala a mano desde GitHub.' },
+      fname: { a: 'Se está ejecutando como ', m1: 'Aoe3ModLauncher (1).exe', b: '. Cámbiale el nombre a ', m2: 'Aoe3ModLauncher.exe', c: ' y vuelve a abrirlo.' }
+    })[phase] || null;
+    const P = (t, act) => ({ t, act: act || (() => {}), bg: '#2f7fe0', sh: '0 4px 14px rgba(47,127,224,.35)', c: '#ffffff', mw: '136px', cur: 'pointer' });
+    const D = t => ({ t, act: () => {}, bg: 'rgba(47,127,224,.35)', sh: 'none', c: 'rgba(255,255,255,.55)', mw: '136px', cur: 'default' });
+    const S = (t, act) => ({ t, act: act || (() => {}), bg: '#1a2c48', sh: 'inset 0 0 0 1px rgba(130,175,255,.22)', c: '#dce7f5', mw: '112px', cur: 'pointer' });
+    const GH = 'Descargar desde GitHub ↗';
+    const btns = ({ idle: [S('Más tarde'), P('Descargar', start)], down: [S('Cancelar', cancel)], verify: [S('Cancelar', cancel)], ready: this.props.juego ? [S('Más tarde'), D('Reiniciar ahora')] : [S('Más tarde'), P('Reiniciar ahora')], fdown: [S('Cerrar'), S(GH), P('Reintentar', start)], fblock: [S('Cerrar'), S(GH), P('Reintentar', start)], fverify: [S('Cerrar'), P(GH)], frestart: [S('Cerrar'), P(GH)], fname: [S('Cerrar'), P(GH)] })[phase];
+    const NOTES = [
+      { h: 'Torneos por equipos', items: [
+        ['Ya se pueden jugar torneos 2v2 y 3v3.', ' Hasta ahora se podían crear, pero nadie podía inscribirse.'],
+        ['Nuevo botón «Mis equipos»', ' debajo de la lista de torneos. Crea un equipo de hasta 6 jugadores, así puede tener suplentes, e invita a jugadores aunque no estén conectados o buscándolos por su nombre. Cuando te llega una invitación, un aviso con el botón «Ver» te deja aceptarla o rechazarla.'],
+        ['Un cuadro por equipos no puede empezar mientras a un equipo le falten jugadores', ', y el launcher dice por qué.'],
+        ['Las partidas de torneo dicen TORNEO', ' en Salas › Partidas de la comunidad y en la Clasificación, para que no parezcan una partida competitiva cualquiera.']
+      ] },
+      { h: 'Instalar mods', items: [
+        ['Los ajustes que copias al instalar ya están la primera vez que abres el mod.', ' Los gráficos, el sonido y los atajos que copias de otro mod ya no esperan al segundo arranque. (Si el launcher todavía no sabe dónde guarda sus ajustes un mod, siguen llegando en el segundo arranque, y la ventana de instalación te lo dice.)'],
+        ['Propiedades › Datos › Importar también funciona con un mod que aún no has abierto.', '']
+      ] },
+      { h: 'Arreglos', items: [
+        ['El mensaje de administrador nombra el mod que estás instalando y el motivo real.', ' Antes decía siempre Wars of Liberty y «para aplicar actualizaciones».'],
+        ['Los ajustes que importas a mano ya no se reemplazan la próxima vez que juegas', ' por los del mod que elegiste al instalar.']
+      ] }
+    ].map(sec => ({ h: sec.h, items: sec.items.map(([b, t]) => ({ b, t })) }));
+    return {
+      barBg: 'rgba(11,20,34,' + (({ 'Sólida': 1, 'Media': .42, 'Máxima': .3 })[lvl] ?? .42) + ')', barBlur: lvl === 'Sólida' ? '0px' : '10px', G,
+      headline: H[phase], fail: phase.charAt(0) === 'f',
+      hasT: !!T, t: { a: '', m1: '', b: '', m2: '', c: '', ...(T || {}) }, hasPath: !!(T && T.path), path: T && T.path ? brk(T.path) : '',
+      notesText: phase === 'idle' && !this.props.soloEnlace, notesLink: phase === 'idle' && !!this.props.soloEnlace, notes: NOTES,
+      lowDisk: phase === 'idle' && !!this.props.pocoEspacio,
+      prog: phase === 'down' || phase === 'verify', pctT: Math.floor(pct) + ' %', bytesT: phase === 'verify' ? TOTAL + ' MB' : num(got) + ' MB de ' + TOTAL + ' MB', w: pct + '%', barOp: phase === 'verify' ? .55 : 1,
+      leftT: phase === 'verify' ? 'Comprobando que el archivo sea el original…' : num(speed) + ' MB/s', rightT: phase === 'verify' ? '' : etaT,
+      ready: phase === 'ready', readyT: 'Descargada y comprobada. Al reiniciar, el launcher se cierra y se vuelve a abrir con la ' + NEW + '.',
+      gameWarn: phase === 'ready' && !!this.props.juego, dlWarn: phase === 'ready' && !!this.props.descarga,
+      btns
+    };
+  }
+}
+</script>
+</body>
+</html>

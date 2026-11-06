@@ -86,6 +86,11 @@ public static class TextScale
     /// </summary>
     public static readonly IReadOnlyList<string> ScaledKeys = new[]
     {
+        "ProfileTitleSize", "ProfileRatingSize", "ProfileNameSize", "ProfileNameSizeCompact", "ProfileNameSizeWide", "ProfileCurveFigureSize", "ProfileStreakFigureSize", "ProfileStreakBestSize", "ProfileRefundFigureSize", "ProfileDeckTitleSize",
+        "StatsTitleSize", "StatsTitleSizeCompact", "StatsFigureSize", "StatsFigureSizeCompact",
+        "StatsSubtitleSize", "StatsBandSize", "StatsRowNameSize", "StatsRowNameSizeCompact",
+        "StatsBodySize", "StatsProseSize", "StatsNoteSize", "StatsDeckCountSize", "StatsLabelSize",
+        "StatsHeaderSize", "StatsTagSize",
         "FontSizeCaption", "FontSizeBody", "FontSizeBodyStrong", "FontSizeSubtitle",
         "FontSizeTitle", "FontSizeHeading", "FontSizeDisplay",
         "MpLabelSize", "MpBodySize", "MpMetaSize", "MpPillSize", "MpMicroSize",
@@ -101,10 +106,11 @@ public static class TextScale
         "MpTagSize", "MpFigureSize", "MpFigureHeadlineSize", "MpTournamentNameSize",
         "WsHeadingSize", "WsBodyStrongSize", "WsBodySize", "WsLabelSize",
         "WsMonoSize", "WsBadgeSize",
-        "SetSectionTitleSize", "SetSubTitleSize", "SetBodySize", "SetControlSize", "SetDescSize",
+        "SetSectionTitleSize", "SetSubTitleSize", "SetBodySize", "SetControlSize", "SetDescSize", "SetRowTitleSize", "SetRowDescSize", "SetNavSize", "SetCaptionSize", "SetPageTitleSize",
         "SetMonoSize", "SetGroupLabelSize", "SetTinySize", "SetBadgeSize",
         // Share diagnostics (design handoff 50a): the step-2 title and the rail box's tag.
         "SetDiagTitleSize", "SetRailTagSize",
+        "DialogHeadlineSize", "DialogTitleSize", "DialogSubheadSize", "WzLabelSize", "DialogBodySize", "DialogCodeSize",
         "SidebarNavTextSize", "NavTabTextSize",
         // The compact layout (design handoff turns 38-39): the nav row's tabs at 12 in a 42-px
         // row, and a room's one-line name.

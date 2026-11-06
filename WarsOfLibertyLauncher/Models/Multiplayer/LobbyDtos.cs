@@ -25,8 +25,9 @@ public class DeviceFlowStart
     [JsonPropertyName("interval")]
     public int IntervalSeconds { get; set; } = 5;
 
+    /// <summary>Zero when the server did not say; the sign-in window then names no duration.</summary>
     [JsonPropertyName("expires_in")]
-    public int ExpiresInSeconds { get; set; } = 900;
+    public int ExpiresInSeconds { get; set; }
 
     [JsonPropertyName("poll_handle")]
     public string PollHandle { get; set; } = "";

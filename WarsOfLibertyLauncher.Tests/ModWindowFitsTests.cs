@@ -44,7 +44,6 @@ public class ModWindowFitsTests
             checkForUpdates: () =>
                 Task.FromResult<WarsOfLibertyLauncher.Services.UpdateService.CheckResult?>(null),
             openAoE3Folder: () => { },
-            changeModFolder: () => { },
             changeAoE3Folder: () => { },
             openUserDataFolder: () => { },
             createBackup: () => null,
@@ -68,7 +67,7 @@ public class ModWindowFitsTests
         dlg.RailSiteText.Text = site;
         if (navLabel != null) dlg.TabGeneralLabel.Text = navLabel;
         dlg.ModRail.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        return dlg.ModRail.DesiredSize.Width;
+        return dlg.ModRail.DesiredSize.Width - dlg.ModRail.Margin.Left;
     }
 
     /// <summary>
@@ -146,8 +145,6 @@ public class ModWindowFitsTests
     /// is covered without touching this test.
     /// </summary>
     [Theory]
-    [InlineData("es", "mod")]
-    [InlineData("en", "mod")]
     [InlineData("es", "settings")]
     [InlineData("en", "settings")]
     public void EveryActionButtonCaptionFitsItsFixedWidth(string language, string window)

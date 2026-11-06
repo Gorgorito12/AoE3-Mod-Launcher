@@ -4,7 +4,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Mod properties"
-        Height="640" Width="1040"
+        Height="720" Width="1120"
         MinHeight="540" MinWidth="780"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
@@ -44,6 +44,14 @@
          the shared controls:TitleBar below. -->
 
     <Window.Resources>
+        <!-- The rail of a window of ONE mod: the selection takes its colour (design 71). -->
+        <Style x:Key="ModNavButton" TargetType="Button" BasedOn="{StaticResource SetNavButton}">
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="active">
+                    <Setter Property="Background" Value="{DynamicResource ModAccentFill}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <!-- ============================================================
              Local styles. Scoped to the dialog so the flat-section
              visual language stays self-contained.
@@ -121,7 +129,27 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>   <!-- Header (with custom close) -->
             <RowDefinition Height="*"/>      <!-- Tabs + content -->
+            <RowDefinition Height="Auto"/>   <!-- Footer -->
         </Grid.RowDefinitions>
+
+        <!-- The mod's image as a strip behind the title bar, fading into the navy, with the glow
+             of its colour under it (BASE.md): a window of one mod, not the whole cover. -->
+        <Border x:Name="ModStrip"
+                Grid.RowSpan="3"
+                Height="340"
+                VerticalAlignment="Top"
+                IsHitTestVisible="False"
+                RenderOptions.BitmapScalingMode="HighQuality"/>
+        <Rectangle Grid.RowSpan="3" Height="340" VerticalAlignment="Top" IsHitTestVisible="False">
+            <Rectangle.Fill>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#590F1C2E" Offset="0"/>
+                    <GradientStop Color="#D90F1C2E" Offset=".6"/>
+                    <GradientStop Color="#FF0F1C2E" Offset="1"/>
+                </LinearGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+        <Rectangle Grid.RowSpan="3" Fill="{DynamicResource ModAccentWash}" IsHitTestVisible="False"/>
 
         <!-- =========================================================
              HEADER — shared global title bar. Mod icon + name come from
@@ -130,20 +158,51 @@
              ========================================================= -->
         <controls:TitleBar Grid.Row="0"
                            x:Name="TitleBarControl"
-                           TitleMaxWidth="420"
                            ShowMinimize="True"
                            ShowMaximize="True"
                            ShowClose="True">
-            <Border x:Name="HeaderVersionBadge"
-                    Style="{StaticResource DialogPillBadge}"
-                    HorizontalAlignment="Right"
-                    Margin="0,0,8,0"
-                    Visibility="Collapsed">
-                <TextBlock x:Name="HeaderVersionText"
-                           Foreground="{DynamicResource AccentBrush}"
-                           FontSize="{DynamicResource FontSizeCaption}"
-                           FontWeight="SemiBold"/>
-            </Border>
+            <!-- Design 71: which mod this window is about, and which copy. The name is a mod's
+                 own text in an Auto column, so its ceiling sits on the text. -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <TextBlock x:Name="HeaderPrefixText"
+                           VerticalAlignment="Center"
+                           Margin="0,0,6,0"
+                           FontSize="{DynamicResource StatsBodySize}"
+                           Foreground="{DynamicResource StatsProse}"/>
+                <TextBlock x:Name="HeaderModName"
+                           VerticalAlignment="Center"
+                           MaxWidth="360"
+                           TextTrimming="CharacterEllipsis"
+                           FontFamily="{DynamicResource DisplayFont}"
+                           FontSize="{DynamicResource StatsSubtitleSize}"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource StatsStrong}"/>
+                <Border x:Name="HeaderVersionBadge"
+                        Height="22" Padding="9,0" Margin="10,0,0,0"
+                        CornerRadius="11"
+                        Background="{DynamicResource ProfilePillFill}"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="HeaderVersionText"
+                               VerticalAlignment="Center"
+                               FontFamily="{DynamicResource MonoFont}"
+                               FontSize="{DynamicResource StatsLabelSize}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource StatsFigure}"/>
+                </Border>
+                <Border x:Name="HeaderCopyBadge"
+                        Height="22" Padding="9,0" Margin="8,0,0,0"
+                        CornerRadius="11"
+                        Background="{DynamicResource ProfilePillFill}"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="HeaderCopyText"
+                               VerticalAlignment="Center"
+                               MaxWidth="200"
+                               TextTrimming="CharacterEllipsis"
+                               FontSize="{DynamicResource StatsLabelSize}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource StatsFigure}"/>
+                </Border>
+            </StackPanel>
         </controls:TitleBar>
 
         <!-- =========================================================
@@ -167,24 +226,26 @@
             <Border Grid.Column="0"
                     x:Name="ModRail"
                     MinWidth="{StaticResource SetModRailWidth}"
-                    Background="{DynamicResource MpRowHighlight}"
-                    BorderBrush="{DynamicResource MpRimFaint}"
-                    BorderThickness="0,0,1,0">
+                    Margin="16,16,0,16"
+                    CornerRadius="14"
+                    Background="{DynamicResource GlassPanel}"
+                    BorderBrush="{DynamicResource GlassRim}"
+                    BorderThickness="1">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Margin="10,14,10,0">
+                    <StackPanel Grid.Row="0" Margin="8,8,8,0">
                         <!-- Six sections and no way to find anything in them. Same box, same
                              styles and the same shared SectionSearch as the launcher settings
                              window; the rail here is structurally identical, so it drops in
                              above the nav entries with nothing to move. -->
                         <Border x:Name="ModSearchShell"
-                                Style="{StaticResource SetSearchShell}" Margin="2,0,2,12">
+                                Style="{StaticResource SetSearchShell}" Margin="0,0,0,12">
                             <DockPanel>
-                                <TextBlock Text="&#xE721;"
+                                <TextBlock Text="&#xE721;" RenderTransformOrigin=".5,.5" RenderTransform="-1 0 0 1 0 0"
                                            DockPanel.Dock="Left"
                                            FontFamily="Segoe MDL2 Assets"
                                            FontSize="{DynamicResource SetControlSize}"
@@ -203,7 +264,7 @@
                             </DockPanel>
                         </Border>
                         <Button x:Name="TabGeneralBtn"
-                                Style="{StaticResource SetNavButton}"
+                                Style="{StaticResource ModNavButton}"
                                 Click="TabGeneralBtn_Click">
                             <DockPanel>
                                 <TextBlock Text="&#xE946;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
@@ -211,7 +272,7 @@
                             </DockPanel>
                         </Button>
                         <Button x:Name="TabLocalFilesBtn"
-                                Style="{StaticResource SetNavButton}"
+                                Style="{StaticResource ModNavButton}"
                                 Click="TabLocalFilesBtn_Click">
                             <DockPanel>
                                 <TextBlock Text="&#xE8B7;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
@@ -219,7 +280,7 @@
                             </DockPanel>
                         </Button>
                         <Button x:Name="TabUserDataBtn"
-                                Style="{StaticResource SetNavButton}"
+                                Style="{StaticResource ModNavButton}"
                                 Click="TabUserDataBtn_Click">
                             <DockPanel>
                                 <TextBlock Text="&#xE77B;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
@@ -227,7 +288,7 @@
                             </DockPanel>
                         </Button>
                         <Button x:Name="TabLanguageBtn"
-                                Style="{StaticResource SetNavButton}"
+                                Style="{StaticResource ModNavButton}"
                                 Click="TabLanguageBtn_Click">
                             <DockPanel>
                                 <TextBlock Text="&#xE775;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
@@ -237,7 +298,7 @@
                         <!-- The count docks RIGHT so the label keeps the remaining space
                              and trims; a signal must never push the text. -->
                         <Button x:Name="TabAddonsBtn"
-                                Style="{StaticResource SetNavButton}"
+                                Style="{StaticResource ModNavButton}"
                                 Click="TabAddonsBtn_Click">
                             <DockPanel>
                                 <TextBlock Text="&#xE710;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
@@ -256,7 +317,7 @@
                              read completely different files. Hidden for the stock game for the
                              same reason STATISTICS is. -->
                         <Button x:Name="TabDecksBtn"
-                                Style="{StaticResource SetNavButton}"
+                                Style="{StaticResource ModNavButton}"
                                 Click="TabDecksBtn_Click">
                             <DockPanel>
                                 <TextBlock Text="&#xE71D;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
@@ -266,7 +327,7 @@
                         <!-- Statistics. Hidden for the stock game, which has no
                              launcher-managed user-data folder and nothing to read. -->
                         <Button x:Name="TabStatsBtn"
-                                Style="{StaticResource SetNavButton}"
+                                Style="{StaticResource ModNavButton}"
                                 Click="TabStatsBtn_Click">
                             <DockPanel>
                                 <TextBlock Text="&#xE904;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
@@ -293,38 +354,75 @@
                          rail is an Auto column measured at infinity, so a caption in here — the
                          Spanish one is the long one — would otherwise widen the rail, and with it
                          every page. TextTrimming alone cannot bound a measure. -->
-                    <Button x:Name="RailDiagBox"
-                            Style="{StaticResource SetDiagRailButton}"
+                    <Border x:Name="RailDiagCard"
                             MaxWidth="{StaticResource SetModRailTextWidth}"
                             Margin="12,18,12,0"
-                            Click="RailDiagBox_Click">
+                            Padding="13,12"
+                            CornerRadius="10"
+                            BorderThickness="1"
+                            Background="{DynamicResource UiDiagSoftBg}"
+                            BorderBrush="{DynamicResource UiDiagRim}">
                         <StackPanel>
+                            <!-- The title has the card's whole width: beside the icon there are 130 px
+                                 and "Compartir diagnóstico" needs 140. -->
                             <TextBlock x:Name="RailDiagTag"
-                                       FontSize="{DynamicResource SetRailTagSize}"
+                                       Margin="0,0,0,6"
+                                       FontSize="{DynamicResource StatsBodySize}"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource UiDiagText}"
+                                       Foreground="{DynamicResource UiDiagTitle}"
                                        TextTrimming="CharacterEllipsis"/>
-                            <DockPanel Margin="0,6,0,0">
-                                <TextBlock x:Name="RailDiagGlyph" Text="&#x21EA;"
-                                           DockPanel.Dock="Left"
-                                           FontSize="{DynamicResource SetBodySize}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource UiDiagText}"
-                                           Margin="0,0,6,0"/>
-                                <TextBlock x:Name="RailDiagCaption"
-                                           FontSize="{DynamicResource SetBodySize}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource UiDiagTitle}"
-                                           TextTrimming="CharacterEllipsis"/>
-                            </DockPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="30" Height="30"
+                                        CornerRadius="15"
+                                        Margin="0,0,8,0"
+                                        VerticalAlignment="Top"
+                                        Background="{DynamicResource UiDiagSoftBg}">
+                                    <TextBlock x:Name="RailDiagGlyph" Text="&#x21EA;"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               FontSize="{DynamicResource SetBodySize}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource UiDiagText}"/>
+                                </Border>
+                                <TextBlock x:Name="RailDiagCaption" Grid.Column="1"
+                                           FontSize="{DynamicResource StatsNoteSize}"
+                                           Foreground="{DynamicResource UiDiagBody}"
+                                           TextWrapping="Wrap"/>
+                            </Grid>
+                            <Button x:Name="RailDiagBox"
+                                    Style="{StaticResource SetDiagButton}"
+                                    Width="NaN"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,10,0,0"
+                                    Click="RailDiagBox_Click"/>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="RailLogsBtn"
+                                        Style="{StaticResource SetActionButton}"
+                                        Width="NaN"
+                                        Height="32"
+                                        Padding="4,0"
+                                        Click="ViewLogsBtn_Click"/>
+                                <Button x:Name="RailDiscordBtn" Grid.Column="2"
+                                        Style="{StaticResource SetActionButton}"
+                                        Width="NaN"
+                                        Height="32"
+                                        Padding="4,0"
+                                        Click="RailDiscordBtn_Click"/>
+                            </Grid>
                         </StackPanel>
-                    </Button>
+                    </Border>
                     <Border MaxWidth="{StaticResource SetModRailTextWidth}"
                             HorizontalAlignment="Left"
-                            Margin="12,12,12,14"
-                            Padding="0,14,0,0"
-                            BorderBrush="{DynamicResource MpRimFaint}"
-                            BorderThickness="0,1,0,0">
+                            Margin="14,14,12,14">
                         <StackPanel>
                             <!-- TWO lines before it gives up, because an author is a list of
                                  names often enough that one line loses half of it. "At most two
@@ -338,10 +436,23 @@
                                        LineHeight="14"
                                        LineStackingStrategy="BlockLineHeight"
                                        MaxHeight="28"/>
-                            <TextBlock x:Name="RailSiteText"
-                                       Style="{StaticResource SetRailFooterText}"
-                                       FontFamily="{DynamicResource MonoFont}"
-                                       Margin="0,4,0,0"/>
+                            <Button x:Name="RailSiteBtn"
+                                    Margin="0,5,0,0"
+                                    HorizontalAlignment="Left"
+                                    Background="Transparent"
+                                    Cursor="Hand"
+                                    Click="RailSiteBtn_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <ContentPresenter/>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <TextBlock x:Name="RailSiteText"
+                                           Style="{StaticResource SetRailFooterText}"
+                                           FontSize="{DynamicResource SetDescSize}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource ModAccentText}"/>
+                            </Button>
                         </StackPanel>
                     </Border>
                     </StackPanel>
@@ -357,7 +468,7 @@
             <ScrollViewer Grid.Column="1"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <Grid Margin="{StaticResource SetContentPadding}">
+                <Grid Margin="20,20,14,20">
                     <StackPanel>
                         <!-- The heading, and beside it how many search results the list under the
                              search box holds (handoff 50b) — shown only while it holds some. -->
@@ -396,7 +507,10 @@
                          which is why the version figure is the only gold thing on the page.
                          =================================================== -->
                     <StackPanel x:Name="GeneralPanel" Visibility="Visible">
-                        <Border Style="{StaticResource SetCard}"
+                        <!-- Design 71 has no identity card: the bar says which mod and the rail
+                             says whose. Kept collapsed because the code still fills it. -->
+                        <Border x:Name="ModIdentityCard" Style="{StaticResource SetCard}"
+                                Visibility="Collapsed"
                                 BorderBrush="{DynamicResource BorderAccentBadge}"
                                 Margin="0,4,0,0">
                             <Border Style="{StaticResource SetRowLast}">
@@ -477,10 +591,23 @@
 
                         <!-- Update state. It answers the question the old loose "Check for
                              updates" button only implied. -->
+                        <Grid Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="LblStateSection" Style="{StaticResource SetGroupLabel}"/>
+                            <TextBlock x:Name="LblStateCopy" Grid.Column="1"
+                                       Style="{StaticResource SetGroupLabel}"
+                                       Margin="6,24,4,10"
+                                       FontWeight="Normal"
+                                       Foreground="{DynamicResource StatsNote}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </Grid>
                         <Border x:Name="UpdateStateCard"
-                                Style="{StaticResource SetCard}"
-                                Margin="0,14,0,0">
-                            <Border Style="{StaticResource SetActionRowLast}">
+                                Style="{StaticResource SetCard}">
+                            <StackPanel>
+                            <Border Style="{StaticResource SetActionRow}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -489,6 +616,7 @@
                                     </Grid.ColumnDefinitions>
                                     <Border Grid.Column="0"
                                             x:Name="UpdateStateIcon"
+                                            Visibility="Collapsed"
                                             Width="28" Height="28"
                                             CornerRadius="{StaticResource RadiusSm}"
                                             Background="{DynamicResource MpChipOkBg}"
@@ -507,10 +635,26 @@
                                         <TextBlock x:Name="CheckUpdatesResult" Style="{StaticResource SetRowDesc}"/>
                                     </StackPanel>
                                     <Button Grid.Column="2" x:Name="CheckUpdatesBtn"
-                                            Style="{StaticResource SetActionButton}"
+                                            Style="{StaticResource ModActionButton}"
                                             Click="CheckUpdatesBtn_Click"/>
                                 </Grid>
                             </Border>
+                            <Border x:Name="GeneralVerifyRow" Style="{StaticResource SetActionRowLast}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="GeneralVerifyTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="GeneralVerifyHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" x:Name="VerifyBtn"
+                                            Style="{StaticResource ModActionButton}"
+                                            Click="VerifyBtn_Click"/>
+                                </Grid>
+                            </Border>
+                            </StackPanel>
                         </Border>
 
                         <TextBlock x:Name="LblAboutSection" Style="{StaticResource SetGroupLabel}"/>
@@ -576,7 +720,7 @@
                                                       MaxWidth="260"
                                                       Margin="0,0,10,0"/>
                                             <Button x:Name="InstallVersionBtn"
-                                                    Style="{StaticResource SetActionButton}"
+                                                    Style="{StaticResource ModActionButton}"
                                                     Click="InstallVersionBtn_Click"/>
                                         </StackPanel>
                                     </StackPanel>
@@ -585,387 +729,175 @@
                         </StackPanel>
                     </StackPanel>
                     <!-- ===================================================
-                         LOCAL FILES (docs/design_archivos_antivirus, 49a)
-
-                         What gets used goes on top, with no scrolling: the ACTIVE COPY
-                         (with its own Uninstall…, because uninstalling acts on that copy —
-                         there is no "danger zone" at the bottom any more) beside SOMETHING
-                         NOT WORKING? (Verify is the one solid button on the page). Then the
-                         copies, each with its actions written out — "Remove from list" and
-                         "Uninstall…" are two different things and say so on the button.
-                         Maintenance and folders, used least, go last.
-
-                         Stacking rule: the two top cards and the two bottom groups sit side
-                         by side while there is room and stack when there is not
-                         (LocalFilesPanel_SizeChanged). No caption is ever clipped; the only
-                         thing that trims is a copy's shortened path.
+                         FILES (design 71). One card of copies: the one in use on top, in the
+                         mod's colour, with its own actions; the others with "Use this one" and
+                         a menu; then the row that installs another. Verify lives in General and
+                         diagnostics in the rail, so nothing here competes with the copies.
                          =================================================== -->
-                    <StackPanel x:Name="LocalFilesPanel" Visibility="Collapsed"
-                                SizeChanged="LocalFilesPanel_SizeChanged">
+                    <StackPanel x:Name="LocalFilesPanel" Visibility="Collapsed">
 
-                        <Grid x:Name="LocalTopRow" Margin="0,14,0,0">
+                        <TextBlock x:Name="LblCopiesIntro" Style="{StaticResource SetRowDesc}"
+                                   FontSize="{DynamicResource SetDescSize}"
+                                   Foreground="{DynamicResource WindowSoftText}"
+                                   Margin="0,0,0,8"
+                                   Visibility="Collapsed"/>
+
+                        <Grid Margin="0,2,0,0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition x:Name="LocalTopColA" Width="1.35*"/>
-                                <ColumnDefinition x:Name="LocalTopGap" Width="12"/>
-                                <ColumnDefinition x:Name="LocalTopColB" Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <!-- ACTIVE COPY -->
-                            <Border x:Name="ActiveCopyCard" Grid.Column="0"
-                                    Style="{StaticResource SetCard}"
-                                    Background="{DynamicResource MpRowHighlight}"
-                                    BorderBrush="{DynamicResource UiActiveCardRim}"
-                                    Padding="15,14,15,14">
-                                <DockPanel LastChildFill="True">
-                                    <TextBlock x:Name="LblActiveCopy" DockPanel.Dock="Top"
-                                               Style="{StaticResource SetCardLabel}"
-                                               Foreground="{DynamicResource MpLinkText}"/>
-                                    <Grid DockPanel.Dock="Top" Margin="0,10,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Border x:Name="ActiveCopyIcon" Width="38" Height="38"
-                                                CornerRadius="8" Margin="0,0,12,0"
-                                                Background="{DynamicResource UiIconTileBg}"/>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock x:Name="ActiveCopyName"
-                                                       FontSize="{DynamicResource FontSizeBodyStrong}"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource MpTextHeading}"
-                                                       TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock x:Name="ValInstallPath" Style="{StaticResource SetMonoValue}"
-                                                       Foreground="{DynamicResource MpTextMuted}"
-                                                       Margin="0,4,0,0"/>
-                                        </StackPanel>
-                                    </Grid>
-                                    <WrapPanel DockPanel.Dock="Top" Margin="0,10,0,0" Orientation="Horizontal">
-                                        <TextBlock x:Name="ActiveCopyVersion"
-                                                   FontFamily="{DynamicResource MonoFont}"
-                                                   FontSize="{DynamicResource SetMonoSize}" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource UiVersionGold}"
-                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                        <Ellipse x:Name="ActiveCopyDot" Width="3" Height="3"
-                                                 Fill="{DynamicResource UiRadioIdleRim}"
-                                                 VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                        <TextBlock x:Name="ActiveCopyHint"
-                                                   FontSize="{DynamicResource SetDescSize}"
-                                                   Foreground="{DynamicResource MpTextMuted}"
-                                                   TextWrapping="Wrap" VerticalAlignment="Center"/>
-                                    </WrapPanel>
-                                    <!-- The actions, on a seam at the bottom of the card. -->
-                                    <Border DockPanel.Dock="Bottom" Margin="0,12,0,0" Padding="0,12,0,0"
-                                            BorderBrush="{DynamicResource UiRimSeam}" BorderThickness="0,1,0,0"
-                                            VerticalAlignment="Bottom">
-                                        <!-- One WrapPanel for all three, so a narrowed window moves a
-                                             button to the next line instead of clipping it. While they
-                                             fit on one line, Uninstall… is pushed to the right edge by
-                                             its left margin (ActiveActionsWrap_SizeChanged). -->
-                                        <WrapPanel x:Name="ActiveActionsWrap" Orientation="Horizontal"
-                                                   Margin="0,0,0,-8"
-                                                   SizeChanged="ActiveActionsWrap_SizeChanged">
-                                            <Button x:Name="OpenFolderBtn"
-                                                    Style="{StaticResource SetGhostButton}"
-                                                    Margin="0,0,8,8" Click="OpenFolderBtn_Click"/>
-                                            <Button x:Name="RepairBtn"
-                                                    Style="{StaticResource SetGhostButton}"
-                                                    Margin="0,0,8,8" Click="RepairBtn_Click"/>
-                                            <Button x:Name="UninstallBtn"
-                                                    Style="{StaticResource SetDangerOutlineButton}"
-                                                    Padding="14,0,14,0" Margin="0,0,0,8"
-                                                    Click="UninstallBtn_Click"/>
-                                        </WrapPanel>
-                                    </Border>
-                                    <Border/>
-                                </DockPanel>
-                            </Border>
-
-                            <!-- SOMETHING NOT WORKING? -->
-                            <Border x:Name="TroubleCard" Grid.Column="2"
-                                    Style="{StaticResource SetCard}"
-                                    BorderBrush="{DynamicResource UiCardRim}"
-                                    Padding="15,14,15,14">
-                                <!-- TWO STEPS (handoff 50a). It used to be a 2x2 grid in which Share
-                                     diagnostics weighed exactly what View logs did, beside it — and it is
-                                     the one thing the team asks for first on Discord, which players could
-                                     not find. Now: 1 · Verify; 2 · if it still fails, Share diagnostics in
-                                     a block of its own colour; View logs and Discord below, secondary. -->
-                                <StackPanel>
-                                    <TextBlock x:Name="LblDiagnosticsSection" Style="{StaticResource SetCardLabel}"/>
-
-                                    <!-- Step 1: the number and the existing hint, then Verify. -->
-                                    <Grid Margin="0,10,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="TroubleStep1Num" Text="1"
-                                                   FontFamily="{DynamicResource MonoFont}"
-                                                   FontSize="{DynamicResource SetGroupLabelSize}"
-                                                   FontWeight="Bold"
-                                                   Foreground="{DynamicResource UiStepNumeral}"
-                                                   Margin="0,2,8,0"/>
-                                        <TextBlock x:Name="LblTroubleHint" Grid.Column="1"
-                                                   Style="{StaticResource SetRowDesc}" Margin="0"/>
-                                    </Grid>
-                                    <Button x:Name="VerifyBtn"
-                                            Style="{StaticResource SetSolidButton}"
-                                            Margin="0,10,0,0" HorizontalAlignment="Stretch"
-                                            Click="VerifyBtn_Click"/>
-
-                                    <!-- Step 2: the diagnostics block. TEAL is reserved for this. -->
-                                    <Border x:Name="DiagStepBlock" Margin="0,10,0,0"
-                                            Background="{DynamicResource UiDiagSoftBg}"
-                                            BorderBrush="{DynamicResource UiDiagRim}"
-                                            BorderThickness="1" CornerRadius="9"
-                                            Padding="12,11,12,11">
-                                        <StackPanel>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock x:Name="DiagStep2Num" Text="2"
-                                                           FontFamily="{DynamicResource MonoFont}"
-                                                           FontSize="{DynamicResource SetGroupLabelSize}"
-                                                           FontWeight="Bold"
-                                                           Foreground="{DynamicResource UiDiagText}"
-                                                           Margin="0,3,8,0"/>
-                                                <StackPanel Grid.Column="1">
-                                                    <TextBlock x:Name="DiagStep2Title"
-                                                               FontSize="{DynamicResource SetDiagTitleSize}"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource UiDiagTitle}"
-                                                               TextWrapping="Wrap"/>
-                                                    <TextBlock x:Name="DiagStep2Body"
-                                                               FontSize="{DynamicResource SetDescSize}"
-                                                               Foreground="{DynamicResource UiDiagBody}"
-                                                               TextWrapping="Wrap"
-                                                               LineHeight="17" LineStackingStrategy="BlockLineHeight"
-                                                               Margin="0,4,0,0"/>
-                                                </StackPanel>
-                                            </Grid>
-                                            <Button x:Name="ShareDiagnosticsBtn"
-                                                    Style="{StaticResource SetDiagButton}"
-                                                    Margin="0,9,0,0" HorizontalAlignment="Stretch"
-                                                    Click="ShareDiagnosticsBtn_Click"/>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <!-- Secondary: View logs and Ask on Discord, two equal outline buttons.
-                                         They stack when the pair would not fit side by side — the Spanish
-                                         captions are the long ones (TroubleGrid_SizeChanged). -->
-                                    <Grid x:Name="TroubleGrid" Margin="0,10,0,0"
-                                          SizeChanged="TroubleGrid_SizeChanged">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition x:Name="TroubleGap" Width="8"/>
-                                            <ColumnDefinition x:Name="TroubleColB" Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-                                        <Button x:Name="ViewLogsBtn"
-                                                Style="{StaticResource SetGhostButton}"
-                                                Height="30" HorizontalAlignment="Stretch"
-                                                Click="ViewLogsBtn_Click"/>
-                                        <ContentControl x:Name="SupportLinkHost" Grid.Column="2"
-                                                        HorizontalContentAlignment="Stretch"
-                                                        VerticalContentAlignment="Stretch"/>
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
+                            <TextBlock x:Name="LblManageInstalls" Style="{StaticResource SetGroupLabel}"/>
+                            <TextBlock x:Name="LblManageInstallsDesc" Grid.Column="1"
+                                       Style="{StaticResource SetGroupLabel}"
+                                       Margin="6,24,4,10"
+                                       FontWeight="Normal"
+                                       Foreground="{DynamicResource StatsNote}"
+                                       TextTrimming="CharacterEllipsis"/>
                         </Grid>
-
-                        <!-- COPIES OF THIS MOD -->
-                        <StackPanel x:Name="CopiesSection">
-                            <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
-                                <TextBlock x:Name="LblManageInstalls" Style="{StaticResource SetCardLabel}"
-                                           VerticalAlignment="Bottom"/>
-                                <TextBlock x:Name="LblManageInstallsDesc"
-                                           FontFamily="{DynamicResource MonoFont}"
-                                           FontSize="{DynamicResource SetGroupLabelSize}"
-                                           Foreground="{DynamicResource UiTextGhost}"
-                                           VerticalAlignment="Bottom" Margin="10,0,0,0"/>
-                            </StackPanel>
-                            <TextBlock x:Name="LblCopiesDesc" Style="{StaticResource SetRowDesc}" Margin="0,6,0,0"/>
-                            <Border x:Name="ManageInstallsCard" Style="{StaticResource SetCard}"
-                                    BorderBrush="{DynamicResource UiCardRim}"
-                                    Margin="0,10,0,0" ClipToBounds="True">
-                                <StackPanel x:Name="ManageInstallsHost"/>
-                            </Border>
-                            <WrapPanel Orientation="Horizontal" Margin="2,8,0,0">
-                                <TextBlock x:Name="LblCopiesLegendRemove"
-                                           FontSize="{DynamicResource SetMonoSize}"
-                                           Foreground="{DynamicResource UiTextDim}"
-                                           TextWrapping="Wrap" Margin="0,0,18,0"/>
-                                <TextBlock x:Name="LblCopiesLegendUninstall"
-                                           FontSize="{DynamicResource SetMonoSize}"
-                                           Foreground="{DynamicResource UiTextDim}"
-                                           TextWrapping="Wrap"/>
-                            </WrapPanel>
-
-                            <Grid x:Name="AddCardsRow" Margin="0,12,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="10"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Button x:Name="InstallNewCopyBtn" Grid.Column="0"
-                                        Style="{StaticResource SetActionCard}"
-                                        Click="InstallNewCopyBtn_Click">
+                        <Border x:Name="ManageInstallsCard" Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border x:Name="ActiveCopyCard" Style="{StaticResource SetRow}"
+                                        Background="{DynamicResource ModAccentFill}"
+                                        CornerRadius="11,11,0,0">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <Border Style="{StaticResource SetIconTile}" Margin="0,0,11,0"
-                                                Background="{DynamicResource UiButtonIconTileAccent}">
-                                            <TextBlock Text="+" FontWeight="SemiBold"
-                                                       FontSize="{DynamicResource FontSizeBodyStrong}"
-                                                       Foreground="{DynamicResource UiButtonIconGlyphAccent}"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       Margin="0,-2,0,0"/>
-                                        </Border>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock x:Name="InstallNewCopyTitle" Style="{StaticResource SetRowTitle}"
-                                                       Foreground="{DynamicResource MpTextHeading}"/>
-                                            <TextBlock x:Name="InstallNewCopyDesc" Style="{StaticResource SetRowDesc}"
-                                                       Foreground="{DynamicResource UiButtonCardDesc}"
-                                                       FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
+                                            <Border x:Name="ActiveCopyPulse" Grid.ColumnSpan="2"
+                                                    Margin="-16,-14" CornerRadius="11,11,0,0"
+                                                    Opacity="0" IsHitTestVisible="False"/>
+                                        <StackPanel Margin="0,0,24,0" VerticalAlignment="Center">
+                                            <WrapPanel x:Name="ActiveCopyHead">
+                                                <TextBlock x:Name="ActiveCopyName"
+                                                           Style="{StaticResource SetRowTitle}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,8,0"/>
+                                            </WrapPanel>
+                                            <TextBlock x:Name="ActiveCopyHint" Style="{StaticResource SetRowDesc}"
+                                                       Foreground="{DynamicResource WindowSoftText}"
+                                                       Margin="0,5,0,0"/>
+                                            <TextBlock x:Name="ValInstallPath" Style="{StaticResource SetMonoValue}"
+                                                       Foreground="{DynamicResource WindowSoftText}"
+                                                       Margin="0,5,0,0"/>
+                                            <Border x:Name="NewerCopyNotice" Style="{StaticResource SetNoticeInfo}"
+                                                    Margin="0,9,0,0" Visibility="Collapsed">
+                                                <TextBlock x:Name="NewerCopyText" TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource WindowIncremental}"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                    VerticalAlignment="Center">
+                                            <Button x:Name="OpenFolderBtn"
+                                                    Style="{StaticResource ModActionButton}"
+                                                    Margin="0,0,8,0" Click="OpenFolderBtn_Click"/>
+                                            <Button x:Name="RepairBtn"
+                                                    Style="{StaticResource ModActionButton}"
+                                                    Margin="0,0,8,0" Click="RepairBtn_Click"/>
+                                            <Button x:Name="UninstallBtn"
+                                                    Style="{StaticResource ModDangerButton}"
+                                                    Click="UninstallBtn_Click"/>
                                         </StackPanel>
                                     </Grid>
-                                </Button>
-                                <Button x:Name="AddExistingFolderBtn" Grid.Column="2"
-                                        Style="{StaticResource SetActionCard}"
-                                        Click="AddExistingFolderBtn_Click">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Border Style="{StaticResource SetIconTile}" Margin="0,0,11,0">
-                                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets"
-                                                       FontSize="{DynamicResource SetDescSize}"
-                                                       Foreground="{DynamicResource UiButtonIconGlyph}"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock x:Name="AddExistingFolderTitle" Style="{StaticResource SetRowTitle}"
-                                                       Foreground="{DynamicResource MpTextHeading}"/>
-                                            <TextBlock x:Name="AddExistingFolderDesc" Style="{StaticResource SetRowDesc}"
-                                                       Foreground="{DynamicResource UiButtonCardDesc}"
-                                                       FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </Button>
-                            </Grid>
-                        </StackPanel>
-
-                        <!-- MAINTENANCE | FOLDERS — used least, so last. Two columns, as the
-                             reference draws them; they stack when the window is narrow. -->
-                        <Grid x:Name="LocalBottomRow" Margin="0,22,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition x:Name="LocalBottomColA" Width="*"/>
-                                <ColumnDefinition x:Name="LocalBottomGap" Width="12"/>
-                                <ColumnDefinition x:Name="LocalBottomColB" Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <StackPanel x:Name="MaintenanceGroup" Grid.Column="0" VerticalAlignment="Top">
-                                <TextBlock x:Name="LblMaintenanceSection" Style="{StaticResource SetCardLabel}"/>
-                                <Border Style="{StaticResource SetCard}" BorderBrush="{DynamicResource UiCardRim}"
-                                        Margin="0,8,0,0">
-                                    <Border Style="{StaticResource SetActionRowLast}" Padding="13,11,13,11">
+                                </Border>
+                                <StackPanel x:Name="CopiesSection">
+                                    <StackPanel x:Name="ManageInstallsHost"/>
+                                    <Border Style="{StaticResource SetRowLast}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
-                                                <TextBlock x:Name="LblTempSection" Style="{StaticResource SetRowTitle}" TextWrapping="Wrap" TextTrimming="None"/>
-                                                <TextBlock x:Name="LblTempDesc" Style="{StaticResource SetRowDesc}"
-                                                           FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
-                                                <TextBlock x:Name="ClearTempResult" Style="{StaticResource SetRowDesc}" Visibility="Collapsed"
-                                                           FontSize="{DynamicResource SetMonoSize}"/>
+                                            <StackPanel Margin="0,0,24,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="InstallNewCopyTitle" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="InstallNewCopyDesc" Style="{StaticResource SetRowDesc}"
+                                                           Margin="0,5,0,0"/>
                                             </StackPanel>
-                                            <Button Grid.Column="1" x:Name="ClearTempBtn"
-                                                    Style="{StaticResource SetGhostButton}" Height="30"
-                                                    MinWidth="100" Click="ClearTempBtn_Click"/>
+                                            <Button x:Name="InstallNewCopyBtn" Grid.Column="1"
+                                                    Style="{StaticResource ModActionButton}"
+                                                    Click="InstallNewCopyBtn_Click"/>
                                         </Grid>
                                     </Border>
-                                </Border>
+                                </StackPanel>
                             </StackPanel>
+                        </Border>
 
-                            <StackPanel x:Name="FoldersGroup" Grid.Column="2" VerticalAlignment="Top">
-                                <TextBlock x:Name="LblPathsSection" Style="{StaticResource SetCardLabel}"/>
-                                <Border Style="{StaticResource SetCard}" BorderBrush="{DynamicResource UiCardRim}"
-                                        Margin="0,8,0,0">
-                                    <StackPanel>
-                                        <Border Style="{StaticResource SetActionRow}" Padding="13,11,13,11">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblAoe3PathTitle" Style="{StaticResource SetRowTitle}" TextWrapping="Wrap" TextTrimming="None"/>
-                                                    <TextBlock x:Name="ValAoe3Path" Style="{StaticResource SetMonoValue}"
-                                                               Foreground="{DynamicResource UiTextDim}" Margin="0,3,0,0"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="1" x:Name="OpenAoE3FolderBtn"
-                                                        Style="{StaticResource SetActionButtonSm}"
-                                                        Margin="0,0,8,0" Click="OpenAoE3FolderBtn_Click"/>
-                                                <Button Grid.Column="2" x:Name="ChangeAoE3FolderBtn"
-                                                        Style="{StaticResource SetActionButtonSm}"
-                                                        Click="ChangeAoE3FolderBtn_Click"/>
-                                            </Grid>
-                                        </Border>
-                                        <Border x:Name="ModFolderRow" Style="{StaticResource SetActionRow}" Padding="13,11,13,11">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblInstallPath" Style="{StaticResource SetRowTitle}" TextWrapping="Wrap" TextTrimming="None"/>
-                                                    <TextBlock x:Name="LblModFolderDesc" Style="{StaticResource SetRowDesc}"
-                                                               FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="1" x:Name="ChangeModFolderBtn"
-                                                        Style="{StaticResource SetActionButtonSm}"
-                                                        Click="ChangeModFolderBtn_Click"/>
-                                            </Grid>
-                                        </Border>
-                                        <Border x:Name="FindInstallRow" Style="{StaticResource SetActionRowLast}" Padding="13,11,13,11">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblFindInstallTitle" Style="{StaticResource SetRowTitle}" TextWrapping="Wrap" TextTrimming="None"/>
-                                                    <TextBlock x:Name="LblFindInstallDesc" Style="{StaticResource SetRowDesc}"
-                                                               FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="1" x:Name="SearchInstallBtn"
-                                                        Style="{StaticResource SetGhostButton}" Height="30"
-                                                        Click="SearchInstallBtn_Click"/>
-                                            </Grid>
-                                        </Border>
-                                    </StackPanel>
+                        <TextBlock x:Name="LblPathsSection" Style="{StaticResource SetGroupLabel}"/>
+                        <Border x:Name="FoldersGroup" Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border x:Name="Aoe3FolderRow" Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,24,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LblAoe3PathTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ValAoe3Path" Style="{StaticResource SetMonoValue}"
+                                                       Foreground="{DynamicResource WindowSoftText}"
+                                                       Margin="0,5,0,0"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                    VerticalAlignment="Center">
+                                            <Button x:Name="OpenAoE3FolderBtn"
+                                                    Style="{StaticResource ModActionButton}"
+                                                    Margin="0,0,8,0" Click="OpenAoE3FolderBtn_Click"/>
+                                            <Button x:Name="ChangeAoE3FolderBtn"
+                                                    Style="{StaticResource ModActionButton}"
+                                                    Click="ChangeAoE3FolderBtn_Click"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <Border x:Name="FindInstallRow" Style="{StaticResource SetRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,24,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LblFindInstallTitle" Style="{StaticResource SetRowTitle}"
+                                                       TextWrapping="Wrap" TextTrimming="None"/>
+                                            <TextBlock x:Name="LblFindInstallDesc" Style="{StaticResource SetRowDesc}"
+                                                       Margin="0,5,0,0"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                    VerticalAlignment="Center">
+                                            <Button x:Name="AddExistingFolderBtn"
+                                                    Style="{StaticResource ModActionButton}"
+                                                    Margin="0,0,8,0" Click="AddExistingFolderBtn_Click"/>
+                                            <Button x:Name="SearchInstallBtn"
+                                                    Style="{StaticResource ModActionButton}"
+                                                    Click="SearchInstallBtn_Click"/>
+                                        </StackPanel>
+                                    </Grid>
                                 </Border>
                             </StackPanel>
-                        </Grid>
+                        </Border>
+
+                        <StackPanel x:Name="MaintenanceGroup">
+                            <TextBlock x:Name="LblMaintenanceSection" Style="{StaticResource SetGroupLabel}"/>
+                            <Border Style="{StaticResource SetCard}">
+                                <Border Style="{StaticResource SetRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,24,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LblTempSection" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="LblTempDesc" Style="{StaticResource SetRowDesc}"
+                                                       Margin="0,5,0,0"/>
+                                            <TextBlock x:Name="ClearTempResult" Style="{StaticResource SetRowDesc}"
+                                                       Margin="0,5,0,0" Visibility="Collapsed"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="ClearTempBtn"
+                                                Style="{StaticResource ModActionButton}"
+                                                Click="ClearTempBtn_Click"/>
+                                    </Grid>
+                                </Border>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
                     <!-- ===================================================
                          USER DATA (5c)
@@ -978,8 +910,7 @@
                          =================================================== -->
                     <StackPanel x:Name="UserDataPanel" Visibility="Collapsed">
                         <TextBlock x:Name="LblUserDataLocation"
-                                   Style="{StaticResource SetGroupLabel}"
-                                   Margin="0,20,0,9"/>
+                                   Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <Border Style="{StaticResource SetActionRowLast}">
                                 <Grid>
@@ -987,8 +918,11 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                        <TextBlock x:Name="UserDataPathText" Style="{StaticResource SetMonoValue}"/>
+                                    <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="LblUserDataPathTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="UserDataPathText" Style="{StaticResource SetMonoValue}"
+                                                   Foreground="{DynamicResource WindowSoftText}"
+                                                   Margin="0,5,0,0"/>
                                         <!-- Documents can be redirected (OneDrive), and the
                                              saves may live in either root. When both hold
                                              files, say so. -->
@@ -1005,7 +939,7 @@
                                                    Visibility="Collapsed"/>
                                     </StackPanel>
                                     <Button Grid.Column="1" x:Name="OpenUserDataFolderBtn"
-                                            Style="{StaticResource SetActionButtonSm}"
+                                            Style="{StaticResource ModActionButton}"
                                             Click="OpenUserDataFolderBtn_Click"/>
                                 </Grid>
                             </Border>
@@ -1013,27 +947,36 @@
 
                         <Grid Margin="0,18,0,9">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" x:Name="LblBackupsSection"
-                                       Style="{StaticResource SetGroupLabel}" Margin="0"/>
-                            <Button Grid.Column="1" x:Name="CreateBackupBtn"
-                                    Style="{StaticResource SetActionPill}"
+                                       Style="{StaticResource SetGroupLabel}" Margin="4,0,0,0"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" x:Name="LblBackupsNote"
+                                       Style="{StaticResource SetGroupLabel}"
+                                           Margin="6,0,8,0"
+                                           VerticalAlignment="Center"
+                                           FontWeight="Normal"
+                                           Foreground="{DynamicResource StatsNote}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            <Button Grid.Column="2" x:Name="CreateBackupBtn"
+                                    Style="{StaticResource ModActionButton}"
                                     Click="CreateBackupBtn_Click"/>
                         </Grid>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
                                 <StackPanel x:Name="BackupsList"/>
                                 <Border x:Name="BackupsEmptyRow" Style="{StaticResource SetRowLast}">
-                                    <TextBlock x:Name="LblRestoreBackupDesc"
-                                               Style="{StaticResource SetRowDesc}" Margin="0"/>
+                                    <StackPanel>
+                                        <TextBlock x:Name="LblRestoreBackupDesc" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="LblRestoreBackupHint" Style="{StaticResource SetRowDesc}"
+                                                   Margin="0,5,0,0"/>
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
                         </Border>
-                        <TextBlock x:Name="LblBackupsNote"
-                                   Style="{StaticResource SetRowDesc}"
-                                   Margin="0,8,0,0"/>
 
                         <StackPanel x:Name="GameSettingsSection">
                             <TextBlock x:Name="LblGameSettingsSection" Style="{StaticResource SetGroupLabel}"/>
@@ -1069,7 +1012,7 @@
                                                       Style="{StaticResource SetCompactCombo}"
                                                       Margin="0,0,10,0"/>
                                             <Button Grid.Column="2" x:Name="ImportSettingsBtn"
-                                                    Style="{StaticResource SetActionButtonSm}"
+                                                    Style="{StaticResource ModActionButton}"
                                                     Click="ImportSettingsBtn_Click"/>
                                         </Grid>
                                     </Border>
@@ -1083,16 +1026,30 @@
                     </StackPanel>
                     <StackPanel x:Name="LanguagePanel" Visibility="Collapsed">
                         <TextBlock x:Name="LblLanguageDesc"
-                                   Style="{StaticResource DialogActionDesc}"
-                                   Margin="0,0,0,14"/>
-                        <Button x:Name="RefreshTranslationsBtn"
-                                Style="{StaticResource PropertyActionButton}"
-                                HorizontalAlignment="Left"
-                                Margin="0,0,0,14"
-                                Click="RefreshTranslationsBtn_Click"/>
-                        <TextBlock x:Name="LblLanguageCurrent"
-                                   Style="{StaticResource DialogFieldLabel}"
+                                   Style="{StaticResource SetRowDesc}"
+                                   FontSize="{DynamicResource SetDescSize}"
+                                   Foreground="{DynamicResource WindowSoftText}"
                                    Margin="0,0,0,6"/>
+                        <Grid Margin="0,14,0,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="LblLanguageCurrent"
+                                       Style="{StaticResource SetGroupLabel}" Margin="4,0,0,0"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" x:Name="LanguageEmptyHint"
+                                       Style="{StaticResource SetGroupLabel}"
+                                           Margin="6,0,8,0"
+                                           VerticalAlignment="Center"
+                                           FontWeight="Normal"
+                                           Foreground="{DynamicResource StatsNote}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            <Button Grid.Column="2" x:Name="RefreshTranslationsBtn"
+                                    Style="{StaticResource ModActionButton}"
+                                    Click="RefreshTranslationsBtn_Click"/>
+                        </Grid>
                         <!-- Shown while the mod is installing/updating: the whole
                              language list is locked (see SetModBusy). -->
                         <Border x:Name="LanguageBusyHint"
@@ -1131,20 +1088,16 @@
                                            VerticalAlignment="Center"/>
                                 <Button x:Name="LanguageLiveWarningAction"
                                         Grid.Column="1"
-                                        Style="{StaticResource SetActionButtonSm}"
+                                        Style="{StaticResource ModActionButton}"
                                         Margin="12,0,0,0"
                                         VerticalAlignment="Center"
                                         Visibility="Collapsed"
                                         Click="LanguageLiveWarningAction_Click"/>
                             </Grid>
                         </Border>
-                        <StackPanel x:Name="LanguageCardList"/>
-                        <TextBlock x:Name="LanguageEmptyHint"
-                                   Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   Margin="0,10,0,0"
-                                   Visibility="Collapsed"
-                                   TextWrapping="Wrap"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel x:Name="LanguageCardList"/>
+                        </Border>
 
                         <!-- TRANSLATION SOURCES. Where the player follows another translator:
                              paste their repo or link once, and every version they publish later
@@ -1152,23 +1105,25 @@
                              edits the same one); each pack names the mod it is for, so this mod
                              only ever shows its own. -->
                         <StackPanel x:Name="TxSourcesSection">
-                            <TextBlock x:Name="TxSourcesTitle" Style="{StaticResource SetGroupLabel}" Margin="0,22,0,9"/>
+                            <TextBlock x:Name="TxSourcesTitle" Style="{StaticResource SetGroupLabel}"/>
                             <Border Style="{StaticResource SetCard}">
                                 <StackPanel>
                                     <StackPanel x:Name="TxSourceRows"/>
-                                    <Border Style="{StaticResource SetActionRowLast}">
-                                        <StackPanel>
-                                            <TextBlock x:Name="TxAddTitle" Style="{StaticResource SetRowTitle}"/>
-                                            <TextBlock x:Name="TxAddHint" Style="{StaticResource SetRowDesc}" Margin="0,4,0,8"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Grid Grid.Column="0">
+                                    <Border Style="{StaticResource SetRowLast}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Margin="0,0,24,0">
+                                                <TextBlock x:Name="TxAddTitle" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="TxAddHint" Style="{StaticResource SetRowDesc}" Margin="0,5,0,8"/>
+                                                <Grid>
                                                     <TextBox x:Name="TxAddInput"
-                                                             Padding="8,6,8,6"
-                                                             FontSize="{DynamicResource SetBodySize}"
+                                                             Height="34"
+                                                             Padding="8,0,8,0"
+                                                             FontFamily="{DynamicResource MonoFont}"
+                                                             FontSize="{DynamicResource SetDescSize}"
                                                              VerticalContentAlignment="Center"
                                                              KeyDown="TxAddInput_KeyDown"
                                                              TextChanged="TxAddInput_TextChanged"/>
@@ -1176,20 +1131,20 @@
                                                                IsHitTestVisible="False"
                                                                Margin="11,0,8,0"
                                                                VerticalAlignment="Center"
-                                                               FontSize="{DynamicResource SetBodySize}"
+                                                               FontFamily="{DynamicResource MonoFont}"
+                                                               FontSize="{DynamicResource SetDescSize}"
                                                                Foreground="{DynamicResource UiTextFaint}"
                                                                TextTrimming="CharacterEllipsis"/>
                                                 </Grid>
-                                                <Button Grid.Column="1" x:Name="TxAddButton"
-                                                        Style="{StaticResource SetActionButtonSm}"
-                                                        Margin="10,0,0,0"
-                                                        Click="TxAddButton_Click"/>
-                                            </Grid>
-                                            <TextBlock x:Name="TxAddResult"
-                                                       Style="{StaticResource SetRowDesc}"
-                                                       Margin="0,8,0,0"
-                                                       Visibility="Collapsed"/>
-                                        </StackPanel>
+                                                <TextBlock x:Name="TxAddResult"
+                                                           Style="{StaticResource SetRowDesc}"
+                                                           Margin="0,8,0,0"
+                                                           Visibility="Collapsed"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" x:Name="TxAddButton"
+                                                    Style="{StaticResource ModActionButton}"
+                                                    Click="TxAddButton_Click"/>
+                                        </Grid>
                                     </Border>
                                 </StackPanel>
                             </Border>
@@ -1215,6 +1170,8 @@
                     <StackPanel x:Name="AddonsPanel" Visibility="Collapsed">
                         <TextBlock x:Name="LblAddonsSectionHint"
                                    Style="{StaticResource SetRowDesc}"
+                                   FontSize="{DynamicResource SetDescSize}"
+                                   Foreground="{DynamicResource WindowSoftText}"
                                    Margin="0,0,0,4"/>
 
                         <Grid Margin="0,18,0,9">
@@ -1223,13 +1180,18 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" x:Name="LblAddonsGroupCatalog"
-                                       Style="{StaticResource SetGroupLabel}" Margin="0"/>
+                                       Style="{StaticResource SetGroupLabel}" Margin="4,0,0,0"/>
                             <TextBlock Grid.Column="1" x:Name="LblAddonsGroupCatalogHint"
-                                       Style="{StaticResource SetRowDesc}"
-                                       Margin="10,0,0,0"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SetGroupLabel}"
+                                           Margin="6,0,8,0"
+                                           VerticalAlignment="Center"
+                                           FontWeight="Normal"
+                                           Foreground="{DynamicResource StatsNote}"
+                                           TextTrimming="CharacterEllipsis"/>
                         </Grid>
-                        <StackPanel x:Name="AddonCardList"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel x:Name="AddonCardList"/>
+                        </Border>
 
                         <!-- Importing lives with the group it produces, not at the bottom
                              of the page under everything else. -->
@@ -1240,25 +1202,27 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" x:Name="LblAddonsGroupImported"
-                                       Style="{StaticResource SetGroupLabel}" Margin="0"/>
-                            <TextBlock Grid.Column="1" x:Name="LblAddonsGroupImportedHint"
-                                       Style="{StaticResource SetRowDesc}"
-                                       Margin="10,0,0,0"
+                                       Style="{StaticResource SetGroupLabel}" Margin="4,0,0,0"
                                        VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" x:Name="LblAddonsGroupImportedHint"
+                                       Style="{StaticResource SetGroupLabel}"
+                                           Margin="6,0,8,0"
+                                           VerticalAlignment="Center"
+                                           FontWeight="Normal"
+                                           Foreground="{DynamicResource StatsNote}"
+                                           TextTrimming="CharacterEllipsis"/>
                             <Button Grid.Column="2" x:Name="ImportAddonBtn"
-                                    Style="{StaticResource SetActionPill}"
+                                    Style="{StaticResource ModActionButton}"
                                     Click="ImportAddonBtn_Click"/>
                         </Grid>
-                        <StackPanel x:Name="ImportedAddonList"/>
+                        <Border x:Name="ImportedAddonCard" Style="{StaticResource SetCard}">
+                            <StackPanel x:Name="ImportedAddonList"/>
+                        </Border>
 
                         <TextBlock x:Name="AddonsEmptyHint"
                                    Style="{StaticResource SetRowDesc}"
                                    Margin="0,2,0,0"
                                    Visibility="Collapsed"/>
-
-                        <TextBlock x:Name="AddonsFooterNote"
-                                   Style="{StaticResource SetRowDesc}"
-                                   Margin="0,18,0,0"/>
 
                         <TextBlock x:Name="AddonsResultText"
                                    FontSize="{DynamicResource FontSizeBody}"
@@ -1268,165 +1232,204 @@
                     </StackPanel>
 
                     <StackPanel x:Name="StatsPanel" Visibility="Collapsed">
-                        <!-- Games against PEOPLE come first, and they come from a different
-                             place: the player's own recordings, rather than the AI's memory
-                             file. They are also the only record of a match the lobby never
-                             saw — a skirmish, a LAN game, or one whose host closed the
-                             launcher before it was reported. -->
-                        <TextBlock x:Name="LblHumanGamesTitle"
-                                   Style="{StaticResource DialogSectionTitle}"/>
-                        <TextBlock x:Name="LblHumanGamesHint"
-                                   Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,14"/>
-
-                        <StackPanel x:Name="HumanGamesList"/>
-
-                        <TextBlock x:Name="HumanGamesEmptyHint"
-                                   Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   Margin="0,4,0,0"
-                                   Visibility="Collapsed"
-                                   TextWrapping="Wrap"/>
-
-                        <TextBlock x:Name="LblStatsSectionTitle"
-                                   Style="{StaticResource DialogSectionTitle}"
-                                   Margin="0,26,0,14"/>
-                        <TextBlock x:Name="LblStatsSectionHint"
-                                   Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,14"/>
-
-                        <StackPanel x:Name="AiGamesList"/>
-
-                        <TextBlock x:Name="StatsEmptyHint"
-                                   Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   Margin="0,4,0,0"
-                                   Visibility="Collapsed"
-                                   TextWrapping="Wrap"/>
-
-                    </StackPanel>
-
-                    <!-- DECKS.
-
-                         Grid above, detail below, both full width — so a wider window fits more
-                         tiles per row and the section grows sideways rather than leaving a
-                         margin. The alternative, two columns side by side, would put a fixed
-                         width on the grid card to stop it eating the row, and a deck is exactly
-                         the content that should reflow.
-
-                         The DETAIL is what keeps this compact: 25 pictures and one description
-                         at a time is a fixed ~300 px whether the player has two decks or twenty,
-                         where a name-and-description list would be ~1,250 px per deck. -->
-                    <StackPanel x:Name="DecksPanel" Visibility="Collapsed">
-                        <TextBlock x:Name="LblDecksSectionHint"
-                                   Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,14"/>
-
-                        <!-- A WrapPanel, so it works the same with two decks and with twenty:
-                             the pills fall onto a second line instead of the row growing past
-                             the window. -->
-                        <WrapPanel x:Name="DeckPickerRow" Margin="0,0,0,12"/>
-
-                        <!-- The grid and the detail PAIR UP when there is room and stack when
-                             there is not, which is the whole of the responsiveness here and
-                             costs no code: each has a MaxWidth, so a WrapPanel puts them side
-                             by side on a wide window and drops the detail underneath on a
-                             narrow one — the approved shape at the default size.
-
-                             The cap on the grid is what stops it drawing all 25 tiles on one
-                             1,300-px line, which read as a band rather than as a deck. -->
-                        <WrapPanel>
-                            <Border x:Name="DeckGridCard"
-                                    MaxWidth="640"
-                                    Margin="0,0,16,12"
-                                    Padding="14,11,14,12"
-                                    Background="{DynamicResource MpSurfaceAlt}"
-                                    BorderBrush="{DynamicResource MpRimSoft}"
-                                    BorderThickness="1"
-                                    CornerRadius="{StaticResource RadiusMd}"
-                                    Visibility="Collapsed">
-                                <StackPanel>
-                                    <TextBlock x:Name="DeckHeadline"
-                                               Foreground="{DynamicResource MpTextPrimary}"
-                                               FontSize="{DynamicResource FontSizeBodyStrong}"
-                                               FontWeight="SemiBold"
-                                               TextWrapping="Wrap"/>
-                                    <TextBlock x:Name="DeckFacts"
-                                               Foreground="{DynamicResource OnSecondaryContainer}"
-                                               FontSize="{DynamicResource FontSizeCaption}"
-                                               Margin="0,3,0,0"
-                                               TextWrapping="Wrap"/>
-                                    <WrapPanel x:Name="DeckCardGrid" Margin="0,10,0,0"/>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- The detail. A fixed MinHeight so moving between cards does not
-                                 make the page jump, and it opens on the first card so it is
-                                 never an empty box asking to be poked. -->
-                            <Border x:Name="DeckDetailCard"
-                                    MinWidth="360"
-                                    MaxWidth="560"
-                                    Margin="0,0,0,12"
-                                    Padding="14,11,14,12"
-                                    MinHeight="104"
-                                    Background="{DynamicResource MpSurfaceAlt}"
-                                    BorderBrush="{DynamicResource MpRimSoft}"
-                                    BorderThickness="1"
-                                    CornerRadius="{StaticResource RadiusMd}"
-                                    Visibility="Collapsed">
-                                <DockPanel>
-                                <Border DockPanel.Dock="Left"
-                                        Width="64" Height="64"
-                                        VerticalAlignment="Top"
-                                        Background="{DynamicResource MpField}"
-                                        CornerRadius="{StaticResource RadiusSm}">
-                                    <Image x:Name="DeckDetailIcon"
-                                           Stretch="Uniform"
-                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <StackPanel x:Name="HumanGamesGroup" Visibility="Collapsed">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="LblHumanGamesTitle" Style="{StaticResource SetGroupLabel}" Margin="4,4,4,10"/>
+                                    <TextBlock x:Name="LblHumanGamesHint" Grid.Column="1"
+                                               Style="{StaticResource SetGroupLabel}"
+                                               Margin="6,4,4,10"
+                                               FontWeight="Normal"
+                                               Foreground="{DynamicResource StatsNote}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                                <Border Style="{StaticResource SetCard}">
+                                    <StackPanel x:Name="HumanGamesList"/>
                                 </Border>
-                                <StackPanel Margin="12,0,0,0">
-                                    <TextBlock x:Name="DeckDetailName"
-                                               Foreground="{DynamicResource MpTextPrimary}"
-                                               FontSize="{DynamicResource FontSizeBodyStrong}"
-                                               FontWeight="SemiBold"
-                                               TextWrapping="Wrap"/>
-                                    <TextBlock x:Name="DeckDetailText"
-                                               Foreground="{DynamicResource MpTextMuted}"
-                                               FontSize="{DynamicResource FontSizeCaption}"
-                                               Margin="0,5,0,0"
-                                               MaxWidth="560"
-                                               HorizontalAlignment="Left"
-                                               TextWrapping="Wrap"/>
-
-                                    <!-- What the card actually changes, in the game's own
-                                         wording. This is the ONLY description the crate and
-                                         unit-shipment cards have — 20 of a real deck's 35 carry
-                                         no written line at all. -->
-                                    <StackPanel x:Name="DeckDetailEffects"
-                                                Margin="0,8,0,0"
-                                                HorizontalAlignment="Left"/>
+                            </StackPanel>
+                            <StackPanel x:Name="AiGamesGroup" Visibility="Collapsed">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="LblStatsSectionTitle" Style="{StaticResource SetGroupLabel}" Margin="4,24,4,10"/>
+                                    <TextBlock x:Name="LblStatsSectionHint" Grid.Column="1"
+                                               Style="{StaticResource SetGroupLabel}"
+                                               Margin="6,24,4,10"
+                                               FontWeight="Normal"
+                                               Foreground="{DynamicResource StatsNote}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                                <Border Style="{StaticResource SetCard}">
+                                    <StackPanel x:Name="AiGamesList"/>
+                                </Border>
+                            </StackPanel>
+                            <Border x:Name="StatsEmptyCard" Style="{StaticResource SetCard}" Visibility="Collapsed">
+                                <Border Style="{StaticResource SetRowLast}">
+                                    <StackPanel>
+                                        <TextBlock x:Name="StatsEmptyHint" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="StatsEmptyDesc" Style="{StaticResource SetRowDesc}"
+                                                   Margin="0,5,0,0"/>
                                     </StackPanel>
-                                </DockPanel>
+                                </Border>
                             </Border>
-                        </WrapPanel>
+                        </StackPanel>
 
-                        <TextBlock x:Name="DecksEmptyHint"
-                                   Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   Margin="0,4,0,0"
-                                   Visibility="Collapsed"
-                                   TextWrapping="Wrap"/>
-                    </StackPanel>
+                        <!-- DECKS (design 71). The home city in one card; below it, the same card holds
+                             the deck pills, the cards in their slots and what the chosen one does.
+                             These are the cards a player BRINGS, not the ones they played. -->
+                        <StackPanel x:Name="DecksPanel" Visibility="Collapsed">
+                            <TextBlock x:Name="LblDecksSectionHint"
+                                       Style="{StaticResource SetRowDesc}"
+                                       FontSize="{DynamicResource SetDescSize}"
+                                       Foreground="{DynamicResource WindowSoftText}"
+                                       Margin="0,0,0,4"/>
+
+                            <StackPanel x:Name="DeckContent" Visibility="Collapsed">
+                                <TextBlock x:Name="LblDeckCity" Style="{StaticResource SetGroupLabel}"/>
+                                <Border Style="{StaticResource SetCard}">
+                                    <Border Style="{StaticResource SetRowLast}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Margin="0,0,24,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="DeckHeadline" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="DeckFacts" Style="{StaticResource SetRowDesc}"
+                                                           Margin="0,5,0,0"/>
+                                                <TextBlock x:Name="DeckFile" Style="{StaticResource SetMonoValue}"
+                                                           Foreground="{DynamicResource WindowSoftText}"
+                                                           Margin="0,5,0,0"/>
+                                            </StackPanel>
+                                            <ComboBox x:Name="DeckCityCombo" Grid.Column="1"
+                                                      Style="{StaticResource SetCompactCombo}"
+                                                      MaxWidth="260"
+                                                      VerticalAlignment="Center"
+                                                      Visibility="Collapsed"
+                                                      SelectionChanged="DeckCityCombo_SelectionChanged"/>
+                                        </Grid>
+                                    </Border>
+                                </Border>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="LblDeckGroup" Style="{StaticResource SetGroupLabel}"/>
+                                    <TextBlock x:Name="DeckCountNote" Grid.Column="1"
+                                               Style="{StaticResource SetGroupLabel}"
+                                               Margin="6,24,4,10"
+                                               FontWeight="Normal"
+                                               Foreground="{DynamicResource StatsNote}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                                <Border x:Name="DeckGridCard" Style="{StaticResource SetCard}" Padding="16,14">
+                                    <StackPanel>
+                                        <WrapPanel x:Name="DeckPickerRow" Margin="0,0,0,8"/>
+                                        <Grid x:Name="DeckBody" SizeChanged="DeckBody_SizeChanged">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition x:Name="DeckTilesColumn" Width="*"/>
+                                                <ColumnDefinition x:Name="DeckGapColumn" Width="14"/>
+                                                <ColumnDefinition x:Name="DeckDetailColumn" Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <UniformGrid x:Name="DeckCardGrid" VerticalAlignment="Top"/>
+                                            <Border x:Name="DeckDetailCard" Grid.Column="2"
+                                                    MinHeight="150"
+                                                    Padding="16,14"
+                                                    Background="{DynamicResource ModDeckDetailFill}"
+                                                    BorderBrush="{DynamicResource ModAccentLine}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="10"
+                                                    VerticalAlignment="Top">
+                                                <DockPanel>
+                                                    <TextBlock x:Name="DeckDetailSlot"
+                                                               DockPanel.Dock="Top"
+                                                               FontFamily="{DynamicResource MonoFont}"
+                                                               FontSize="{DynamicResource SetGroupLabelSize}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource StatsNote}"/>
+                                                    <TextBlock x:Name="DeckDetailInternal"
+                                                               DockPanel.Dock="Bottom"
+                                                               Style="{StaticResource SetMonoValue}"
+                                                               FontSize="{DynamicResource SetGroupLabelSize}"
+                                                               Foreground="{DynamicResource StatsNote}"
+                                                               Margin="0,10,0,0"/>
+                                                    <StackPanel>
+                                                        <DockPanel Margin="0,8,0,0">
+                                                            <Image x:Name="DeckDetailIcon"
+                                                                   DockPanel.Dock="Left"
+                                                                   Width="64" Height="64"
+                                                                   Margin="0,0,12,0"
+                                                                   VerticalAlignment="Top"
+                                                                   Stretch="Uniform"
+                                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                            <TextBlock x:Name="DeckDetailName"
+                                                                       Foreground="{DynamicResource ModChipText}"
+                                                                       FontSize="{DynamicResource SetSubTitleSize}"
+                                                                       FontWeight="SemiBold"
+                                                                       VerticalAlignment="Center"
+                                                                       TextWrapping="Wrap"/>
+                                                        </DockPanel>
+                                                        <TextBlock x:Name="DeckDetailText"
+                                                                   Foreground="{DynamicResource WindowSoftText}"
+                                                                   FontSize="{DynamicResource SetRowDescSize}"
+                                                                   Margin="0,8,0,0"
+                                                                   TextWrapping="Wrap"/>
+                                                        <!-- What the card changes, in the game's own wording:
+                                                             the only description most shipments have. -->
+                                                        <StackPanel x:Name="DeckDetailEffects" Margin="0,8,0,0"/>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <Border x:Name="DecksEmptyCard" Style="{StaticResource SetCard}"
+                                    Margin="0,8,0,0" Visibility="Collapsed">
+                                <Border Style="{StaticResource SetRowLast}">
+                                    <StackPanel>
+                                        <TextBlock x:Name="DecksEmptyHint" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="DecksEmptyDesc" Style="{StaticResource SetRowDesc}"
+                                                   Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </Border>
+                        </StackPanel>
                         </StackPanel>
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
         </Grid>
+
+        <Border Grid.Row="2"
+                Height="52"
+                Padding="16,0"
+                Background="{DynamicResource WindowFooter}"
+                BorderBrush="{DynamicResource WindowFooterRule}"
+                BorderThickness="0,1,0,0">
+            <Grid>
+                <TextBlock x:Name="ModFooterText"
+                           FontSize="{DynamicResource SetRowDescSize}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource UiMutedText}"/>
+                <Button x:Name="ModFooterClose"
+                        Style="{StaticResource SetFooterBarGhostButton}"
+                        HorizontalAlignment="Right"
+                        MinWidth="112"
+                        Click="ModFooterClose_Click"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

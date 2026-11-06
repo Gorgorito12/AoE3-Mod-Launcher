@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
@@ -22,7 +24,7 @@ public enum RadminInstallState
 /// (install / open / join / nothing) without having to re-query the
 /// registry + network adapters from XAML.
 /// </summary>
-/// <param name="InstallState">Whether Radmin's MSI is installed.</param>
+/// <param name="InstallState">Whether Radmin is installed.</param>
 /// <param name="ExePath">Path to RvGuiStarter.exe / RvRvpnGui.exe when installed; null otherwise.</param>
 /// <param name="Version">Installed version string from the uninstall registry.</param>
 /// <param name="IsServiceRunning">
@@ -61,7 +63,7 @@ public sealed record RadminStatus(
 /// are empty GUID placeholders). So the best we can do is:
 ///
 ///   * Detect whether Radmin is installed
-///   * Optionally silent-install it from Famatech's MSI
+///   * Optionally silent-install it from Famatech's installer
 ///   * Detect whether the user's Radmin adapter has a 26.x.x.x IP
 ///     (= currently connected to ANY Radmin network)
 ///   * Launch the Radmin GUI on demand
@@ -76,11 +78,47 @@ public sealed record RadminStatus(
 public static class RadminVpnService
 {
     /// <summary>
-    /// Canonical Famatech download URL. Redirects to the latest stable
-    /// MSI at the time the request is made, so we don't hard-code a
-    /// version that goes stale every few months.
+    /// The official home page, read for the installer's address. There is no stable address:
+    /// the file carries its version in its name, and the unversioned MSI this used to point at
+    /// answers 404, so "Install" could only ever fall through to the browser.
     /// </summary>
-    private const string MsiUrl = "https://download.radmin-vpn.com/download/files/Radmin_VPN.msi";
+    private const string DownloadPageUrl = "https://www.radmin-vpn.com/";
+
+    /// <summary>What to try when the page cannot be read.</summary>
+    private const string KnownInstallerUrl =
+        "https://download.radmin-vpn.com/download/files/Radmin_VPN_2.1.4951.1.exe";
+
+    /// <summary>Who signs it. The installer runs as administrator, so anybody else is refused.</summary>
+    private const string InstallerPublisher = "CN=Famatech Corp.";
+
+    private static readonly Regex InstallerUrlPattern = new(
+        @"https://download\.radmin-vpn\.com/download/files/Radmin_VPN_\d+(?:\.\d+){1,3}\.exe",
+        RegexOptions.CultureInvariant);
+
+    /// <summary>The installer's address in the download page, or null when it has none.</summary>
+    internal static string? FindInstallerUrl(string? page)
+        => page == null ? null : InstallerUrlPattern.Match(page) is { Success: true } match ? match.Value : null;
+
+    /// <summary>The signer's name must be Famatech's, whole, not merely contain it.</summary>
+    internal static bool IsRadminPublisher(string? signerSubject)
+        => signerSubject != null
+           && signerSubject.Split(", ", StringSplitOptions.None)
+               .Contains(InstallerPublisher, StringComparer.Ordinal);
+
+    private static async Task<string> ResolveInstallerUrlAsync(HttpClient http, CancellationToken ct)
+    {
+        try
+        {
+            var found = FindInstallerUrl(await http.GetStringAsync(DownloadPageUrl, ct));
+            if (found != null) return found;
+            DiagnosticLog.Write("RadminVpnService: the download page names no installer; using the known one.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            DiagnosticLog.Write($"RadminVpnService: the download page could not be read: {ex.Message}");
+        }
+        return KnownInstallerUrl;
+    }
 
     /// <summary>
     /// Name of the community Radmin network the AoE3 modding scene
@@ -609,7 +647,7 @@ public static class RadminVpnService
     {
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            Services.HarnessMode.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = exePath,
                 UseShellExecute = true,
@@ -627,13 +665,13 @@ public static class RadminVpnService
     /// <summary>
     /// Open Famatech's download page in the user's browser. Used as a
     /// graceful fallback when <see cref="InstallSilentAsync"/> fails
-    /// (download blocked by AV, msiexec refuses UAC, etc.).
+    /// (download blocked by AV, the UAC prompt declined, etc.).
     /// </summary>
     public static void OpenDownloadPageInBrowser()
     {
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            Services.HarnessMode.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "https://www.radmin-vpn.com/",
                 UseShellExecute = true,
@@ -646,18 +684,18 @@ public static class RadminVpnService
     }
 
     /// <summary>
-    /// Download Radmin's MSI and run a silent install. Triggers a UAC
-    /// prompt because the MSI installs a system service + driver. The
+    /// Download Radmin's installer and run it silently. Triggers a UAC
+    /// prompt because it installs a system service + driver. The
     /// progress reports go 0..90 during download and bump to 100 once
-    /// msiexec exits.
+    /// the installer exits.
     /// </summary>
     /// <returns>
-    /// <c>true</c> when msiexec exited with code 0 (success). <c>false</c>
+    /// <c>true</c> when the installer exited with code 0 (success). <c>false</c>
     /// on any failure — caller should fall back to opening the browser
     /// download page so the user can install manually.
     /// </returns>
     /// <param name="confirmSpace">
-    /// Called with the MSI's size once the response headers arrive and BEFORE any of it is
+    /// Called with the installer's size once the response headers arrive and BEFORE any of it is
     /// written, so the caller can check free space and ask the user. Returning false aborts and
     /// this method returns false — which lands on the documented "fall back to the browser
     /// download page" path, exactly where someone who cancelled for lack of space should end up.
@@ -668,15 +706,15 @@ public static class RadminVpnService
         CancellationToken ct,
         Func<long, bool>? confirmSpace = null)
     {
-        var tmpPath = Path.Combine(Path.GetTempPath(), "RadminVPN_setup.msi");
+        var tmpPath = Path.Combine(Path.GetTempPath(), "RadminVPN_setup.exe");
         try
         {
-            // 1. Download MSI to %TEMP%.
+            // 1. Download the installer to %TEMP%.
             using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
             {
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("Aoe3ModLauncher/1.0");
                 using var resp = await http.GetAsync(
-                    MsiUrl,
+                    await ResolveInstallerUrlAsync(http, ct),
                     HttpCompletionOption.ResponseHeadersRead,
                     ct);
                 resp.EnsureSuccessStatusCode();
@@ -702,7 +740,7 @@ public static class RadminVpnService
                     downloaded += read;
                     if (total > 0 && progress != null)
                     {
-                        // Reserve the last 10% for the msiexec phase
+                        // Reserve the last 10% for the installer phase
                         // so the bar doesn't sit at 100% while the user
                         // waits for the installer to finish.
                         progress.Report((int)(downloaded * 90 / total));
@@ -710,18 +748,28 @@ public static class RadminVpnService
                 }
             }
 
-            // 2. Run msiexec /qn (silent, no UI). Verb="runas" triggers
-            //    the UAC prompt — required because the MSI installs the
+            DiagnosticLog.Write($"RadminVpnService.InstallSilentAsync: downloaded {new FileInfo(tmpPath).Length} bytes.");
+
+            // 2. It is about to run as administrator, so it has to be Famatech's own.
+            var signer = AuthenticodeCheck.TrustedSigner(tmpPath);
+            if (!IsRadminPublisher(signer))
+            {
+                DiagnosticLog.Write($"RadminVpnService.InstallSilentAsync: refused, signed by '{signer ?? "nobody"}'.");
+                return false;
+            }
+
+            // 3. Run it silently (these are Inno Setup's own switches). Verb="runas" triggers
+            //    the UAC prompt — required because it installs the
             //    Radmin VPN Control Service + the TAP driver.
             progress?.Report(92);
             var psi = new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "msiexec.exe",
-                Arguments = $"/i \"{tmpPath}\" /qn /norestart",
+                FileName = tmpPath,
+                Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART",
                 UseShellExecute = true,
                 Verb = "runas",
             };
-            using var proc = System.Diagnostics.Process.Start(psi);
+            using var proc = Services.HarnessMode.Start(psi);
             if (proc == null) return false;
             await proc.WaitForExitAsync(ct);
             progress?.Report(100);
@@ -729,7 +777,7 @@ public static class RadminVpnService
             var ok = proc.ExitCode == 0;
             if (!ok)
             {
-                DiagnosticLog.Write($"RadminVpnService.InstallSilentAsync: msiexec exit={proc.ExitCode}");
+                DiagnosticLog.Write($"RadminVpnService.InstallSilentAsync: installer exit={proc.ExitCode}");
             }
             // Whatever happened, the next probe reads the registry afresh.
             ForgetInstallation();

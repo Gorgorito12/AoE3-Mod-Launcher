@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}@keyframes vpPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}</style></helmet>
+<section id="t99" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t99" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">99</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Ver una partida del torneo, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Es MatchWatchWindow: lo que ve quien organiza un torneo al abrir un cruce desde el cuadro. No es la sala (LobbyWindow): quien supervisa no juega, así que no hay Listo, Empezar ni Record Game. La ventana sigue a 640 de ancho con alto al contenido, y como el torneo es de un mod, lleva su franja arriba y su color en la barra y en la selección. Responde a cuatro cosas: qué cruce es, quién está dentro, qué se dice y el resultado cuando llega. Hoy el servidor no deja entrar a quien no juega (sala en partida, sala atada a un cruce, cero plazas de observador), así que el chat se muestra solo en lectura y el pie lo dice; la versión con chat funcional (99d) queda para cuando el servidor abra esa puerta al organizador. El cuadro ya tiene «Decidir esta partida»; aquí va como atajo secundario, nunca como único sitio.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="5">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px;width:640px">
+        <div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <div style="width:640px;box-sizing:border-box;color-scheme:dark;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08);background:#0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+          <div style="position:absolute;left:0;right:0;top:0;height:300px;background:url(mods/wol/hero.jpg) center 30%/cover no-repeat"></div>
+          <div style="position:absolute;left:0;right:0;top:0;height:302px;background:linear-gradient(180deg,rgba(15,28,46,.25) 0%,rgba(15,28,46,.6) 55%,#0f1c2e 100%),linear-gradient(90deg,rgba(15,28,46,.7) 0%,rgba(15,28,46,.2) 60%,rgba(15,28,46,0) 100%)"></div>
+          <div style="position:absolute;left:0;right:0;top:260px;height:360px;background:{{ f.glow }}"></div>
+          <div style="position:relative;height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ f.barBg }};backdrop-filter:blur({{ f.barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;border-radius:4px;background:url(mods/wol/icon.png) center/cover no-repeat, #1a2c48"></span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 13px/1.4 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Partida del torneo</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">✕</span></div>
+          <div style="position:relative;padding:22px 22px 18px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:{{ f.accT }};text-shadow:0 1px 6px rgba(0,0,0,.5)">{{ f.kicker }}</span>
+              <span style="font:700 24px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb;text-wrap:pretty;text-shadow:0 2px 14px rgba(0,0,0,.45)">{{ f.title }}</span>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
+                <span style="height:24px;box-sizing:border-box;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:6px;background:{{ f.gBg }};backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ f.stC }};white-space:nowrap">{{ f.stDot }}{{ f.stT }}</span>
+                <span style="height:24px;box-sizing:border-box;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:6px;background:{{ f.gBg }};backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap"><span style="width:6px;height:6px;border-radius:3px;background:#E6C06A"></span>{{ f.format }}</span>
+                <span style="height:24px;box-sizing:border-box;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:6px;background:{{ f.gBg }};backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1 1h5l5 5-5 5-5-5z" fill="#7ee08b"></path><circle cx="3.6" cy="3.6" r="1" fill="#0f1c2e"></circle></svg>Wars of Liberty<span style="font:600 11px/1 Consolas,ui-monospace,monospace">1.6.2</span></span>
+              </div>
+            </div>
+            <sc-if value="{{ f.hasResult }}" hint-placeholder-val="{{ false }}"><div style="box-sizing:border-box;border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(79,214,138,.36);padding:12px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center">
+              <span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">RESULTADO</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap;text-align:right">{{ f.resWhen }}</span>
+              <span style="font:600 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ f.resT }}</span><span style="font:600 20px/1 Consolas,ui-monospace,monospace;color:#7fe0a8;white-space:nowrap">{{ f.resScore }}</span>
+              <span style="grid-column:1 / span 2;font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ f.resSub }}</span>
+            </div></sc-if>
+            <div style="display:grid;grid-template-columns:minmax(0,.75fr) minmax(0,1.5fr);gap:14px;align-items:stretch">
+              <div style="min-width:0;box-sizing:border-box;border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:12px 14px;display:flex;flex-direction:column">
+                <div style="display:flex;align-items:baseline;gap:8px"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">EN LA SALA</span><span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">{{ f.count }}</span></div>
+                <sc-for list="{{ f.sides }}" as="g" hint-placeholder-count="2">
+                  <sc-if value="{{ g.head }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:baseline;gap:8px;padding:12px 0 2px;min-width:0"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ g.name }}</span><span style="flex:none;font:400 11.5px/1 Consolas,ui-monospace,monospace;color:#8C9CB1;white-space:nowrap">{{ g.seed }}</span></div></sc-if>
+                  <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="1">
+                    <div style="display:grid;grid-template-columns:{{ f.rowCols }};gap:9px;align-items:center;padding:8px 0;box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);opacity:{{ r.op }}">
+                      <sc-if value="{{ f.showSeed }}" hint-placeholder-val="{{ true }}"><span style="text-align:right;font:500 11.5px/1 Consolas,ui-monospace,monospace;color:#61779a">{{ r.seed }}</span></sc-if>
+                      <span style="width:26px;height:26px;box-sizing:border-box;border-radius:13px;display:flex;align-items:center;justify-content:center;background:{{ r.av }};box-shadow:{{ r.ring }};font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ r.init }}</span>
+                      <div style="min-width:0;display:flex;flex-direction:column;gap:3px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 13px/1.4 'Segoe UI',system-ui,sans-serif;color:{{ r.nameC }}">{{ r.name }}</span><span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:{{ r.subC }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.sub }}</span></div>
+                    </div>
+                  </sc-for>
+                </sc-for>
+                <sc-if value="{{ f.hasRosterNote }}" hint-placeholder-val="{{ false }}"><span style="padding-top:10px;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ f.rosterNote }}</span></sc-if>
+              </div>
+              <div style="min-width:0;display:flex;flex-direction:column;border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);overflow:hidden">
+                <div style="flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 14px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.08)"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a;white-space:nowrap">CHAT DE LA SALA</span><div style="flex:1"></div><sc-if value="{{ f.readOnly }}" hint-placeholder-val="{{ true }}"><span title="El servidor no deja entrar a quien no juega: ves el chat, pero no puedes escribir." style="height:22px;box-sizing:border-box;padding:0 8px;border-radius:11px;display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.04em;color:#a8bcd2;cursor:help;white-space:nowrap">SOLO LECTURA</span></sc-if><sc-if value="{{ f.canChat }}" hint-placeholder-val="{{ false }}"><span style="height:22px;box-sizing:border-box;padding:0 8px;border-radius:11px;display:flex;align-items:center;gap:5px;background:{{ f.accFill }};font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.04em;color:#ffffff">ORGANIZADOR</span></sc-if></div>
+                <div style="flex:1;min-height:{{ f.chatH }};max-height:{{ f.chatH }};overflow:hidden auto;scrollbar-width:thin;scrollbar-color:{{ f.scroll }} transparent;display:flex;flex-direction:column;gap:9px;padding:12px 14px">
+                  <sc-for list="{{ f.chat }}" as="m" hint-placeholder-count="3">
+                    <sc-if value="{{ m.sys }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ m.t }}</span></sc-if>
+                    <sc-if value="{{ m.msg }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:baseline;gap:7px"><span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:{{ m.whoC }}">{{ m.who }}</span><span style="font:400 10.5px/1 Consolas,ui-monospace,monospace;color:#61779a">{{ m.at }}</span></div><span style="font:400 13px/1.4 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ m.t }}</span></div></sc-if>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ f.canChat }}" hint-placeholder-val="{{ false }}"><div style="flex:none;display:flex;align-items:center;gap:8px;padding:8px 10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)"><div style="flex:1;min-width:0;height:32px;box-sizing:border-box;padding:0 11px;border-radius:8px;display:flex;align-items:center;background:rgba(5,10,18,.45);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);font:400 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Escribe como organizador…</div><span style-hover="background:#213758" style="cursor:pointer;height:32px;box-sizing:border-box;padding:0 12px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Enviar</span></div></sc-if>
+              </div>
+            </div>
+          </div>
+          <div style="position:relative;flex:none;display:flex;align-items:center;gap:10px;padding:12px 22px 14px;background:{{ f.footBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 1px 0 rgba(255,255,255,.08)">
+            <span style="flex:1;min-width:0;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ f.foot }}</span>
+            <sc-if value="{{ f.hasDecide }}" hint-placeholder-val="{{ true }}"><span title="Fija tú el resultado del cruce: lo mismo que «Decidir esta partida» en el cuadro" style-hover="background:#213758" style="flex:none;cursor:pointer;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">Decidir esta partida</span></sc-if>
+            <span style-hover="filter:brightness(1.08)" style="flex:none;cursor:pointer;min-width:96px;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ f.acc }};box-shadow:{{ f.accSh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;white-space:nowrap">Cerrar</span>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:34px;max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><b>Para Claude Code.</b> MatchWatchWindow.xaml(.cs) conserva 640 de ancho, SizeToContent y sus piezas: MatchLabel (el kicker, con BracketLayout.RoundLabelKey en minúsculas), RoomTitleText, StateRow (pasa a chip con punto: verde en partida, color del mod esperando, gris terminada), RosterPanel (semilla en Consolas a la derecha, foto o inicial y nombre; en equipos, agrupado por el lado que fijó el cuadro con la semilla del equipo), ChatPanel con la columna 0,75 : 1,5 que ya tiene, ResultBox (se muestra solo con resultado, con el marcador en verde y la duración; <code>MpResult*</code>) y el pie con PreviewNote y Cerrar. Cambios: la caja de texto y «Enviar» desaparecen mientras el servidor no admita al organizador (hoy el botón abre un aviso de «no hace nada»): en su lugar, el chip «Solo lectura» con su tooltip y la nota del pie. «Decidir esta partida» entra en el pie como botón secundario sólido, llamando a lo mismo que el cuadro (TournamentPermissions); no aparece con resultado. La franja y el color salen del mod del torneo (ModProfile.AccentColor igualado en OKLCH), como en la Sala de torneo v2 (85). 99d solo se activa cuando el servidor exima al organizador de las tres puertas (in_game, cruce y plazas de observador); hasta entonces es un dibujo. Textos nuevos: Solo lectura · Esperando a {0} · Terminada hace {0} min · Escribe como organizador… · Ves el chat pero no puedes escribir: el servidor no deja entrar a quien no juega. · Si {0} no entra a tiempo, decide la partida desde aquí o desde el cuadro.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const NAVY = '#0f1c2e';
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const toHex = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+    const al = (h, a) => 'rgba(' + hex(h).join(',') + ',' + a + ')';
+    const lum = h => { const c = hex(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+    const con = (a, b) => { const A = lum(a) + .05, B = lum(b) + .05; return Math.max(A, B) / Math.min(A, B); };
+    const accText = a => { let t = .3, c = mix(a, '#ffffff', t); while (con(c, NAVY) < 5 && t < .9) { t += .08; c = mix(a, '#ffffff', t); } return c; };
+    const lvl = p.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px', foot: 'rgba(12,22,38,.94)', bar: 1 }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px', foot: 'rgba(10,19,33,.42)', bar: .3 } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px', foot: 'rgba(10,19,33,.62)', bar: .42 };
+    const acc = '#c04444', accT = accText(acc), fill = mix(acc, NAVY, .58);
+    const AV = { Kaiser: '#9a6a2e', Cuzco: '#7a5bb5', Gorgo: '#2f7fe0', Malinche: '#2e8a6e', Siux: '#3b6fb0', Menelik: '#8a3b5c' };
+    const dot = c => React.createElement('span', { style: { width: 6, height: 6, borderRadius: 3, background: c, flex: 'none' } });
+    const pulse = React.createElement('span', { style: { width: 6, height: 6, borderRadius: 3, background: accT, flex: 'none', animation: 'vpPulse 1.6s ease-in-out infinite' } });
+    const pl = (name, o) => ({ seed: o.seed || '', init: name.charAt(0), av: o.missing ? 'transparent' : AV[name] || '#1a2c48', ring: o.missing ? 'inset 0 0 0 1.5px rgba(168,188,210,.4)' : 'none', name, nameC: o.missing ? '#a8bcd2' : '#f0f5fb', sub: o.sub || '', subC: o.missing ? '#F5BD76' : '#8C9CB1', op: '1' });
+    const sys = t => ({ sys: true, msg: false, t, who: '', at: '', whoC: '' });
+    const msg = (who, at, t, org) => ({ sys: false, msg: true, who, at, t, whoC: org ? accT : '#dce7f5' });
+    const build = c => {
+      const st = c.st, teams = !!c.teams, result = st === 'result';
+      let sides, count, chat, stT, stC, stDot, foot, kicker = c.kicker, title = c.title, rosterNote = '';
+      if (teams) {
+        sides = [
+          { head: true, name: 'Los del Sur', seed: 'semilla 1', rows: [pl('Kaiser', { sub: 'capitán · Fortaleza' }), pl('Cuzco', { sub: 'Colonial' }), pl('Siux', { sub: 'Colonial' })] },
+          { head: true, name: 'Pampa Brava', seed: 'semilla 4', rows: [pl('Gorgo', { sub: 'capitán · Fortaleza' }), pl('Malinche', { sub: 'Comercio' }), pl('Menelik', { sub: 'Descubrimiento' })] }
+        ]; count = '6 / 6';
+      } else {
+        const missing = st === 'waiting';
+        sides = [{ head: false, rows: [pl('Kaiser', { seed: '1', sub: 'Industrial · 1630 ELO' }), pl('Cuzco', { seed: '5', sub: missing ? 'No entró todavía' : 'Colonial · 1244 ELO', missing })] }]; count = missing ? '1 / 2' : '2 / 2';
+      }
+      if (st === 'waiting') {
+        stT = 'Esperando a Cuzco'; stC = accT; stDot = pulse;
+        chat = [sys('Kaiser abrió la sala del cruce.'), msg('Kaiser', '20:58', '@Cuzco estoy dentro, avisa cuando entres'), sys('La sala espera al otro inscrito; nadie más puede entrar.')];
+        foot = 'Si Cuzco no entra a tiempo, decide la partida desde aquí o desde el cuadro. El chat se ve pero no se puede escribir: el servidor no deja entrar a quien no juega.';
+        rosterNote = 'Solo pueden entrar los dos inscritos del cruce.';
+      } else if (result) {
+        stT = 'Terminada hace 4 min'; stC = '#a8bcd2'; stDot = dot('#61779a');
+        chat = [sys('Partida en marcha.'), msg('Cuzco', '21:34', 'gg'), msg('Kaiser', '21:34', 'gg wp'), sys('Partida terminada. Kaiser envió el resultado y la grabación.')];
+        foot = 'El resultado ya está en el cuadro y Kaiser pasa a la final. El chat se ve pero no se puede escribir.';
+      } else {
+        stT = 'En partida · 24 min'; stC = '#7fe0a8'; stDot = dot('#4fd68a');
+        chat = teams
+          ? [sys('Partida en marcha.'), msg('Kaiser', '21:02', 'gl hf'), msg('Gorgo', '21:02', 'gl'), msg('Siux', '21:19', 'se me cayó un segundo, ya volví'), msg('Menelik', '21:20', 'ok, seguimos')]
+          : [sys('Partida en marcha.'), msg('Kaiser', '21:02', 'gl hf'), msg('Cuzco', '21:02', 'gl'), msg('Cuzco', '21:19', 'lag? a mí me va a saltos'), msg('Kaiser', '21:19', 'a mí bien, aguanta')];
+        if (c.canChat) chat.push(msg('Gorgo · organizador', '21:21', 'Si se corta, avisen aquí y lo decido por lo jugado.', true));
+        foot = c.canChat ? 'Escribes como organizador: tu mensaje llega a los dos jugadores. No puedes marcar ni empezar nada.' : 'El chat se ve pero no se puede escribir: el servidor no deja entrar a quien no juega. Si hay disputa, decide la partida desde aquí o desde el cuadro.';
+      }
+      return {
+        id: c.id, href: '#' + c.id, label: c.label,
+        glow: 'radial-gradient(70% 60% at 30% 0%, ' + al(acc, .2) + ', transparent 72%)',
+        barBg: al(mix('#0b1422', acc, .22), G.bar), barBlur: lvl === 'Sólida' ? '0px' : '10px', gBg: G.bg, gBlur: G.blur, footBg: G.foot, scroll: al(acc, .55),
+        acc, accT, accFill: fill, accSh: '0 6px 18px ' + al(acc, .35),
+        kicker, title, stT, stC, stDot, format: teams ? 'Competitiva · 3v3' : 'Competitiva · 1v1',
+        hasResult: result, resWhen: '21:35', resT: 'Ganó Kaiser', resScore: '1–0', resSub: 'Británicos contra Franceses · 33 min · grabación enviada por Kaiser. Cuenta para el ELO de los dos.',
+        sides, count, rowCols: teams ? '26px minmax(0,1fr)' : '14px 26px minmax(0,1fr)', showSeed: !teams, hasRosterNote: !!rosterNote, rosterNote,
+        chat, chatH: teams ? '232px' : '184px', readOnly: !c.canChat, canChat: !!c.canChat,
+        foot, hasDecide: !result
+      };
+    };
+    const frames = [
+      build({ id: '99a', st: 'playing', kicker: 'COPA DE OCTUBRE · SEMIFINAL · KAISER VS CUZCO', title: 'Semifinal · Kaiser vs Cuzco', label: 'En partida. Arriba, qué cruce es y el estado en un chip; abajo, quién está en la sala con su semilla y su edad, y el chat en solo lectura, con el chip que explica por qué. En el pie, «Decidir esta partida» como atajo del cuadro y «Cerrar» en el color del mod.' }),
+      build({ id: '99b', st: 'waiting', kicker: 'COPA DE OCTUBRE · SEMIFINAL · KAISER VS CUZCO', title: 'Semifinal · Kaiser vs Cuzco', label: 'Antes de empezar, con un inscrito sin entrar: su fila va vacía con «No entró todavía» en ámbar, el chip late en el color del mod y el pie recuerda que el organizador puede decidir el cruce si no aparece.' }),
+      build({ id: '99c', st: 'result', kicker: 'COPA DE OCTUBRE · SEMIFINAL · KAISER VS CUZCO', title: 'Semifinal · Kaiser vs Cuzco', label: 'Con resultado: la tarjeta aparece solo ahora (ResultBox), con ganador, marcador, civilizaciones, duración y quién envió la grabación. «Decidir esta partida» desaparece: ya está decidida.' }),
+      build({ id: '99d', st: 'playing', canChat: true, kicker: 'COPA DE OCTUBRE · SEMIFINAL · KAISER VS CUZCO', title: 'Semifinal · Kaiser vs Cuzco', label: 'Cuando el servidor deje entrar al organizador: el chat gana la caja y «Enviar», sus mensajes van marcados como organizador en el color del mod, y el pie dice qué puede y qué no. Hasta entonces, esta pantalla no existe.' }),
+      build({ id: '99e', st: 'playing', teams: true, kicker: 'LIGA 3V3 · CUARTOS · LOS DEL SUR VS PAMPA BRAVA', title: 'Cuartos · Los del Sur vs Pampa Brava', label: 'Un cruce de equipos: la sala agrupa por el lado que fijó el cuadro, con la semilla del equipo y el capitán primero; el chat crece a 232 para seis personas.' })
+    ];
+    return { frames };
+  }
+}
+</script>
+</body>
+</html>

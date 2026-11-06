@@ -665,12 +665,11 @@
          If the tabs ever move again, this marker moves with them. -->
     <Style x:Key="NavTabButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{DynamicResource ChromeTextDim}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiMutedText}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <!-- 16 horizontal from the reference; no vertical padding because the button
-             stretches to the row height and the label is centred in it. -->
-        <Setter Property="Padding" Value="16,0"/>
-        <Setter Property="Margin" Value="4,0,0,0"/>
+        <!-- Design 68a: the underline is as wide as the word, 30 between tabs. -->
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Margin" Value="0,0,30,0"/>
         <Setter Property="Cursor" Value="Hand"/>
         <!-- Stretch, so the button fills the nav row's full height — which is what lets
              the underline sit on the row's bottom edge rather than floating under the
@@ -682,7 +681,7 @@
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
         <Setter Property="FontSize" Value="{DynamicResource NavTabTextSize}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -705,8 +704,9 @@
                             <Setter Property="Foreground" Value="{DynamicResource ChromeTextSoft}"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="active">
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ModAccent}"/>
                             <Setter Property="Foreground" Value="#FFFFFF"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1756,7 +1756,7 @@
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonHoverBg}"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="open">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonPressedBg}"/>
+                            <Setter TargetName="border" Property="Background" Value="#1FFFFFFF"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonPressedBg}"/>

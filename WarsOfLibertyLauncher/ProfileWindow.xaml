@@ -62,7 +62,7 @@
          available. -->
     <Border BorderBrush="{DynamicResource MpRimMedium}"
             BorderThickness="1"
-            Background="{DynamicResource MpAppBg}">
+            Background="{DynamicResource ProfileWindowWash}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>   <!-- Title bar (chrome) -->
@@ -82,16 +82,33 @@
                  is Mazos, so BuildProfileHeader is not built there and a link beside the
                  name would vanish the moment you pressed that pill. -->
 
-            <!-- One page-level scroller and no MaxWidth — both carried over from
-                 ProfileView unchanged. The 900 px bound the handoff asked for was
-                 rejected three times, and the filter chips at the top of the history
-                 scroll away with the page: don't "fix" that by nesting a second
-                 scroller inside this one. -->
-            <Grid Grid.Row="1" x:Name="ProfileContentRoot">
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <!-- Design 95: the player card on the left, fixed across the four sections, and the
+                 section on the right. Two scrollers on purpose: the card must stay where it is
+                 while a long history moves. -->
+            <Grid Grid.Row="1" x:Name="ProfileContentRoot" Margin="20,16,20,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="ProfileRailColumn" Width="268"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="ProfileRail"
+                        CornerRadius="14"
+                        BorderThickness="1"
+                        Background="{DynamicResource GlassPanel}"
+                        BorderBrush="{DynamicResource ProfileCardRim}">
+                    <ScrollViewer VerticalScrollBarVisibility="Hidden"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="ProfileRailBody"/>
+                    </ScrollViewer>
+                </Border>
+
+                <ScrollViewer x:Name="ProfileScroll"
+                              Grid.Column="2"
+                              VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="ProfileBody"
-                                Margin="14,16,14,18"
+                                Margin="0,0,4,0"
                                 HorizontalAlignment="Stretch"/>
                 </ScrollViewer>
             </Grid>

@@ -153,7 +153,7 @@
 
         <!-- Footer: Cancel as a link, one solid button. -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-            <Button x:Name="CancelButton" Style="{StaticResource SetFooterLinkButton}"
+            <Button x:Name="CancelButton" Style="{StaticResource SetFooterBarGhostButton}"
                     IsCancel="True" Margin="0,0,14,0" Click="CancelButton_Click"/>
             <Button x:Name="OkButton" Style="{StaticResource SetFooterDangerButton}"
                     Click="OkButton_Click"/>

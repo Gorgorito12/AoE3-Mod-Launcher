@@ -32,7 +32,6 @@ public class ShareDiagnosticsVisibilityTests
         openRepair: () => { },
         checkForUpdates: () => Task.FromResult<Services.UpdateService.CheckResult?>(null),
         openAoE3Folder: () => { },
-        changeModFolder: () => { },
         changeAoE3Folder: () => { },
         openUserDataFolder: () => { },
         createBackup: () => null,
@@ -85,8 +84,10 @@ public class ShareDiagnosticsVisibilityTests
             var dlg = Build();
             dlg.ModSearchBox.Text = query;
 
-            Assert.Equal(Visibility.Visible, dlg.LocalFilesPanel.Visibility);
-            Assert.Equal(Visibility.Visible, dlg.LocalTopRow.Visibility);
+            // General names it too since design 71, in the hint under "Archivos del mod", and it
+            // comes first. What must not happen is the search coming back empty.
+            Assert.True(dlg.GeneralPanel.Visibility == Visibility.Visible
+                        || dlg.LocalFilesPanel.Visibility == Visibility.Visible);
             Assert.Equal(Visibility.Collapsed, dlg.ModSearchNoResults.Visibility);
             dlg.Close();
         });
@@ -106,36 +107,11 @@ public class ShareDiagnosticsVisibilityTests
     }
 
     /// <summary>
-    /// The card reads as two steps: Verify, then the diagnostics block with its own solid button.
-    /// View logs and Discord sit below as the secondary row — and Share diagnostics is no longer
-    /// one of them.
+    /// The rail box runs the action from any section and does not navigate: the section that
+    /// was open stays open.
     /// </summary>
     [Fact]
-    public void TheCardIsTwoStepsWithDiagnosticsInItsOwnBlock()
-    {
-        Run("en", () =>
-        {
-            var dlg = Build();
-            Assert.True(IsUnder(dlg.ShareDiagnosticsBtn, dlg.DiagStepBlock),
-                "Share diagnostics must sit in its own block");
-            Assert.Same(Application.Current.FindResource("SetDiagButton"), dlg.ShareDiagnosticsBtn.Style);
-            Assert.False(IsUnder(dlg.ShareDiagnosticsBtn, dlg.TroubleGrid),
-                "Share diagnostics went back into the secondary row");
-            Assert.True(IsUnder(dlg.ViewLogsBtn, dlg.TroubleGrid));
-            Assert.True(IsUnder(dlg.SupportLinkHost, dlg.TroubleGrid));
-            Assert.False(string.IsNullOrWhiteSpace(dlg.DiagStep2Title.Text));
-            Assert.False(string.IsNullOrWhiteSpace(dlg.DiagStep2Body.Text));
-            Assert.IsType<Button>(dlg.SupportLinkHost.Content);
-            dlg.Close();
-        });
-    }
-
-    /// <summary>
-    /// The rail box runs the SAME action as the card's button, and does not navigate: the
-    /// section that was open stays open.
-    /// </summary>
-    [Fact]
-    public void TheRailBoxRunsTheSameActionAndStaysPut()
+    public void TheRailBoxRunsTheActionAndStaysPut()
     {
         Run("en", () =>
         {
@@ -144,9 +120,8 @@ public class ShareDiagnosticsVisibilityTests
             var generalWas = dlg.GeneralPanel.Visibility;
 
             dlg.RailDiagBox.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            dlg.ShareDiagnosticsBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-            Assert.Equal(2, calls);
+            Assert.Equal(1, calls);
             Assert.Equal(generalWas, dlg.GeneralPanel.Visibility);
             Assert.False(string.IsNullOrWhiteSpace(dlg.RailDiagTag.Text));
             Assert.False(string.IsNullOrWhiteSpace(dlg.RailDiagCaption.Text));
@@ -170,11 +145,11 @@ public class ShareDiagnosticsVisibilityTests
             var hits = dlg.SearchHitsFor("diagnostico");
 
             Assert.Equal(2, hits.Count);
-            Assert.Same(dlg.ShareDiagnosticsBtn, hits[0].Target.Element);
-            Assert.Same(dlg.ViewLogsBtn, hits[1].Target.Element);
+            Assert.Same(dlg.RailDiagBox, hits[0].Target.Element);
+            Assert.Same(dlg.RailLogsBtn, hits[1].Target.Element);
             Assert.Equal("diagnóstico", hits[0].Keyword);
             Assert.True(hits[0].Target.IsDiagnostics);
-            Assert.Same(dlg.DiagStepBlock, hits[0].Target.RingTarget);
+            Assert.Same(dlg.RailDiagCard, hits[0].Target.RingTarget);
             dlg.Close();
         });
     }
@@ -231,25 +206,18 @@ public class ShareDiagnosticsVisibilityTests
         });
     }
 
-    /// <summary>
-    /// Opening a result from another section brings its section to the front — the filter
-    /// that found it stays as it was.
-    /// </summary>
+    /// <summary>Both results live in the rail, so opening one leaves the page where it was.</summary>
     [Fact]
-    public void OpeningAResultBringsItsSectionForward()
+    public void OpeningAResultLeavesTheSectionWhereItWas()
     {
         Run("en", () =>
         {
             var dlg = Build();
-            dlg.TabGeneralBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(Visibility.Collapsed, dlg.LocalFilesPanel.Visibility);
+            dlg.TabUserDataBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-            var hit = dlg.SearchHitsFor("crash").Single();
-            dlg.OpenSearchHit(hit);
+            dlg.OpenSearchHit(dlg.SearchHitsFor("crash").Single());
 
-            Assert.Equal(Visibility.Visible, dlg.LocalFilesPanel.Visibility);
-            Assert.Equal(Visibility.Collapsed, dlg.GeneralPanel.Visibility);
-            Assert.Equal(dlg.TabLocalFilesLabel.Text, dlg.ModSectionTitle.Text);
+            Assert.Equal(Visibility.Visible, dlg.UserDataPanel.Visibility);
             dlg.Close();
         });
     }
@@ -276,7 +244,7 @@ public class ShareDiagnosticsVisibilityTests
             wordy.RailDiagTag.Text = string.Concat(Enumerable.Repeat(Strings.Get("ModPropRailProblems") + " ", 6));
             wordy.ModRail.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
 
-            Assert.True(wordy.ModRail.DesiredSize.Width <= ceiling + 0.5,
+            Assert.True(wordy.ModRail.DesiredSize.Width - wordy.ModRail.Margin.Left <= ceiling + 0.5,
                 $"the diagnostics box grew the rail to {wordy.ModRail.DesiredSize.Width:F0} px against {ceiling:F0}");
             Assert.Equal(plain.ModRail.DesiredSize.Width, wordy.ModRail.DesiredSize.Width, 1);
             plain.Close();

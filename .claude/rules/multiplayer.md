@@ -720,6 +720,17 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   supervisor is not a member. `THE_ONE_THAT_MATTERS_TheWatchWindowOffersNoMemberActions` is what
   stops it becoming that window one reasonable-sounding button at a time.
 
+- **Design 78 replaced the four steps below with THREE and moved "Open Radmin" into the steps that
+  need it.** "Copied" appears only after copying, Close is secondary until the player is on the
+  network, and step 1 installs Radmin from the window through the same `InstallSilentAsync` as the
+  banner. **Radmin has no stable installer address:** it publishes a versioned Inno Setup `.exe`, and
+  the old `Radmin_VPN.msi` answers 404, so "Install" could only fall through to the browser. The
+  address is read from the home page (`FindInstallerUrl`, with the last known one as the fallback),
+  and because the file runs as administrator it must pass `AuthenticodeCheck.TrustedSigner` and be
+  signed by `CN=Famatech Corp.` first. Verified up to that point; the silent run itself
+  (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`) has never been executed here. Header chip: `KickNetworkProbe` runs the assistant's probe at most every 30 s and turns it
+  into "Falta la red" (design 79h).
+
 - **The assistant is TWO shapes now, and the fold is what the rules above constrain.**
   Below `InAoE3Network` it is a checklist with exactly ONE step open — finished steps fold to a
   line with a green check, the active one is the only card, the pending one is a dim ring; at it,

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section style="padding:40px 44px 60px;display:flex;flex-direction:column;gap:30px;max-width:1500px">
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px">BASE</span><span style="font:700 22px/1.2 'Source Serif 4',Georgia,serif;color:#1a1a1a">Base de diseño del launcher</span></div>
+    <span style="max-width:1100px;font:400 12.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.65);text-wrap:pretty">Sacada de la Biblioteca unificada (68a). Todos los menús y diálogos del launcher se rediseñan con estas piezas y reglas. Las reglas por escrito están en <code style="font:11.5px ui-monospace,monospace">CLAUDE.md</code>.</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:22px">
+
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">1 · Colores de estado (fijos)</span>
+      <div style="padding:18px;border-radius:12px;background:#0f1c2e;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <sc-for list="{{ fixed }}" as="c" hint-placeholder-count="8"><div style="display:flex;flex-direction:column;gap:6px"><span style="height:34px;border-radius:7px;background:{{ c.hex }}"></span><span style="font:600 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ c.t }}</span><span style="font:400 11px/1 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ c.hex }}</span></div></sc-for>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">2 · Color del mod: dónde se usa</span>
+      <div style="padding:18px;border-radius:12px;background:#0f1c2e;display:flex;flex-direction:column;gap:12px">
+        <sc-for list="{{ accents }}" as="a" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:14px;align-items:center">
+            <span style="font:600 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ a.name }}</span>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span style="height:34px;padding:0 16px;border-radius:8px;display:flex;align-items:center;background:{{ a.acc }};box-shadow:0 6px 16px {{ a.glow }};font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ a.btnText }}">▶ Jugar</span>
+              <span style="height:30px;padding:0 12px;border-radius:15px;display:flex;align-items:center;background:{{ a.soft }};box-shadow:inset 0 0 0 1px {{ a.line }};font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ a.text }}">Filtro activo</span>
+              <span style="width:110px;height:6px;border-radius:3px;background:rgba(255,255,255,.12)"><span style="display:block;width:62%;height:100%;border-radius:3px;background:{{ a.acc }}"></span></span>
+              <span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ a.text }}">Leer más</span>
+            </div>
+          </div>
+        </sc-for>
+        <span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">accentColor del catálogo → igualado en OKLCH (L 0,56–0,68 · C 0,11–0,16). Texto del botón blanco u oscuro según contraste. Nunca para estados.</span>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">3 · Cristal: tres niveles (predeterminado: Media)</span>
+      <div style="position:relative;padding:18px;border-radius:12px;background:url(mods/hundred-days/hero.jpg) center 30%/cover no-repeat;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;min-height:170px">
+        <sc-for list="{{ glass }}" as="g" hint-placeholder-count="3"><div style="align-self:end;padding:14px;border-radius:12px;background:{{ g.bg }};backdrop-filter:blur({{ g.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);display:flex;flex-direction:column;gap:5px"><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ g.t }}</span><span style="font:400 11px/1.4 Consolas,ui-monospace,monospace;color:#c3d2e5">{{ g.spec }}</span></div></sc-for>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">4 · Botones (uno principal por vista)</span>
+      <div style="padding:18px;border-radius:12px;background:#0f1c2e;display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+        <span style="height:52px;padding:0 30px;border-radius:10px;display:flex;align-items:center;background:#c8102e;box-shadow:0 10px 28px rgba(200,16,46,.35);font:600 16px/1 'Segoe UI',system-ui,sans-serif;color:#fff">▶  Jugar</span>
+        <span style="height:52px;padding:0 20px;border-radius:10px;display:flex;align-items:center;background:rgba(10,19,33,.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:500 14px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Secundario</span>
+        <span title="Ajustes" style="width:52px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(10,19,33,.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:400 20px/1 'Segoe UI Symbol','Segoe UI',system-ui,sans-serif;color:#dce7f5">⚙</span>
+        <span style="height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Pequeño</span>
+        <span style="height:34px;padding:0 14px;border-radius:8px;display:flex;align-items:center;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Acción global</span>
+        <span style="height:34px;padding:0 16px;border-radius:7px;display:flex;align-items:center;background:#c84a4a;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Desinstalar</span>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">5 · Chips y píldoras</span>
+      <div style="padding:18px;border-radius:12px;background:#0f1c2e;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <sc-for list="{{ chips }}" as="c" hint-placeholder-count="4"><span style="white-space:nowrap;height:24px;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6"><span style="width:6px;height:6px;border-radius:3px;background:{{ c.dot }}"></span>{{ c.t }}</span></sc-for>
+          <span style="white-space:nowrap;height:24px;padding:0 10px 0 8px;border-radius:12px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#7ee08b" stroke-width="1.7" stroke-linejoin="round"><path d="M1.5 8.6V2.2c0-.4.3-.7.7-.7h6.4l6 6c.3.3.3.7 0 1l-5.7 5.7c-.3.3-.7.3-1 0z"></path><circle cx="5" cy="5" r="1.2"></circle></svg><span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:#e8eef6">v1.2.0e</span></span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <span style="height:30px;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:7px;background:rgba(10,19,33,.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Instalados <span style="color:#8C9CB1">5</span></span>
+          <span style="height:30px;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Discord <span style="color:#8C9CB1;font-size:11px">↗</span></span>
+          <span style="height:34px;box-sizing:border-box;padding:0 12px;border-radius:17px;display:flex;align-items:center;gap:10px;background:rgba(10,19,33,.6);box-shadow:inset 0 0 0 1px rgba(200,16,46,.55)"><span style="width:20px;height:20px;border-radius:10px;background:rgba(200,16,46,.25);display:flex;align-items:center;justify-content:center;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#f39aa8">↓</span><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">2 descargas</span><span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:#f39aa8">41 %</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">6 · Lista lateral: filas y modo plegado</span>
+      <div style="padding:14px;border-radius:12px;background:url(mods/the-ottoman-empire/hero.jpg) center/cover no-repeat;display:grid;grid-template-columns:1fr 72px;gap:12px">
+        <div style="padding:6px;border-radius:14px;background:rgba(10,19,33,.5);backdrop-filter:blur(16px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:12px;align-items:center;height:56px;padding:0 12px;border-radius:10px;background:{{ r.bg }};box-shadow:{{ r.ring }}"><span style="width:36px;height:36px;background:{{ r.icon }}"></span><div style="min-width:0;display:flex;flex-direction:column;gap:5px"><span style="font:600 13.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span><span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:{{ r.subC }}">{{ r.sub }}</span></div><span style="display:flex;align-items:center;gap:10px"><span style="font:400 15px/1 'Segoe UI Symbol','Segoe UI',system-ui,sans-serif;color:{{ r.starC }}">{{ r.star }}</span><span style="width:7px;height:7px;border-radius:4px;background:{{ r.dot }}"></span></span></div></sc-for>
+        </div>
+        <div style="padding:6px;border-radius:14px;background:rgba(10,19,33,.5);backdrop-filter:blur(16px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);display:flex;flex-direction:column;align-items:center;gap:4px">
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="3"><div style="position:relative;width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:{{ r.bg }};box-shadow:{{ r.ring }}"><span style="width:36px;height:36px;background:{{ r.icon }}"></span><span style="position:absolute;right:6px;top:6px;width:8px;height:8px;border-radius:4px;background:{{ r.dot }};box-shadow:0 0 0 2px rgba(10,19,33,.9)"></span><sc-if value="{{ r.fav }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;left:4px;top:3px;font:400 12px/1 'Segoe UI Symbol','Segoe UI',system-ui,sans-serif;color:#E6C06A;text-shadow:0 0 4px rgba(0,0,0,.9)">★</span></sc-if></div></sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">7 · Menú contextual y confirmación</span>
+      <div style="padding:18px;border-radius:12px;background:#0f1c2e;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+        <div style="width:240px;padding:6px;border-radius:10px;background:rgba(12,22,38,.96);box-shadow:0 16px 40px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.12);display:flex;flex-direction:column">
+          <span style="padding:6px 10px 8px;font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Wars of Liberty</span>
+          <sc-for list="{{ menu }}" as="m" hint-placeholder-count="6"><sc-if value="{{ m.sep }}" hint-placeholder-val="{{ false }}"><span style="height:1px;margin:4px 6px;background:rgba(255,255,255,.1)"></span></sc-if><sc-if value="{{ m.row }}" hint-placeholder-val="{{ true }}"><span style="height:32px;display:flex;align-items:center;padding:0 10px;border-radius:6px;background:{{ m.bg }};font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ m.c }}">{{ m.t }}</span></sc-if></sc-for>
+        </div>
+        <div style="flex:1;min-width:260px;padding:18px 20px;border-radius:12px;background:#12213a;box-shadow:0 24px 60px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.1);display:flex;flex-direction:column;gap:10px"><span style="font:600 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#f4f8fc">¿Desinstalar Hundred Days?</span><span style="font:400 12.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Se borrará la carpeta del mod. Podrás volver a instalarlo desde el Catálogo.</span><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px"><span style="height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cancelar</span><span style="height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:#c84a4a;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Desinstalar</span></div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">8 · Progreso y tipografía</span>
+      <div style="padding:18px;border-radius:12px;background:#0f1c2e;display:flex;flex-direction:column;gap:16px">
+        <div style="padding:16px 18px;border-radius:12px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(58,140,217,.45);display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px"><span style="width:34px;height:34px;border-radius:17px;background:rgba(58,140,217,.22);display:flex;align-items:center;justify-content:center;font:700 15px/1 'Segoe UI',system-ui,sans-serif;color:#9cc8f2">↓</span><div style="flex:1;display:flex;flex-direction:column;gap:4px"><span style="font:600 14px/1.2 'Segoe UI',system-ui,sans-serif;color:#f4f8fc">Actualizando Improvement Mod</span><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">78 MB de 186 MB</span></div><span style="font:600 22px/1 Consolas,ui-monospace,monospace;color:#9cc8f2">42 %</span></div>
+          <span style="height:8px;border-radius:4px;background:rgba(255,255,255,.1)"><span style="display:block;width:42%;height:100%;border-radius:4px;background:linear-gradient(90deg,#3a8cd9,#6aa9e2)"></span></span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px"><span style="font:700 34px/1.05 'Source Serif 4',Georgia,serif;color:#fff">Título · Source Serif 4</span><span style="font:400 14px/1.6 'Segoe UI',system-ui,sans-serif;color:#d6e1ee">Texto · Segoe UI 14–16,5 (clamp con el ancho)</span><span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:#c3d2e5">Números y versiones · Consolas</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:6px;max-width:1100px"><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">9 · Reglas de interacción</span>
+    <sc-for list="{{ rules }}" as="r" hint-placeholder-count="6"><span style="font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.7);text-wrap:pretty">· {{ r }}</span></sc-for>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const ic = id => `url(mods/${id}/icon.png) center/contain no-repeat`;
+    return {
+      fixed: [
+        { t: 'Instalado / OK', hex: '#4fd68a' }, { t: 'Actualización / info', hex: '#55ACEE' }, { t: 'Error / detenido', hex: '#F4900C' },
+        { t: 'Favorito', hex: '#E6C06A' }, { t: 'Destructivo', hex: '#c84a4a' }, { t: 'Acción global', hex: '#2f7fe0' },
+        { t: 'Fondo', hex: '#0f1c2e' }, { t: 'Panel', hex: '#12213a' }, { t: 'Versión (icono)', hex: '#7ee08b' }
+      ],
+      accents: [
+        { name: 'Wars of Liberty', acc: '#c8102e', glow: 'rgba(200,16,46,.35)', btnText: '#fff', soft: 'rgba(200,16,46,.16)', line: 'rgba(200,16,46,.55)', text: '#f39aa8' },
+        { name: 'The Asian Dynasties', acc: '#b8913f', glow: 'rgba(184,145,63,.35)', btnText: '#0f1c2e', soft: 'rgba(184,145,63,.16)', line: 'rgba(184,145,63,.55)', text: '#e3c88f' },
+        { name: 'Improvement Mod', acc: '#3a8cd9', glow: 'rgba(58,140,217,.35)', btnText: '#0f1c2e', soft: 'rgba(58,140,217,.16)', line: 'rgba(58,140,217,.55)', text: '#9cc8f2' },
+        { name: 'Age of Dynasties', acc: '#1fa3a3', glow: 'rgba(31,163,163,.35)', btnText: '#0f1c2e', soft: 'rgba(31,163,163,.16)', line: 'rgba(31,163,163,.55)', text: '#8fd8d8' }
+      ],
+      glass: [
+        { t: 'Sólida', bg: 'rgba(12,22,38,.86)', blur: '0px', spec: '.86 · sin difuminado' },
+        { t: 'Media', bg: 'rgba(10,19,33,.5)', blur: '16px', spec: '.50 · 16 px' },
+        { t: 'Máxima', bg: 'rgba(10,19,33,.28)', blur: '8px', spec: '.28 · 8 px' }
+      ],
+      chips: [{ t: 'INSTALADO', dot: '#4fd68a' }, { t: 'ACTUALIZACIÓN DISPONIBLE', dot: '#55ACEE' }, { t: 'DESCARGA DETENIDA', dot: '#F4900C' }, { t: 'NO INSTALADO', dot: '#61779a' }],
+      rows: [
+        { name: 'Wars of Liberty', sub: 'v1.2.0e · Principal · 3 copias', subC: '#8C9CB1', icon: ic('wol'), bg: 'rgba(200,16,46,.22)', ring: 'inset 0 0 0 1px rgba(200,16,46,.6)', star: '★', starC: '#E6C06A', dot: '#4fd68a', fav: true },
+        { name: 'Improvement Mod', sub: 'Actualizando · 42 %', subC: '#9cc8f2', icon: ic('improvement-mod'), bg: 'transparent', ring: 'none', star: '☆', starC: 'rgba(220,231,245,.35)', dot: '#55ACEE', fav: false },
+        { name: "King's Return", sub: 'Descarga detenida · 63 %', subC: '#F5BD76', icon: ic('kings-return'), bg: 'transparent', ring: 'none', star: '☆', starC: 'rgba(220,231,245,.35)', dot: '#F4900C', fav: false }
+      ],
+      menu: [
+        { row: true, t: 'Jugar', c: '#e8eef6', bg: 'rgba(255,255,255,.08)' }, { sep: true },
+        { row: true, t: 'Quitar de favoritos', c: '#e8eef6', bg: 'transparent' }, { row: true, t: 'Ajustes del mod', c: '#e8eef6', bg: 'transparent' }, { row: true, t: 'Abrir la carpeta del mod', c: '#e8eef6', bg: 'transparent' }, { sep: true },
+        { row: true, t: 'Desinstalar la copia «Principal»…', c: '#f0a6a6', bg: 'transparent' }
+      ],
+      rules: [
+        'Un solo botón principal por vista, del color del mod. Lo demás en cristal o como icono.',
+        'El clic derecho es un atajo: nunca es el único lugar de una acción y no cambia la selección; solo «Jugar» lleva al mod.',
+        'Lo destructivo va al final, separado, en rojo y con confirmación que dice qué se borra.',
+        'Nada que parezca funcionar sin hacer nada: lo que no tiene datos no aparece.',
+        'Los estados se ven en tres sitios: la fila de la lista, la ficha y la píldora global de la barra superior.',
+        'El layout no tiene topes de ancho; se prueba a 1366, 1920 y 2560 px. La lista se pliega a 72 px en pantallas pequeñas.'
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

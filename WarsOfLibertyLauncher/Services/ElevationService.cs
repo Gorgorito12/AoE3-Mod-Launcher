@@ -72,6 +72,7 @@ public static class ElevationService
     /// </summary>
     public static bool RelaunchElevated(string? arguments = null)
     {
+        if (HarnessMode.Block($"relaunch elevated {arguments}".TrimEnd())) return false;
         try
         {
             var launch = ResolveSelfLaunch(CurrentProcessPath(), AppContext.BaseDirectory, File.Exists);
@@ -85,7 +86,7 @@ public static class ElevationService
                 Arguments = launch.Value.ArgumentsPrefix + (arguments ?? "")
             };
 
-            Process.Start(startInfo);
+            Services.HarnessMode.Start(startInfo);
             DiagnosticLog.Write($"Successfully launched elevated instance: {startInfo.FileName} {startInfo.Arguments}");
             return true;
         }
@@ -176,12 +177,13 @@ public static class ElevationService
 
     private static ElevatedRun RunSelfElevated(string arguments, TimeSpan timeout)
     {
+        if (HarnessMode.Block($"run elevated {arguments}")) return new ElevatedRun(ElevatedRunStatus.Declined);
         var launch = ResolveSelfLaunch(CurrentProcessPath(), AppContext.BaseDirectory, File.Exists);
         if (launch == null) return new ElevatedRun(ElevatedRunStatus.NoExecutable);
 
         try
         {
-            using var process = Process.Start(new ProcessStartInfo
+            using var process = Services.HarnessMode.Start(new ProcessStartInfo
             {
                 FileName = launch.Value.FileName,
                 Arguments = launch.Value.ArgumentsPrefix + arguments,

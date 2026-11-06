@@ -149,6 +149,25 @@ All commands run from `WarsOfLibertyLauncher/`.
   operational, not code: enable MFA on GitHub/SignPath for all team members (the
   policy doc already asserts it), and confirm the lobby backend repo is public OSS.
 
+### Testbed (the real launcher, on the CORSAIR)
+
+`tools/testbed/` runs the real launcher beside the player's own: `build`, `launch`, `shot`, `record`,
+`uia` (presses real controls with UI Automation, no cursor), `perf`, `compare`, `safety`. Writes that
+matter run for real in its own folders: `AOE3ML_DOCUMENTS` (backups, restores, imports) and
+`AOE3ML_SANDBOX` (Repair on `repair_fixture.py`'s real mod, `HarnessMode.BlockOutsideSandbox`), both
+ignored outside the harness. **In the harness `EnsureGameNotRunning` answers yes without looking,**
+because that check goes by name and the game on this machine may be another project's: never press
+"close it". `SelfUpdateIntegrationTests` runs the real download, verification and swap on a disposable
+copy with `AOE3ML_SELFUPDATE_TEST=1`; it is skipped otherwise, and it stops short of the restart. Its
+`README.md` has the commands and the definition of done; read it before verifying UI. Test launches
+open on the CORSAIR XENEON, found by NAME, because Windows' `DISPLAYn` does not match Display
+Settings. **`Services/HarnessMode.cs` is what makes this safe and all three of its conditions are
+required** (`AOE3ML_HARNESS=1`, a developer build, a data folder that is not the player's): a
+published launcher ignores the variable. In that mode every process goes through
+`HarnessMode.Start` and becomes a `HARNESS BLOCKED` log line, which is how a button is proved
+without anything opening. **A new `Process.Start` must use that funnel**;
+`HarnessModeTests.THE_ONE_THAT_MATTERS_EveryProcessGoesThroughTheFunnel` fails otherwise.
+
 ### Tests & verification
 
 There is now a **minimal unit-test project** — `WarsOfLibertyLauncher.Tests/`
@@ -486,6 +505,77 @@ the version somebody looked at. So the tournament dialog came UP to the room dia
 rather than the reverse.
 
 ## Important gotchas
+
+- **The Library and the Workshop are ONE tab now (design 68a, `docs/design_base_launcher`), and this
+  SUPERSEDES several bullets below that still describe the old screens.** `TopTabMods` is hidden and
+  `SwitchTopTab(TopTab.Mods)` lands on the Library, so the Workshop rules below ("the Workshop never
+  installs", the 86-px row, "See in Library") describe a control nobody reaches: installing starts
+  from the same button as playing, and a catalog mod is selected in the list like any other.
+  `MainWindow.Library.cs` draws it; the install, update, repair and check code did not move.
+  `Controls/ModRail` is the list, `Services/LibraryList` the pure rules (groups, filters,
+  `LibraryMetrics` for the prototype's `clamp()`s, `HeroCover`, `LibraryStatus`), `Services/ModTheme`
+  paints the selected mod's colour into `Application.Resources` (the `Mod*` brushes; menus and
+  panels of the launcher itself never read them) and `Services/GlassTheme` the transparency level.
+  Things worth knowing, each of which cost a round:
+  (1) **The cover runs behind the title bar and the tabs**, so it lives in `LibraryBackdrop`, a child
+  of the window's root grid, and `DashboardBgFill` is no longer inside `PlayView`. The hero is CSS
+  `center 25%/cover` through a computed `Viewbox` (`HeroCover`): the old `Stretch.Fill`, and the
+  paragraph below explaining why, are gone. The hero brushes are therefore NOT frozen.
+  (2) **The glass is one image blurred once** (`BuildBlurredCover`, 320 px wide) in
+  `LibraryBlurLayer`, clipped to the panels by `UpdateLibraryBlurClip`; never a live `BlurEffect`
+  behind them. The panels are SIBLINGS of the backdrop, so the clip needs `TransformToVisual`:
+  `TransformToAncestor` throws, and the `catch` beside it would hide that as "no blur".
+  (3) **The hero stopped being a transform:** `UiScale.Attach(HeroContentGrid, …)` is gone, the cover
+  reflows, and `HeroContentGrid` is a plain StackPanel that keeps the name. Everything `Dashboard*` the
+  code writes to kept its name, including elements that are now collapsed (`DashboardChangeModButton`,
+  the speed/ETA labels), because the operation code still assigns them.
+  (4) **The primary button and the status line:** `_statusMessage` used to live in the idle progress
+  strip, which no longer exists. A message a player should read goes to `LibraryStatusLine`; the
+  ones the chip above the title already says are filtered by `LibraryStatus.IsRoutine`
+  (`RoutineStatusTemplates`). A new routine status must be added there or it appears under the
+  buttons. `LibraryCaption` replaces the legacy text; Stop coercion in `SetPrimaryAction` still runs first.
+  (5) **A refresh is coalesced and keyed** (`ScheduleLibraryRefresh`, `_libraryRailKey`,
+  `_libraryCoverKey`): a mod switch asks for several, and rebuilding the list each time was a
+  three-second LAYOUT STORM. `ModRail.UpdateOperation` is what a progress tick calls; it never rebuilds.
+  (6) **Chrome.xaml gives every ScrollViewer `Padding="0,0,8,0"`**, and it silently crops anything laid
+  out to a known width: the folded tiles lost 13 px until the padding was given back.
+  (7) **Header:** title bar 40 and nav 56 in BOTH layouts; the old compact heights (34 / 42) and the
+  `NavTabButtonCompact` swap below are history. The main bar carries the mod's tint (`ModTitleBar`);
+  secondary windows keep one uniform colour (BASE.md).
+  (8) **`--preview-library=updating|installing|stopped`** paints the download states with nothing
+  downloading, in the harness only. `tools/testbed/sweep_library.py` presses every control of the
+  screen on the real launcher.
+  **MainWindow's XAML is parsed by no unit test**, so a broken value there passes the whole suite and
+  dies on launch (a `Margin="11%"` did exactly that): launch it with the testbed before calling a
+  change to that file done.
+
+- **Screens 73, 74, 77, 78 and 79 of `docs/design_base_launcher` SUPERSEDE these claims further
+  down.** `PublishModDialog` is no longer fixed at 760: it has the settings chassis, a list of steps
+  on the left, and `Controls/FieldRowPanel` rows. `InstallFolderDialog` now BLOCKS Install when the
+  space estimate is short instead of warning, and shows paths through `Controls/PathLinePanel` and
+  `PathDisplay.SplitWhole` (`SplitForDisplay` is gone). `LauncherUpdateDialog` warns about space
+  inside itself rather than through `DiskSpacePrompt`, and its "ready" state lives in
+  `LauncherUpdateService.MarkStaged`, one session only because `CleanupOldVersion` sweeps the staged
+  file. The Radmin assistant has THREE steps and installs Radmin itself. `--preview-dialog=` also
+  takes `launcherupdate:*`, `installfolder:*`, `radmin:*`, `publish:<step>`, `updatepill:*`, `bar:*`.
+
+- **Screen 71 of `docs/design_base_launcher` SUPERSEDES these claims further down.** LOCAL FILES is
+  one card of copies with the copy in use first (no longer ordered by folder), and the other copies
+  carry "Use this one" plus a ⋯ menu (`BuildCopyMenu`). The two-step "Something not working?" card is
+  gone: Verify lives in General, and Share diagnostics, logs and Discord live only in the rail, which
+  is where the search's two results now point. "Change mod folder" left the window (Choose folder
+  adds a copy instead). The language cards, addon cards, decks and statistics are rows on `SetCard`,
+  built with `ModRow` / `Controls/ModChips`; a whole language card is no longer a button. Deck tiles
+  are number + 34-px art + name, by the maintainer's decision against the prototype, and the art loads
+  only when the section opens. Flags and small card art stayed in Statistics and the Profile. After
+  "Use this one" or "Choose folder" the row pulses (`PulseActiveRow`, `Pulse`), since the copy in use
+  jumps to the top. `LocalGameCards.BuildHumanGameRow` / `BuildAiGameRow` are the mod
+  window's; the Profile keeps the cards. `UiToggleOn` lets a window colour its switches.
+
+- **A test class that calls `Strings.SetLanguage` must carry `[Collection("wpf-and-language")]`.**
+  Without it the class races every other language test: a full run fails now and then, and the test
+  passes alone. `DialogXamlTests.EnsureResources` also seals every style on the thread that parsed
+  it, because an unsealed style throws on any other thread.
 
 - **AssemblyName ≠ RootNamespace, on purpose.** The shipped binary is
   `Aoe3ModLauncher.exe` (`<AssemblyName>`), but every file's namespace and
@@ -8940,6 +9030,12 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
 
 ## Conventions
 
+- **Two texts on one line never touch.** Keep at least 8 px between them, 10 in a data row, and the
+  one that can grow ends in an ellipsis instead of running into its neighbour. It is a rule because
+  it kept happening: on the account menu "Descubrimiento" ran straight into "Sin clasificar", and the
+  profile had the same fault. In a `* | Auto` row the gap is a `Margin` on the star text, which also
+  carries `TextTrimming`; a space inside the string is not a gap. Check the longest Spanish string at
+  the narrowest width on a real capture, because a measure cannot see it: both texts report a fit.
 - File-scoped namespaces, `Nullable` enabled, `ImplicitUsings` enabled.
 - Doc-comments explain **why** code exists, not what it does. Don't add comments
   that restate the code.

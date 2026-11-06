@@ -48,8 +48,7 @@
                            Margin="0,-3,0,0"/>
             </Grid>
             <StackPanel Grid.Column="1">
-                <TextBlock x:Name="HeadlineText" Style="{StaticResource SetDialogHeadline}"
-                           FontSize="{DynamicResource FontSizeSubtitle}"/>
+                <TextBlock x:Name="HeadlineText" Style="{StaticResource SetDialogHeadline}"/>
                 <WrapPanel Orientation="Horizontal" Margin="0,8,0,0">
                     <Border x:Name="FileTag" Style="{StaticResource SetFileTag}" Margin="0,0,8,0">
                         <TextBlock x:Name="FileTagText"/>
@@ -66,63 +65,78 @@
             </StackPanel>
         </Grid>
 
-        <!-- FOLDERS TO EXCLUDE + IN WINDOWS SECURITY -->
+        <!-- FOLDERS TO EXCLUDE + IN WINDOWS SECURITY. A "Copiar" per path, because Windows adds
+             exclusions one at a time and "Copy both" pasted two paths into a field for one. -->
         <Border Style="{StaticResource SetCard}" BorderBrush="{DynamicResource UiCardRim}"
-                Margin="0,16,0,0" ClipToBounds="True">
+                Margin="0,16,0,0">
             <StackPanel>
-                <DockPanel Margin="12,10,12,8" LastChildFill="False">
-                    <TextBlock x:Name="FoldersTitle" Style="{StaticResource SetCardLabel}"
-                               VerticalAlignment="Center"/>
-                    <Button x:Name="CopyButton" DockPanel.Dock="Right"
-                            Style="{StaticResource SetInlinePillButton}"
-                            Click="CopyButton_Click"/>
-                </DockPanel>
-                <Border Background="{DynamicResource UiRimSeam}" Padding="0,1,0,0">
-                    <!-- One label column for both rows, as wide as the longer label
-                         ("Carpeta del mod" does not fit the reference's 92 px). -->
-                    <StackPanel Grid.IsSharedSizeScope="True">
-                        <Grid Background="{DynamicResource MpField}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" MinWidth="92" SharedSizeGroup="AvRowLabel"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="TempRowLabel" Margin="12,10,12,9"
-                                       FontSize="{DynamicResource SetMonoSize}" FontWeight="Medium"
-                                       Foreground="{DynamicResource UiTextDim}"/>
-                            <TextBlock x:Name="TempPathText" Grid.Column="1" Margin="0,9,12,9"
-                                       FontFamily="{DynamicResource MonoFont}"
-                                       FontSize="{DynamicResource SetDescSize}"
-                                       Foreground="{DynamicResource UiTextStrong}"
-                                       TextWrapping="Wrap"/>
-                        </Grid>
-                        <Grid x:Name="InstallRow" Background="{DynamicResource MpField}" Margin="0,1,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" MinWidth="92" SharedSizeGroup="AvRowLabel"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="InstallRowLabel" Margin="12,10,12,9"
-                                       FontSize="{DynamicResource SetMonoSize}" FontWeight="Medium"
-                                       Foreground="{DynamicResource UiTextDim}"/>
-                            <TextBlock x:Name="InstallPathText" Grid.Column="1" Margin="0,9,12,9"
-                                       FontFamily="{DynamicResource MonoFont}"
-                                       FontSize="{DynamicResource SetDescSize}"
-                                       Foreground="{DynamicResource UiTextStrong}"
-                                       TextWrapping="Wrap"/>
-                        </Grid>
-                    </StackPanel>
-                </Border>
+                <TextBlock x:Name="FoldersTitle" Style="{StaticResource SetCardLabel}"
+                           Margin="16,12,16,10"/>
+
                 <Border BorderBrush="{DynamicResource UiRimSeam}" BorderThickness="0,1,0,0"
-                        Padding="12,11,12,12">
+                        Padding="16,9,16,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock x:Name="TempRowLabel"
+                                       FontSize="{DynamicResource SetDescSize}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource UiTextDim}"/>
+                            <TextBlock x:Name="TempPathText" Margin="0,4,0,0"
+                                       FontFamily="{DynamicResource MonoFont}"
+                                       FontSize="{DynamicResource SetDescSize}"
+                                       Foreground="{DynamicResource UiTextStrong}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <Button x:Name="CopyTempButton" Grid.Column="1"
+                                Style="{StaticResource WindowSecondaryButton}"
+                                MinWidth="104"
+                                VerticalAlignment="Center"
+                                Click="CopyPath_Click"/>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="InstallRow"
+                        BorderBrush="{DynamicResource UiRimSeam}" BorderThickness="0,1,0,0"
+                        Padding="16,9,16,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock x:Name="InstallRowLabel"
+                                       FontSize="{DynamicResource SetDescSize}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource UiTextDim}"/>
+                            <TextBlock x:Name="InstallPathText" Margin="0,4,0,0"
+                                       FontFamily="{DynamicResource MonoFont}"
+                                       FontSize="{DynamicResource SetDescSize}"
+                                       Foreground="{DynamicResource UiTextStrong}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <Button x:Name="CopyInstallButton" Grid.Column="1"
+                                Style="{StaticResource WindowSecondaryButton}"
+                                MinWidth="104"
+                                VerticalAlignment="Center"
+                                Click="CopyPath_Click"/>
+                    </Grid>
+                </Border>
+
+                <Border BorderBrush="{DynamicResource UiRimSeam}" BorderThickness="0,1,0,0"
+                        Padding="16,11,16,12">
                     <StackPanel>
-                        <DockPanel LastChildFill="False" Margin="0,0,0,8">
-                            <TextBlock x:Name="StepsTitle" Style="{StaticResource SetCardLabel}"
-                                       VerticalAlignment="Center"/>
-                            <Button x:Name="OpenSecurityButton" DockPanel.Dock="Right"
-                                    Style="{StaticResource SetFooterLinkButton}"
-                                    FontSize="{DynamicResource SetMonoSize}" Padding="0"
-                                    Click="OpenSecurityButton_Click"/>
-                        </DockPanel>
+                        <TextBlock x:Name="StepsTitle" Style="{StaticResource SetCardLabel}"
+                                   Margin="0,0,0,8"/>
                         <StackPanel x:Name="StepsHost"/>
+                        <TextBlock x:Name="OtherAntivirusText"
+                                   Margin="0,10,0,0"
+                                   TextWrapping="Wrap"
+                                   FontSize="{DynamicResource SetDescSize}"
+                                   Foreground="{DynamicResource UiTextDim}"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -141,7 +155,7 @@
                     Style="{StaticResource SetFooterSolidButton}" MinWidth="140"
                     IsDefault="True" Click="ContinueButton_Click"/>
             <Button x:Name="CancelButton" DockPanel.Dock="Right"
-                    Style="{StaticResource SetFooterLinkButton}" Margin="0,0,14,0"
+                    Style="{StaticResource SetFooterBarGhostButton}" Margin="0,0,14,0"
                     IsCancel="True" Click="CancelButton_Click"/>
         </DockPanel>
     </Border>

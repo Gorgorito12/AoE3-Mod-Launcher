@@ -33,6 +33,8 @@
                 <!-- Badges.xaml: the rank badge's shield geometry and per-age brushes.
                      Self-contained (it references only itself), so its place is free. -->
                 <ResourceDictionary Source="/Styles/Badges.xaml"/>
+                <!-- The Library's styles, which the window's XAML reaches with StaticResource. -->
+                <ResourceDictionary Source="/Styles/Library.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- ============================================================
@@ -60,7 +62,7 @@
                  here — WPF FontFamily doesn't understand "serif" /
                  "sans-serif" and throws at construction, which silently
                  nukes the whole ResourceDictionary load. -->
-            <FontFamily x:Key="DisplayFont">Cambria, Georgia</FontFamily>
+            <FontFamily x:Key="DisplayFont">pack://application:,,,/Aoe3ModLauncher;component/Assets/Fonts/#Source Serif 4, Cambria, Georgia</FontFamily>
 
             <!-- Body text — explicit Segoe UI (also the WPF default)
                  with Tahoma as a paranoid fallback. Single knob to

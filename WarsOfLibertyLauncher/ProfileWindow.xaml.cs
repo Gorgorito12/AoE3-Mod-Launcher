@@ -31,7 +31,19 @@ public partial class ProfileWindow : Window
     {
         InitializeComponent();
         ApplyStrings();
+        SizeChanged += (_, _) =>
+        {
+            ProfileRailColumn.Width = new GridLength(RailWidthFor(ActualWidth));
+            Resized?.Invoke();
+        };
     }
+
+    /// <summary>The page owner hears about a resize here: the shape of a section can change.</summary>
+    internal event Action? Resized;
+
+    /// <summary>The card's width (95): 220 on the smallest window, 268 at the design's, 300 above.</summary>
+    internal static double RailWidthFor(double windowWidth)
+        => windowWidth < 900 ? 220 : windowWidth < 1300 ? 268 : 300;
 
     /// <summary>
     /// The window's own static text. Called from the constructor and again from

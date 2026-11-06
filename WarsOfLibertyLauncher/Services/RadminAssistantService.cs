@@ -17,7 +17,7 @@ namespace WarsOfLibertyLauncher.Services;
 /// 3-second polling loop just keeps re-probing and the UI reacts.
 public enum RadminStage
 {
-    /// <summary>Radmin MSI isn't installed on this machine yet.</summary>
+    /// <summary>Radmin isn't installed on this machine yet.</summary>
     NotInstalled = 0,
 
     /// <summary>

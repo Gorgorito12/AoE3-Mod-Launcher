@@ -64,6 +64,15 @@ public static class RoomDemoData
         public required bool Competitive { get; init; }
         public required IReadOnlyList<Seat> Players { get; init; }
 
+        /// <summary>Paint the room as a quick match still waiting for its rival (design 96).</summary>
+        public bool QuickSearch { get; init; }
+
+        /// <summary>With <see cref="QuickSearch"/>: Radmin is not ready.</summary>
+        public bool QuickRadminMissing { get; init; }
+
+        /// <summary>With <see cref="QuickSearch"/>: the time shown on the clock.</summary>
+        public string QuickElapsed { get; init; } = "02:14";
+
         /// <summary>The server's win probability for the room (rating v3); null = none shown.</summary>
         public RoomOdds? Odds { get; init; }
 
@@ -194,8 +203,27 @@ public static class RoomDemoData
     /// <summary>Every sample, in the order the scenario list shows them.</summary>
     public static IReadOnlyList<Sample> All() => new[]
     {
-        OneVOne(), TwoVTwo(), Full(), LongName(),
+        OneVOne(), TwoVTwo(), Full(), LongName(), QuickSearching("quick", false, "02:14"),
+        QuickSearching("quick-radmin", true, "02:14"), QuickSearching("quick-long", false, "25:41"),
     };
+
+    /// <summary>The room a quick match waits in: a host alone, the code in the header.</summary>
+    private static Sample QuickSearching(string name, bool radminMissing, string elapsed)
+    {
+        var solo = OneVOne();
+        return new Sample
+        {
+            Name = name,
+            Code = "QV0M6C7Z",
+            RoomName = "Quick match · Wars of Liberty 1v1",
+            Seats = 2,
+            Competitive = true,
+            Players = solo.Players,
+            QuickSearch = true,
+            QuickRadminMissing = radminMissing,
+            QuickElapsed = elapsed,
+        };
+    }
 
     /// <summary>
     /// Resolve <c>--demo-room=&lt;name&gt;</c>. An unknown or missing name falls back to the

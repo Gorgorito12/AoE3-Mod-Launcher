@@ -7,47 +7,69 @@
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         ResizeMode="NoResize"
-        Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
   <Grid>
     <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
-    <controls:TitleBar x:Name="Chrome" Grid.Row="0"
+    <controls:TitleBar Grid.Row="0" x:Name="Chrome"
+                       TitleIcon="pack://application:,,,/Aoe3ModLauncher;component/AppIcon.png"
                        ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
-    <StackPanel Grid.Row="1" Margin="24,20">
-        <Grid Margin="0,0,0,20">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0"
-                       Text="&#x2139;"
-                       FontSize="{DynamicResource FontSizeHeading}"
-                       Foreground="{DynamicResource AccentBrush}"
-                       VerticalAlignment="Top"
-                       Margin="0,0,14,0"/>
-            <TextBlock Grid.Column="1"
-                       x:Name="BodyText"
-                       Foreground="{DynamicResource TextSecondary}"
-                       FontSize="{DynamicResource FontSizeBody}"
-                       TextWrapping="Wrap"/>
-        </Grid>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="NoButton"
-                    Click="NoButton_Click"
-                    Style="{StaticResource SidebarPrimaryButton}"
-                    Background="#3a3d44"
-                    Padding="18,6"
-                    MinWidth="110"
-                    Margin="0,0,10,0"/>
-            <Button x:Name="YesButton"
-                    Click="YesButton_Click"
-                    IsDefault="True"
-                    Style="{StaticResource SidebarPrimaryButton}"
-                    Padding="18,6"
-                    MinWidth="140"/>
+
+    <StackPanel Grid.Row="1" Margin="22,24,22,20">
+        <TextBlock x:Name="HeadlineText" Style="{StaticResource WindowHeadline}"/>
+        <TextBlock x:Name="BodyText" Style="{StaticResource WindowBody}" Margin="0,8,0,0"/>
+
+        <Border Style="{StaticResource WindowCard}" Padding="16,12" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock x:Name="WhatItDoesLabel" Style="{StaticResource WindowCardLabel}"/>
+                <StackPanel x:Name="StepsList"/>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource WindowField}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock x:Name="DestinationLabel" Style="{StaticResource WindowFieldLabel}"/>
+                <TextBlock x:Name="DestinationPath" Style="{StaticResource WindowPath}"
+                           Margin="0,5,0,0"/>
+                <TextBlock x:Name="DestinationSize"
+                           FontFamily="Consolas, Courier New, monospace"
+                           FontSize="{DynamicResource SetControlSize}"
+                           Foreground="{DynamicResource WindowMuted}"
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="SpaceWarning" Style="{StaticResource WindowNotice}"
+                Margin="0,14,0,0" Visibility="Collapsed">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource WindowNoticeMark}">
+                    <TextBlock Text="!" FontSize="11" FontWeight="Bold" Foreground="#0F1C2E"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <TextBlock Grid.Column="1" x:Name="SpaceWarningText"
+                           Style="{StaticResource WindowBody}"
+                           Foreground="{DynamicResource WindowNoticeTitle}"
+                           Margin="10,1,0,0"/>
+            </Grid>
+        </Border>
+
+        <TextBlock x:Name="NotNowNote"
+                   FontSize="{DynamicResource SetControlSize}"
+                   Foreground="{DynamicResource WindowFineText}"
+                   TextWrapping="Wrap"
+                   Margin="0,14,0,0"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button x:Name="NoButton" Style="{StaticResource WindowSecondaryButton}"
+                    MinWidth="112" IsCancel="True" Click="NoButton_Click"/>
+            <Button x:Name="YesButton" Style="{StaticResource WindowPrimaryButton}"
+                    MinWidth="136" Margin="8,0,0,0" Click="YesButton_Click"/>
         </StackPanel>
     </StackPanel>
   </Grid>

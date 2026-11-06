@@ -73,7 +73,6 @@ public partial class ModPropertiesDialog : Window
     // actual logic.
     private readonly Func<Task<UpdateService.CheckResult?>> _checkForUpdates;
     private readonly Action _openAoE3Folder;
-    private readonly Action _changeModFolder;
     private readonly Action _changeAoE3Folder;
     private readonly Action _openUserDataFolder;
     // Backup/restore return a localized result line (or null when cancelled /
@@ -126,7 +125,6 @@ public partial class ModPropertiesDialog : Window
         Action openRepair,
         Func<Task<UpdateService.CheckResult?>> checkForUpdates,
         Action openAoE3Folder,
-        Action changeModFolder,
         Action changeAoE3Folder,
         Action openUserDataFolder,
         Func<string?> createBackup,
@@ -165,7 +163,6 @@ public partial class ModPropertiesDialog : Window
         _openRepair = openRepair;
         _checkForUpdates = checkForUpdates;
         _openAoE3Folder = openAoE3Folder;
-        _changeModFolder = changeModFolder;
         _changeAoE3Folder = changeAoE3Folder;
         _openUserDataFolder = openUserDataFolder;
         _createBackup = createBackup;
@@ -216,7 +213,12 @@ public partial class ModPropertiesDialog : Window
         static void SetTip(System.Windows.FrameworkElement el, string key) => el.ToolTip = TooltipHelper.Wrap(Strings.Get(key));
 
         Title = Strings.Format("ModPropTitle", _profile.DisplayName ?? "");
-        TitleBarControl.Title = _profile.DisplayName ?? "";
+        // The bar's own title stays empty: this window's bar is a sentence (design 71).
+        HeaderPrefixText.Text = Strings.Get("ModPropTitlePrefix");
+        HeaderModName.Text = _profile.DisplayName ?? "";
+        ModFooterText.Text = Strings.Get("DlgSettingsAppliesInstantly");
+        ModFooterClose.Content = Strings.Get("BtnClose");
+        PaintModStrip();
         // (The neutral subtitle that used to sit under HeaderTitleText
         // was removed when the header was compacted to a single row —
         // the sidebar tabs already communicate "this is where you
@@ -240,6 +242,9 @@ public partial class ModPropertiesDialog : Window
         // "Name:" / "Author:" / "Website:" field labels are gone; the website moved to the
         // rail footer, where it identifies the mod rather than sitting in a data table.
         LblAboutSection.Text = Strings.Get("ModPropUpdatesSection");
+        LblStateSection.Text = Strings.Get("ModPropStateSection");
+        GeneralVerifyTitle.Text = Strings.Get("ModPropFilesRowTitle");
+        GeneralVerifyHint.Text = Strings.Get("ModPropFilesRowHint");
         LblVersion.Text = Strings.Get("ModPropInstalledLabel");
         StayOnVersionTitle.Text = Strings.Get("ModPropStayOnVersionShort");
         StayOnVersionWarning.Text = Strings.Get("ModPropStayOnVersionWarn");
@@ -260,27 +265,15 @@ public partial class ModPropertiesDialog : Window
         SetTip(InstallVersionBtn, "TipMpInstallVersion");
 
         // LOCAL FILES tab (49a)
-        LblActiveCopy.Text = Strings.Get("ModPropActiveCopy");
         ActiveCopyHint.Text = Strings.Get("ModPropActiveCopyHint");
-        LblTroubleHint.Text = Strings.Get("ModPropTroubleHint");
-        LblCopiesDesc.Text = Strings.Get("ModPropCopiesDesc");
-        LblCopiesLegendRemove.Inlines.Clear();
-        LblCopiesLegendRemove.Inlines.Add(new System.Windows.Documents.Run(Strings.Get("BtnRemoveFromList"))
-            { FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("MpTextBody") });
-        LblCopiesLegendRemove.Inlines.Add(new System.Windows.Documents.Run(" " + Strings.Get("ModPropCopiesLegendRemove")));
-        LblCopiesLegendUninstall.Inlines.Clear();
-        LblCopiesLegendUninstall.Inlines.Add(new System.Windows.Documents.Run(Strings.Get("BtnUninstallEllipsis"))
-            { FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("UiDangerText") });
-        LblCopiesLegendUninstall.Inlines.Add(new System.Windows.Documents.Run(" " + Strings.Get("ModPropCopiesLegendUninstall")));
+        LblCopiesIntro.Text = Strings.Get("ModPropFilesIntro");
         InstallNewCopyTitle.Text = Strings.Get("ModPropInstallCopyTitle");
         InstallNewCopyDesc.Text = Strings.Get("ModPropInstallCopyDesc");
-        AddExistingFolderTitle.Text = Strings.Get("ModPropAddFolderTitle");
-        AddExistingFolderDesc.Text = Strings.Get("ModPropAddFolderDesc");
-        LblModFolderDesc.Text = Strings.Get("ModPropModFolderDesc");
-        LblInstallPath.Text = Strings.Get("ModPropModFolderTitle");
+        InstallNewCopyBtn.Content = Strings.Get("ModPropInstallCopyBtn");
         LblAoe3PathTitle.Text = Strings.Get("ModPropAoe3FolderTitle");
         LblFindInstallTitle.Text = Strings.Get("ModPropFindInstallTitle");
         LblFindInstallDesc.Text = Strings.Get("ModPropFindInstallDesc");
+        AddExistingFolderBtn.Content = Strings.Get("ModPropChooseFolderBtn");
         LblTempSection.Text = Strings.Get("ModPropTempTitle");
         LblTempDesc.Text = Strings.Get("ModPropTempShortDesc");
         ClearTempBtn.Content = Strings.Get("BtnFreeSpace");
@@ -290,11 +283,9 @@ public partial class ModPropertiesDialog : Window
         SetTip(OpenFolderBtn, "TipMpOpenFolder");
         OpenAoE3FolderBtn.Content = Strings.Get("BtnOpen");
         SetTip(OpenAoE3FolderBtn, "TooltipMenuOpenAoE3Folder");
-        ChangeModFolderBtn.Content = Strings.Get("BtnChange");
-        SetTip(ChangeModFolderBtn, "TipMpChangeModFolder");
-        ChangeAoE3FolderBtn.Content = Strings.Get("BtnChange");
+        ChangeAoE3FolderBtn.Content = Strings.Get("BtnChangeEllipsis");
         SetTip(ChangeAoE3FolderBtn, "TooltipMenuSelectAoE3Folder");
-        SearchInstallBtn.Content = Strings.Get("SearchInstallButton");
+        SearchInstallBtn.Content = Strings.Get("ModPropSearchDisksBtn");
         SetTip(SearchInstallBtn, "TipSearchInstall");
         // The broad "find my install" search is meaningless for the stock game
         // (the launcher never installs it) — hide it there.
@@ -304,35 +295,27 @@ public partial class ModPropertiesDialog : Window
         SetTip(AddExistingFolderBtn, "TipMpAddExistingFolder");
         SetTip(InstallNewCopyBtn, "TooltipMenuInstallAnotherCopy");
         LblMaintenanceSection.Text = Strings.Get("ModPropMaintenanceSection");
-        VerifyBtn.Content = Strings.Get("BtnVerifyFiles");
+        VerifyBtn.Content = Strings.Get("ModPropVerifyBtn");
         SetTip(VerifyBtn, "TooltipMenuVerifyFiles");
         RepairBtn.Content = Strings.Get("BtnRepair");
         SetTip(RepairBtn, "TooltipMenuRepairInstall");
-        LblDiagnosticsSection.Text = Strings.Get("ModPropTroubleTitle");
-        ViewLogsBtn.Content = Strings.Get("ModPropViewLogs");
-        SetTip(ViewLogsBtn, "TooltipMenuViewLogs");
-        // Step 2 of "Something not working?" (handoff 50a) and the rail box that runs the
-        // same action from every section.
-        DiagStep2Title.Text = Strings.Get("ModPropDiagStep2Title");
-        DiagStep2Body.Text = Strings.Get("ModPropDiagStep2Body");
-        ShareDiagnosticsBtn.Content = ShareGlyph + " " + Strings.Get("ModPropShareDiagnostics");
-        RailDiagTag.Text = Strings.Get("ModPropRailProblems");
-        RailDiagCaption.Text = Strings.Get("ModPropShareDiagnostics");
+        RailDiagTag.Text = Strings.Get("ModPropShareDiagnostics");
+        RailDiagCaption.Text = Strings.Get("ModPropRailDiagBody");
+        RailDiagBox.Content = Strings.Get("ModPropRailCreateReport");
+        RailLogsBtn.Content = Strings.Get("ModPropRailLogs");
+        RailDiscordBtn.Content = Strings.Get("ModPropRailDiscord");
         SetTip(RailDiagBox, "TipMpShareDiagnostics");
-        // Ask on Discord: an outline button like View logs beside it. SupportLink still owns
-        // the destination, its full-URL tooltip and the open — only the look is this card's.
-        var support = Controls.SupportLink.BuildOutline("ModPropAskDiscord");
-        support.HorizontalAlignment = HorizontalAlignment.Stretch;
-        support.Height = 30;
-        SupportLinkHost.Content = support;
-        SetTip(ShareDiagnosticsBtn, "TipMpShareDiagnostics");
+        SetTip(RailLogsBtn, "TooltipMenuViewLogs");
         // What the search finds them by (handoff 50b-50c). Their captions are plain strings,
         // which the search never reads, so the caption goes in too — and BOTH languages,
-        // whatever the UI is set to, because the player types in their own.
-        Controls.SectionSearch.SetKeywords(ShareDiagnosticsBtn,
-            Controls.SectionSearch.KeywordsFor("ModPropShareDiagnostics", "SearchKwShareDiagnostics"));
-        Controls.SectionSearch.SetKeywords(ViewLogsBtn,
-            Controls.SectionSearch.KeywordsFor("ModPropViewLogs", "SearchKwViewLogs"));
+        // whatever the UI is set to, because the player types in their own. The Verify row
+        // carries them as well: it is the row that sends you to the rail, and a query that
+        // leaves every section empty would read as "nothing found" beside a list of results.
+        var diagnosticsWords = Controls.SectionSearch.KeywordsFor("ModPropShareDiagnostics", "SearchKwShareDiagnostics");
+        var logWords = Controls.SectionSearch.KeywordsFor("ModPropViewLogs", "SearchKwViewLogs");
+        Controls.SectionSearch.SetKeywords(RailDiagBox, diagnosticsWords);
+        Controls.SectionSearch.SetKeywords(RailLogsBtn, logWords);
+        Controls.SectionSearch.SetKeywords(GeneralVerifyRow, diagnosticsWords + " " + logWords);
         UninstallBtn.Content = Strings.Get("BtnUninstallEllipsis");
         SetTip(UninstallBtn, "TooltipMenuUninstall");
 
@@ -341,6 +324,7 @@ public partial class ModPropertiesDialog : Window
         // label ("Open" / "Backup" / "Restore") because the long
         // text already tells the user what the action does.
         LblUserDataLocation.Text = Strings.Get("ModPropUserDataLocation");
+        LblUserDataPathTitle.Text = Strings.Get("ModPropUserDataPathTitle");
         // The path IS the location row now, so its title and description are gone; the
         // backups are a real list, so "Restore" moved onto each of them.
         OpenUserDataFolderBtn.Content = Strings.Get("BtnOpen");
@@ -351,20 +335,26 @@ public partial class ModPropertiesDialog : Window
         LblImportTitle.Text = Strings.Get("ModPropImportTitle");
         // Default; LoadUserData() replaces it with the real list or "none yet".
         LblRestoreBackupDesc.Text = Strings.Get("ModPropRestoreNone");
+        LblRestoreBackupHint.Text = Strings.Get("ModPropRestoreNoneHint");
 
         // LANGUAGE tab
-        LblHumanGamesTitle.Text = Strings.Get("ModPropHumanGamesTitle");
-        LblHumanGamesHint.Text = Strings.Get("ModPropHumanGamesHint");
-        LblStatsSectionTitle.Text = Strings.Get("ModPropStatsTitle");
-        LblStatsSectionHint.Text = Strings.Get("ModPropStatsHint");
+        LblHumanGamesTitle.Text = Strings.Get("ModStatsPeopleLabel");
+        LblHumanGamesHint.Text = Strings.Get("ModStatsPeopleNote");
+        LblHumanGamesHint.ToolTip = TooltipHelper.Wrap(Strings.Get("ModPropHumanGamesHint"));
+        LblStatsSectionTitle.Text = Strings.Get("ModStatsAiLabel");
+        LblStatsSectionHint.Text = Strings.Get("ModStatsAiNote");
+        LblStatsSectionHint.ToolTip = TooltipHelper.Wrap(Strings.Get("ModPropStatsHint"));
+        StatsEmptyHint.Text = Strings.Get("ModStatsEmptyTitle");
+        StatsEmptyDesc.Text = Strings.Get("ModStatsEmptyHint");
         LblDecksSectionHint.Text = Strings.Get("ModPropDecksHint");
+        LblDeckCity.Text = Strings.Get("ModPropDeckCityLabel");
+        LblDeckGroup.Text = Strings.Get("ModPropDeckGroupLabel");
         LblAddonsSectionHint.Text = Strings.Get("AddonsSectionHint");
         ImportAddonBtn.Content = Strings.Get("AddonImportButton");
         LblAddonsGroupCatalog.Text = Strings.Get("AddonsGroupCatalog");
         LblAddonsGroupCatalogHint.Text = Strings.Get("AddonsGroupCatalogHint");
         LblAddonsGroupImported.Text = Strings.Get("AddonsGroupImported");
         LblAddonsGroupImportedHint.Text = Strings.Get("AddonsGroupImportedHint");
-        AddonsFooterNote.Text = Strings.Get("AddonsFooterNote");
         LblLanguageDesc.Text = Strings.Get("ModPropLanguageDesc");
         RefreshTranslationsBtn.Content = Strings.Get("DlgLangRefreshButton");
         LblLanguageCurrent.Text = Strings.Get("ModPropLanguageCurrent");
@@ -391,6 +381,16 @@ public partial class ModPropertiesDialog : Window
         var identityBrush = LoadIconBrush(_profile);
         if (identityBrush != null) ModIdentityIcon.Background = identityBrush;
 
+        // Which copy these settings are about, only when there is more than one to mean.
+        var copies = _config.GetState(_profile.Id);
+        string? copy = copies.HasMultipleInstalls && !string.IsNullOrWhiteSpace(copies.InstallPath)
+            ? System.IO.Path.GetFileName(copies.InstallPath.TrimEnd('\\', '/'))
+            : null;
+        HeaderCopyText.Text = copy == null ? "" : Strings.Format("ModPropCopyChip", copy);
+        HeaderCopyBadge.Visibility = copy == null ? Visibility.Collapsed : Visibility.Visible;
+        LblStateCopy.Text = copy == null ? "" : Strings.Format("ModPropCopyChip", copy);
+        GeneralVerifyRow.Visibility = _profile.IsStockGame ? Visibility.Collapsed : Visibility.Visible;
+
         ValName.Text = _profile.DisplayName ?? "";
         ValAuthor.Text = string.IsNullOrWhiteSpace(_profile.Author) ? "—" : _profile.Author;
         var ver = _service.CurrentVersion?.Ver;
@@ -414,7 +414,10 @@ public partial class ModPropertiesDialog : Window
         // The tooltip is set explicitly because the painted text is no longer the datum;
         // RevealText leaves an element that already has one alone (see its BuildRevealFor).
         var site = _profile.OfficialWebsite ?? "";
-        RailSiteText.Text = SafeUrl.CompactForDisplay(site);
+        var shownSite = SafeUrl.CompactForDisplay(site);
+        RailSiteText.Text = string.IsNullOrEmpty(shownSite) ? "" : shownSite + " ↗";
+        RailSiteBtn.IsEnabled = !string.IsNullOrWhiteSpace(site);
+        _railSite = site;
         RailSiteText.ToolTip = string.IsNullOrWhiteSpace(site)
             ? null
             : TooltipHelper.Wrap(site);
@@ -560,11 +563,10 @@ public partial class ModPropertiesDialog : Window
         ActiveCopyName.Text = installed ? DeriveLeaf(path) : (_profile.DisplayName ?? "");
         var version = _config.GetState(_profile.Id).LastKnownVersion;
         bool hasVersion = installed && !string.IsNullOrWhiteSpace(version);
-        ActiveCopyVersion.Text = hasVersion ? VersionLabel(version) : "";
-        ActiveCopyVersion.Visibility = hasVersion ? Visibility.Visible : Visibility.Collapsed;
-        ActiveCopyDot.Visibility = hasVersion ? Visibility.Visible : Visibility.Collapsed;
-        var icon = LoadIconBrush(_profile);
-        ActiveCopyIcon.Background = icon ?? (Brush)FindResource("UiIconTileBg");
+        while (ActiveCopyHead.Children.Count > 1) ActiveCopyHead.Children.RemoveAt(1);
+        if (hasVersion) ActiveCopyHead.Children.Add(Controls.ModChips.Version(VersionLabel(version)));
+        if (installed)
+            ActiveCopyHead.Children.Add(Controls.ModChips.Status(Strings.Get("ModPropCopyActiveBadge"), "#4FD68A"));
 
         // The AoE3 folder, resolved the CONFIG-AWARE way — the bare detector misses a
         // non-standard install even after the user pointed the picker straight at it.
@@ -583,7 +585,6 @@ public partial class ModPropertiesDialog : Window
         // (their IsEnabled reflects the current detection state).
         OpenFolderBtn.IsEnabled = installed;
         OpenAoE3FolderBtn.IsEnabled = true;   // Always tries; warns if not found.
-        ChangeModFolderBtn.IsEnabled = true;
         ChangeAoE3FolderBtn.IsEnabled = true;
         VerifyBtn.IsEnabled = installed;
         // Repair re-lays the mod from its payload, so a mod the launcher does not install
@@ -599,8 +600,6 @@ public partial class ModPropertiesDialog : Window
         }
         AddExistingFolderBtn.IsEnabled = true; // adopting an existing folder is always allowed
         InstallNewCopyBtn.IsEnabled = installed;
-        ViewLogsBtn.IsEnabled = true;          // Logs are always available.
-        ShareDiagnosticsBtn.IsEnabled = true;  // Bundle is always available.
         UninstallBtn.IsEnabled = installed;
 
         // Stock Age of Empires III is detect-only: the launcher never
@@ -624,165 +623,89 @@ public partial class ModPropertiesDialog : Window
             CopiesSection.Visibility = Visibility.Collapsed;
             MaintenanceGroup.Visibility = Visibility.Collapsed;
             FindInstallRow.Visibility = Visibility.Collapsed;
-            ModFolderRow.BorderThickness = new Thickness(0);
+            Aoe3FolderRow.BorderThickness = new Thickness(0);
+            ActiveCopyCard.BorderThickness = new Thickness(0);
+            ActiveCopyCard.CornerRadius = new CornerRadius(11);
         }
 
         LoadManageInstalls();
-        LayoutLocalFiles();
-    }
-
-    // ---------------------------------------------------------------------------------
-    // LOCAL FILES layout. The two pairs are ALWAYS side by side (maintainer's call: the
-    // cards never stack). Half and half, not the reference's 1.35 : 1 — measured in
-    // Spanish, the troubleshooting card needs "Ver registros | Compartir diagnóstico" on
-    // one line and the active card needs its three buttons on one line, and an even split
-    // is the one that gives both what they need at the window's default width. If the
-    // window is narrowed by hand, content wraps INSIDE its card; nothing clips.
-    // ---------------------------------------------------------------------------------
-
-    private void LocalFilesPanel_SizeChanged(object sender, SizeChangedEventArgs e) => LayoutLocalFiles();
-
-    private void LayoutLocalFiles()
-    {
-        PlacePair(LocalTopColA, LocalTopGap, LocalTopColB, ActiveCopyCard, TroubleCard, sideBySide: true);
-        // The troubleshooting card never gets narrower than its own buttons need: its Discord
-        // pill is SupportLink's and cannot wrap or trim, so a star share smaller than that
-        // clipped it ("Pregunta e…"). The active card takes what is left and wraps inside.
-        LocalTopColB.MinWidth = TroubleCardNeededWidth();
-        // A hidden maintenance group (stock game) leaves the folders alone on the row.
-        bool maintenance = MaintenanceGroup.Visibility == Visibility.Visible;
-        PlacePair(LocalBottomColA, LocalBottomGap, LocalBottomColB, MaintenanceGroup, FoldersGroup,
-            sideBySide: maintenance);
-    }
-
-    /// <summary>The ⇪ in front of "Share diagnostics", on the button and in the rail box.</summary>
-    private const string ShareGlyph = "⇪";
-
-    /// <summary>The narrowest the troubleshooting card may get: its widest single button plus
-    /// the card's padding and rim — and for Share diagnostics, the teal block's own padding and
-    /// rim as well. View logs and Discord are NOT required to fit side by side here: they stack
-    /// inside the card on their own (TroubleGrid_SizeChanged), which is what leaves the
-    /// active-copy card enough room at the window's minimum width.</summary>
-    private double TroubleCardNeededWidth()
-    {
-        double Natural(UIElement e)
-        {
-            e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            return e.DesiredSize.Width;
-        }
-        double pill = SupportLinkHost.Content is UIElement p ? Natural(p) : 0;
-        var blockPad = DiagStepBlock.Padding;
-        var blockRim = DiagStepBlock.BorderThickness;
-        double share = Natural(ShareDiagnosticsBtn)
-                       + blockPad.Left + blockPad.Right + blockRim.Left + blockRim.Right;
-        double widest = Math.Max(Math.Max(pill, Natural(ViewLogsBtn)), share);
-        var pad = TroubleCard.Padding;
-        var rim = TroubleCard.BorderThickness;
-        return widest + pad.Left + pad.Right + rim.Left + rim.Right;
     }
 
     /// <summary>
-    /// View logs and Ask on Discord share a row only when both captions fit half of it (minus
-    /// the 8-px gap); otherwise they stack. Share diagnostics is no longer part of this: it has
-    /// a block of its own above, at full width.
-    /// </summary>
-    private void TroubleGrid_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        if (!e.WidthChanged) return;
-        double gap = TroubleGap.Width.Value;
-        double cell = (TroubleGrid.ActualWidth - gap) / 2;
-        double need = 0;
-        foreach (var b in new UIElement?[] { ViewLogsBtn, SupportLinkHost.Content as UIElement })
-        {
-            if (b == null) continue;
-            b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            need = Math.Max(need, b.DesiredSize.Width);
-        }
-        bool split = need <= cell;
-        Grid.SetColumnSpan(ViewLogsBtn, split ? 1 : 3);
-        Grid.SetRow(SupportLinkHost, split ? 0 : 1);
-        Grid.SetColumn(SupportLinkHost, split ? 2 : 0);
-        Grid.SetColumnSpan(SupportLinkHost, split ? 1 : 3);
-        SupportLinkHost.Margin = new Thickness(0, split ? 0 : 8, 0, 0);
-    }
-
-    /// <summary>Uninstall… sits at the right edge while the three buttons share a line, and
-    /// simply wraps with the others when they do not — a margin, not a DockPanel, because a
-    /// docked button is never moved to the next line and gets clipped instead.</summary>
-    private void ActiveActionsWrap_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        if (!e.WidthChanged) return;
-        double Natural(FrameworkElement b)
-        {
-            if (b.Visibility != Visibility.Visible) return 0;
-            b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            return b.DesiredSize.Width - b.Margin.Left - b.Margin.Right;
-        }
-        double open = Natural(OpenFolderBtn), repair = Natural(RepairBtn), uninstall = Natural(UninstallBtn);
-        double left = open + (open > 0 ? 8 : 0) + repair + (repair > 0 ? 8 : 0);
-        double slack = ActiveActionsWrap.ActualWidth - left - uninstall - 1;
-        var m = UninstallBtn.Margin;
-        UninstallBtn.Margin = new Thickness(slack >= 0 ? slack : 0, m.Top, m.Right, m.Bottom);
-    }
-
-    private static void PlacePair(ColumnDefinition a, ColumnDefinition gap, ColumnDefinition b,
-        FrameworkElement first, FrameworkElement second, bool sideBySide)
-    {
-        a.Width = new GridLength(1, GridUnitType.Star);
-        gap.Width = new GridLength(sideBySide ? 12 : 0);
-        b.Width = sideBySide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-        Grid.SetColumn(first, 0); Grid.SetRow(first, 0);
-        Grid.SetColumn(second, sideBySide ? 2 : 0); Grid.SetRow(second, 0);
-    }
-
-    /// <summary>
-    /// Build the "Manage installs" list: one card per registered install (the active one
-    /// first, then each inactive copy) with an editable name, its path + version, and
-    /// Active/Switch/Remove actions. Reuses <see cref="PathDisplay"/> for unique labels and
-    /// compact paths. Skipped for the stock game (no copies).
+    /// The copies list of FILES (design 71): the copy in use is the card's first row, in XAML
+    /// with its own actions, and each other copy is built here below it. Skipped for the stock
+    /// game, which has no copies.
     /// </summary>
     private void LoadManageInstalls()
     {
         ManageInstallsHost.Children.Clear();
-        if (_profile.IsStockGame) return;
+        if (_pulseActiveCopy && !_profile.IsStockGame)
+        {
+            _pulseActiveCopy = false;
+            PulseActiveRow();
+        }
+        NewerCopyNotice.Visibility = Visibility.Collapsed;
+        LblCopiesIntro.Visibility = Visibility.Collapsed;
+        if (_profile.IsStockGame)
+        {
+            LblManageInstallsDesc.Text = "";
+            return;
+        }
 
         var st = _config.GetState(_profile.Id);
         // Name = the real FOLDER name (ignore any stored custom Label — renaming was removed
         // because a label that doesn't match the folder is misleading).
-        var rows = new List<(string Id, string Label, string Path, string Version, bool IsActive)>
-        {
-            (st.ActiveInstallId, DeriveLeaf(st.InstallPath), st.InstallPath, st.LastKnownVersion, true),
-        };
-        foreach (var o in st.OtherInstalls)
-            rows.Add((o.Id, DeriveLeaf(o.InstallPath), o.InstallPath, o.LastKnownVersion, false));
+        var others = st.OtherInstalls
+            .OrderBy(o => o.InstallPath, StringComparer.OrdinalIgnoreCase)
+            .Select(o => (o.Id, Label: DeriveLeaf(o.InstallPath), Path: o.InstallPath, Version: o.LastKnownVersion))
+            .ToList();
 
-        // STABLE ORDER by install folder (not active-first): switching the active copy
-        // must NOT reorder the list — otherwise the chosen card jumps to the top, which
-        // reads as abrupt/ambiguous. With a fixed order only the gold highlight moves to
-        // the clicked card in place (animated below). Ordinal so it's deterministic.
-        rows.Sort((a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
+        // The folder names have to be told apart across the whole card, the one in use included.
+        var named = new List<(string Label, string Path)> { (DeriveLeaf(st.InstallPath), st.InstallPath) };
+        named.AddRange(others.Select(o => (o.Label, o.Path)));
+        var labels = PathDisplay.DisambiguateLabels(named);
+        if (!string.IsNullOrEmpty(st.InstallPath)) ActiveCopyName.Text = labels[0];
 
-        var uniqueLabels = PathDisplay.DisambiguateLabels(
-            rows.Select(r => (r.Label, r.Path)).ToList());
-
-        for (int i = 0; i < rows.Count; i++)
+        for (int i = 0; i < others.Count; i++)
             ManageInstallsHost.Children.Add(BuildCopyRow(
-                rows[i].Id, uniqueLabels[i], rows[i].Path, rows[i].Version, rows[i].IsActive,
-                isLast: i == rows.Count - 1));
+                others[i].Id, labels[i + 1], others[i].Path, others[i].Version));
 
-        LblManageInstallsDesc.Text = rows.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var count = others.Count + 1;
+        LblManageInstallsDesc.Text = count == 1
+            ? Strings.Get("ModPropCopiesNoteOne")
+            : Strings.Format("ModPropCopiesNote", count);
+        LblCopiesIntro.Visibility = count > 1 ? Visibility.Visible : Visibility.Collapsed;
 
-        // Consume the "just switched" marker so a plain RefreshData does not re-animate.
-        _recentlyActivatedInstallId = null;
+        var ahead = CopyVersions.NewestAhead(st.LastKnownVersion,
+            others.Select((o, i) => (labels[i + 1], o.Version)));
+        if (ahead is { } newer)
+        {
+            NewerCopyText.Text = Strings.Format("ModPropCopyNewer", newer.Label, VersionLabel(newer.Version));
+            NewerCopyNotice.Visibility = Visibility.Visible;
+        }
     }
 
-    /// <summary>
-    /// Id of the copy the user just made active via "Switch", so the rebuilt list can
-    /// play a one-shot gold-tint pulse on that card (the highlight "moves" to it in
-    /// place instead of the card jumping to the top). Set before the switch await,
-    /// consumed + cleared by <see cref="LoadManageInstalls"/>.
-    /// </summary>
-    private string? _recentlyActivatedInstallId;
+    private bool _pulseActiveCopy;
+
+    /// <summary>The row in use keeps the mod's fill, so its overlay fades instead of its background.</summary>
+    private void PulseActiveRow()
+    {
+        var accent = ((SolidColorBrush)FindResource("ModAccent")).Color;
+        ActiveCopyPulse.Opacity = 0.55;
+        ActiveCopyPulse.Background = new SolidColorBrush(accent);
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            ActiveCopyPulse.Opacity = 0;
+            return;
+        }
+        ActiveCopyPulse.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation
+        {
+            From = 0.55,
+            To = 0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(1600)),
+            EasingFunction = new System.Windows.Media.Animation.QuadraticEase(),
+        });
+    }
 
     /// <summary>"1.2.0e" → "v1.2.0e", the way the title bar pill writes it; a tag that
     /// is not a number (a date, a word) is shown as it is.</summary>
@@ -795,206 +718,149 @@ public partial class ModPropertiesDialog : Window
         return string.IsNullOrEmpty(leaf) ? (path ?? "") : leaf;
     }
 
-    /// <summary>Reads a resource brush's <see cref="Color"/>, falling back if it's
-    /// missing or not a solid colour (so the switch pulse can never throw).</summary>
-    private Color ResourceColor(string key, Color fallback)
+    /// <summary>A copy that is not in use: its name, version and folder, "Use this one", and
+    /// the rest in a menu so that uninstalling is never one misclick away.</summary>
+    private FrameworkElement BuildCopyRow(string id, string label, string path, string version)
     {
-        try { return TryFindResource(key) is SolidColorBrush b ? b.Color : fallback; }
-        catch { return fallback; }
-    }
-
-    /// <summary>
-    /// One row of COPIES OF THIS MOD (49a). The active copy reads as active at a glance —
-    /// a filled circle, a soft blue fill, a 3 px bar on the left, the ACTIVE badge and
-    /// "Opens with Play" — and the rim never changes thickness, so nothing shifts when the
-    /// active copy moves. Every inactive copy spells out its three actions: Make active,
-    /// Remove from list (forgets the registration, keeps the files) and Uninstall… (removes
-    /// that copy from disk through the same window and service as the active one).
-    /// </summary>
-    private FrameworkElement BuildCopyRow(
-        string id, string label, string path, string version, bool isActive, bool isLast)
-    {
-        var outer = new Grid
-        {
-            Background = isActive ? (Brush)FindResource("UiActiveRowBg") : Brushes.Transparent,
-        };
-
-        // "The highlight moved here": the copy the user just made active starts a step
-        // brighter and settles, so the eye follows the change (the order is fixed by folder).
-        if (isActive && id == _recentlyActivatedInstallId)
-        {
-            var from = ResourceColor("MpActionSoftBg", Color.FromArgb(0x29, 0x2F, 0x7F, 0xE0));
-            var to = ResourceColor("UiActiveRowBg", Color.FromArgb(0x17, 0x2F, 0x7F, 0xE0));
-            var pulse = new SolidColorBrush(from);
-            outer.Background = pulse;
-            outer.Loaded += (_, _) =>
-            {
-                var anim = new System.Windows.Media.Animation.ColorAnimation
-                {
-                    To = to,
-                    Duration = new Duration(TimeSpan.FromMilliseconds(450)),
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase
-                    {
-                        EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut,
-                    },
-                };
-                pulse.BeginAnimation(SolidColorBrush.ColorProperty, anim);
-            };
-        }
-
-        var seam = new Border
-        {
-            BorderBrush = (Brush)FindResource("UiRimSeam"),
-            BorderThickness = new Thickness(0, 0, 0, isLast ? 0 : 1),
-            Padding = new Thickness(14, 12, 14, 12),
-            SnapsToDevicePixels = true,
-        };
-        outer.Children.Add(seam);
-        if (isActive)
-        {
-            outer.Children.Add(new Border
-            {
-                Width = 3,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Background = (Brush)FindResource("MpAction"),
-            });
-        }
-
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(35) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        seam.Child = grid;
 
-        // The radio circle: filled for the active copy, empty for the rest.
-        var radio = new Grid { Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Left,
-                               VerticalAlignment = VerticalAlignment.Center };
-        radio.Children.Add(new System.Windows.Shapes.Ellipse
-        {
-            Stroke = (Brush)FindResource(isActive ? "MpAction" : "UiRadioIdleRim"),
-            StrokeThickness = isActive ? 2 : 1.5,
-        });
-        if (isActive)
-            radio.Children.Add(new System.Windows.Shapes.Ellipse
-            {
-                Width = 8, Height = 8,
-                Fill = (Brush)FindResource("MpAction"),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-        grid.Children.Add(radio);
-
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var nameLine = new DockPanel { LastChildFill = true };
-        if (isActive)
-        {
-            var badge = new Border
-            {
-                Style = (Style)FindResource("SetBadge"),
-                Background = (Brush)FindResource("UiNavCountBg"),
-                Padding = new Thickness(7, 3, 7, 3),
-                Margin = new Thickness(8, 0, 0, 0),
-                Child = new TextBlock
-                {
-                    Text = Strings.Get("ModPropCopyActiveBadge"),
-                    FontSize = (double)FindResource("SetTinySize"),
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)FindResource("MpActionText"),
-                },
-            };
-            DockPanel.SetDock(badge, Dock.Right);
-            nameLine.Children.Add(badge);
-        }
-        nameLine.Children.Add(new TextBlock
+        var head = new WrapPanel();
+        head.Children.Add(new TextBlock
         {
             Text = label,
-            FontSize = (double)FindResource("FontSizeCaption"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource(isActive ? "MpTextHeading" : "UiTextStrong"),
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            Style = (Style)FindResource("SetRowTitle"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
         });
-        // The badge must follow the name, not sit at the far edge: a DockPanel docks it to
-        // the right of whatever width the name leaves, so keep the pair left-aligned.
-        nameLine.HorizontalAlignment = HorizontalAlignment.Left;
-        text.Children.Add(nameLine);
+        if (!string.IsNullOrWhiteSpace(version))
+            head.Children.Add(Controls.ModChips.Version(VersionLabel(version)));
+
         var pathLine = new TextBlock
         {
-            FontFamily = (FontFamily)FindResource("MonoFont"),
-            FontSize = (double)FindResource("SetMonoSize"),
-            Foreground = (Brush)FindResource("UiTextDim"),
-            Margin = new Thickness(0, 3, 0, 0),
+            Style = (Style)FindResource("SetMonoValue"),
+            Foreground = (Brush)FindResource("WindowSoftText"),
+            Margin = new Thickness(0, 5, 0, 0),
         };
-        // Shortened in the middle to the width it actually gets, so the copy's own folder —
-        // the part that tells two copies apart — is never the part that is cut.
-        MiddlePathText.Bind(pathLine, path, string.IsNullOrEmpty(version) ? "" : $" · {VersionLabel(version)}");
+        MiddlePathText.Bind(pathLine, path);
+
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 24, 0) };
+        text.Children.Add(head);
         text.Children.Add(pathLine);
-        Grid.SetColumn(text, 1);
         grid.Children.Add(text);
 
-        FrameworkElement right;
-        if (isActive)
+        var use = new Button
         {
-            right = new TextBlock
-            {
-                Text = Strings.Get("ModPropCopyOpensWithPlay"),
-                FontSize = (double)FindResource("SetDescSize"),
-                Foreground = (Brush)FindResource("MpLinkText"),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(13, 0, 0, 0),
-            };
-        }
-        else
+            Style = (Style)FindResource("ModActionButton"),
+            Content = Strings.Get("BtnMakeActive"),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(use, "CopyUse_" + id);
+        use.Click += async (_, _) =>
         {
-            var actions = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(13, 0, 0, 0),
-            };
-            Button Make(string styleKey, string captionKey, double min)
-            {
-                var b = new Button
-                {
-                    Style = (Style)FindResource(styleKey),
-                    Content = Strings.Get(captionKey),
-                    Height = 30,
-                    MinWidth = min,
-                    Padding = new Thickness(12, 0, 12, 0),
-                    FontSize = (double)FindResource("SetDescSize"),
-                    Margin = new Thickness(7, 0, 0, 0),
-                };
-                return b;
-            }
-            var makeActive = Make("SetAccentOutlineButton", "BtnMakeActive", 104);
-            makeActive.Margin = new Thickness(0);
-            makeActive.Click += async (_, _) =>
-            {
-                _recentlyActivatedInstallId = id;
-                if (_switchInstall != null) await _switchInstall(id);
-            };
-            var remove = Make("SetGhostButton", "BtnRemoveFromList", 128);
-            remove.ToolTip = TooltipHelper.Wrap(Strings.Get("RemoveInstallCopy"));
-            remove.Click += (_, _) => _removeInstall?.Invoke(id);
-            var uninstall = Make("SetDangerOutlineButton", "BtnUninstallEllipsis", 96);
-            uninstall.ToolTip = TooltipHelper.Wrap(Strings.Get("TipUninstallCopy"));
-            uninstall.IsEnabled = _uninstallCopy != null;
-            uninstall.Click += (_, _) =>
-            {
-                // The Properties window stays open: the uninstall window opens over it.
-                _ = _uninstallCopy?.Invoke(id);
-            };
-            actions.Children.Add(makeActive);
-            actions.Children.Add(remove);
-            actions.Children.Add(uninstall);
-            right = actions;
-        }
-        right.Tag = "copy-actions";
-        Grid.SetColumn(right, 2);
-        grid.Children.Add(right);
+            _pulseActiveCopy = true;
+            if (_switchInstall != null) await _switchInstall(id);
+        };
 
-        return outer;
+        var more = new Button
+        {
+            Style = (Style)FindResource("ModActionButton"),
+            Content = "⋯",
+            MinWidth = 0,
+            Width = 32,
+            Padding = new Thickness(0),
+            FontWeight = FontWeights.Bold,
+            ToolTip = TooltipHelper.Wrap(Strings.Get("ModPropMoreOptions")),
+        };
+        System.Windows.Automation.AutomationProperties.SetName(more, Strings.Get("ModPropMoreOptions"));
+        System.Windows.Automation.AutomationProperties.SetAutomationId(more, "CopyMore_" + id);
+        more.Click += (_, _) => BuildCopyMenu(more, id, label, path, version).IsOpen = true;
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        actions.Children.Add(use);
+        actions.Children.Add(more);
+        Grid.SetColumn(actions, 1);
+        grid.Children.Add(actions);
+
+        var row = new Border { Style = (Style)FindResource("SetRow"), Child = grid };
+        if (id == _copyToHighlight) Pulse(row);
+        return row;
+    }
+
+    /// <summary>The copy that was just added or put in use, so the eye can follow it: the list
+    /// keeps the one in use on top, so a copy changes place when it is chosen.</summary>
+    private string? _copyToHighlight;
+
+    /// <summary>A finite fade from the mod's colour. It ends on its own and needs no clock kept.</summary>
+    private void Pulse(Border row)
+    {
+        var settled = (row.Background as SolidColorBrush)?.Color ?? Colors.Transparent;
+        var start = ((SolidColorBrush)FindResource("ModAccent")).Color;
+        var brush = new SolidColorBrush(Color.FromArgb(0x66, start.R, start.G, start.B));
+        row.Background = brush;
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            Dispatcher.BeginInvoke(() => row.ClearValue(Border.BackgroundProperty),
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            return;
+        }
+        var fade = new System.Windows.Media.Animation.ColorAnimation
+        {
+            To = Color.FromArgb(0, start.R, start.G, start.B),
+            Duration = new Duration(TimeSpan.FromMilliseconds(1600)),
+            EasingFunction = new System.Windows.Media.Animation.QuadraticEase(),
+        };
+        fade.Completed += (_, _) => row.ClearValue(Border.BackgroundProperty);
+        row.Loaded += (_, _) => brush.BeginAnimation(SolidColorBrush.ColorProperty, fade);
+    }
+
+    /// <summary>The ⋯ menu of a copy. Uninstall opens the same window as the copy in use's
+    /// button, over this one; "Remove from list" only forgets it, and the files stay.</summary>
+    internal ContextMenu BuildCopyMenu(Button owner, string id, string label, string path, string version)
+    {
+        var title = string.IsNullOrWhiteSpace(version) ? label : $"{label} · {VersionLabel(version)}";
+        var menu = new ContextMenu
+        {
+            Style = (Style)FindResource("LibraryMenu"),
+            PlacementTarget = owner,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            VerticalOffset = 4,
+        };
+        menu.Items.Add(new MenuItem { Header = title, Style = (Style)FindResource("LibraryMenuHeader") });
+
+        MenuItem Row(string caption, Action action, bool enabled = true)
+        {
+            var item = new MenuItem
+            {
+                Header = caption,
+                Style = (Style)FindResource("LibraryMenuItem"),
+                IsEnabled = enabled,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(item, caption);
+            item.Click += (_, _) => action();
+            return item;
+        }
+
+        menu.Items.Add(Row(Strings.Get("ModPropOpenFolder"), () => OpenCopyFolder(path), Directory.Exists(path)));
+        menu.Items.Add(Row(Strings.Get("BtnRemoveFromList"), () => _removeInstall?.Invoke(id)));
+        menu.Items.Add(new Separator { Style = (Style)FindResource("LibraryMenuSeparator") });
+        var uninstall = Row(Strings.Get("BtnUninstallEllipsis"), () => _ = _uninstallCopy?.Invoke(id), _uninstallCopy != null);
+        uninstall.SetResourceReference(ForegroundProperty, "UiDangerText");
+        menu.Items.Add(uninstall);
+        return menu;
+    }
+
+    private static void OpenCopyFolder(string path)
+    {
+        try
+        {
+            Services.HarnessMode.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ModPropertiesDialog: could not open a copy's folder: {ex.Message}");
+        }
     }
 
     private void LoadUserData()
@@ -1100,7 +966,7 @@ public partial class ModPropertiesDialog : Window
             var restore = new Button
             {
                 Content = Strings.Get("ModPropRestoreBtn"),
-                Style = (Style)FindResource("SetActionButtonSm"),
+                Style = (Style)FindResource("ModActionButton"),
                 IsEnabled = installed && !_modBusy,
             };
             // Every row restores the SAME way the single button did — the dialog owns no
@@ -1111,8 +977,7 @@ public partial class ModPropertiesDialog : Window
 
             BackupsList.Children.Add(new Border
             {
-                Style = (Style)FindResource(
-                    i == backups.Count - 1 ? "SetActionRowLast" : "SetActionRow"),
+                Style = (Style)FindResource(i == backups.Count - 1 ? "SetRowLast" : "SetRow"),
                 Child = grid,
             });
         }
@@ -1193,7 +1058,7 @@ public partial class ModPropertiesDialog : Window
 
         // English (default) — always available.
         LanguageCardList.Children.Add(BuildLanguageCard(
-            "🌐", Strings.Get("MenuLangEnglish"), "", null, "",
+            Strings.Get("MenuLangEnglish"), "", null, "",
             isActive: string.IsNullOrEmpty(activeId), blocked: false, compatible: false,
             onUse: () => _revertToEnglish?.Invoke()));
 
@@ -1258,12 +1123,14 @@ public partial class ModPropertiesDialog : Window
                     && !string.IsNullOrEmpty(entry.ContentHash)
                     && !string.Equals(entry.ContentHash, activeHash, StringComparison.OrdinalIgnoreCase);
                 LanguageCardList.Children.Add(BuildLanguageCard(
-                    LanguageFlag(entry.Id), entry.Name, entry.Author, entry.CompatibleWith, entry.Version,
+                    entry.Name, entry.Author, entry.CompatibleWith, entry.Version,
                     isActive, blocked, compatible, () => _applyTranslation?.Invoke(captured),
                     entry, canUpdate));
             }
         }
 
+        DropLastSeam(LanguageCardList);
+        LanguageEmptyHint.Text = Strings.Get("ModPropNoTranslations");
         LanguageEmptyHint.Visibility = cards.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
 
         // "In use" above is the CONFIG's word for it. Ask the disk too, off the UI thread (it
@@ -1339,10 +1206,12 @@ public partial class ModPropertiesDialog : Window
 
     private FrameworkElement BuildSourceRow(TranslationSourceRow row)
     {
-        var text = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
-        var title = new TextBlock { Style = (Style)FindResource("SetRowTitle") };
-        title.Inlines.Add(new System.Windows.Documents.Run(row.Label));
-        text.Children.Add(title);
+        var text = new StackPanel();
+        var head = RowHead(row.Label);
+        head.Children.Add(Controls.ModChips.Status(
+            Strings.Get(row.IsOfficial ? "TxSrcOfficialBadge" : "TxSrcUnofficialBadge"),
+            row.IsOfficial ? "#4FD68A" : "#F4900C"));
+        text.Children.Add(head);
 
         // The location in full is the tooltip: a label can say anything, the address is what it is.
         var kind = Strings.Get(row.Kind == TranslationSourceKind.Index ? "TxSrcKindLink" : "TxSrcKindGitHub");
@@ -1350,29 +1219,22 @@ public partial class ModPropertiesDialog : Window
             ? Strings.Format("TxSrcRowUnreachable", Strings.Get(row.ErrorKey ?? "TxSrcErrUnreachable"))
             : row.PackCount < 0 ? ""
             : row.PackCount == 0 ? Strings.Format("TxSrcRowNoPacks", _profile.DisplayName)
+            : row.PackCount == 1 ? Strings.Get("TxSrcRowPacksOne")
             : Strings.Format("TxSrcRowPacks", row.PackCount);
         var desc = new TextBlock
         {
             Style = (Style)FindResource("SetRowDesc"),
-            Text = string.Join("  ·  ", new[] { kind, status }.Where(s => !string.IsNullOrEmpty(s))),
+            Text = string.Join(" · ", new[] { kind, status }.Where(s => !string.IsNullOrEmpty(s))),
+            Margin = new Thickness(0, 5, 0, 0),
         };
         if (!row.Reachable) desc.Foreground = Res("MpCautionText", "#D8BD8A");
         text.Children.Add(desc);
         text.ToolTip = TooltipHelper.Wrap(row.Location);
 
         var actions = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var badge = new Border
-        {
-            Style = (Style)FindResource("SetBadge"),
-            Tag = row.IsOfficial ? "ok" : "warn",
-            Margin = new Thickness(0, 0, 10, 0),
-            Child = new TextBlock { Text = Strings.Get(row.IsOfficial ? "TxSrcOfficialBadge" : "TxSrcUnofficialBadge") },
-        };
-        actions.Children.Add(badge);
-
         var copy = new Button
         {
-            Style = (Style)FindResource("SetActionButtonSm"),
+            Style = (Style)FindResource("ModActionButton"),
             Content = Strings.Get("TxSrcCopyLink"),
             ToolTip = TooltipHelper.Wrap(Strings.Get("TxSrcCopyLinkTip")),
         };
@@ -1380,7 +1242,7 @@ public partial class ModPropertiesDialog : Window
         {
             try
             {
-                Clipboard.SetText(row.Location);
+                if (!Services.HarnessMode.Block("clipboard " + row.Location)) Clipboard.SetText(row.Location);
                 copy.Content = Strings.Get("TxSrcCopied");
             }
             catch (Exception ex) { DiagnosticLog.Write($"Copy source link failed: {ex.Message}"); }
@@ -1391,7 +1253,7 @@ public partial class ModPropertiesDialog : Window
         {
             var remove = new Button
             {
-                Style = (Style)FindResource("SetActionButtonSm"),
+                Style = (Style)FindResource("ModActionButton"),
                 Content = Strings.Get("TxSrcRemove"),
                 Margin = new Thickness(8, 0, 0, 0),
                 IsEnabled = !_modBusy,
@@ -1412,14 +1274,7 @@ public partial class ModPropertiesDialog : Window
             actions.Children.Add(remove);
         }
 
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(text, 0);
-        Grid.SetColumn(actions, 1);
-        grid.Children.Add(text);
-        grid.Children.Add(actions);
-        return new Border { Style = (Style)FindResource("SetActionRow"), Child = grid };
+        return ModRow(text, actions);
     }
 
     private void TxAddInput_TextChanged(object sender, TextChangedEventArgs e)
@@ -1628,150 +1483,151 @@ public partial class ModPropertiesDialog : Window
         return shadows.Count > 0 && shadows.All(s => set.Contains(s.Replace('\\', '/')));
     }
 
-    /// <summary>
-    /// The top of a translation card: the language and the translator, then where it comes from
-    /// — and, for a source the player added, that it is not the mod's own. With one card per
-    /// translator, this line is what tells two "Español" cards apart.
-    /// </summary>
-    private void AddCardHeader(StackPanel col, string flag, string name, string author, TranslationIndexEntry? entry)
+    /// <summary>A row of the mod window (design 71): what it is on the left, its actions in
+    /// a column on the right.</summary>
+    private Border ModRow(FrameworkElement left, FrameworkElement? right)
     {
-        col.Children.Add(new TextBlock
+        left.Margin = new Thickness(0, 0, 24, 0);
+        left.VerticalAlignment = VerticalAlignment.Center;
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(left);
+        if (right != null)
         {
-            Text = $"{flag}  {name}" + (string.IsNullOrWhiteSpace(author) ? "" : $"  —  {author}"),
-            FontSize = 15, FontWeight = FontWeights.SemiBold,
-            Foreground = Res("MpTextPrimary", "#E8EEF6"), TextWrapping = TextWrapping.Wrap,
-        });
-        if (entry == null || string.IsNullOrWhiteSpace(entry.SourceLabel)) return;
-
-        var source = new TextBlock
-        {
-            FontSize = 12, Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap,
-            Foreground = Res("MpTextMuted", "#8EA4C0"),
-            ToolTip = string.IsNullOrWhiteSpace(entry.SourceRepo) ? null : TooltipHelper.Wrap(entry.SourceRepo),
-        };
-        source.Inlines.Add(new System.Windows.Documents.Run(Strings.Format("LangCardSource", entry.SourceLabel)));
-        if (entry.SourceKind != TranslationSourceKind.Local)
-        {
-            source.Inlines.Add(new System.Windows.Documents.Run("  ·  "));
-            source.Inlines.Add(new System.Windows.Documents.Run(
-                Strings.Get(entry.IsOfficial ? "LangCardOfficial" : "LangCardUnofficial"))
-            {
-                Foreground = entry.IsOfficial ? Res("MpOkText", "#8FE0B0") : Res("MpCautionText", "#D8BD8A"),
-            });
+            Grid.SetColumn(right, 1);
+            grid.Children.Add(right);
         }
-        col.Children.Add(source);
+        return new Border { Style = (Style)FindResource("SetRow"), Child = grid };
     }
 
-    private FrameworkElement BuildLanguageCard(string flag, string name, string author,
+    /// <summary>A card's last row carries no seam.</summary>
+    private static void DropLastSeam(Panel list)
+    {
+        if (list.Children.Count > 0 && list.Children[^1] is Border last)
+            last.BorderThickness = new Thickness(0);
+    }
+
+    private WrapPanel RowHead(string title)
+    {
+        var head = new WrapPanel();
+        head.Children.Add(new TextBlock
+        {
+            Text = title,
+            Style = (Style)FindResource("SetRowTitle"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        });
+        return head;
+    }
+
+    private TextBlock RowMono(string text) => new()
+    {
+        Text = text,
+        Style = (Style)FindResource("SetMonoValue"),
+        Foreground = (Brush)FindResource("WindowSoftText"),
+        Margin = new Thickness(0, 5, 0, 0),
+    };
+
+    private Border AmberNotice(string text) => new()
+    {
+        Style = (Style)FindResource("SetNoticeAmber"),
+        Margin = new Thickness(0, 9, 0, 0),
+        Child = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap },
+    };
+
+    /// <summary>"✓ In use": a state rather than a button, in the place the button would have.</summary>
+    private Border InUseStatus()
+    {
+        var label = new TextBlock
+        {
+            Text = Strings.Get("LangInUse"),
+            FontSize = (double)FindResource("SetDescSize"),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var status = new Border
+        {
+            MinWidth = 112,
+            Height = 32,
+            Padding = new Thickness(12, 0, 12, 0),
+            CornerRadius = new CornerRadius(7),
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = label,
+        };
+        status.SetResourceReference(Border.BackgroundProperty, "ModAccentFill");
+        status.SetResourceReference(Border.BorderBrushProperty, "ModAccentRing");
+        return status;
+    }
+
+    private void AddLanguageChips(WrapPanel head, TranslationIndexEntry? entry)
+    {
+        if (entry == null || entry.SourceKind == TranslationSourceKind.Local) return;
+        head.Children.Add(Controls.ModChips.Status(
+            Strings.Get(entry.IsOfficial ? "TxSrcOfficialBadge" : "TxSrcUnofficialBadge"),
+            entry.IsOfficial ? "#4FD68A" : "#F4900C"));
+    }
+
+    private static string LanguageTitle(string name, string author)
+        => string.IsNullOrWhiteSpace(author) ? name : $"{name} — {author}";
+
+    private static string LanguageFacts(TranslationIndexEntry? entry, IReadOnlyList<string>? compatibleWith, string packVersion)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(entry?.SourceLabel)) parts.Add(entry!.SourceLabel);
+        if (compatibleWith is { Count: > 0 })
+            parts.Add(Strings.Format("LangCardForMod", string.Join(", ", compatibleWith)));
+        if (!string.IsNullOrWhiteSpace(packVersion))
+            parts.Add(Strings.Format("LangCardPackVer", packVersion));
+        return string.Join(" · ", parts);
+    }
+
+    private FrameworkElement BuildLanguageCard(string name, string author,
         IReadOnlyList<string>? compatibleWith, string packVersion,
         bool isActive, bool blocked, bool compatible, Action onUse,
         TranslationIndexEntry? entry = null, bool canUpdate = false)
     {
-        var col = new StackPanel();
-        AddCardHeader(col, flag, name, author, entry);
+        var left = new StackPanel();
+        var head = RowHead(LanguageTitle(name, author));
+        AddLanguageChips(head, entry);
+        if (compatible)
+            head.Children.Add(Controls.ModChips.Status(Strings.Get("LangChipCompatible"), "#4FD68A"));
+        left.Children.Add(head);
 
-        var subParts = new List<string>();
-        if (compatibleWith != null && compatibleWith.Count > 0)
-            subParts.Add(Strings.Format("LangCardForMod", string.Join(", ", compatibleWith)));
-        if (!string.IsNullOrWhiteSpace(packVersion))
-            subParts.Add(Strings.Format("LangCardPackVer", packVersion));
-        if (subParts.Count > 0)
-            col.Children.Add(new TextBlock
-            {
-                Text = string.Join("       ", subParts), FontSize = 12,
-                Foreground = Res("MpTextMuted", "#8EA4C0"),
-                Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap,
-            });
-        if (blocked)
-            col.Children.Add(new TextBlock
-            {
-                Text = Strings.Get("LangCardBlockedHint"), FontSize = 12,
-                Foreground = Res("MpDestructiveText", "#D99A9A"),
-                Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
-            });
-        else if (compatible)
-            col.Children.Add(new TextBlock
-            {
-                Text = "✓ " + Strings.Get("LangCardCompatibleHint"), FontSize = 12,
-                Foreground = Res("MpOkText", "#8FE0B0"),
-                Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
-            });
-
-        // Status indicator (not a button anymore — the WHOLE card is the click
-        // target, which is more forgiving than a small "Use" button). A version-
-        // mismatched pack reads "Use anyway" in amber — a warning the user can
-        // override, NOT a block (the apply dialog confirms first). While the mod
-        // is installing/updating (_modBusy) every card reads "🔒 Unavailable".
-        var status = new TextBlock
+        var facts = LanguageFacts(entry, compatibleWith, packVersion);
+        if (facts.Length > 0)
         {
-            Text = _modBusy ? "🔒 " + Strings.Get("LangCardUnavailableBusy")
-                : canUpdate ? Strings.Get("LangCardUpdate")
-                : isActive ? Strings.Get("LangCardActive")
-                : blocked ? Strings.Get("LangCardUseAnyway") : Strings.Get("LangCardUse"),
-            FontSize = 13, FontWeight = FontWeights.SemiBold,
-            Foreground = _modBusy ? Res("MpTextMuted", "#8EA4C0")
-                : canUpdate ? Res("MpAction", "#2F7FE0")
-                : isActive ? Res("MpOkText", "#8FE0B0")
-                : blocked ? Res("MpCautionText", "#D8BD8A") : Res("MpAction", "#2F7FE0"),
-            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(10, 0, 0, 0),
-        };
+            var mono = RowMono(facts);
+            if (!string.IsNullOrWhiteSpace(entry?.SourceRepo))
+                mono.ToolTip = TooltipHelper.Wrap(entry!.SourceRepo);
+            left.Children.Add(mono);
+        }
+        if (blocked) left.Children.Add(AmberNotice(Strings.Get("LangCardBlockedHint")));
 
-        var grid = new Grid { Margin = new Thickness(12, 10, 12, 10) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(col, 0);
-        Grid.SetColumn(status, 1);
-        grid.Children.Add(col);
-        grid.Children.Add(status);
+        if (isActive && !canUpdate && !_modBusy) return ModRow(left, InUseStatus());
 
-        // A version-mismatched ("blocked") pack stays clickable: the user can apply
-        // it under their own responsibility and the apply dialog confirms first.
-        // The already-active pack is non-clickable (nothing to do); and while the
-        // mod is installing/updating (_modBusy) the WHOLE list is locked.
-        bool clickable = (!isActive || canUpdate) && !_modBusy;
-        var border = new Border
+        // A version-mismatched pack stays usable: the user can apply it under their own
+        // responsibility and the apply dialog confirms first. While the mod is installing or
+        // updating every row is locked.
+        var use = new Button
         {
-            Background = Res("MpPanel", "#12213A"),
-            BorderBrush = isActive ? Res("MpAction", "#2F7FE0") : Res("MpRimSoft", "#1C82AFFF"),
-            BorderThickness = new Thickness(isActive ? 2 : 1),
-            CornerRadius = new CornerRadius(6),
-            Margin = new Thickness(0, 0, 0, 8),
-            // Busy = clearly disabled (0.5); a version-mismatch caution = slightly
-            // dimmed (0.85, not inert); otherwise full.
-            Opacity = _modBusy ? 0.5 : (blocked ? 0.85 : 1.0),
-            Child = grid,
+            Style = (Style)FindResource("ModActionButton"),
+            Content = Strings.Get(_modBusy ? "LangCardUnavailableBusy"
+                : canUpdate ? "LangCardUpdate"
+                : blocked ? "LangCardUseAnyway"
+                : "LangCardUse"),
+            IsEnabled = !_modBusy,
         };
-        if (!clickable) return border;
-
-        // Wrap the whole card in a CHROMELESS Button. Button.Click fires reliably
-        // (MouseLeftButtonUp on a Border can be swallowed by the surrounding
-        // ScrollViewer), and we get keyboard/focus behaviour for free. The custom
-        // template strips the default button chrome so it still looks like a card.
-        var template = new ControlTemplate(typeof(Button))
-        {
-            VisualTree = new FrameworkElementFactory(typeof(ContentPresenter)),
-        };
-        var button = new Button
-        {
-            Content = border,
-            Template = template,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(0),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-        };
-        button.Click += (_, _) => onUse();
-        return button;
+        use.Click += (_, _) => onUse();
+        return ModRow(left, use);
     }
 
     /// <summary>
-    /// A language card for a folder pack that keeps a VERSION HISTORY: a version
-    /// combo + an Apply button (mirrors the GitHubReleases version picker). Unlike
-    /// the single-version card, the whole card is NOT a click target (it holds
-    /// interactive controls); applying uses the selected version. The for-mod /
-    /// compatibility hint + Apply label re-compute on each combo selection.
+    /// A row for a pack that keeps a VERSION HISTORY: the version picker sits under its facts,
+    /// and the chips, the notice and the action follow the chosen version.
     /// </summary>
     private FrameworkElement BuildVersionedLanguageCard(
         TranslationIndexEntry entry, bool isActive, string activeVersion, string? activeHash,
@@ -1779,20 +1635,30 @@ public partial class ModPropertiesDialog : Window
     {
         var versions = entry.Versions;
 
-        var col = new StackPanel();
-        AddCardHeader(col, LanguageFlag(entry.Id), entry.Name, entry.Author, entry);
+        var left = new StackPanel();
+        var head = RowHead(LanguageTitle(entry.Name, entry.Author));
+        AddLanguageChips(head, entry);
+        var compatibleChip = Controls.ModChips.Status(Strings.Get("LangChipCompatible"), "#4FD68A");
+        head.Children.Add(compatibleChip);
+        left.Children.Add(head);
 
-        var hint = new TextBlock
-        {
-            FontSize = 12, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
-        };
-        col.Children.Add(hint);
+        var facts = RowMono("");
+        if (!string.IsNullOrWhiteSpace(entry.SourceRepo))
+            facts.ToolTip = TooltipHelper.Wrap(entry.SourceRepo);
+        left.Children.Add(facts);
 
         var combo = new System.Windows.Controls.ComboBox
         {
-            MinWidth = 200, VerticalAlignment = VerticalAlignment.Center,
-            IsEnabled = !_modBusy, Margin = new Thickness(0, 8, 0, 0),
+            Style = (Style)FindResource("SetCompactCombo"),
+            MaxWidth = 340,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            IsEnabled = !_modBusy,
+            Margin = new Thickness(0, 9, 0, 0),
         };
+        left.Children.Add(combo);
+        var notice = AmberNotice(Strings.Get("LangCardBlockedHint"));
+        left.Children.Add(notice);
+
         int compatIdx = -1, activeIdx = -1;
         for (int i = 0; i < versions.Count; i++)
         {
@@ -1807,29 +1673,33 @@ public partial class ModPropertiesDialog : Window
             combo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = VersionLabel(v, tags), Tag = v });
         }
 
-        var applyBtn = new Button
+        var use = new Button
         {
-            Style = (Style)FindResource("PropertyActionButton"),
-            Margin = new Thickness(10, 8, 0, 0),
-            MinWidth = 150, VerticalAlignment = VerticalAlignment.Center,
+            Style = (Style)FindResource("ModActionButton"),
             IsEnabled = !_modBusy,
         };
+        var inUse = InUseStatus();
+        var right = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        right.Children.Add(use);
+        right.Children.Add(inUse);
 
         void Refresh()
         {
+            var i = combo.SelectedIndex;
             var v = (combo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as TranslationVersion
                     ?? versions[0];
             bool blocked = TranslationCompat.IsVersionBlocked(v.CompatibleWith, modVersion);
             bool compat = TranslationCompat.IsCompatible(v.CompatibleWith, modVersion);
+            bool applied = isActive && i == activeIdx && !_modBusy;
 
-            if (blocked) { hint.Text = Strings.Get("LangCardBlockedHint"); hint.Foreground = Res("MpDestructiveText", "#D99A9A"); }
-            else if (compat) { hint.Text = "✓ " + Strings.Get("LangCardCompatibleHint"); hint.Foreground = Res("MpOkText", "#8FE0B0"); }
-            else hint.Text = "";
-            hint.Visibility = string.IsNullOrEmpty(hint.Text) ? Visibility.Collapsed : Visibility.Visible;
-
-            applyBtn.Content = _modBusy ? "🔒 " + Strings.Get("LangCardUnavailableBusy")
-                : blocked ? Strings.Get("LangCardUseAnyway")
-                : Strings.Get("LangCardApplyVersion");
+            facts.Text = LanguageFacts(entry, v.CompatibleWith, v.Version);
+            compatibleChip.Visibility = compat ? Visibility.Visible : Visibility.Collapsed;
+            notice.Visibility = blocked ? Visibility.Visible : Visibility.Collapsed;
+            inUse.Visibility = applied ? Visibility.Visible : Visibility.Collapsed;
+            use.Visibility = applied ? Visibility.Collapsed : Visibility.Visible;
+            use.Content = Strings.Get(_modBusy ? "LangCardUnavailableBusy"
+                : blocked ? "LangCardUseAnyway"
+                : "LangCardUse");
         }
 
         combo.SelectionChanged += (_, _) => Refresh();
@@ -1837,31 +1707,14 @@ public partial class ModPropertiesDialog : Window
         combo.SelectedIndex = activeIdx >= 0 ? activeIdx : (compatIdx >= 0 ? compatIdx : 0);
         Refresh();
 
-        applyBtn.Click += (_, _) =>
+        use.Click += (_, _) =>
         {
             if (_modBusy) return;
             if ((combo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag is TranslationVersion v)
                 onUseVersion(v);
         };
 
-        var row = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-        row.Children.Add(combo);
-        row.Children.Add(applyBtn);
-        col.Children.Add(row);
-
-        var grid = new Grid { Margin = new Thickness(12, 10, 12, 10) };
-        grid.Children.Add(col);
-
-        return new Border
-        {
-            Background = Res("MpPanel", "#12213A"),
-            BorderBrush = isActive ? Res("MpAction", "#2F7FE0") : Res("MpRimSoft", "#1C82AFFF"),
-            BorderThickness = new Thickness(isActive ? 2 : 1),
-            CornerRadius = new CornerRadius(6),
-            Margin = new Thickness(0, 0, 0, 8),
-            Opacity = _modBusy ? 0.5 : 1.0,
-            Child = grid,
-        };
+        return ModRow(left, right);
     }
 
     /// <summary>
@@ -1914,22 +1767,6 @@ public partial class ModPropertiesDialog : Window
         try { return (Brush)new BrushConverter().ConvertFromString(fallbackHex)!; }
         catch { return Brushes.Gray; }
     }
-
-    private static string LanguageFlag(string id) => id.ToLowerInvariant() switch
-    {
-        "es" or "es-es" or "es-mx" or "es-ar" => "🇪🇸",
-        "fr" or "fr-fr" => "🇫🇷",
-        "de" or "de-de" => "🇩🇪",
-        "it" or "it-it" => "🇮🇹",
-        "pt" or "pt-pt" => "🇵🇹",
-        "pt-br" => "🇧🇷",
-        "ru" or "ru-ru" => "🇷🇺",
-        "zh" or "zh-cn" or "zh-tw" => "🇨🇳",
-        "ja" or "ja-jp" => "🇯🇵",
-        "ko" or "ko-kr" => "🇰🇷",
-        "pl" or "pl-pl" => "🇵🇱",
-        _ => "🌐",
-    };
 
     // -- Tab switching ------------------------------------------------------
 
@@ -2004,6 +1841,21 @@ public partial class ModPropertiesDialog : Window
 
     /// <summary>Opens on LOCAL FILES (<c>--open-mod-settings=local-files</c>).</summary>
     public void ShowLocalFilesTab() => SetActiveTab(TabLocalFilesBtn);
+
+    /// <summary>For <c>--open-mod-settings=&lt;section&gt;</c>. An unknown name stays where it is.</summary>
+    public void ShowTabNamed(string section)
+    {
+        switch (section.ToLowerInvariant())
+        {
+            case "general": SetActiveTab(TabGeneralBtn); break;
+            case "local-files": SetActiveTab(TabLocalFilesBtn); break;
+            case "user-data": SetActiveTab(TabUserDataBtn); break;
+            case "language": SetActiveTab(TabLanguageBtn); break;
+            case "addons": SetActiveTab(TabAddonsBtn); break;
+            case "decks": TabDecksBtn_Click(TabDecksBtn, null!); break;
+            case "stats": TabStatsBtn_Click(TabStatsBtn, null!); break;
+        }
+    }
 
     /// <summary>
     /// Filters the six sections down to the rows matching what you typed, and jumps to the
@@ -2161,9 +2013,15 @@ public partial class ModPropertiesDialog : Window
         RefreshTranslationsBtn.Content = Strings.Get("DlgLangRefreshing");
         try
         {
+            var before = _translationIndex?.Translations?.Count ?? 0;
             var idx = await _refreshTranslations();
             if (idx != null) _translationIndex = idx;
             LoadLanguage();   // rebuild the cards with the freshly fetched index
+            if (idx != null && (idx.Translations?.Count ?? 0) <= before)
+            {
+                LanguageEmptyHint.Text = Strings.Get("ModPropTranslationsChecked");
+                LanguageEmptyHint.Visibility = Visibility.Visible;
+            }
         }
         catch { /* re-fetch failure is non-fatal; cards keep the old index */ }
         finally
@@ -2506,7 +2364,7 @@ public partial class ModPropertiesDialog : Window
         if (string.IsNullOrEmpty(path) || !Directory.Exists(path)) return;
         try
         {
-            Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
+            Services.HarnessMode.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
         }
         catch (Exception ex)
         {
@@ -2518,16 +2376,6 @@ public partial class ModPropertiesDialog : Window
     {
         // Just opens Explorer — no covering window, so keep the dialog open.
         _openAoE3Folder?.Invoke();
-    }
-
-    private void ChangeModFolderBtn_Click(object sender, RoutedEventArgs e)
-    {
-        // Stays open: the folder picker is a modal that lands on top. The
-        // new path is written to config before the callback's await, so the
-        // immediate RefreshData() shows it; the re-detected version catches
-        // up via MainWindow's post-CheckAsync RefreshData call.
-        _changeModFolder?.Invoke();
-        RefreshData();
     }
 
     private void ChangeAoE3FolderBtn_Click(object sender, RoutedEventArgs e)
@@ -2560,8 +2408,14 @@ public partial class ModPropertiesDialog : Window
     {
         // Adopts an existing install folder as a copy (no reinstall). Stays open and
         // refreshes the list in place so the new copy appears immediately.
+        var before = _config.GetState(_profile.Id).OtherInstalls.Select(o => o.Id).ToHashSet();
         if (_addExistingFolder?.Invoke() == true)
+        {
+            _copyToHighlight = _config.GetState(_profile.Id).OtherInstalls
+                .Select(o => o.Id).FirstOrDefault(id => !before.Contains(id));
             LoadManageInstalls();
+            _copyToHighlight = null;
+        }
     }
 
     private void SearchInstallBtn_Click(object sender, RoutedEventArgs e)
@@ -2578,19 +2432,21 @@ public partial class ModPropertiesDialog : Window
         _viewLogs?.Invoke();
     }
 
-    private void ShareDiagnosticsBtn_Click(object sender, RoutedEventArgs e)
-    {
-        // Bundles the diagnostic files to the Desktop and reveals them in Explorer
-        // — no covering window, so keep the dialog open.
-        _shareDiagnostics?.Invoke();
-    }
-
     /// <summary>
-    /// The rail box (handoff 50a): the SAME action as the button in LOCAL FILES, from any
-    /// section. It does not navigate there — the point is that it is one click wherever the
-    /// player happens to be.
+    /// The rail box (design 71): one click from any section. The bundle is written to the
+    /// Desktop and revealed in Explorer, with no covering window, so this one stays open.
     /// </summary>
     private void RailDiagBox_Click(object sender, RoutedEventArgs e) => _shareDiagnostics?.Invoke();
+
+    private string? _railSite;
+
+    private void RailSiteBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_railSite)) SafeUrl.TryOpen(_railSite);
+    }
+
+    private void RailDiscordBtn_Click(object sender, RoutedEventArgs e)
+        => SafeUrl.TryOpen(LauncherConfig.SupportDiscordUrl);
 
     private void UninstallBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -2725,6 +2581,13 @@ public partial class ModPropertiesDialog : Window
 
         // The empty hint belongs to the IMPORTED group alone: the catalog group is
         // never empty, so "no addons yet" under a list of three was simply wrong.
+        DropLastSeam(AddonCardList);
+        DropLastSeam(ImportedAddonList);
+        ImportedAddonCard.Visibility = imported.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        var multipleCopies = _config.GetActiveState().OtherInstalls.Count > 0;
+        LblAddonsGroupCatalogHint.Text = multipleCopies && !string.IsNullOrEmpty(_service.InstallPath)
+            ? Strings.Format("AddonsCatalogInCopy", DeriveLeaf(_service.InstallPath))
+            : Strings.Get("AddonsGroupCatalogHint");
         AddonsEmptyHint.Visibility = imported.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (imported.Count == 0) AddonsEmptyHint.Text = Strings.Get("AddonsEmptyHint");
     }
@@ -2792,21 +2655,8 @@ public partial class ModPropertiesDialog : Window
     }
 
     /// <summary>One state chip. Same 9/600 shape as every other badge in the launcher.</summary>
-    private Border AddonBadge(string text, string bgKey, string fgKey) => new()
-    {
-        Background = (Brush)FindResource(bgKey),
-        CornerRadius = new CornerRadius(3),
-        Padding = new Thickness(6, 2, 6, 2),
-        Margin = new Thickness(8, 0, 0, 0),
-        VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock
-        {
-            Text = text,
-            FontSize = (double)FindResource("SetBadgeSize"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource(fgKey),
-        },
-    };
+    private static Border AddonBadge(string text, string dot)
+        => Controls.ModChips.Status(text.ToUpper(Strings.Culture), dot);
 
     /// <summary>
     /// A notice box: the consequence, in the colour that consequence has. Amber for
@@ -2815,44 +2665,27 @@ public partial class ModPropertiesDialog : Window
     /// </summary>
     private Border AddonNotice(string text, string kind)
     {
-        var (bg, rim, fg, glyph) = kind switch
+        var (bg, rim, fg) = kind switch
         {
-            "danger" => ("UiDangerBadgeBg", "UiRimDanger", "MpDestructiveText", ""),
-            "warn"   => ("MpCautionBg", "MpCautionRim", "MpCautionText", ""),
-            _        => ("MpRowHighlight", "MpRimSoft", "MpTextMuted", ""),
+            "danger" => ("UiDangerBadgeBg", "UiRimDanger", "MpDestructiveText"),
+            "warn"   => ("MpCautionBg", "MpCautionRim", "MpCautionText"),
+            _        => ("MpRowHighlight", "MpRimSoft", "MpTextMuted"),
         };
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var icon = new TextBlock
-        {
-            Text = glyph,
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = (double)FindResource("SetDescSize"),
-            Foreground = (Brush)FindResource(fg),
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 1, 8, 0),
-        };
-        var body = new TextBlock
-        {
-            Text = text,
-            FontSize = (double)FindResource("SetDescSize"),
-            Foreground = (Brush)FindResource(fg),
-            TextWrapping = TextWrapping.Wrap,
-        };
-        Grid.SetColumn(icon, 0);
-        Grid.SetColumn(body, 1);
-        grid.Children.Add(icon);
-        grid.Children.Add(body);
         return new Border
         {
             Background = (Brush)FindResource(bg),
             BorderBrush = (Brush)FindResource(rim),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 8, 10, 8),
-            Margin = new Thickness(0, 10, 0, 0),
-            Child = grid,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12, 9, 12, 9),
+            Margin = new Thickness(0, 9, 0, 0),
+            Child = new TextBlock
+            {
+                Text = text,
+                FontSize = (double)FindResource("SetDescSize"),
+                Foreground = (Brush)FindResource(fg),
+                TextWrapping = TextWrapping.Wrap,
+            },
         };
     }
 
@@ -2868,9 +2701,9 @@ public partial class ModPropertiesDialog : Window
             Text = string.Join("  ·  ", parts),
             FontFamily = (FontFamily)FindResource("MonoFont"),
             FontSize = (double)FindResource("SetMonoSize"),
-            Foreground = (Brush)FindResource("UiTextFaint"),
+            Foreground = (Brush)FindResource("WindowSoftText"),
             TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 6, 0, 0),
+            Margin = new Thickness(0, 5, 0, 0),
         };
     }
 
@@ -2887,27 +2720,16 @@ public partial class ModPropertiesDialog : Window
     {
         var left = new StackPanel();
 
-        var titleRow = new WrapPanel { Orientation = Orientation.Horizontal };
-        titleRow.Children.Add(new TextBlock
-        {
-            Text = title,
-            Foreground = (Brush)FindResource("MpTextHeading"),
-            FontSize = (double)FindResource("SetBodySize"),
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        });
-        foreach (var b in badges) titleRow.Children.Add(b);
-        left.Children.Add(titleRow);
+        var head = RowHead(title);
+        foreach (var b in badges) head.Children.Add(b);
+        left.Children.Add(head);
 
         if (!string.IsNullOrWhiteSpace(description))
             left.Children.Add(new TextBlock
             {
                 Text = description,
-                Foreground = (Brush)FindResource("MpTextMuted"),
-                FontSize = (double)FindResource("SetDescSize"),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, 0, 0),
+                Style = (Style)FindResource("SetRowDesc"),
+                Margin = new Thickness(0, 5, 0, 0),
             });
 
         var meta = AddonMetaLine(facts);
@@ -2918,31 +2740,10 @@ public partial class ModPropertiesDialog : Window
         var right = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(14, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
         };
         foreach (var a in actions) right.Children.Add(a);
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(left, 0);
-        Grid.SetColumn(right, 1);
-        grid.Children.Add(left);
-        grid.Children.Add(right);
-
-        return new Border
-        {
-            Background = (Brush)FindResource("MpPanel"),
-            // An enabled addon is marked by its ACTIVE badge, not by a border that
-            // grows from 1 to 2 and shifts everything inside the card by a pixel.
-            BorderBrush = (Brush)FindResource(isEnabled ? "MpActionRimSoft" : "MpRimSoft"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(14, 12, 14, 12),
-            Margin = new Thickness(0, 0, 0, 8),
-            Child = grid,
-        };
+        return ModRow(left, right);
     }
 
     /// <summary>The "Page ↗" link. A destination, so it reads as a link and not a button.</summary>
@@ -2980,18 +2781,16 @@ public partial class ModPropertiesDialog : Window
         bool actionable = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath);
 
         var badges = new List<UIElement>();
-        if (isEnabled)
-            badges.Add(AddonBadge(Strings.Get("AddonBadgeActive"), "MpChipOkBg", "MpOkText"));
         if (blocked)
-            badges.Add(AddonBadge(Strings.Get("AddonBadgeBlocked"), "UiDangerBadgeBg", "MpDestructiveText"));
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeBlocked"), "#C84A4A"));
         else if (risky)
-            badges.Add(AddonBadge(Strings.Get("AddonBadgeMultiplayerRisk"), "MpCautionBg", "MpCautionText"));
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeMultiplayerRisk"), "#F4900C"));
         else if (facts is not null)
-            badges.Add(AddonBadge(Strings.Get("AddonBadgeCosmetic"), "MpActionSoftBg", "MpActionText"));
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeCosmetic"), "#55ACEE"));
         // Declared by the registry, so it is known before anything is downloaded —
         // and it is the one thing about this addon that will interrupt the player.
         if (isInstaller)
-            badges.Add(AddonBadge(Strings.Get("AddonBadgeInstaller"), "MpPrivateBg", "MpPrivateText"));
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeInstaller"), "#A8BCD2"));
 
         var notices = new List<Border>();
         if (blocked)
@@ -3016,13 +2815,14 @@ public partial class ModPropertiesDialog : Window
         {
             if (isEnabled)
             {
-                var off = new Button
+                var off = new System.Windows.Controls.Primitives.ToggleButton
                 {
-                    Content = Strings.Get("AddonDisable"),
-                    Style = (Style)FindResource("SetActionButton"),
+                    Style = (Style)FindResource("SetToggle"),
+                    IsChecked = true,
                     IsEnabled = actionable,
+                    VerticalAlignment = VerticalAlignment.Center,
                 };
-                off.Click += async (_, _) => await DisableOfferedAddonAsync(entry);
+                off.Unchecked += async (_, _) => await DisableOfferedAddonAsync(entry);
                 actions.Add(off);
             }
             else
@@ -3034,10 +2834,7 @@ public partial class ModPropertiesDialog : Window
                     Content = risky
                         ? Strings.Get("AddonEnableAnyway")
                         : Strings.Get("AddonDownloadAndEnable"),
-                    Style = (Style)FindResource("SetActionButton"),
-                    Width = double.NaN,
-                    MinWidth = 150,
-                    Padding = new Thickness(14, 0, 14, 0),
+                    Style = (Style)FindResource("ModActionButton"),
                     IsEnabled = actionable,
                 };
                 get.Click += async (_, _) => await DownloadAndEnableAsync(entry, get);
@@ -3066,14 +2863,12 @@ public partial class ModPropertiesDialog : Window
         bool risky = level == AddonRiskLevel.MultiplayerRisk;
 
         var badges = new List<UIElement>();
-        if (isEnabled)
-            badges.Add(AddonBadge(Strings.Get("AddonBadgeActive"), "MpChipOkBg", "MpOkText"));
         if (blocked)
-            badges.Add(AddonBadge(Strings.Get("AddonBadgeBlocked"), "UiDangerBadgeBg", "MpDestructiveText"));
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeBlocked"), "#C84A4A"));
         else if (risky)
-            badges.Add(AddonBadge(Strings.Get("AddonBadgeMultiplayerRisk"), "MpCautionBg", "MpCautionText"));
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeMultiplayerRisk"), "#F4900C"));
         else
-            badges.Add(AddonBadge(Strings.Get("AddonBadgeCosmetic"), "MpActionSoftBg", "MpActionText"));
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeCosmetic"), "#55ACEE"));
 
         var notices = new List<Border>();
         if (blocked)
@@ -3505,6 +3300,9 @@ public partial class ModPropertiesDialog : Window
         // reads a different place on disk entirely.
         await LoadHumanGamesAsync();
         await LoadAiGamesAsync();
+        StatsEmptyCard.Visibility = HumanGamesGroup.Visibility == Visibility.Visible
+                                    || AiGamesGroup.Visibility == Visibility.Visible
+            ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private async System.Threading.Tasks.Task LoadAiGamesAsync()
@@ -3518,40 +3316,30 @@ public partial class ModPropertiesDialog : Window
             _profile.Id, _service.InstallPath, _profile.GameExecutable, folder);
         var (games, names) = (data.Games, data.Names);
 
-        if (games.Count == 0)
-        {
-            StatsEmptyHint.Text = Strings.Get("ModPropStatsEmpty");
-            StatsEmptyHint.Visibility = Visibility.Visible;
-            return;
-        }
-        StatsEmptyHint.Visibility = Visibility.Collapsed;
+        AiGamesGroup.Visibility = games.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (games.Count == 0) return;
 
-        AiGamesList.Children.Clear();
         foreach (var game in games)
-            AiGamesList.Children.Add(Controls.LocalGameCards.BuildAiGameCard(
+            AiGamesList.Children.Add(Controls.LocalGameCards.BuildAiGameRow(
                 game, names, data.Opponents.TryGetValue(game.Personality, out var who) ? who : null));
+        DropLastSeam(AiGamesList);
     }
 
     // ======================================================================
     // DECKS — what the player brings, with the game's own art
     // ======================================================================
 
-    /// <summary>One card's tile. Big enough to recognise the art, small enough that 25 fit.</summary>
-    private const int TileSize = 48;
-
     private bool _decksLoaded;
     private readonly List<Models.HomeCityProfile> _deckProfiles = new();
     private IReadOnlyDictionary<string, Services.CardDetail> _cardDetails =
         new Dictionary<string, Services.CardDetail>();
-    private IReadOnlyDictionary<string, ImageSource> _cardIcons =
-        new Dictionary<string, ImageSource>();
+    private IReadOnlyDictionary<string, ImageSource> _cardIcons = new Dictionary<string, ImageSource>();
     private IReadOnlyDictionary<string, IReadOnlyList<string>> _cardEffects =
         new Dictionary<string, IReadOnlyList<string>>();
     private readonly Dictionary<string, string> _deckCivNames = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The tile the user clicked, so hovering elsewhere can come back to it.</summary>
-    private Border? _selectedTile;
-    private Models.HomeCityCard? _pinnedCard;
+    private Button? _selectedTile;
 
     /// <summary>
     /// Fills the DECKS section from the game's own home city files.
@@ -3648,64 +3436,77 @@ public partial class ModPropertiesDialog : Window
             return;
         }
 
-        DecksEmptyHint.Visibility = Visibility.Collapsed;
         BuildDeckPicker();
     }
 
     private void ShowDecksEmpty()
     {
         DecksEmptyHint.Text = Strings.Get("ModPropDecksEmpty");
-        DecksEmptyHint.Visibility = Visibility.Visible;
-        DeckPickerRow.Children.Clear();
-        DeckGridCard.Visibility = Visibility.Collapsed;
-        DeckDetailCard.Visibility = Visibility.Collapsed;
+        DecksEmptyDesc.Text = Strings.Get("ModPropDecksEmptyHint");
+        DecksEmptyCard.Visibility = Visibility.Visible;
+        DeckContent.Visibility = Visibility.Collapsed;
+        LblDecksSectionHint.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
-    /// One pill per deck. Hidden when there is only one, because a chooser with a single
-    /// choice is furniture.
+    /// The handoff draws one home city. A player has one per civilization they have played, so
+    /// a list appears on the city's row when there is more than one to choose from.
     /// </summary>
     private void BuildDeckPicker()
     {
-        DeckPickerRow.Children.Clear();
+        var withDecks = _deckProfiles.Where(p => p.Decks.Count > 0).ToList();
+        DecksEmptyCard.Visibility = Visibility.Collapsed;
+        LblDecksSectionHint.Visibility = Visibility.Visible;
+        DeckContent.Visibility = Visibility.Visible;
 
-        var first = true;
-        foreach (var profile in _deckProfiles)
-        {
-            foreach (var deck in profile.Decks)
+        DeckCityCombo.Items.Clear();
+        foreach (var profile in withDecks)
+            DeckCityCombo.Items.Add(new ComboBoxItem
             {
-                var thisProfile = profile;
-                var thisDeck = deck;
-
-                var pill = new RadioButton
-                {
-                    Style = (Style)FindResource("SetSegmentItem"),
-                    GroupName = "DeckPicker",
-                    Content = DeckPillLabel(profile, deck),
-                    Margin = new Thickness(0, 0, 6, 6),
-                    IsChecked = first,
-                };
-                pill.Checked += (_, _) => ShowDeck(thisProfile, thisDeck);
-                DeckPickerRow.Children.Add(pill);
-
-                // Setting IsChecked before the handler is attached is deliberate — it must not
-                // fire during construction — so the first deck is shown by hand.
-                if (first)
-                {
-                    ShowDeck(thisProfile, thisDeck);
-                    first = false;
-                }
-            }
-        }
-
-        DeckPickerRow.Visibility =
-            DeckPickerRow.Children.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+                Content = string.IsNullOrWhiteSpace(profile.CityName) ? CivDisplay(profile) : profile.CityName,
+                Tag = profile,
+            });
+        DeckCityCombo.Visibility = withDecks.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        DeckCityCombo.SelectedIndex = 0;
     }
 
-    private string DeckPillLabel(Models.HomeCityProfile profile, Models.HomeCityDeckEntry deck)
+    private void DeckCityCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if ((DeckCityCombo.SelectedItem as ComboBoxItem)?.Tag is Models.HomeCityProfile profile)
+            ShowHomeCity(profile);
+    }
+
+    private void ShowHomeCity(Models.HomeCityProfile profile)
     {
         var civ = CivDisplay(profile);
-        return string.IsNullOrWhiteSpace(deck.Name) ? civ : civ + "  ·  " + deck.Name;
+        DeckHeadline.Text = string.IsNullOrWhiteSpace(profile.CityName) ? civ : profile.CityName;
+        DeckFacts.Text = profile.Level > 0
+            ? Strings.Format("ModPropDeckCityFacts", civ, profile.Level)
+            : Strings.Format("ModPropDeckCityCiv", civ);
+        DeckFile.Text = System.IO.Path.GetFileNameWithoutExtension(profile.SourceFile);
+        DeckCountNote.Text = profile.Decks.Count == 1
+            ? Strings.Get("ModPropDeckCountOne")
+            : Strings.Format("ModPropDeckCount", profile.Decks.Count);
+
+        DeckPickerRow.Children.Clear();
+        foreach (var deck in profile.Decks)
+        {
+            var thisDeck = deck;
+            var pill = new Button { Style = (Style)FindResource("ModDeckPill") };
+            var caption = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+            caption.Inlines.Add(new System.Windows.Documents.Run(
+                string.IsNullOrWhiteSpace(deck.Name) ? civ : deck.Name));
+            pill.Content = caption;
+            var count = new System.Windows.Documents.Run(
+                "  " + Strings.Format("ModPropDecksCardCount", deck.Cards.Count))
+            {
+                FontWeight = FontWeights.Normal,
+            };
+            caption.Inlines.Add(count);
+            pill.Click += (_, _) => ShowDeck(pill, thisDeck);
+            DeckPickerRow.Children.Add(pill);
+        }
+        if (DeckPickerRow.Children[0] is Button first) ShowDeck(first, profile.Decks[0]);
     }
 
     /// <summary>What the mod calls this civilization, falling back to what the file calls it.</summary>
@@ -3719,105 +3520,131 @@ public partial class ModPropertiesDialog : Window
         return string.IsNullOrWhiteSpace(profile.Civ) ? profile.CityName : profile.Civ;
     }
 
-    private void ShowDeck(Models.HomeCityProfile profile, Models.HomeCityDeckEntry deck)
+    /// <summary>The slot is the card's place in the file, which is why the list is never sorted.</summary>
+    private void ShowDeck(Button pill, Models.HomeCityDeckEntry deck)
     {
-        DeckGridCard.Visibility = Visibility.Visible;
-        DeckHeadline.Text = DeckPillLabel(profile, deck);
-
-        var facts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(profile.CityName) && !string.IsNullOrWhiteSpace(profile.Civ))
-            facts.Add(profile.CityName);
-        facts.Add(Strings.Format("ModPropDecksCardCount", deck.Cards.Count));
-        if (profile.Level > 0) facts.Add(Strings.Format("ModPropDecksLevel", profile.Level));
-        DeckFacts.Text = string.Join("  ·  ", facts);
+        foreach (var other in DeckPickerRow.Children.OfType<Button>()) other.Tag = null;
+        pill.Tag = "selected";
 
         DeckCardGrid.Children.Clear();
         _selectedTile = null;
-        _pinnedCard = null;
 
-        var tiles = Controls.DeckTiles.Build(deck, _cardDetails, _cardIcons, TileSize);
-        for (var i = 0; i < tiles.Count; i++)
+        for (var i = 0; i < deck.Cards.Count; i++)
         {
             var card = deck.Cards[i];
-            var tile = tiles[i];
+            var slot = i + 1;
+            var total = deck.Cards.Count;
+            _cardDetails.TryGetValue(card.InternalName, out var detail);
 
-            // Selection only. Hovering used to swap the panel as the pointer crossed the grid,
-            // which made the description flicker past on the way to the card you wanted.
-            tile.Click += (_, _) => SelectCard(card, tile);
+            var number = new TextBlock
+            {
+                Text = slot.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Width = 20,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("StatsNote"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            number.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+            number.SetResourceReference(TextBlock.FontSizeProperty, "SetGroupLabelSize");
+            var name = new TextBlock
+            {
+                Text = detail?.Name ?? card.InternalName,
+                FontWeight = FontWeights.Medium,
+                TextWrapping = TextWrapping.Wrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                LineHeight = 15,
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                MaxHeight = 30,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            name.SetResourceReference(TextBlock.FontSizeProperty, "SetControlSize");
+            var body = new DockPanel();
+            DockPanel.SetDock(number, Dock.Left);
+            body.Children.Add(number);
+            if (detail?.IconPath != null && _cardIcons.TryGetValue(detail.IconPath, out var art))
+            {
+                var picture = Controls.MultiplayerTab.ArtImage(art, 34);
+                picture.Margin = new Thickness(0, 0, 8, 0);
+                DockPanel.SetDock(picture, Dock.Left);
+                body.Children.Add(picture);
+            }
+            body.Children.Add(name);
 
+            var tile = new Button
+            {
+                Style = (Style)FindResource("ModDeckTile"),
+                Content = body,
+                ToolTip = TooltipHelper.Wrap(detail?.Name ?? card.InternalName),
+            };
+            // Internal name, for the order tests: the caption can be any language.
+            System.Windows.Automation.AutomationProperties.SetAutomationId(tile, "DeckCard_" + slot);
+            tile.Click += (_, _) => SelectCard(card, tile, slot, total);
             DeckCardGrid.Children.Add(tile);
+
+            if (i == 0) SelectCard(card, tile, slot, total);
         }
 
-        if (tiles.Count > 0) SelectCard(deck.Cards[0], tiles[0]);
-        else DeckDetailCard.Visibility = Visibility.Collapsed;
+        DeckDetailCard.Visibility = deck.Cards.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>
-    /// Pins a card. The rim changes COLOUR and never thickness: growing a border to 2 shifts
-    /// every child of the tile by a pixel the moment you click it.
-    /// </summary>
-    private void SelectCard(Models.HomeCityCard card, Button tile)
+    /// <summary>The prototype's two flex items: tiles from 420 px, detail from 260, the room
+    /// left over shared evenly, and the detail under the tiles when both do not fit.</summary>
+    private void DeckBody_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        _selectedTile = Controls.DeckTiles.Select(tile, _selectedTile);
-        _pinnedCard = card;
-        ShowCardDetail(card);
+        if (!e.WidthChanged) return;
+        const double TilesBasis = 420, DetailBasis = 260, Gap = 14, TileMin = 176;
+
+        var width = DeckBody.ActualWidth;
+        bool sideBySide = width >= TilesBasis + Gap + DetailBasis;
+        var spare = (width - TilesBasis - DetailBasis - Gap) / 2;
+
+        DeckTilesColumn.Width = sideBySide ? new GridLength(TilesBasis + spare) : new GridLength(1, GridUnitType.Star);
+        DeckGapColumn.Width = new GridLength(sideBySide ? Gap : 0);
+        DeckDetailColumn.Width = sideBySide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        Grid.SetColumn(DeckDetailCard, sideBySide ? 2 : 0);
+        Grid.SetRow(DeckDetailCard, sideBySide ? 0 : 1);
+        DeckDetailCard.Margin = new Thickness(0, sideBySide ? 0 : 8, 0, 0);
+
+        var tilesWidth = sideBySide ? TilesBasis + spare : width;
+        DeckCardGrid.Columns = Math.Max(1, (int)((tilesWidth + 6) / TileMin));
     }
 
-    private void ShowCardDetail(Models.HomeCityCard card)
+    /// <summary>The fill changes, and never the rim's thickness, so nothing shifts on a click.</summary>
+    private void SelectCard(Models.HomeCityCard card, Button tile, int slot, int total)
     {
+        if (_selectedTile != null) _selectedTile.Tag = null;
+        tile.Tag = "selected";
+        _selectedTile = tile;
+
         _cardDetails.TryGetValue(card.InternalName, out var detail);
-
-        DeckDetailCard.Visibility = Visibility.Visible;
+        DeckDetailSlot.Text = Strings.Format("ModPropDeckCardOf", slot, total);
         DeckDetailName.Text = detail?.Name ?? card.InternalName;
+        DeckDetailIcon.Source = detail?.IconPath != null && _cardIcons.TryGetValue(detail.IconPath, out var art)
+            ? art : null;
+        DeckDetailIcon.Visibility = DeckDetailIcon.Source != null ? Visibility.Visible : Visibility.Collapsed;
+        DeckDetailInternal.Text = card.InternalName;
 
-        DeckDetailIcon.Source =
-            detail?.IconPath != null && _cardIcons.TryGetValue(detail.IconPath, out var icon)
-                ? icon
-                : null;
-
-        // The modder's own sentence when there is one. 20 of a real deck's 35 cards carry none,
-        // so the line is dropped rather than filled with a placeholder — and those are exactly
-        // the cards the effects below now describe instead.
+        // The modder's own sentence when there is one. Many cards carry none, so the line is
+        // dropped rather than filled with a placeholder.
         var description = detail?.Description ?? "";
         DeckDetailText.Text = description;
-        DeckDetailText.Visibility =
-            description.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        DeckDetailText.Visibility = description.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
 
-        ShowCardEffects(card);
-    }
-
-    /// <summary>
-    /// What the card changes, in the game's own words — the lines with the percentages that the
-    /// engine builds from the card's effects rather than storing.
-    /// </summary>
-    private void ShowCardEffects(Models.HomeCityCard card)
-    {
         DeckDetailEffects.Children.Clear();
-
-        if (!_cardEffects.TryGetValue(card.InternalName, out var lines) || lines.Count == 0)
-        {
-            DeckDetailEffects.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        DeckDetailEffects.Visibility = Visibility.Visible;
-
-        var size = (double)Application.Current.FindResource("FontSizeCaption");
-        var brush = (Brush)Application.Current.FindResource("MpTextBody");
-
-        foreach (var line in lines)
-        {
-            DeckDetailEffects.Children.Add(new TextBlock
+        if (_cardEffects.TryGetValue(card.InternalName, out var lines))
+            foreach (var line in lines)
             {
-                Text = line,
-                Foreground = brush,
-                FontSize = size,
-                MaxWidth = 560,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 3),
-            });
-        }
+                var effect = new TextBlock
+                {
+                    Text = line,
+                    FontWeight = FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 3),
+                };
+                effect.SetResourceReference(TextBlock.FontSizeProperty, "SetRowDescSize");
+                effect.SetResourceReference(TextBlock.ForegroundProperty, "ModAccentText");
+                DeckDetailEffects.Children.Add(effect);
+            }
     }
 
     // ======================================================================
@@ -3850,7 +3677,7 @@ public partial class ModPropertiesDialog : Window
 
         if (string.IsNullOrWhiteSpace(folder))
         {
-            ShowHumanGamesEmpty();
+            HumanGamesGroup.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -3868,25 +3695,21 @@ public partial class ModPropertiesDialog : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"ModProperties: local matches unavailable — {ex.Message}");
-            ShowHumanGamesEmpty();
+            HumanGamesGroup.Visibility = Visibility.Collapsed;
             return;
         }
 
         if (rows.Count == 0)
         {
-            ShowHumanGamesEmpty();
+            HumanGamesGroup.Visibility = Visibility.Collapsed;
             return;
         }
 
-        HumanGamesEmptyHint.Visibility = Visibility.Collapsed;
+        HumanGamesGroup.Visibility = Visibility.Visible;
         foreach (var row in rows)
-            HumanGamesList.Children.Add(Controls.LocalGameCards.BuildHumanGameCard(
-                row, decks => Services.LocalGames.ResolveDeckArtAsync(installPath, exe, decks)));
-    }
-
-    private void ShowHumanGamesEmpty()
-    {
-        HumanGamesEmptyHint.Text = Strings.Get("ModPropHumanGamesEmpty");
-        HumanGamesEmptyHint.Visibility = Visibility.Visible;
+            HumanGamesList.Children.Add(Controls.LocalGameCards.BuildHumanGameRow(row,
+                Controls.LocalGameCards.BuildDeckSnapshotSection(row.Decks,
+                    decks => Services.LocalGames.ResolveDeckArtAsync(installPath, exe, decks))));
+        DropLastSeam(HumanGamesList);
     }
 }

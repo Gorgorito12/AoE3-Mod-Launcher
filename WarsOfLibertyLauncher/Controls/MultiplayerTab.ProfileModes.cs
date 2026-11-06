@@ -77,98 +77,6 @@ public partial class MultiplayerTab
 
     // ------------------------------------------------------------------ the header
 
-    /// <summary>
-    /// The header (55d): the 56-px portrait, the name in 20 px of serif, and one line saying where
-    /// the player stands in each mode — "Industrial in 1v1 · in placement in Teams". The rating
-    /// itself lives in the mode cards now, one per ladder, so the header carries none.
-    ///
-    /// <para>With no rated match anywhere (55f) the line becomes the sentence that explains it and
-    /// a "—" stands where a rating would be: never a 1500 nobody earned.</para>
-    /// </summary>
-    /// <remarks><c>internal</c> so the tests build the real header.</remarks>
-    internal UIElement BuildProfileHeader(LobbyUserSummary user)
-    {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var avatar = BuildAvatarDisc(user.DisplayName, user.AvatarUrl, 56, cornerRadius: 14);
-        avatar.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(avatar, 0);
-        grid.Children.Add(avatar);
-
-        var who = new StackPanel { Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        who.Children.Add(new TextBlock
-        {
-            Text = user.DisplayName,
-            FontFamily = (FontFamily)Application.Current.FindResource("DisplayFont"),
-            FontSize = (double)Application.Current.FindResource("MpProfileNameSize"),
-            FontWeight = FontWeights.Bold,
-            Foreground = (Brush)Application.Current.FindResource("UiTextHeadline"),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        });
-
-        string? status = null;
-        var noGames = false;
-        if (_cachedStanding is { } standing)
-        {
-            var (ladders, _) = ProfileLadders(standing);
-            noGames = ProfileModeView.NoGamesAnywhere(ladders);
-            status = noGames
-                ? Strings.Get("MpProfileNoMatchesYou")
-                : ProfileModeView.StatusLine(new[]
-                {
-                    ProfileModeView.StatusSegment(ladders.Default, ModeName(false),
-                        CommunityStatsView.RankedPlayers(_communityStats, team: false)),
-                    ProfileModeView.StatusSegment(ladders.Team, ModeName(true),
-                        CommunityStatsView.RankedPlayers(_communityStats, team: true)),
-                });
-        }
-        if (status != null)
-        {
-            who.Children.Add(new TextBlock
-            {
-                Text = status,
-                Margin = new Thickness(0, noGames ? 3 : 5, 0, 0),
-                Foreground = (Brush)Application.Current.FindResource("MpRankMutedText"),
-                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-                TextWrapping = TextWrapping.Wrap,
-            });
-        }
-        Grid.SetColumn(who, 1);
-        grid.Children.Add(who);
-
-        if (noGames)
-        {
-            var dash = new TextBlock
-            {
-                Text = Strings.Get("MpDash"),
-                Margin = new Thickness(12, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = (FontFamily)Application.Current.FindResource("DisplayFont"),
-                FontSize = (double)Application.Current.FindResource("MpProfileDashSize"),
-                FontWeight = FontWeights.Bold,
-                Foreground = (Brush)Application.Current.FindResource("MpTextFade"),
-            };
-            Grid.SetColumn(dash, 2);
-            grid.Children.Add(dash);
-        }
-
-        return new Border
-        {
-            Child = grid,
-            Tag = "ProfileHeader",
-            Padding = new Thickness(18, 16, 18, 16),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusLg"),
-            Background = (Brush)Application.Current.FindResource("MpProfileHeaderBg"),
-            // One rung up from the handoff's .15: WPF composites a Border's rim over what is
-            // behind the card, CSS over the card's own fill (see the bracket card's rim).
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimStrong"),
-            BorderThickness = new Thickness(1),
-        };
-    }
-
     // ------------------------------------------------------------------ the mode cards
 
     /// <summary>
@@ -182,14 +90,13 @@ public partial class MultiplayerTab
         var (ladders, legacy) = ProfileLadders(standing);
         if (ProfileModeView.NoGamesAnywhere(ladders)) return null;
 
-        // A refund not yet dismissed puts its banner over its mode's card (55n).
-        var solo = WithRefundBanner(BuildModeCard(ladders.Default, team: false, legacy), team: false);
+        var solo = BuildModeCard(ladders.Default, team: false, legacy);
         // An older backend has no team ladder to show; a card would only say "no matches".
-        var team = legacy ? null : WithRefundBanner(BuildModeCard(ladders.Team, team: true, legacy: false), team: true);
+        var team = legacy ? null : BuildModeCard(ladders.Team, team: true, legacy: false);
 
-        var grid = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+        var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(team == null ? 0 : 10) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(team == null ? 0 : 12) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(team == null ? 0 : 1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -209,11 +116,11 @@ public partial class MultiplayerTab
     {
         var wantColumn = stacked ? 0 : 2;
         if (Grid.GetColumn(second) == wantColumn) return;
-        grid.ColumnDefinitions[1].Width = new GridLength(stacked ? 0 : 10);
+        grid.ColumnDefinitions[1].Width = new GridLength(stacked ? 0 : 12);
         grid.ColumnDefinitions[2].Width = new GridLength(stacked ? 0 : 1, GridUnitType.Star);
         Grid.SetColumn(second, wantColumn);
         Grid.SetRow(second, stacked ? 1 : 0);
-        second.Margin = new Thickness(0, stacked ? 10 : 0, 0, 0);
+        second.Margin = new Thickness(0, stacked ? 12 : 0, 0, 0);
     }
 
     /// <summary>One mode's card, in whichever of its four shapes the ladder calls for.</summary>
@@ -237,7 +144,7 @@ public partial class MultiplayerTab
         {
             var shown = new ShownBadge(team ? BadgeKind.Team : BadgeKind.Solo, age, ladder!.LadderRank ?? 0, null, 0);
             // No click: the rank guide opens over the multiplayer tab, which is behind this window.
-            var badge = RankBadge.BuildFor(shown, 18, "profile-mode-" + (team ? "team" : "solo"),
+            var badge = RankBadge.BuildFor(shown, 22, "profile-mode-" + (team ? "team" : "solo"),
                 RankBadgeTips.Text(shown, CommunityStatsView.RequiredDecided(_communityStats)));
             badge.VerticalAlignment = VerticalAlignment.Center;
             badge.Margin = new Thickness(0, 0, 8, 0);
@@ -249,9 +156,9 @@ public partial class MultiplayerTab
         {
             Text = ModeName(team).ToUpper(Strings.Culture),
             VerticalAlignment = VerticalAlignment.Center,
-            FontSize = (double)Application.Current.FindResource("MpPillSize"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            FontSize = (double)Application.Current.FindResource("StatsLabelSize"),
+            FontWeight = FontWeights.Bold,
+            Foreground = (Brush)Application.Current.FindResource("StatsProse"),
         };
         Grid.SetColumn(label, 1);
         head.Children.Add(label);
@@ -271,8 +178,8 @@ public partial class MultiplayerTab
                 Text = where,
                 Margin = new Thickness(8, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
-                FontSize = (double)Application.Current.FindResource("MpLabelSize"),
-                Foreground = (Brush)Application.Current.FindResource("MpRankMutedText"),
+                FontSize = (double)Application.Current.FindResource("StatsProseSize"),
+                Foreground = (Brush)Application.Current.FindResource("StatsProse"),
             };
             Grid.SetColumn(right, 3);
             head.Children.Add(right);
@@ -297,20 +204,13 @@ public partial class MultiplayerTab
                 FillPlacementCard(body, ladder!, team);
                 break;
             default:
-                FillRankedCard(body, ladder!, inactive: shape == ProfileModeShape.Inactive, legacy);
+                FillRankedCard(body, ladder!, inactive: shape == ProfileModeShape.Inactive, legacy, team);
                 break;
         }
 
-        return new Border
-        {
-            Child = body,
-            Tag = ModeCardTag,
-            Padding = new Thickness(15, 14, 15, 14),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusLg"),
-            Background = (Brush)Application.Current.FindResource("MpPanel"),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimMedium"),
-            BorderThickness = new Thickness(1),
-        };
+        var card = ProfileGlass(body, new Thickness(18, 16, 18, 16));
+        card.Tag = ModeCardTag;
+        return card;
     }
 
     /// <summary>
@@ -318,14 +218,14 @@ public partial class MultiplayerTab
     /// and the three streak cells — or, while inactive, the rating, the peak, the record and the
     /// amber notice.
     /// </summary>
-    private void FillRankedCard(StackPanel body, LadderStanding ladder, bool inactive, bool legacy)
+    private void FillRankedCard(StackPanel body, LadderStanding ladder, bool inactive, bool legacy, bool team)
     {
         var rating = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
         rating.Children.Add(new TextBlock
         {
             Text = PlacementView.RatingText(ladder.Rating),
             FontFamily = (FontFamily)Application.Current.FindResource("DisplayFont"),
-            FontSize = (double)Application.Current.FindResource("MpProfileRatingSize"),
+            FontSize = (double)Application.Current.FindResource("ProfileRatingSize"),
             FontWeight = FontWeights.Bold,
             Foreground = (Brush)Application.Current.FindResource(inactive ? "MpTextSecondary" : "UiTextHeadline"),
         });
@@ -354,28 +254,7 @@ public partial class MultiplayerTab
         // The old payload carried no streaks; three cells of zeros would be a claim it never made.
         if (legacy) return;
 
-        var cells = new Grid { Margin = new Thickness(0, 10, 0, 0) };
-        for (var i = 0; i < 5; i++)
-            cells.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = i % 2 == 1 ? new GridLength(8) : new GridLength(1, GridUnitType.Star),
-            });
-
-        var current = ProfileModeView.CurrentStreak(ladder, DateTimeOffset.Now, Strings.Language);
-        cells.Children.Add(StreakCellOf(0, "MpProfileStreak", current.Text, current.BrushKey, current.Note,
-            infoTip: ladder.StreakCurrent > 0
-                ? Strings.Format("MpProfileStreakTipTitle", ladder.StreakCurrent) + "\n" + Strings.Get("MpProfileStreakTipBody")
-                : null));
-        cells.Children.Add(StreakCellOf(2, "MpProfileLongestWin", ladder.StreakBest.ToString(), "MpTextPrimary", null, null));
-        cells.Children.Add(StreakCellOf(4, "MpProfileLongestLoss", ladder.LossStreakBest.ToString(), "MpTextPrimary", null, null));
-
-        body.Children.Add(new Border
-        {
-            Child = cells,
-            Margin = new Thickness(0, 10, 0, 0),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
-            BorderThickness = new Thickness(0, 1, 0, 0),
-        });
+        body.Children.Add(BuildStreakCards(ladder, team));
 
         static FrameworkElement Extreme(string key, double value, string? at)
         {
@@ -439,90 +318,6 @@ public partial class MultiplayerTab
             }
             return tb;
         }
-    }
-
-    /// <summary>One of the three streak cells: the label (wrapping — the longest label is "longest
-    /// winning streak"), the figure, and under the current streak the line saying when it ran out.</summary>
-    private static FrameworkElement StreakCellOf(int column, string labelKey, string value, string brushKey,
-        string? note, string? infoTip)
-    {
-        var cell = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-        // With the "i" the label sits in an Auto column so the circle follows the word, as drawn;
-        // only the current streak has one, and its label is short. The two long labels ("longest
-        // winning streak") keep the star column and wrap.
-        var top = new Grid();
-        top.ColumnDefinitions.Add(new ColumnDefinition
-        {
-            Width = infoTip != null ? GridLength.Auto : new GridLength(1, GridUnitType.Star),
-        });
-        if (infoTip != null)
-        {
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        }
-        top.Children.Add(new TextBlock
-        {
-            Text = Strings.Get(labelKey),
-            FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.FindResource("MpTextLabel"),
-            TextWrapping = infoTip != null ? TextWrapping.NoWrap : TextWrapping.Wrap,
-            TextTrimming = infoTip != null ? TextTrimming.CharacterEllipsis : TextTrimming.None,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        if (infoTip != null)
-        {
-            // The "i" whose tooltip says what ends a streak (55d). Only beside a streak there IS —
-            // with none, there is nothing for that sentence to be about.
-            var info = new Border
-            {
-                Width = 13,
-                Height = 13,
-                Margin = new Thickness(5, 0, 0, 0),
-                CornerRadius = new CornerRadius(6.5),
-                BorderBrush = (Brush)Application.Current.FindResource("MpTextLabel"),
-                BorderThickness = new Thickness(1),
-                Background = Brushes.Transparent,
-                VerticalAlignment = VerticalAlignment.Center,
-                Tag = "StreakInfo",
-                Child = new TextBlock
-                {
-                    Text = "i",
-                    FontSize = 8.5,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
-                ToolTip = TooltipHelper.Wrap(infoTip),
-            };
-            ToolTipService.SetInitialShowDelay(info, 0);
-            Grid.SetColumn(info, 1);
-            top.Children.Add(info);
-        }
-        cell.Children.Add(top);
-        cell.Children.Add(new TextBlock
-        {
-            Text = value,
-            Margin = new Thickness(0, 5, 0, 0),
-            FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            FontSize = (double)Application.Current.FindResource("MpProfileStreakSize"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.FindResource(brushKey),
-        });
-        if (note != null)
-        {
-            cell.Children.Add(new TextBlock
-            {
-                Text = note,
-                Margin = new Thickness(0, 2, 0, 0),
-                FontSize = (double)Application.Current.FindResource("MpRankSmallSize"),
-                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-                TextWrapping = TextWrapping.Wrap,
-            });
-        }
-        Grid.SetColumn(cell, column);
-        return cell;
     }
 
     /// <summary>The amber notice of an inactive ladder (55f): the place is kept, and the date of the
@@ -590,7 +385,7 @@ public partial class MultiplayerTab
         var figure = new TextBlock
         {
             FontFamily = (FontFamily)Application.Current.FindResource("DisplayFont"),
-            FontSize = (double)Application.Current.FindResource("MpProfileRatingSize"),
+            FontSize = (double)Application.Current.FindResource("ProfileRatingSize"),
             FontWeight = FontWeights.Bold,
             Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
             ToolTip = TooltipHelper.Wrap(Strings.Get("MpEloProvisionalTip")),
@@ -599,46 +394,12 @@ public partial class MultiplayerTab
         figure.Inlines.Add(new Run("?") { Foreground = (Brush)Application.Current.FindResource("MpCaution") });
         rating.Children.Add(figure);
 
-        var progress = new TextBlock
-        {
-            Margin = new Thickness(0, 5, 0, 0),
-            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
-            Foreground = (Brush)Application.Current.FindResource("MpRankMutedText"),
-        };
-        AddTemplateRuns(progress, Strings.Get("MpProfilePlacementLine"), _ => new Run(
-            Strings.Format("MpPlacementProgressShort", played, required))
-        {
-            FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.FindResource("UiTextStrong"),
-        });
+        var progress = StatsProse(Strings.Get("MpProfileProvisional"), "StatsProseSize", "StatsProse");
+        progress.Margin = new Thickness(0, 5, 0, 0);
         rating.Children.Add(progress);
         body.Children.Add(rating);
 
-        var bottom = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-        var segments = BuildPlacementSegments(
-            PlacementView.Segments(played, required, ladder.PlacementResults), height: 8, gap: 4, profile: true);
-        bottom.Children.Add(segments);
-        var left = PlacementView.Remaining(played, required);
-        if (left > 0)
-        {
-            bottom.Children.Add(new TextBlock
-            {
-                Text = left == 1 ? Strings.Get("MpPlacementLeftOne") : Strings.Format("MpPlacementLeft", left),
-                Margin = new Thickness(0, 8, 0, 0),
-                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-                Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
-                TextWrapping = TextWrapping.Wrap,
-            });
-        }
-        body.Children.Add(new Border
-        {
-            Child = bottom,
-            Margin = new Thickness(0, 10, 0, 0),
-            Padding = new Thickness(0, 10, 0, 0),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
-            BorderThickness = new Thickness(0, 1, 0, 0),
-        });
+        body.Children.Add(BuildPlacementBox(ladder, played, required, team));
     }
 
     // ------------------------------------------------------------------ against each opponent

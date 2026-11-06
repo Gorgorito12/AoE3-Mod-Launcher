@@ -1,8 +1,10 @@
 using System;
+using System.Windows.Media.Animation;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models.Multiplayer;
@@ -58,6 +60,10 @@ public partial class MultiplayerTab
 
     private QuickMatchStage _qmStage = QuickMatchStage.Idle;
     private string? _qmLobbyId;
+    private RoomDemoData.Sample? _demoQuickSearch;
+    private bool _qmRadminNotReady;
+    private bool _qmRoomWasAlone;
+    private AnimationClock? _qmSeatDotClock;
     private string? _qmModId;
     private string? _qmModHash;
     private string? _qmModName;
@@ -117,7 +123,10 @@ public partial class MultiplayerTab
         if (profile == null || string.IsNullOrEmpty(GetInstallPath(profile)))
         {
             await MpAlertOverlay.NoticeAsync(
-                TabRootGrid, Strings.Get("QmFindMatch"), Strings.Get("QmModMissing"), Strings.Get("MpAlertOk"));
+                TabRootGrid, Strings.Get("QmFindMatch"),
+                profile == null ? Strings.Get("QmModMissing")
+                    : Strings.Format("QmModMissingNamed", profile.DisplayName),
+                Strings.Get("MpAlertOk"));
             return;
         }
 
@@ -143,6 +152,7 @@ public partial class MultiplayerTab
         _qmModHash = hash;
         _qmModName = profile.DisplayName;
         _qmStartedUtc = DateTime.UtcNow;
+        _qmRadminNotReady = false;
         StartQuickMatchClock();
         RefreshQuickMatchUi();
         DiagnosticLog.Write($"QuickMatch: searching a 1v1 in '{profile.Id}'.");
@@ -476,6 +486,7 @@ public partial class MultiplayerTab
             && !string.Equals(_session.CurrentLobbyId, _qmLobbyId, StringComparison.Ordinal))
         {
             EndQuickMatch("the player left the room");
+            ShowSearchStopped();
             return;
         }
         if (_qmStage == QuickMatchStage.Waiting && DateTime.UtcNow - _qmStartedUtc >= QuickMatchPlanner.GiveUpAfter)
@@ -540,6 +551,8 @@ public partial class MultiplayerTab
         {
             var stage = await Task.Run(() => RadminAssistantService.StageOf(RadminVpnService.GetStatus()));
             if (stage >= RadminStage.LoggedIn || !IsQuickMatchSearching) return;
+            _qmRadminNotReady = true;
+            RefreshQuickRoom();
             _showAppToast?.Invoke(new AppToast.ToastOptions(
                 "⚠",
                 Strings.Get("QmRadminTitle"),
@@ -572,5 +585,110 @@ public partial class MultiplayerTab
         _setQuickMatchPill?.Invoke(
             searching ? Strings.Format("QmPill", elapsed) : null,
             searching ? Strings.Format("QmPillTip", _qmModName ?? _qmModId ?? "") : null);
+        RefreshQuickRoom();
+    }
+
+    /// <summary>The room is only a search so far: alone in the room the search waits in.</summary>
+    internal bool QuickSearchAlone
+    {
+        get
+        {
+            var demo = _demoQuickSearch != null
+                && (_openingDemoRoom || (_demoRoomWindow != null && ReferenceEquals(_lobbyWindow, _demoRoomWindow)));
+            var searchingHere = demo || (_qmStage == QuickMatchStage.Waiting && _qmLobbyId != null
+                && string.Equals(_session?.CurrentLobbyId, _qmLobbyId, StringComparison.Ordinal));
+            return QuickMatchPlanner.WaitsAlone(searchingHere, RoomPlayerCount());
+        }
+    }
+
+    private string QuickSearchModName
+        => _qmModName ?? (_demoQuickSearch != null ? Strings.Get("MpTournamentDemoWatchMod") : _qmModId ?? "");
+
+    /// <summary>
+    /// The room window while it is only a search (design 96): the search box and the footer stand in
+    /// for the actions, and the free seat says a rival is coming. Goes back on its own the moment
+    /// somebody joins, because the same check answers both ways.
+    /// </summary>
+    private void RefreshQuickRoom()
+    {
+        var w = _lobbyWindow;
+        if (w == null) return;
+        var alone = QuickSearchAlone;
+        var shown = alone ? Visibility.Visible : Visibility.Collapsed;
+        w.QuickSearchCard.Visibility = shown;
+        w.QuickSearchFooter.Visibility = shown;
+        w.LobbyActions.Visibility = alone ? Visibility.Collapsed : Visibility.Visible;
+        if (alone != _qmRoomWasAlone)
+        {
+            _qmRoomWasAlone = alone;
+            StopQuickSeatDot();
+            RenderRoomMembers();
+        }
+        if (!alone) return;
+
+        var demo = _demoQuickSearch;
+        var elapsed = demo?.QuickElapsed ?? QuickMatchPlanner.Elapsed(DateTime.UtcNow - _qmStartedUtc);
+        var radmin = demo?.QuickRadminMissing ?? _qmRadminNotReady;
+        w.QuickSearchLabel.Text = Strings.Get("QmRoomSearching");
+        w.QuickSearchClock.Text = elapsed;
+        w.QuickSearchSince.Text = Strings.Format("QmRoomSince",
+            (demo != null ? DateTime.Now.AddMinutes(-2) : _qmStartedUtc.ToLocalTime()).ToString("HH:mm", Strings.Culture));
+        w.QuickSearchBody.Text = Strings.Format("QmRoomBody", QuickSearchModName);
+        w.QuickSearchNote.Text = Strings.Get("QmRoomNote");
+        w.QuickFooterTitle.Text = radmin
+            ? Strings.Get("QmRoomRadminTitle") : Strings.Format("QmRoomFooter", elapsed);
+        w.QuickFooterTitle.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
+            radmin ? "WindowNoticeTitle" : "WindowStrongText");
+        w.QuickFooterNote.Text = radmin
+            ? Strings.Format("QmRoomRadminBody", elapsed)
+            : Strings.Format("QmRoomGiveUp", (int)QuickMatchPlanner.GiveUpAfter.TotalMinutes);
+        w.QuickRadminButton.Content = Strings.Get("QmRadminOpen");
+        w.QuickRadminButton.Visibility = radmin ? Visibility.Visible : Visibility.Collapsed;
+        w.QuickStopButton.Content = Strings.Get("QmPillCancelTip");
+    }
+
+    /// <summary>"Stop searching": nothing to confirm, the room is empty.</summary>
+    private void StopQuickMatchFromRoom()
+    {
+        if (_demoQuickSearch != null)
+        {
+            DiagnosticLog.Write("QuickMatch demo: stop pressed; nothing to stop.");
+            ShowSearchStopped();
+            return;
+        }
+        _ = CancelQuickMatchAsync(Strings.Get("QmCancelled"));
+    }
+
+    private void ShowSearchStopped() => _showAppToast?.Invoke(new AppToast.ToastOptions(
+        "⏹", Strings.Get("QmFindMatch"), Strings.Get("QmCancelled"), Array.Empty<AppToast.ToastAction>(),
+        AutoDismissMs: 6000, Cause: ToastCause.Answer));
+
+    private System.Windows.Shapes.Ellipse QuickSeatDot()
+    {
+        StopQuickSeatDot();
+        var dot = new System.Windows.Shapes.Ellipse
+        {
+            Width = 6,
+            Height = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 2, 0),
+            Fill = (Brush)Application.Current.FindResource("MpAction"),
+        };
+        if (RankBadge.ReducedEffects || !SystemParameters.ClientAreaAnimation) return dot;
+        var pulse = new System.Windows.Media.Animation.DoubleAnimation(1, 0.35, TimeSpan.FromSeconds(0.8))
+        {
+            AutoReverse = true,
+            RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+        };
+        System.Windows.Media.Animation.Timeline.SetDesiredFrameRate(pulse, 30);
+        _qmSeatDotClock = pulse.CreateClock();
+        dot.ApplyAnimationClock(OpacityProperty, _qmSeatDotClock);
+        return dot;
+    }
+
+    private void StopQuickSeatDot()
+    {
+        _qmSeatDotClock?.Controller?.Stop();
+        _qmSeatDotClock = null;
     }
 }

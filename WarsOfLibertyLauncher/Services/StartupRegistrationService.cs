@@ -60,6 +60,7 @@ public static class StartupRegistrationService
     /// </summary>
     public static void ForgetStartupApproval()
     {
+        if (HarnessMode.Block("forget startup approval")) return;
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(StartupApprovedKey, writable: true);
@@ -223,6 +224,7 @@ public static class StartupRegistrationService
 
     public static bool Apply(bool enabled, bool startMinimized = false, string? exePathOverride = null)
     {
+        if (HarnessMode.Block($"startup registration enabled={enabled}")) return true;
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true)

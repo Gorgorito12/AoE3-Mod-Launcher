@@ -436,8 +436,8 @@ public static partial class Strings
         },
         ["ChangePathButton"] = new()
         {
-            [LangEn] = "Change...",
-            [LangEs] = "Cambiar...",
+            [LangEn] = "Change…",
+            [LangEs] = "Cambiar…",
         },
 
         // -------- Uninstall --------
@@ -458,11 +458,8 @@ public static partial class Strings
             [LangEs] = "Desinstalar",
         },
         // {0} = the copy's folder name, e.g. "Wars of Liberty (2)"
-        ["DlgUninstallQuestion"] = new()
-        {
-            [LangEn] = "Uninstall {0}?",
-            [LangEs] = "¿Desinstalar {0}?",
-        },
+        ["DlgUninstallQuestion"] = new() { [LangEn] = "Uninstall {0}?", [LangEs] = "¿Desinstalar {0}?" },
+        ["DlgUninstallQuestionCopy"] = new() { [LangEn] = "Uninstall the copy \"{0}\" of {1}?", [LangEs] = "¿Desinstalar la copia «{0}» de {1}?" },
         ["DlgUninstallFolderDeleted"] = new()
         {
             [LangEn] = "THIS FOLDER IS DELETED",
@@ -499,12 +496,12 @@ public static partial class Strings
         },        ["DlgUninstallSafeWithCopies"] = new()
         {
             [LangEn] = "Age of Empires III and your other copies are not touched.",
-            [LangEs] = "Age of Empires III y tus otras copias no se tocan.",
+            [LangEs] = "Ni Age of Empires III ni tus otras copias se tocan.",
         },
         ["DlgUninstallAlsoRemove"] = new()
         {
             [LangEn] = "ALSO REMOVE",
-            [LangEs] = "QUITAR TAMBIÉN",
+            [LangEs] = "TAMBIÉN QUITAR",
         },
         ["DlgUninstallOptShortcuts"] = new()
         {
@@ -514,17 +511,17 @@ public static partial class Strings
         ["DlgUninstallOptShortcutsDesc"] = new()
         {
             [LangEn] = "The desktop and Start menu shortcuts to this copy.",
-            [LangEs] = "Los accesos directos a esta copia en el escritorio y el menú Inicio.",
+            [LangEs] = "Los del Escritorio y el menú Inicio que abren esta copia.",
         },
         ["DlgUninstallOptRegistry"] = new()
         {
             [LangEn] = "Windows installed-apps entry",
-            [LangEs] = "Entrada en las aplicaciones de Windows",
+            [LangEs] = "Entrada en Aplicaciones de Windows",
         },
         ["DlgUninstallOptRegistryDesc"] = new()
         {
             [LangEn] = "Its line in Settings → Apps, so Windows stops listing it.",
-            [LangEs] = "Su línea en Configuración → Aplicaciones, para que Windows deje de mostrarla.",
+            [LangEs] = "Su línea en Configuración › Aplicaciones.",
         },
         ["DlgUninstallOptUserData"] = new()
         {
@@ -765,11 +762,7 @@ public static partial class Strings
         },
         // Opens the GAMES section. It states the consequence once, at the top,
         // instead of repeating a four-line paragraph under each switch.
-        ["DlgSettingsGamesIntro"] = new()
-        {
-            [LangEn] = "Age of Empires III does not record games by default, and the recording is the only place the launcher can read who won from. Without it a match cannot be rated.",
-            [LangEs] = "Age of Empires III no graba las partidas por defecto, y la grabación es el único sitio del que el launcher puede leer quién ganó. Sin ella, la partida no cuenta para el ELO.",
-        },
+        ["DlgSettingsGamesIntro"] = new() { [LangEn] = "Without a recording nobody can tell who won, and the match doesn't count for the ranking.", [LangEs] = "Sin grabación no se puede saber quién ganó, y la partida no cuenta para el ranking." },
         // --- Generic action labels. The redesign puts the verb on a fixed-width button
         // and the subject in the row title beside it, so the labels are one word and
         // shared across rows instead of each button restating its whole sentence.
@@ -838,11 +831,7 @@ public static partial class Strings
             [LangEn] = "Launcher version",
             [LangEs] = "Versión del launcher",
         },
-        ["DlgSettingsAdvInstallTitle"] = new()
-        {
-            [LangEn] = "Install on this PC",
-            [LangEs] = "Instalar en esta PC",
-        },
+        ["DlgSettingsAdvInstallTitle"] = new() { [LangEn] = "Install on this PC", [LangEs] = "Instalar en este PC" },
         ["DlgSettingsAdvTelemetryTitle"] = new()
         {
             [LangEn] = "Local diagnostic log",
@@ -900,11 +889,7 @@ public static partial class Strings
             [LangEn] = "Refresh",
             [LangEs] = "Refrescar",
         },
-        ["DlgSettingsUpdAutoTitle"] = new()
-        {
-            [LangEn] = "Update mods automatically",
-            [LangEs] = "Actualizar los mods automáticamente",
-        },
+        ["DlgSettingsUpdAutoTitle"] = new() { [LangEn] = "Update mods automatically", [LangEs] = "Actualizar mods automáticamente" },
         ["DlgSettingsUpdAutoDesc"] = new()
         {
             [LangEn] = "If your version does not match the host's, you cannot join their room.",
@@ -960,16 +945,6 @@ public static partial class Strings
             [LangEn] = "INSTALLED MODS",
             [LangEs] = "MODS INSTALADOS",
         },
-        ["DlgSettingsModsUpToDate"] = new()
-        {
-            [LangEn] = "Up to date",
-            [LangEs] = "Al día",
-        },
-        ["DlgSettingsModsUpdate"] = new()
-        {
-            [LangEn] = "Update",
-            [LangEs] = "Actualizar",
-        },
         ["DlgSettingsModsNone"] = new()
         {
             [LangEn] = "No mods installed yet.",
@@ -1001,11 +976,7 @@ public static partial class Strings
             [LangEs] = "Comprueba el hash de cada archivo antes de instalarlo.",
         },
         // --- GAMES (4b).
-        ["DlgSettingsGroupRanking"] = new()
-        {
-            [LangEn] = "RANKING",
-            [LangEs] = "CLASIFICACIÓN",
-        },
+        ["DlgSettingsGroupRanking"] = new() { [LangEn] = "RANKING", [LangEs] = "RANKING" },
         ["DlgSettingsRecOffTitle"] = new()
         {
             [LangEn] = "AoE3 recording is switched off",
@@ -1033,16 +1004,8 @@ public static partial class Strings
         },
         // The opt-out for uploading competitive recordings (ReplayUploadService.Decide). One
         // switch, on by default: implicit consent, stated in every competitive room.
-        ["DlgSettingsReplayUpTitle"] = new()
-        {
-            [LangEn] = "Share my competitive match recordings",
-            [LangEs] = "Compartir mis grabaciones de partidas competitivas",
-        },
-        ["DlgSettingsReplayUpDesc"] = new()
-        {
-            [LangEn] = "When you report a competitive match, its recording is uploaded so any player can download it. It is kept for a year.",
-            [LangEs] = "Cuando reportas una partida competitiva, su grabación se sube para que cualquier jugador pueda descargarla. Se guarda un año.",
-        },
+        ["DlgSettingsReplayUpTitle"] = new() { [LangEn] = "Upload my competitive recordings", [LangEs] = "Subir mis grabaciones competitivas" },
+        ["DlgSettingsReplayUpDesc"] = new() { [LangEn] = "When a match ends they are uploaded so anyone can download them for a year.", [LangEs] = "Al terminar, se suben para que cualquiera pueda descargarlas durante un año." },
         ["DlgSettingsReplayUpTip"] = new()
         {
             [LangEn] = "A recording holds every player's in-game name, civilization and every order of the match. Only competitive rooms, and only the matches you report as host. Turn it off and nothing is uploaded.",
@@ -1269,11 +1232,6 @@ public static partial class Strings
             [LangEn] = "Open the mod's install folder in Explorer.",
             [LangEs] = "Abre la carpeta donde está instalado el mod en el Explorador.",
         },
-        ["TipMpChangeModFolder"] = new()
-        {
-            [LangEn] = "Point the launcher at the mod's folder if you moved it or installed it elsewhere.",
-            [LangEs] = "Indícale al launcher dónde está la carpeta del mod si la moviste o la instalaste en otro lado.",
-        },
         ["TipMpAddExistingFolder"] = new()
         {
             [LangEn] = "Register a mod folder you already have on disk, without downloading it again.",
@@ -1427,18 +1385,18 @@ public static partial class Strings
         },
         ["ModPropTabGeneral"] = new()
         {
-            [LangEn] = "GENERAL",
-            [LangEs] = "GENERAL",
+            [LangEn] = "General",
+            [LangEs] = "General",
         },
         ["ModPropTabLocalFiles"] = new()
         {
-            [LangEn] = "LOCAL FILES",
-            [LangEs] = "ARCHIVOS LOCALES",
+            [LangEn] = "Files",
+            [LangEs] = "Archivos",
         },
         ["ModPropTabLanguage"] = new()
         {
-            [LangEn] = "LANGUAGE",
-            [LangEs] = "IDIOMA",
+            [LangEn] = "Language",
+            [LangEs] = "Idioma",
         },
 
         // -- Addons tab -------------------------------------------------------
@@ -1453,8 +1411,8 @@ public static partial class Strings
         },
         ["ModPropTabAddons"] = new()
         {
-            [LangEn] = "ADDONS",
-            [LangEs] = "ADDONS",
+            [LangEn] = "Add-ons",
+            [LangEs] = "Complementos",
         },
         ["AddonsSectionTitle"] = new()
         {
@@ -1464,13 +1422,13 @@ public static partial class Strings
         // --- STATISTICS tab: the games AoE3 recorded against the AI ---------------
         ["ModPropTabDecks"] = new()
         {
-            [LangEn] = "DECKS",
-            [LangEs] = "MAZOS",
+            [LangEn] = "Decks",
+            [LangEs] = "Barajas",
         },
         ["ModPropTabStats"] = new()
         {
-            [LangEn] = "STATISTICS",
-            [LangEs] = "ESTADÍSTICAS",
+            [LangEn] = "Statistics",
+            [LangEs] = "Estadísticas",
         },
         ["ModPropStatsTitle"] = new()
         {
@@ -1614,22 +1572,15 @@ public static partial class Strings
         // nothing on screen could reveal.
         ["ModPropDecksHint"] = new()
         {
-            [LangEn] = "The decks you have built, straight from the game — one per civilization "
-                     + "you have played. These are the cards you TAKE into a match, not the ones "
-                     + "you ended up sending: the game does not record that anywhere the launcher "
-                     + "can read.",
-            [LangEs] = "Los mazos que armaste, directo del juego — uno por civilización que hayas "
-                     + "jugado. Son las cartas que LLEVAS a la partida, no las que terminaste "
-                     + "enviando: eso el juego no lo guarda en ningún lado que el launcher pueda "
-                     + "leer.",
+            [LangEn] = "They are read from your home city's files. Pick a card to see what it does.",
+            [LangEs] = "Se leen de los archivos de tu metrópoli. Elige una carta para ver qué hace.",
         },
         ["ModPropDecksEmpty"] = new()
         {
-            [LangEn] = "No decks yet. Open the home city in the game, build one, and it will show up here.",
-            [LangEs] = "Todavía no hay mazos. Abre la ciudad natal en el juego, arma uno y aparecerá acá.",
+            [LangEn] = "No decks yet",
+            [LangEs] = "Todavía no hay barajas",
         },
         ["ModPropDecksCardCount"] = new() { [LangEn] = "{0} cards", [LangEs] = "{0} cartas" },
-        ["ModPropDecksLevel"] = new() { [LangEn] = "level {0}", [LangEs] = "nivel {0}" },
         ["TipModPropTabStats"] = new()
         {
             [LangEn] = "What you built, sent and gathered in your games against the AI.",
@@ -1642,12 +1593,8 @@ public static partial class Strings
         },
         ["AddonsSectionHint"] = new()
         {
-            [LangEn] = "Small community tweaks — a transparent interface, gun smoke, "
-                     + "and the like. They stay applied when the mod updates, and "
-                     + "turning one off puts the original files back.",
-            [LangEs] = "Retoques pequeños de la comunidad — interfaz transparente, humo "
-                     + "de armas y cosas así. Se mantienen cuando el mod se actualiza, y "
-                     + "al desactivar uno vuelven los archivos originales.",
+            [LangEn] = "They are applied again on their own after every update and repair. Turning one off restores the original files.",
+            [LangEs] = "Se vuelven a aplicar solos después de cada actualización y reparación. Al desactivar uno, se restauran los archivos originales.",
         },
         ["AddonsEmptyHint"] = new()
         {
@@ -1656,8 +1603,8 @@ public static partial class Strings
         },
         ["AddonImportButton"] = new()
         {
-            [LangEn] = "Add addon from file…",
-            [LangEs] = "Agregar addon desde archivo…",
+            [LangEn] = "Add from file…",
+            [LangEs] = "Añadir desde archivo…",
         },
         ["AddonImportFilter"] = new()
         {
@@ -1741,8 +1688,8 @@ public static partial class Strings
         },
         ["AddonsGroupCatalogHint"] = new()
         {
-            [LangEn] = "enabled in this install",
-            [LangEs] = "activados en esta instalación",
+            [LangEn] = "In this install",
+            [LangEs] = "En esta instalación",
         },
         ["AddonsGroupImported"] = new()
         {
@@ -1751,13 +1698,8 @@ public static partial class Strings
         },
         ["AddonsGroupImportedHint"] = new()
         {
-            [LangEn] = "available to every mod",
-            [LangEs] = "disponibles en todos los mods",
-        },
-        ["AddonBadgeActive"] = new()
-        {
-            [LangEn] = "ACTIVE",
-            [LangEs] = "ACTIVO",
+            [LangEn] = "Available in all your mods",
+            [LangEs] = "Disponibles en todos tus mods",
         },
         ["AddonBadgeCosmetic"] = new()
         {
@@ -1804,17 +1746,8 @@ public static partial class Strings
         },
         ["AddonEnableAnyway"] = new()
         {
-            [LangEn] = "Enable anyway...",
-            [LangEs] = "Activar igual...",
-        },
-        ["AddonsFooterNote"] = new()
-        {
-            [LangEn] = "Catalog addons are checked against their SHA-256 before anything is "
-                     + "written. Imported ones are copied into the launcher's folder so they "
-                     + "can be re-applied after every update.",
-            [LangEs] = "Los del catálogo se verifican con su SHA-256 antes de escribir nada. "
-                     + "Los importados se copian a la carpeta del launcher para poder volver "
-                     + "a aplicarlos tras cada actualización.",
+            [LangEn] = "Enable anyway…",
+            [LangEs] = "Activar igual…",
         },
         ["AddonDownloadAndEnable"] = new()
         {
@@ -1985,21 +1918,21 @@ public static partial class Strings
         },
         ["ModPropNoTranslations"] = new()
         {
-            [LangEn] = "This mod ships no translation packs.",
-            [LangEs] = "Este mod no incluye paquetes de traducción.",
+            [LangEn] = "This mod has no community translations yet",
+            [LangEs] = "Este mod todavía no tiene traducciones de la comunidad",
         },
         ["ModPropLanguageCurrent"] = new()
         {
-            [LangEn] = "Current language",
-            [LangEs] = "Idioma actual",
+            [LangEn] = "CURRENT LANGUAGE",
+            [LangEs] = "IDIOMA ACTUAL",
         },
         // Properties dialog expansion — folds the old SETTINGS
         // popup into the dialog so the gear button has a single
         // destination for all per-mod actions.
         ["ModPropTabUserData"] = new()
         {
-            [LangEn] = "USER DATA",
-            [LangEs] = "DATOS",
+            [LangEn] = "Data",
+            [LangEs] = "Datos",
         },
         ["ModPropCheckUpdates"] = new()
         {
@@ -2177,51 +2110,21 @@ public static partial class Strings
             [LangEs] = "Compartir diagnóstico",
         },
         // ---- LOCAL FILES (49a) ----
-        ["ModPropActiveCopy"] = new()
-        {
-            [LangEn] = "ACTIVE COPY",
-            [LangEs] = "COPIA ACTIVA",
-        },
         ["ModPropActiveCopyHint"] = new()
         {
-            [LangEn] = "This is the copy that opens when you press Play",
-            [LangEs] = "Es la copia que se abre al pulsar Jugar",
+            [LangEn] = "It's the one that opens when you press Play.",
+            [LangEs] = "Es la que se abre al pulsar Jugar.",
         },
         ["ModPropStockCopyHint"] = new()
         {
             [LangEn] = "Your own Age of Empires III. The launcher only opens it.",
             [LangEs] = "Tu propio Age of Empires III. El launcher solo lo abre.",
         },
-        ["ModPropTroubleTitle"] = new()
-        {
-            [LangEn] = "SOMETHING NOT WORKING?",
-            [LangEs] = "¿ALGO NO FUNCIONA?",
-        },
-        ["ModPropTroubleHint"] = new()
-        {
-            [LangEn] = "Start with Verify: it checks every file without downloading anything.",
-            [LangEs] = "Empieza por Verificar: revisa cada archivo sin descargar nada.",
-        },
         // ---- Share diagnostics, made findable (design handoff 50) ----
-        ["ModPropDiagStep2Title"] = new()
-        {
-            [LangEn] = "Still failing? Share diagnostics",
-            [LangEs] = "¿Sigue fallando? Comparte el diagnóstico",
-        },
-        ["ModPropDiagStep2Body"] = new()
-        {
-            [LangEn] = "Saves your logs and setup in one file. Post it on Discord so the team can see what went wrong.",
-            [LangEs] = "Guarda tus registros y tu configuración en un archivo. Publícalo en Discord para que el equipo vea qué falló.",
-        },
         ["ModPropRailProblems"] = new()
         {
             [LangEn] = "PROBLEMS?",
             [LangEs] = "¿PROBLEMAS?",
-        },
-        ["ModPropAskDiscord"] = new()
-        {
-            [LangEn] = "Ask on Discord",
-            [LangEs] = "Pregunta en Discord",
         },
         ["ModSearchResultsCount"] = new()
         {
@@ -2265,25 +2168,15 @@ public static partial class Strings
             [LangEn] = "COPIES OF THIS MOD",
             [LangEs] = "COPIAS DE ESTE MOD",
         },
-        ["ModPropCopiesDesc"] = new()
-        {
-            [LangEn] = "Separate installs of the same mod, each in its own folder. Useful to keep an older version or a test setup. Only the active one opens when you press Play.",
-            [LangEs] = "Instalaciones separadas del mismo mod, cada una en su carpeta. Sirven para conservar una versión anterior o una de pruebas. Solo la activa se abre al pulsar Jugar.",
-        },
         ["ModPropCopyActiveBadge"] = new()
         {
-            [LangEn] = "ACTIVE",
-            [LangEs] = "ACTIVA",
-        },
-        ["ModPropCopyOpensWithPlay"] = new()
-        {
-            [LangEn] = "Opens with Play",
-            [LangEs] = "Se abre con Jugar",
+            [LangEn] = "IN USE",
+            [LangEs] = "EN USO",
         },
         ["BtnMakeActive"] = new()
         {
-            [LangEn] = "Make active",
-            [LangEs] = "Hacer activa",
+            [LangEn] = "Use this one",
+            [LangEs] = "Usar esta",
         },
         ["BtnRemoveFromList"] = new()
         {
@@ -2295,21 +2188,6 @@ public static partial class Strings
             [LangEn] = "Uninstall…",
             [LangEs] = "Desinstalar…",
         },
-        ["TipUninstallCopy"] = new()
-        {
-            [LangEn] = "Removes this copy's folder from your disk. The launcher first checks that the folder really is this mod.",
-            [LangEs] = "Borra de tu disco la carpeta de esta copia. Antes, el launcher comprueba que la carpeta sea de verdad este mod.",
-        },
-        ["ModPropCopiesLegendRemove"] = new()
-        {
-            [LangEn] = "forgets the copy and keeps its files.",
-            [LangEs] = "olvida la copia y conserva sus archivos.",
-        },
-        ["ModPropCopiesLegendUninstall"] = new()
-        {
-            [LangEn] = "removes that copy from your disk.",
-            [LangEs] = "borra esa copia de tu disco.",
-        },
         ["ModPropInstallCopyTitle"] = new()
         {
             [LangEn] = "Install another copy",
@@ -2317,28 +2195,13 @@ public static partial class Strings
         },
         ["ModPropInstallCopyDesc"] = new()
         {
-            [LangEn] = "Downloads a fresh copy into a new folder. The copy you have stays as it is.",
-            [LangEs] = "Descarga una copia nueva en otra carpeta. La que tienes se queda como está.",
-        },
-        ["ModPropAddFolderTitle"] = new()
-        {
-            [LangEn] = "Add a folder you already have",
-            [LangEs] = "Añadir una carpeta que ya tienes",
-        },
-        ["ModPropAddFolderDesc"] = new()
-        {
-            [LangEn] = "Adds a copy that is already on your disk to the list. Nothing is downloaded.",
-            [LangEs] = "Añade a la lista una copia que ya está en tu disco. No se descarga nada.",
+            [LangEn] = "Downloads a new copy into another folder. The one you have doesn't change.",
+            [LangEs] = "Descarga una copia nueva en otra carpeta. La que tienes no cambia.",
         },
         ["ModPropFoldersSection"] = new()
         {
             [LangEn] = "FOLDERS",
             [LangEs] = "CARPETAS",
-        },
-        ["ModPropModFolderDesc"] = new()
-        {
-            [LangEn] = "Point the active copy at a folder you moved.",
-            [LangEs] = "Apunta la copia activa a una carpeta que moviste.",
         },
         ["ModPropShareDiagnosticsSaveTitle"] = new()
         {
@@ -2368,7 +2231,7 @@ public static partial class Strings
         ["ModPropCreateBackup"] = new()
         {
             [LangEn] = "Create backup",
-            [LangEs] = "Crear respaldo",
+            [LangEs] = "Crear copia de seguridad",
         },
         ["ModPropRestoreBackup"] = new()
         {
@@ -2413,8 +2276,8 @@ public static partial class Strings
         },
         ["ModPropBackupsNote"] = new()
         {
-            [LangEn] = "They keep saves, home cities and your profile. They do not include the mod's files.",
-            [LangEs] = "Guardan partidas, ciudades de origen y perfil. No incluyen los archivos del mod.",
+            [LangEn] = "They keep saves, home cities and your profile, not the mod's files",
+            [LangEs] = "Guardan partidas, metrópolis y tu perfil, no los archivos del mod",
         },
         ["ModPropGameSettingsSection"] = new()
         {
@@ -2424,7 +2287,7 @@ public static partial class Strings
         ["ModPropImportTitle"] = new()
         {
             [LangEn] = "Import from another mod",
-            [LangEs] = "Importar desde otro mod",
+            [LangEs] = "Importar de otro mod",
         },
         ["ModPropInstallsSection"] = new()
         {
@@ -2441,11 +2304,6 @@ public static partial class Strings
             [LangEn] = "{0} registered",
             [LangEs] = "{0} registradas",
         },
-        ["ModPropModFolderTitle"] = new()
-        {
-            [LangEn] = "Mod folder",
-            [LangEs] = "Carpeta del mod",
-        },
         ["ModPropAoe3FolderTitle"] = new()
         {
             [LangEn] = "AoE3 folder",
@@ -2453,13 +2311,13 @@ public static partial class Strings
         },
         ["ModPropFindInstallTitle"] = new()
         {
-            [LangEn] = "Can't find your installation?",
-            [LangEs] = "¿No encuentra tu instalación?",
+            [LangEn] = "Did you move the mod, or do you already have it in another folder?",
+            [LangEs] = "¿Moviste el mod o ya lo tienes en otra carpeta?",
         },
         ["ModPropFindInstallDesc"] = new()
         {
-            [LangEn] = "Looks for copies of the mod on every drive.",
-            [LangEs] = "Busca copias del mod en todos los discos.",
+            [LangEn] = "Choose its folder or let the launcher look on all your drives. It joins the list of copies; nothing is downloaded.",
+            [LangEs] = "Elige su carpeta o deja que el launcher la busque en todas tus unidades. Se suma a la lista de copias; no se descarga nada.",
         },
         ["ModPropTempTitle"] = new()
         {
@@ -2469,7 +2327,7 @@ public static partial class Strings
         ["ModPropTempShortDesc"] = new()
         {
             [LangEn] = "Download cache. Safe to delete; it comes back if you repair.",
-            [LangEs] = "Caché de descarga. Se puede borrar; se vuelve a bajar si reparas.",
+            [LangEs] = "Caché de descargas. Se puede borrar; vuelve si reparas.",
         },
         ["ModPropVerifyTitle"] = new()
         {
@@ -2579,8 +2437,8 @@ public static partial class Strings
         },
         ["ModPropRestoreNone"] = new()
         {
-            [LangEn] = "No backups yet — create one above and it will show up here.",
-            [LangEs] = "Aún no hay backups — crea uno arriba y aparecerá aquí.",
+            [LangEn] = "No backups yet",
+            [LangEs] = "Todavía no hay copias de seguridad",
         },
         ["ModPropBackupDone"] = new()
         {
@@ -2599,8 +2457,8 @@ public static partial class Strings
         },
         ["ModPropLanguageDesc"] = new()
         {
-            [LangEn] = "Choose the language used for this mod's in-game text.",
-            [LangEs] = "Elige el idioma de los textos del mod.",
+            [LangEn] = "Choose the language of the mod's text in the game.",
+            [LangEs] = "Elige el idioma de los textos del mod dentro del juego.",
         },
         ["ModPropOpenBtn"] = new()
         {
@@ -2614,8 +2472,8 @@ public static partial class Strings
         },
         ["ModPropRestoreBtn"] = new()
         {
-            [LangEn] = "Restore",
-            [LangEs] = "Restaurar",
+            [LangEn] = "Restore…",
+            [LangEs] = "Restaurar…",
         },
         // Sub-view crumbs — shown as "AJUSTES › RUTAS" etc when the
         // user drills into Paths / User data / Game language from
@@ -3149,18 +3007,18 @@ public static partial class Strings
         },
         ["PublishWizardStep1Hint"] = new()
         {
-            [LangEn] = "The wizard writes a mod.json and opens a PR against the catalog. Nothing is installed here.",
-            [LangEs] = "El asistente escribe un mod.json y abre un PR al catálogo. Aquí no se instala nada.",
+            [LangEn] = "What your mod is called and who makes it.",
+            [LangEs] = "Cómo se llama tu mod y quién lo hace.",
         },
         ["PublishWizardStep2Title"] = new()
         {
-            [LangEn] = "Look & feel",
-            [LangEs] = "Apariencia",
+            [LangEn] = "Look",
+            [LangEs] = "Aspecto",
         },
         ["PublishWizardStep2Hint"] = new()
         {
-            [LangEn] = "Accent colour, icon and banner. Optional but recommended.",
-            [LangEs] = "Color de acento, icono y banner. Opcional pero recomendado.",
+            [LangEn] = "How your mod looks in the launcher. All of it is optional.",
+            [LangEs] = "Cómo se ve tu mod en el launcher. Todo es opcional.",
         },
         ["PublishWizardStep3Title"] = new()
         {
@@ -3169,8 +3027,8 @@ public static partial class Strings
         },
         ["PublishWizardStep3Hint"] = new()
         {
-            [LangEn] = "How the mod's files live on disk and which executable launches it.",
-            [LangEs] = "Cómo se almacenan los archivos del mod y qué ejecutable lo lanza.",
+            [LangEn] = "Where and how your mod installs on each player's PC.",
+            [LangEs] = "Dónde y cómo se instala tu mod en el equipo de cada jugador.",
         },
         ["PublishWizardStep4Title"] = new()
         {
@@ -3179,18 +3037,18 @@ public static partial class Strings
         },
         ["PublishWizardStep4Hint"] = new()
         {
-            [LangEn] = "How the launcher pulls new versions. The fields below change with the mechanism you pick.",
-            [LangEs] = "Cómo el launcher obtiene nuevas versiones. Los campos de abajo cambian según el mecanismo.",
+            [LangEn] = "How new versions reach the players.",
+            [LangEs] = "Cómo les llegan las versiones nuevas a los jugadores.",
         },
         ["PublishWizardStep5Title"] = new()
         {
-            [LangEn] = "Description & links",
-            [LangEs] = "Descripción y enlaces",
+            [LangEn] = "Text",
+            [LangEs] = "Textos",
         },
         ["PublishWizardStep5Hint"] = new()
         {
-            [LangEn] = "Per-language description, the mod's homepage URL and your community links.",
-            [LangEs] = "Descripción por idioma, la URL del sitio del mod y tus enlaces de comunidad.",
+            [LangEn] = "What players read on your mod's page.",
+            [LangEs] = "Lo que leen los jugadores en la ficha de tu mod.",
         },
         ["PublishWizardStep6Title"] = new()
         {
@@ -3199,8 +3057,8 @@ public static partial class Strings
         },
         ["PublishWizardStep6Hint"] = new()
         {
-            [LangEn] = "Check the file below. The button opens GitHub with it already written for you.",
-            [LangEs] = "Revisa el archivo de abajo. El botón abre GitHub con él ya escrito.",
+            [LangEn] = "Check the mod.json and open the PR on the catalog.",
+            [LangEs] = "Comprueba el mod.json y abre el PR en el catálogo.",
         },
         ["PublishFieldId"] = new() { [LangEn] = "Id", [LangEs] = "Id" },
         ["PublishFieldIdHint"] = new()
@@ -3226,19 +3084,31 @@ public static partial class Strings
             [LangEn] = "Short tagline under the title. Example: Napoleonic Wars, 1789–1815",
             [LangEs] = "Frase corta bajo el título. Ejemplo: Guerras napoleónicas, 1789–1815",
         },
-        ["PublishFieldAccent"] = new() { [LangEn] = "Accent colour", [LangEs] = "Color de acento" },
+        ["PublishFieldAccent"] = new()
+        {
+            [LangEn] = "Mod colour",
+            [LangEs] = "Color del mod",
+        },
         ["PublishFieldAccentHint"] = new()
         {
             [LangEn] = "Hex format, e.g. #c8102e. It's the mod's brand colour in the launcher.",
             [LangEs] = "Formato hex, ej. #c8102e. Es el color de marca del mod en el launcher.",
         },
-        ["PublishFieldIcon"] = new() { [LangEn] = "Icon filename", [LangEs] = "Nombre del icono" },
+        ["PublishFieldIcon"] = new()
+        {
+            [LangEn] = "Icon",
+            [LangEs] = "Icono",
+        },
         ["PublishFieldIconHint"] = new()
         {
             [LangEn] = "icon.png — 256x256, PNG with alpha, ≤100 KB.",
             [LangEs] = "icon.png — 256x256, PNG con alfa, ≤100 KB.",
         },
-        ["PublishFieldBanner"] = new() { [LangEn] = "Banner filename", [LangEs] = "Nombre del banner" },
+        ["PublishFieldBanner"] = new()
+        {
+            [LangEn] = "Background image",
+            [LangEs] = "Imagen de fondo",
+        },
         ["PublishFieldBannerHint"] = new()
         {
             [LangEn] = "banner.png/.jpg — 1200x300, ≤500 KB.",
@@ -3252,18 +3122,18 @@ public static partial class Strings
         },
         ["PublishInstallOptUhc"] = new()
         {
-            [LangEn] = "Total conversion with its own patched exe (UHC) — runs from any folder",
-            [LangEs] = "Conversión total con su propio exe parcheado (UHC) — corre desde cualquier carpeta",
+            [LangEn] = "Own folder, a copy of AoE3",
+            [LangEs] = "Carpeta aparte, copia de AoE3",
         },
         ["PublishInstallOptAdditive"] = new()
         {
-            [LangEn] = "Adds new files to AoE3 (own suffixed exe/.bar, doesn't replace base files)",
-            [LangEs] = "Agrega archivos nuevos al AoE3 (exe/.bar propio con sufijo, no pisa el base)",
+            [LangEn] = "On top of the player's AoE3",
+            [LangEs] = "Encima del AoE3 del jugador",
         },
         ["PublishInstallOptReplace"] = new()
         {
-            [LangEn] = "Replaces AoE3 using the stock age3y.exe (gets its own registry entry)",
-            [LangEs] = "Reemplaza el AoE3 usando el age3y.exe stock (recibe su propia clave de registro)",
+            [LangEn] = "Total conversion with the original .exe",
+            [LangEs] = "Conversión total con el .exe original",
         },
         ["PublishFieldDefaultFolder"] = new() { [LangEn] = "Default install folder", [LangEs] = "Carpeta de instalación por defecto" },
         ["PublishFieldDefaultFolderHint"] = new()
@@ -3350,16 +3220,24 @@ public static partial class Strings
         },
         ["PublishFieldLinks"] = new()
         {
-            [LangEn] = "Community links",
-            [LangEs] = "Enlaces de la comunidad",
+            [LangEn] = "Other links",
+            [LangEs] = "Otros enlaces",
         },
         ["PublishFieldLinksHint"] = new()
         {
-            [LangEn] = "One per line, as type|url. Up to 4, HTTPS only. Types: website, discord, moddb, forum, wiki, video, other. Example: discord|https://discord.gg/your-mod",
-            [LangEs] = "Uno por línea, con el formato tipo|url. Hasta 4, solo HTTPS. Tipos: website, discord, moddb, forum, wiki, video, other. Ejemplo: discord|https://discord.gg/tu-mod",
+            [LangEn] = "Up to 4: Discord, ModDB, forum, wiki, video or other.",
+            [LangEs] = "Hasta 4: Discord, ModDB, foro, wiki, vídeo u otro.",
         },
-        ["PublishCopyJson"] = new() { [LangEn] = "Copy JSON", [LangEs] = "Copiar JSON" },
-        ["PublishOpenPr"] = new() { [LangEn] = "Open PR on GitHub", [LangEs] = "Abrir PR en GitHub" },
+        ["PublishCopyJson"] = new()
+        {
+            [LangEn] = "Copy",
+            [LangEs] = "Copiar",
+        },
+        ["PublishOpenPr"] = new()
+        {
+            [LangEn] = "Open PR on GitHub ↗",
+            [LangEs] = "Abrir PR en GitHub ↗",
+        },
         ["PublishWizardIntro"] = new()
         {
             [LangEn] = "This wizard builds a mod.json for the public catalog. Fill in each step, then on the last step copy the file or open a ready-made GitHub pull request. You don't install anything here — your mod is added by a PR to the catalog repo (Gorgorito12/aoe3-mods-catalog), which the launcher reads to list every mod.",
@@ -3453,7 +3331,11 @@ public static partial class Strings
             [LangEn] = "64-hex SHA-256 of the file the template serves. REQUIRED when you set a URL template — without GitHub's authenticity boundary the launcher won't install an external download unverified.",
             [LangEs] = "SHA-256 (64 hex) del archivo que sirve la plantilla. OBLIGATORIO si pones una plantilla de URL: sin la garantía de autenticidad de GitHub, el launcher no instala una descarga externa sin verificar.",
         },
-        ["PublishTranslationsHeader"] = new() { [LangEn] = "COMMUNITY TRANSLATIONS", [LangEs] = "TRADUCCIONES DE LA COMUNIDAD" },
+        ["PublishTranslationsHeader"] = new()
+        {
+            [LangEn] = "TRANSLATIONS",
+            [LangEs] = "TRADUCCIONES",
+        },
         ["PublishFieldTranslationsRepo"] = new() { [LangEn] = "Translations repo (owner/repo)", [LangEs] = "Repo de traducciones (owner/repo)" },
         ["PublishFieldTranslationsRepoHint"] = new()
         {
@@ -3505,8 +3387,8 @@ public static partial class Strings
         },
         ["PublishAdvancedSummaryGh"] = new()
         {
-            [LangEn] = "Host the .zip on your own CDN instead of on the release.",
-            [LangEs] = "Alojar el .zip en tu propia CDN en vez de en el release.",
+            [LangEn] = "The release file hosted outside GitHub, with its SHA-256.",
+            [LangEs] = "Archivo de la release alojado fuera de GitHub, con su SHA-256.",
         },
 
         // --- Step 4. The install payload moved here from step 3: it is the third url+sha
@@ -3514,8 +3396,8 @@ public static partial class Strings
         ["PublishGrpPayload"] = new() { [LangEn] = "INSTALL PACKAGE", [LangEs] = "PAQUETE DE INSTALACIÓN" },
         ["PublishGrpPayloadNote"] = new()
         {
-            [LangEn] = "What a FIRST install downloads, with any mechanism. Leave it blank if the launcher takes the .zip from your GitHub release.",
-            [LangEs] = "Lo que descarga una PRIMERA instalación, con cualquier mecanismo. Déjalo vacío si el launcher toma el .zip de tu release de GitHub.",
+            [LangEn] = "Only if the first install downloads from somewhere else.",
+            [LangEs] = "Solo si la primera instalación se descarga de otro sitio.",
         },
         // The four mechanisms had their Content nailed into the XAML and were never
         // translated. The value the schema stores is the Tag, which never changes.
@@ -3564,14 +3446,30 @@ public static partial class Strings
             [LangEs] = "Puedes publicar así, pero un mod nuevo pasa revisión manual y esto es lo primero que se pide.",
         },
         ["PublishMissingStepFormat"] = new() { [LangEn] = "step {0}", [LangEs] = "paso {0}" },
-        ["PublishMissingProbe"] = new() { [LangEn] = "probe file", [LangEs] = "archivo testigo" },
-        ["PublishMissingExecutable"] = new() { [LangEn] = "executable", [LangEs] = "ejecutable" },
-        ["PublishMissingDescription"] = new() { [LangEn] = "description", [LangEs] = "descripción" },
-        ["PublishMissingIcon"] = new() { [LangEn] = "icon", [LangEs] = "icono" },
+        ["PublishMissingProbe"] = new()
+        {
+            [LangEn] = "Probe file",
+            [LangEs] = "Archivo testigo",
+        },
+        ["PublishMissingExecutable"] = new()
+        {
+            [LangEn] = "Executable",
+            [LangEs] = "Ejecutable",
+        },
+        ["PublishMissingDescription"] = new()
+        {
+            [LangEn] = "Description",
+            [LangEs] = "Descripción",
+        },
+        ["PublishMissingIcon"] = new()
+        {
+            [LangEn] = "Icon",
+            [LangEs] = "Icono",
+        },
         ["PublishMissingNone"] = new()
         {
-            [LangEn] = "Nothing obvious is missing.",
-            [LangEs] = "No falta nada evidente.",
+            [LangEn] = "Your mod has everything it needs to install",
+            [LangEs] = "Tu mod tiene todo lo que necesita para instalarse",
         },
         // THE step the box used to be missing. Without a release carrying the overlay .zip the
         // sourceRepo + approvedReleaseTag collected two steps earlier resolve to nothing,
@@ -3668,12 +3566,12 @@ public static partial class Strings
         ["MpRoomsRadminHelp"] = new()
         {
             [LangEn] = "Help connecting",
-            [LangEs] = "Ayuda para conectar",
+            [LangEs] = "Ayuda para conectarte",
         },
         ["MpRoomsRadminHelpTooltip"] = new()
         {
-            [LangEn] = "How to connect with other players through Radmin VPN",
-            [LangEs] = "Cómo conectarte con otros jugadores mediante Radmin VPN",
+            [LangEn] = "Opens the Radmin assistant",
+            [LangEs] = "Abre el asistente de Radmin",
         },
         // Also the ProfileWindow's title and taskbar caption, since the subtab it named is
         // gone and the window is what replaced it.
@@ -3987,8 +3885,8 @@ public static partial class Strings
         },
         ["MpChipMenuNoIp"] = new()
         {
-            [LangEn] = "Radmin VPN not detected",
-            [LangEs] = "No se detecta Radmin VPN",
+            [LangEn] = "We couldn't find your Radmin IP.",
+            [LangEs] = "No encontramos tu IP de Radmin.",
         },
         // Just the unit, for the places that render the number and the word at different
         // sizes. The same in both languages: it is the name of the rating scale.
@@ -5036,11 +4934,7 @@ public static partial class Strings
             [LangEn] = "Watch the room",
             [LangEs] = "Ver la sala",
         },
-        ["MpWatchWindowTitle"] = new()
-        {
-            [LangEn] = "Watching a match",
-            [LangEs] = "Viendo una partida",
-        },
+        ["MpWatchWindowTitle"] = new() { [LangEn] = "Tournament match", [LangEs] = "Partida del torneo" },
         ["MpWatchRoster"] = new()
         {
             [LangEn] = "In the room",
@@ -5051,27 +4945,9 @@ public static partial class Strings
             [LangEn] = "Room chat",
             [LangEs] = "Chat de la sala",
         },
-        ["MpWatchSend"] = new()
-        {
-            [LangEn] = "Send",
-            [LangEs] = "Enviar",
-        },
-        ["MpWatchInGameFor"] = new()
-        {
-            [LangEn] = "in game for {0} min",
-            [LangEs] = "en partida desde hace {0} min",
-        },
+        ["MpWatchInGameFor"] = new() { [LangEn] = "In a match · {0} min", [LangEs] = "En partida · {0} min" },
         // Says what this window IS, inside the window. A preview that only admits to being
         // one in a commit message is a preview somebody screenshots as a promise.
-        ["MpWatchPreviewNote"] = new()
-        {
-            [LangEn] = "Preview. The server does not allow this yet: a room that has started "
-                     + "refuses every join, and a tournament room admits only the two players "
-                     + "of that match.",
-            [LangEs] = "Previsualizaci\u00f3n. El servidor todav\u00eda no permite esto: una sala que ya "
-                     + "empez\u00f3 rechaza cualquier entrada, y una sala de torneo solo admite a los "
-                     + "dos jugadores de ese cruce.",
-        },
         ["MpTournamentInProgress"] = new()
         {
             [LangEn] = "Being played now",
@@ -5329,71 +5205,14 @@ public static partial class Strings
         // The head counts. TWO numbers where there was one: the server's total carries no
         // `rated` predicate, and the page printed it under the words "rated matches" for a
         // build. The gap between them is the interesting part.
-        ["MpStatsHeadRated"] = new()
-        {
-            [LangEn] = "{0} rated of {1} matches",
-            [LangEs] = "{0} puntuadas de {1} partidas",
-        },
+        ["MpStatsHeadRated"] = new() { [LangEn] = "{0} rated matches in {1} days", [LangEs] = "{0} partidas puntuadas en {1} días" },
         // The fallback for a backend that sends no rated count. Saying how many matches there
         // were is still true; calling them rated would not be.
-        ["MpStatsHeadMatches"] = new()
-        {
-            [LangEn] = "{0} matches",
-            [LangEs] = "{0} partidas",
-        },
-        ["MpStatsHeadMaps"] = new()
-        {
-            [LangEn] = "{0} maps",
-            [LangEs] = "{0} mapas",
-        },
+        ["MpStatsHeadMatches"] = new() { [LangEn] = "{0} matches in {1} days", [LangEs] = "{0} partidas en {1} días" },
 
-        // How many matches actually moved a rating, and why the rest did not. Both figures
-        // come from columns that existed since the rating rules were written and that no
-        // endpoint read until now.
-        ["MpStatsHealthTitle"] = new()
-        {
-            [LangEn] = "MATCHES THAT COUNTED",
-            [LangEs] = "PARTIDAS QUE CONTARON",
-        },
-        ["MpStatsHealthCounted"] = new()
-        {
-            [LangEn] = "counted",
-            [LangEs] = "contaron",
-        },
-        ["MpStatsHealthNotCounted"] = new()
-        {
-            [LangEn] = "did not",
-            [LangEs] = "no contaron",
-        },
-        // The reason is the server's own identifier and is NOT translated: it is the word
-        // somebody greps the logs for, and a translated one would not be findable.
-        ["MpStatsHealthReason"] = new()
-        {
-            [LangEn] = "{0} of them: {1}",
-            [LangEs] = "{0} de ellas: {1}",
-        },
 
-        ["MpStatsActivityTitle"] = new()
-        {
-            [LangEn] = "WHEN ROOMS OPEN",
-            [LangEs] = "CUÁNDO SE ABREN SALAS",
-        },
-        ["MpStatsActivePlayers"] = new()
-        {
-            [LangEn] = "players in {0} days",
-            [LangEs] = "jugadores en {0} días",
-        },
-        // Says which clock, and says what is being counted. The server measures rooms being
-        // OPENED, not games being played - rooms are stamped server-side and never deleted,
-        // while a match only exists if somebody's game got reported at all. Drawing one and
-        // calling it the other is the mislabel this page just finished removing.
-        ["MpStatsActivityPeak"] = new()
-        {
-            [LangEn] = "Busiest around {0}, your time. It counts rooms being opened, not "
-                       + "games being played.",
-            [LangEs] = "La hora más movida es sobre las {0}, en tu horario. Cuenta cuándo se "
-                       + "abren salas, no cuándo se juega.",
-        },
+        ["MpStatsActivityTitle"] = new() { [LangEn] = "Activity", [LangEs] = "Actividad" },
+        ["MpStatsActivePlayers"] = new() { [LangEn] = "Players in the last {0} days", [LangEs] = "Jugadores en los últimos {0} días" },
 
         // The deck table is opt-in on this side and the server cannot tell. An empty table
         // under a live heading reads as broken; this says whose data it would be and how to
@@ -5421,57 +5240,14 @@ public static partial class Strings
             [LangEs] = "Algunas de estas cartas no están en los archivos de este mod, así "
                      + "que se muestran con su identificador interno.",
         },
-        ["MpStatsDecksEmptyTitle"] = new()
-        {
-            [LangEn] = "Nobody has shared a deck yet",
-            [LangEs] = "Todavía nadie ha compartido un mazo",
-        },
-        ["MpStatsDecksEmptyBody"] = new()
-        {
-            [LangEn] = "This table is built from the decks players share, and nobody has "
-                       + "shared one for this mod yet. It says which cards people BRING - no "
-                       + "recording carries the card that was actually played.",
-            [LangEs] = "Esta tabla se construye con los mazos que comparten los jugadores, y "
-                       + "todavía nadie ha compartido uno de este mod. Dice qué cartas TRAE "
-                       + "la gente: ninguna grabación lleva la carta que se jugó.",
-        },
-        ["MpStatsDecksEmptyAction"] = new()
-        {
-            // PRIVACY, not Multiplayer. The switch hangs off PrivacyHeader in
-            // LauncherSettingsDialog.xaml; this line had been sending people to the wrong
-            // section since it was written.
-            [LangEn] = "You share yours by default; it is in Settings, under Privacy.",
-            [LangEs] = "Tú compartes los tuyos por defecto; está en Ajustes, en Privacidad.",
-        },
+        ["MpStatsDecksEmptyBody"] = new() { [LangEn] = "Nobody has shared a {0} deck yet. Decks are shared from Launcher settings › Advanced › \"Share my decks with the community table\": it sends which cards you bring, never how you play.", [LangEs] = "Nadie compartió todavía un mazo de {0}. Los mazos se comparten desde Ajustes del launcher › Avanzado › «Compartir mis mazos con la tabla de la comunidad»: se envía qué cartas llevas, nunca cómo juegas." },
         ["MpStatsWindowDays"] = new()
         {
             [LangEn] = "last {0} days",
             [LangEs] = "últimos {0} días",
         },
-        ["MpStatsMapsOver"] = new()
-        {
-            [LangEn] = "over {0} matches",
-            [LangEs] = "sobre {0} partidas",
-        },
-        ["MpStatsTailMaps"] = new()
-        {
-            [LangEn] = "{0} more maps, one match each",
-            [LangEs] = "{0} mapas más, una partida cada uno",
-        },
-        // The same fold when the positional cut put maps OVER the bar into it. Then "one match
-        // each" is false of some of them and the row says only the count - and names none.
-        ["MpStatsTailMapsMixed"] = new()
-        {
-            [LangEn] = "{0} more maps",
-            [LangEs] = "{0} mapas m\u00E1s",
-        },
-        ["MpStatsTailMapsWhy"] = new()
-        {
-            [LangEn] = "A map played once says nothing about anybody's preferences, so "
-                       + "the tail is grouped instead of taking a row each.",
-            [LangEs] = "Un mapa con una sola partida no dice nada de las preferencias de "
-                       + "nadie, así que la cola se agrupa en vez de ocupar una fila cada uno.",
-        },
+        ["MpStatsMapsOver"] = new() { [LangEn] = "over {0} with a name", [LangEs] = "sobre {0} con nombre" },
+        ["MpStatsTailMaps"] = new() { [LangEn] = "{0} more maps, one match each.", [LangEs] = "{0} mapas más, una partida cada uno." },
         ["MpStatsSeeAll"] = new()
         {
             [LangEn] = "See all",
@@ -5482,89 +5258,14 @@ public static partial class Strings
             [LangEn] = "No data yet",
             [LangEs] = "Aún sin datos",
         },
-        ["MpStatsCivsCount"] = new()
-        {
-            [LangEn] = "{0} of {1} matches carry a civilization",
-            [LangEs] = "{0} de {1} partidas traen civilización",
-        },
-        ["MpStatsCivsWhy"] = new()
-        {
-            [LangEn] = "The launcher only started recording each player's civilization "
-                       + "recently. This table fills up with the matches played from then "
-                       + "on: in the older ones there is no way to work it out.",
-            [LangEs] = "El launcher empezó a registrar la civilización de cada jugador "
-                       + "hace poco. Esta tabla se llena con las partidas que se jueguen "
-                       + "desde entonces: en las viejas no hay forma de deducirla.",
-        },
-        ["MpStatsCivsMany"] = new()
-        {
-            [LangEn] = "This mod ships hundreds of civilizations, so most of them will sit "
-                       + "without a percentage for a long time. That is the normal case "
-                       + "here, not the exception.",
-            [LangEs] = "Este mod trae cientos de civilizaciones, así que la mayoría "
-                       + "estará mucho tiempo sin porcentaje. Ese es el caso normal aquí, "
-                       + "no la excepción.",
-        },
-        ["MpStatsOrderNote"] = new()
-        {
-            [LangEn] = "ordered by matches played",
-            [LangEs] = "orden por partidas jugadas",
-        },
         // The two rules, said under the table. Somebody who sees a 58 % below a 56 %
         // needs to know why, or the table looks broken rather than honest.
-        ["MpStatsCivsRules"] = new()
-        {
-            [LangEn] = "The percentage is over DECIDED matches, and is only published from "
-                       + "{0} of them. The order is by matches played: ordering by "
-                       + "percentage would put whoever won their only match on top.",
-            [LangEs] = "El porcentaje se calcula sobre partidas DECIDIDAS y solo se "
-                       + "publica a partir de {0}. Se ordena por partidas jugadas: "
-                       + "ordenar por porcentaje pondría arriba a quien ganó su única "
-                       + "partida.",
-        },
-        ["MpStatsTailCivs"] = new()
-        {
-            [LangEn] = "{0} more civilizations, with fewer than {1} matches",
-            [LangEs] = "{0} civilizaciones más, con menos de {1} partidas",
-        },
-        ["MpStatsTailCivsWhy"] = new()
-        {
-            [LangEn] = "no percentage until there is a sample",
-            [LangEs] = "sin porcentaje hasta que haya muestra",
-        },
+        ["MpStatsCivsRules"] = new() { [LangEn] = "Sorted by matches played. The percentage is worked out over decided matches and only appears from {0}; with fewer, the bar stays empty.", [LangEs] = "Ordenadas por partidas jugadas. El porcentaje se calcula sobre las decididas y solo aparece desde {0}; con menos, la barra queda vacía." },
+        ["MpStatsTailCivs"] = new() { [LangEn] = "{0} more civilizations with {1} matches or fewer: too few to say anything about them.", [LangEs] = "{0} civilizaciones más con {1} partidas o menos: muy pocas para decir nada de ellas." },
         ["MpStatsColWins"] = new()
         {
             [LangEn] = "WINS",
             [LangEs] = "VICTORIAS",
-        },
-        ["MpStatsHowMeasured"] = new()
-        {
-            [LangEn] = "HOW IT IS MEASURED",
-            [LangEs] = "CÓMO SE MIDE",
-        },
-        ["MpStatsHowRated"] = new()
-        {
-            [LangEn] = "Rated matches only: the ones the server accepted with a recording.",
-            [LangEs] = "Solo partidas puntuadas: las que el servidor aceptó con grabación.",
-        },
-        ["MpStatsHowDecided"] = new()
-        {
-            [LangEn] = "The percentage is over the DECIDED ones, not the played ones.",
-            [LangEs] = "El porcentaje se calcula sobre las DECIDIDAS, no sobre las jugadas.",
-        },
-        ["MpStatsHowNoSample"] = new()
-        {
-            [LangEn] = "A civilization without a sample shows a dash, never an invented "
-                       + "percentage.",
-            [LangEs] = "Una civilización sin muestra muestra un guión, nunca un "
-                       + "porcentaje inventado.",
-        },
-        ["MpStatsHowOld"] = new()
-        {
-            [LangEn] = "Matches older than the civilization recording carry none, and stay "
-                       + "out of this table.",
-            [LangEs] = "Las partidas anteriores al registro de civilización no la traen y "
-                       + "quedan fuera de esta tabla.",
         },
         ["MpSubtabRanking"] = new()
         {
@@ -5694,11 +5395,7 @@ public static partial class Strings
             [LangEn] = "PROVISIONAL",
             [LangEs] = "PROVISIONAL",
         },
-        ["MpProfileCurveTitle"] = new()
-        {
-            [LangEn] = "RATING OVER TIME",
-            [LangEs] = "EVOLUCIÓN DEL RATING",
-        },
+        ["MpProfileCurveTitle"] = new() { [LangEn] = "ELO over time", [LangEs] = "Evolución del ELO" },
         // With one point there is no line to draw, and a flat stroke would be a claim about a
         // rating that has held steady — which is false for somebody who has played once.
         ["MpProfileCurveTooFew"] = new()
@@ -5764,32 +5461,11 @@ public static partial class Strings
         // --- Clasificación: the community's civilization balance ------------------
         ["MpRankingModeCivs"] = new() { [LangEn] = "CIVS", [LangEs] = "CIVS" },
         ["MpSubtabStats"] = new() { [LangEn] = "Statistics", [LangEs] = "Estadísticas" },
-        // Fixed: this shipped as "Mapas mas jugados", without the accent.
-        // ⚠ COMMUNITY, and the name says so. These used to be MpStatsDecksTitle/Hint, which
-        // the profile's own deck section already owned — a dictionary initializer is indexer
-        // assignment, so the later declaration won and this table silently rendered "Your
-        // decks" over a community aggregate. Caught by NoKeyIsDeclaredTwice.
-        // --- The community-cards table, folded by civilization ---
-        // Beside the section label: the denominator, said. "from 6 decks for Germans" —
-        // publishing a share without saying over how many was the fault the redesign started
-        // from. Monospace, like every figure on the page. It used to carry the mod's total
-        // contributors too; that figure divides nothing on this page and the bar underneath
-        // repeated it, and both went with the bar.
-        ["MpStatsDecksHeaderFrom"] = new()
-        {
-            [LangEn] = "from {0} decks for {1}",
-            [LangEs] = "de {0} mazos de {1}",
-        },
         // The fold on the civilization strip. The arrow is the prototype's own.
         ["MpStatsDecksMorePills"] = new()
         {
             [LangEn] = "{0} more \u25BE",
             [LangEs] = "{0} m\u00E1s \u25BE",
-        },
-        ["MpStatsDecksCivCards"] = new()
-        {
-            [LangEn] = "{0} cards",
-            [LangEs] = "{0} cartas",
         },
         // A band's heading. The percentage once per band with its denominator beside it, never
         // once per card in a column. "in every German deck" when the band is unanimous.
@@ -5798,70 +5474,13 @@ public static partial class Strings
             [LangEn] = "{0} %",
             [LangEs] = "{0} %",
         },
-        ["MpStatsDecksBandEvery"] = new()
-        {
-            [LangEn] = "in every {0} deck",
-            [LangEs] = "en cada mazo de {0}",
-        },
-        ["MpStatsDecksBandOf"] = new()
-        {
-            [LangEn] = "in {0} of the {1}",
-            [LangEs] = "en {0} de los {1}",
-        },
+        ["MpStatsDecksBandEvery"] = new() { [LangEn] = "in all {0} decks", [LangEs] = "en los {0} mazos" },
+        ["MpStatsDecksBandOf"] = new() { [LangEn] = "in {0} of the {1} decks", [LangEs] = "en {0} de los {1} mazos" },
         // The folded cards. It said "seen once" while the fold also held everything past a
         // seven-row cap - a card in five of six decks printed as an example. The cap is gone
         // and the tail is only ever cards in one or two decks, which is what this now says.
-        ["MpStatsTailDecks"] = new()
-        {
-            [LangEn] = "{0} more cards, each in one or two decks",
-            [LangEs] = "{0} cartas m\u00E1s, cada una en uno o dos mazos",
-        },
-        // The same fold for a civilization UNDER the sample minimum, where every card is in it
-        // and "one or two decks" would be false of most. Names the deck count and the bar.
-        ["MpStatsTailDecksUnsampled"] = new()
-        {
-            [LangEn] = "{0} cards from only {1} decks \u2014 it takes {2} to name what people prefer",
-            [LangEs] = "{0} cartas de solo {1} mazos \u2014 hacen falta {2} para decir qu\u00E9 prefiere la gente",
-        },
-        ["MpStatsTailDecksOneDeck"] = new()
-        {
-            [LangEn] = "{0} cards from a single deck \u2014 it takes {1} to name what people prefer",
-            [LangEs] = "{0} cartas de un solo mazo \u2014 hacen falta {1} para decir qu\u00E9 prefiere la gente",
-        },
-        ["MpStatsTailDecksWhy"] = new()
-        {
-            [LangEn] = "Too thin a sample to say anything, so they are counted and not listed.",
-            [LangEs] = "Muy poca muestra para decir nada, as\u00ED que se cuentan y no se listan.",
-        },
-        ["MpStatsDecksShowAll"] = new()
-        {
-            [LangEn] = "Show all {0}",
-            [LangEs] = "Ver las {0}",
-        },
-        ["MpStatsCommunityDecksTitle"] = new()
-        {
-            [LangEn] = "The community deck",
-            [LangEs] = "El mazo de la comunidad",
-        },
-        // Every clause here is load-bearing. "Take into a match" and not "play", because no
-        // recording carries the card that was played. The {0} is the one clause the number
-        // needs, set in emphasis: a percentage here is a share of decks, never a win rate -
-        // the two used to sit in two columns a screen apart with two meanings.
-        ["MpStatsCommunityDecksHint"] = new()
-        {
-            [LangEn] = "How often each card shows up in the decks players share \u2014 the cards "
-                     + "they take into a match, not the ones they sent. The percentage is {0}, "
-                     + "nothing to do with winning. Hover a card for its name and what it does.",
-            [LangEs] = "Con qu\u00E9 frecuencia aparece cada carta en los mazos que la gente comparte: "
-                     + "las que llevan a la partida, no las que enviaron. El porcentaje es {0}, "
-                     + "y no tiene nada que ver con ganar. Pasa el mouse por una carta para ver su "
-                     + "nombre y qu\u00E9 hace.",
-        },
-        ["MpStatsCommunityDecksHintShare"] = new()
-        {
-            [LangEn] = "the share of decks that carry it",
-            [LangEs] = "la parte de los mazos que la llevan",
-        },
+        ["MpStatsTailDecks"] = new() { [LangEn] = "{0} more cards in 1 or 2 decks: too few to say the community prefers them.", [LangEs] = "{0} cartas más en 1 o 2 mazos: muy pocos para decir que la comunidad las prefiere." },
+        ["MpStatsCommunityDecksTitle"] = new() { [LangEn] = "What the community brings", [LangEs] = "Lo que lleva la comunidad" },
         // The full-width bar under the deck is GONE, and with it MpStatsDecksShareNoticeOn /
         // Off / ShareSettings. It said three things at once and none of them belonged here:
         // that sharing is automatic and where to switch it off is a privacy note, whose place
@@ -5900,76 +5519,19 @@ public static partial class Strings
             [LangEn] = "Teams",
             [LangEs] = "Equipos",
         },
-        // In a team game "matchup" is ambiguous - every pair of civilizations in a 3v3 met,
-        // and half of them were on the same side - so the two tables say which is which in
-        // their titles rather than leaving it to the footnote.
-        ["MpStatsRivalsTitle"] = new()
-        {
-            [LangEn] = "Civilizations against each other",
-            [LangEs] = "Civilizaciones enfrentadas",
-        },
-        ["MpStatsRivalsHint"] = new()
-        {
-            [LangEn] = "Rated team games only, counting pairs on opposite sides. The record is "
-                     + "the first civilization's. A percentage appears once a pairing has enough "
-                     + "decided games behind it.",
-            [LangEs] = "Sólo partidas por equipos puntuadas, contando parejas de bandos "
-                     + "contrarios. El récord es el de la primera civilización. El porcentaje "
-                     + "aparece cuando el enfrentamiento tiene suficientes partidas decididas "
-                     + "detrás.",
-        },
+        ["MpStatsRivalsHint"] = new() { [LangEn] = "In team games a match counts for every pair of civilizations that faced each other. The record and the percentage are the first one's.", [LangEs] = "En equipos, una partida cuenta para cada pareja de civilizaciones enfrentadas. El récord y el porcentaje son de la primera." },
         // Not "matchup": these two civilizations were on the same side, and the column heading
         // saying otherwise contradicted the footnote directly under the same table.
-        ["MpStatsAlliesColPair"] = new()
-        {
-            [LangEn] = "Pairing",
-            [LangEs] = "Pareja",
-        },
-        ["MpStatsAlliesTitle"] = new()
-        {
-            [LangEn] = "Civilizations played together",
-            [LangEs] = "Civilizaciones que juegan juntas",
-        },
+        ["MpStatsAlliesColPair"] = new() { [LangEn] = "PAIR", [LangEs] = "PAREJA" },
+        ["MpStatsAlliesTitle"] = new() { [LangEn] = "Played together", [LangEs] = "Juegan juntas" },
         // Says what the record means here, because the column headings are the same as the
         // table above and would otherwise read as one civilization beating its own ally.
-        ["MpStatsAlliesHint"] = new()
-        {
-            [LangEn] = "Rated team games only, counting pairs on the SAME side. The record is "
-                     + "how that pairing did together, so both civilizations won or lost the "
-                     + "same games.",
-            [LangEs] = "Sólo partidas por equipos puntuadas, contando parejas del MISMO bando. "
-                     + "El récord es el de la pareja jugando junta, así que las dos "
-                     + "civilizaciones ganaron o perdieron las mismas partidas.",
-        },
-        ["MpStatsFormatsTitle"] = new()
-        {
-            [LangEn] = "Team formats",
-            [LangEs] = "Formatos por equipos",
-        },
-        // The fallback for a participant count that does not halve. It should never happen -
-        // the server only rates 2v2 and 3v3 as team games - and if it does, saying the raw
-        // count beats inventing a format nobody played.
-        ["MpStatsFormatPlayers"] = new()
-        {
-            [LangEn] = "{0} players",
-            [LangEs] = "{0} jugadores",
-        },
-        ["MpStatsMatchupsTitle"] = new()
-        {
-            [LangEn] = "Civilization matchups",
-            [LangEs] = "Enfrentamientos entre civilizaciones",
-        },
+        ["MpStatsAlliesHint"] = new() { [LangEn] = "The pair's record: how many it won and lost on the same side.", [LangEs] = "Récord de la pareja: cuántas ganó y perdió jugando en el mismo bando." },
+        ["MpStatsMatchupsTitle"] = new() { [LangEn] = "Matchups", [LangEs] = "Enfrentamientos" },
         // Says the three things that make the numbers readable, because each of them makes a
         // reader distrust the table if they find it out on their own: only 1v1, only rated, and
         // the record belongs to the FIRST civilization of the pair.
-        ["MpStatsMatchupsHint"] = new()
-        {
-            [LangEn] = "Rated 1v1 only. The record is the first civilization's. A percentage "
-                     + "appears once a pairing has enough decided games behind it.",
-            [LangEs] = "Sólo 1v1 puntuado. El récord es el de la primera civilización. El "
-                     + "porcentaje aparece cuando el enfrentamiento tiene suficientes partidas "
-                     + "decididas detrás.",
-        },
+        ["MpStatsMatchupsHint"] = new() { [LangEn] = "The record and the percentage are the first civilization's. No length: the average of three matches says nothing.", [LangEs] = "El récord y el porcentaje son de la primera civilización de la pareja. Sin duración: la media de tres partidas no dice nada." },
         ["MpMatchupColPair"] = new()
         {
             [LangEn] = "MATCHUP",
@@ -5990,18 +5552,10 @@ public static partial class Strings
             [LangEn] = "vs",
             [LangEs] = "vs",
         },
-        ["MpStatsMapsTitle"] = new()
-        {
-            [LangEn] = "Most-played maps",
-            [LangEs] = "Mapas más jugados",
-        },
+        ["MpStatsMapsTitle"] = new() { [LangEn] = "Most played maps", [LangEs] = "Mapas más jugados" },
         // The two halves of the profile page. Short on purpose: they sit in a row that also
         // carries the page, and a long caption there costs width the ladder needs.
-        ["MpProfileSectionOverview"] = new()
-        {
-            [LangEn] = "Profile",
-            [LangEs] = "Perfil",
-        },
+        ["MpProfileSectionOverview"] = new() { [LangEn] = "Summary", [LangEs] = "Resumen" },
         ["MpProfileSectionDecks"] = new()
         {
             [LangEn] = "Decks",
@@ -6084,23 +5638,8 @@ public static partial class Strings
                      + "una. El porcentaje aparece sólo cuando una civilización tiene "
                      + "suficientes partidas decididas.",
         },
-        ["MpCivsLoading"] = new()
-        {
-            [LangEn] = "Loading...",
-            [LangEs] = "Cargando...",
-        },
-        // The honest empty state. It WILL be what everybody sees for a while, so it says why.
-        ["MpCivsEmpty"] = new()
-        {
-            [LangEn] = "No matches with a civilization yet. The launcher started recording which "
-                     + "one each player used, and this fills in from the matches played with it "
-                     + "— there is no way to work it out for older games.",
-            [LangEs] = "Todavía no hay partidas con civilización. El launcher empezó a registrar "
-                     + "cuál usó cada jugador, y esto se llena con las partidas que se jueguen "
-                     + "desde entonces: no hay forma de deducirla en las partidas viejas.",
-        },
         ["MpCivColCiv"] = new() { [LangEn] = "CIVILIZATION", [LangEs] = "CIVILIZACIÓN" },
-        ["MpCivColPlayed"] = new() { [LangEn] = "PLAYED", [LangEs] = "JUGADAS" },
+        ["MpCivColPlayed"] = new() { [LangEn] = "MATCHES", [LangEs] = "PARTIDAS" },
         ["MpCivColLength"] = new() { [LangEn] = "LENGTH", [LangEs] = "DURACIÓN" },
         ["MpProfileCivsTitle"] = new()
         {
@@ -6130,11 +5669,7 @@ public static partial class Strings
             [LangEs] = "Sobre tus últimas {0} partidas. El porcentaje sólo aparece cuando una "
                      + "civilización tiene suficientes partidas decididas detrás.",
         },
-        ["MpProfileTopMap"] = new()
-        {
-            [LangEn] = "MOST PLAYED MAP",
-            [LangEs] = "MAPA MÁS JUGADO",
-        },
+        ["MpProfileTopMap"] = new() { [LangEn] = "Most played map", [LangEs] = "Mapa más jugado" },
         ["MpProfileTopMapCount"] = new()
         {
             [LangEn] = "{0} of {1} matches",
@@ -6492,48 +6027,35 @@ public static partial class Strings
         },
         ["MpSignInButton"] = new() { [LangEn] = "Sign in with Discord", [LangEs] = "Iniciar sesión con Discord" },
         ["MpSignOutButton"] = new() { [LangEn] = "Sign out", [LangEs] = "Cerrar sesión" },
-        ["MpSignInDialogTitle"] = new() { [LangEn] = "Discord sign-in", [LangEs] = "Inicio de sesión Discord" },
-        ["MpSignInStep1"] = new()
-        {
-            [LangEn] = "Sign in with Discord: open this link in your browser (or copy it) and click Authorize.",
-            [LangEs] = "Inicia sesión con Discord: abre este enlace en tu navegador (o cópialo) y haz clic en Autorizar.",
-        },
+        ["MpSignInDialogTitle"] = new() { [LangEn] = "Sign in with Discord", [LangEs] = "Inicio de sesión con Discord" },
         ["MpSignInStep2"] = new()
         {
             // Only shown for legacy GitHub-style flows where the user has to
             // type a code into the browser. Discord skips this step entirely;
             // the dialog hides this text when the server returns an empty
             // user_code.
-            [LangEn] = "Type or paste this code into the browser, then approve:",
-            [LangEs] = "Escribe o pega este código en el navegador y aprueba:",
+            [LangEn] = "When asked, type this code:",
+            [LangEs] = "Cuando te lo pida, escribe este código:",
         },
         ["MpSignInWaiting"] = new()
         {
-            // Two plain sentences rather than one with an ellipsis in the middle: it has a
-            // whole row to itself now instead of being squeezed against Cancel, and
-            // "continues automatically" was vaguer than what actually happens, which is
-            // that the window closes.
-            [LangEn] = "Waiting for you to authorize in the browser. This window closes "
-                     + "itself when you are done.",
-            [LangEs] = "Esperando tu autorizaci\u00f3n en el navegador. Esta ventana se cierra "
-                     + "sola al terminar.",
+            [LangEn] = "Waiting for you to authorize in the browser.",
+            [LangEs] = "Esperando tu autorizaci\u00f3n en el navegador.",
         },
         ["MpSignInOpenBrowser"] = new() { [LangEn] = "Open browser", [LangEs] = "Abrir navegador" },
         ["MpSignInCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
         ["MpSignInCopyLink"] = new() { [LangEn] = "Copy link", [LangEs] = "Copiar enlace" },
-        ["MpSignInCopyLinkDone"] = new() { [LangEn] = "Copied ✓", [LangEs] = "¡Copiado! ✓" },
+        ["MpSignInCopyLinkDone"] = new() { [LangEn] = "Copied ✓", [LangEs] = "Copiado ✓" },
         // Says what to CHECK, not merely what to feel. "A browser you trust" asks the
         // player for a judgement they have no way to make; "the link starts with
         // discord.com" is a thing they can look at - which is also the reason the link
         // above this stopped being ellipsised.
         ["MpSignInBrowserHint"] = new()
         {
-            [LangEn] = "Check the link starts with discord.com and that it opens in a "
-                     + "browser you recognize. If not, copy it and paste it into Chrome, "
-                     + "Edge or Firefox.",
-            [LangEs] = "Comprueba que el enlace empieza por discord.com y que se abre en un "
-                     + "navegador que reconoces. Si no, c\u00f3pialo y p\u00e9galo en Chrome, Edge "
-                     + "o Firefox.",
+            [LangEn] = "Check that the link starts with {0} and that it opens in a browser "
+                     + "you recognize. If not, copy it and paste it into yours.",
+            [LangEs] = "Comprueba que el enlace empieza por {0} y que se abre en un navegador "
+                     + "que reconoces. Si no, c\u00f3pialo y p\u00e9galo en el tuyo.",
         },
         // The card's own caption, so the URL is labelled rather than floating loose.
         ["MpSignInUriLabel"] = new()
@@ -6545,7 +6067,7 @@ public static partial class Strings
         ["MpSignInPrivacyPrefix"] = new()
         {
             [LangEn] = "By signing in you agree to our ",
-            [LangEs] = "Al iniciar sesión aceptas nuestra ",
+            [LangEs] = "Al iniciar sesión aceptas la ",
         },
         ["MpSignInPrivacyLink"] = new()
         {
@@ -6564,61 +6086,25 @@ public static partial class Strings
         // -------------------------------------------------------------
         ["RadAsstWindowTitle"] = new()
         {
-            [LangEn] = "Radmin Assistant",
-            [LangEs] = "Asistente Radmin",
-        },
-        ["RadAsstHeaderTitle"] = new()
-        {
-            [LangEn] = "Connect to the AoE3 network",
-            [LangEs] = "Conéctate a la red AoE3",
-        },
-        ["RadAsstHeaderSubtitle"] = new()
-        {
-            [LangEn] = "We'll walk you through it. Most steps auto-advance.",
-            [LangEs] = "Te guiamos. La mayoría de los pasos avanzan solos.",
+            [LangEn] = "Radmin assistant",
+            [LangEs] = "Asistente de Radmin",
         },
         // Step 1 — open Radmin
         ["RadAsstStep1Title"] = new()
         {
-            [LangEn] = "Open Radmin VPN",
-            [LangEs] = "Abrir Radmin VPN",
-        },
-        ["RadAsstStep1BodyNotInstalled"] = new()
-        {
-            [LangEn] = "Radmin VPN isn't installed. Download it from Famatech to continue.",
-            [LangEs] = "Radmin VPN no está instalado. Descárgalo de Famatech para continuar.",
-        },
-        ["RadAsstStep1BodyDone"] = new()
-        {
-            [LangEn] = "Opened for you. If the window didn't come to front, click reopen.",
-            [LangEs] = "Lo abrimos por ti. Si la ventana no se ve, haz clic en reabrir.",
+            [LangEn] = "Install Radmin VPN",
+            [LangEs] = "Instala Radmin VPN",
         },
         ["RadAsstStep1BtnInstall"] = new()
         {
-            [LangEn] = "Download Radmin VPN",
-            [LangEs] = "Descargar Radmin VPN",
-        },
-        ["RadAsstStep1BtnReopen"] = new()
-        {
-            [LangEn] = "Open Radmin",
-            [LangEs] = "Abrir Radmin",
+            [LangEn] = "Install Radmin VPN",
+            [LangEs] = "Instalar Radmin VPN",
         },
         // Step 2 — sign in
         ["RadAsstStep2Title"] = new()
         {
-            [LangEn] = "Sign in to Radmin",
-            [LangEs] = "Inicia sesión en Radmin",
-        },
-        ["RadAsstStep2BodyWaiting"] = new()
-        {
-            [LangEn] = "Create a free Radmin account if you don't have one — we're waiting for your 26.x.x.x address to appear…",
-            [LangEs] = "Crea una cuenta gratis de Radmin si no tienes — esperando tu dirección 26.x.x.x…",
-        },
-        ["RadAsstStep2BodyDone"] = new()
-        {
-            // {0} = the user's 26.x.x.x address.
-            [LangEn] = "Signed in. Your Radmin IP: {0}",
-            [LangEs] = "Sesión iniciada. Tu IP de Radmin: {0}",
+            [LangEn] = "Open Radmin and sign in",
+            [LangEs] = "Abre Radmin e inicia sesión",
         },
         // Step 3 — paste network name + Join
         ["RadAsstStep3Title"] = new()
@@ -6626,25 +6112,10 @@ public static partial class Strings
             [LangEn] = "Join the network",
             [LangEs] = "Únete a la red",
         },
-        ["RadAsstStep3BodyPending"] = new()
-        {
-            [LangEn] = "First sign in above. Then we'll prepare the network name for you.",
-            [LangEs] = "Primero inicia sesión arriba. Luego preparamos el nombre de la red.",
-        },
-        ["RadAsstStep3BodyActive"] = new()
-        {
-            [LangEn] = "In Radmin: Join network → Gaming tab → paste (Ctrl+V) → Join.",
-            [LangEs] = "En Radmin: Unirse a la red → pestaña Gaming → pega (Ctrl+V) → Unirse.",
-        },
-        ["RadAsstStep3BodyDone"] = new()
-        {
-            [LangEn] = "Joined!",
-            [LangEs] = "¡Unido!",
-        },
         ["RadAsstStep3Hint"] = new()
         {
-            [LangEn] = "The network name is already in your clipboard.",
-            [LangEs] = "El nombre de la red ya está en tu portapapeles.",
+            [LangEn] = "Already joined and it doesn't tick? Check in Radmin that the network is on your list.",
+            [LangEs] = "¿Ya te uniste y no se marca? Comprueba en Radmin que la red aparece en tu lista.",
         },
         ["RadAsstCopyNetwork"] = new()
         {
@@ -6654,26 +6125,6 @@ public static partial class Strings
         // Step 4 — confirmation (until seed-peer ping ships, this stays
         // as "verify manually" — overpromising kills the assistant's
         // credibility on first failure).
-        ["RadAsstStep4Title"] = new()
-        {
-            [LangEn] = "Connection confirmed",
-            [LangEs] = "Conexión confirmada",
-        },
-        ["RadAsstStep4BodyPending"] = new()
-        {
-            [LangEn] = "Will mark itself once you finish the steps above.",
-            [LangEs] = "Se marcará solo cuando termines los pasos de arriba.",
-        },
-        ["RadAsstStep4BodyManual"] = new()
-        {
-            [LangEn] = "Verify in Radmin that you appear in the 'Age of Empires III…' network. (Auto-detection is on its way.)",
-            [LangEs] = "Verifica en Radmin que apareces unido a la red 'Age of Empires III…'. (La detección automática está por llegar.)",
-        },
-        ["RadAsstStep4BodyDone"] = new()
-        {
-            [LangEn] = "You're in the AoE3 network. You can close this assistant.",
-            [LangEs] = "Estás en la red AoE3. Puedes cerrar este asistente.",
-        },
         // Footer
         // The folded rows. A finished step is a RESULT, not an instruction, so these are
         // shorter than the bodies they replace: "Radmin abierto", not "Lo abrimos por ti.
@@ -6682,30 +6133,20 @@ public static partial class Strings
         // The title bar's only line, since the subtitle went. Deliberately the PRODUCT
         // rather than an instruction: "Conectate a la red AoE3" was a heading over a
         // checklist, and it kept saying it after you were connected.
-        ["RadAsstTitleBar"] = new()
-        {
-            [LangEn] = "Radmin VPN",
-            [LangEs] = "Radmin VPN",
-        },
         ["RadAsstStep1Done"] = new()
         {
-            [LangEn] = "Radmin open",
-            [LangEs] = "Radmin abierto",
+            [LangEn] = "Radmin VPN installed",
+            [LangEs] = "Radmin VPN instalado",
         },
         ["RadAsstStep2Done"] = new()
         {
-            [LangEn] = "Signed in \u00b7 IP {0}",
-            [LangEs] = "Sesi\u00f3n iniciada \u00b7 IP {0}",
+            [LangEn] = "Signed in · IP `{0}`",
+            [LangEs] = "Sesión iniciada · IP `{0}`",
         },
         ["RadAsstStep3Done"] = new()
         {
-            [LangEn] = "Joined the network",
-            [LangEs] = "Unido a la red",
-        },
-        ["RadAsstStep4Done"] = new()
-        {
-            [LangEn] = "Connection confirmed",
-            [LangEs] = "Conexi\u00f3n confirmada",
+            [LangEn] = "On the AoE3 network",
+            [LangEs] = "En la red AoE3",
         },
         ["RadAsstProgress"] = new()
         {
@@ -6714,8 +6155,8 @@ public static partial class Strings
         },
         ["RadAsstAllDone"] = new()
         {
-            [LangEn] = "All four steps are done.",
-            [LangEs] = "Los cuatro pasos est\u00e1n completos.",
+            [LangEn] = "All three steps are done.",
+            [LangEs] = "Los tres pasos están completos.",
         },
         ["RadAsstHideSteps"] = new()
         {
@@ -6732,8 +6173,8 @@ public static partial class Strings
         },
         ["RadAsstConnectedIp"] = new()
         {
-            [LangEn] = "your Radmin IP {0}",
-            [LangEs] = "tu IP de Radmin {0}",
+            [LangEn] = "Your Radmin IP: `{0}`",
+            [LangEs] = "Tu IP de Radmin: `{0}`",
         },
         ["RadAsstNetworkLabel"] = new()
         {
@@ -6752,8 +6193,8 @@ public static partial class Strings
         },
         ["RadAsstCopyDone"] = new()
         {
-            [LangEn] = "It\u2019s already in your clipboard.",
-            [LangEs] = "Ya est\u00e1 en tu portapapeles.",
+            [LangEn] = "✓ Copied",
+            [LangEs] = "✓ Copiado",
         },
         // What the launcher is watching for while the user is in Radmin's window. Honest
         // about who does what: they join, we notice.
@@ -6764,8 +6205,8 @@ public static partial class Strings
         },
         ["RadAsstDontShowAgain"] = new()
         {
-            [LangEn] = "Don't show this again",
-            [LangEs] = "No mostrar de nuevo",
+            [LangEn] = "Don't show again",
+            [LangEs] = "No volver a mostrar",
         },
         ["RadAsstClose"] = new()
         {
@@ -8513,16 +7954,8 @@ public static partial class Strings
         // open") described something the user already had — presence rides an
         // always-on socket while signed in, and CloseToTray defaults on — so it read
         // as "isn't this already happening?" and made the toggle look broken.
-        ["DlgLauncherSettingsStartWithWindows"] = new()
-        {
-            [LangEn] = "Start with Windows in the background",
-            [LangEs] = "Iniciar con Windows en segundo plano",
-        },
-        ["DlgLauncherSettingsStartWithWindowsHint"] = new()
-        {
-            [LangEn] = "It waits in the system tray, so you show up as online without opening it.",
-            [LangEs] = "Se queda en la bandeja del sistema y apareces como conectado sin abrirlo.",
-        },
+        ["DlgLauncherSettingsStartWithWindows"] = new() { [LangEn] = "Start with Windows", [LangEs] = "Arrancar con Windows" },
+        ["DlgLauncherSettingsStartWithWindowsHint"] = new() { [LangEn] = "Starts in the background: you show as online without opening it.", [LangEs] = "Arranca en segundo plano: apareces conectado sin abrirlo." },
         ["DlgLauncherSettingsStartupFailed"] = new()
         {
             [LangEn] = "Windows would not let the launcher register itself to start automatically. "
@@ -8571,24 +8004,8 @@ public static partial class Strings
             [LangEn] = "No, thanks",
             [LangEs] = "No, gracias",
         },
-        ["DlgSettingsBgInstallPromptTitle"] = new()
-        {
-            [LangEn] = "Install a stable copy?",
-            [LangEs] = "¿Instalar una copia estable?",
-        },
-        ["DlgSettingsBgInstallPromptBody"] = new()
-        {
-            [LangEn] = "For \"start with Windows\" to keep working, the launcher should run from a "
-                     + "fixed location. Right now it runs from this .exe, and auto-start will break if "
-                     + "you move or delete it.\n\n"
-                     + "Install a stable copy on this PC now? (You can keep using this .exe; nothing "
-                     + "else changes.)",
-            [LangEs] = "Para que \"iniciar con Windows\" siga funcionando, el launcher debería ejecutarse "
-                     + "desde una ubicación fija. Ahora se ejecuta desde este .exe, y el inicio automático "
-                     + "se romperá si lo mueves o lo borras.\n\n"
-                     + "¿Instalar ahora una copia estable en esta PC? (Puedes seguir usando este .exe; no "
-                     + "cambia nada más.)",
-        },
+        ["DlgSettingsBgInstallPromptTitle"] = new() { [LangEn] = "Install a stable copy", [LangEs] = "Instalar una copia estable" },
+        ["DlgSettingsBgInstallPromptBody"] = new() { [LangEn] = "It is running from a portable folder right now. If you move or delete it, Windows will keep trying to open something that is no longer there.", [LangEs] = "Ahora se está ejecutando desde una carpeta portátil. Si la mueves o la borras, Windows seguirá intentando abrir algo que ya no está ahí." },
         ["DlgSettingsBgInstallFailed"] = new()
         {
             [LangEn] = "Couldn't install the stable copy. Auto-start was set up to use this .exe instead — "
@@ -8597,11 +8014,7 @@ public static partial class Strings
                      + ".exe — puede dejar de funcionar si lo mueves o lo borras.",
         },
         // Buttons for the themed first-launch install dialog (SelfInstallPromptDialog).
-        ["DlgSettingsBgInstallPromptYes"] = new()
-        {
-            [LangEn] = "Install a copy",
-            [LangEs] = "Instalar una copia",
-        },
+        ["DlgSettingsBgInstallPromptYes"] = new() { [LangEn] = "Install stable copy", [LangEs] = "Instalar copia estable" },
         ["DlgSettingsBgInstallPromptNo"] = new()
         {
             [LangEn] = "Not now",
@@ -8794,11 +8207,7 @@ public static partial class Strings
             [LangEn] = "Minimize to system tray on close",
             [LangEs] = "Minimizar a la bandeja al cerrar",
         },
-        ["DlgLauncherSettingsMinimizeToTrayHint"] = new()
-        {
-            [LangEn] = "Right-click the tray icon → Exit to close it completely.",
-            [LangEs] = "Clic derecho en el icono de la bandeja → Salir para cerrarlo del todo.",
-        },
+        ["DlgLauncherSettingsMinimizeToTrayHint"] = new() { [LangEn] = "The ✕ leaves it in the system tray instead of closing it.", [LangEs] = "La ✕ lo deja en la bandeja del sistema en vez de cerrarlo." },
         ["DlgLauncherSettingsMinimizeToTrayTip"] = new()
         {
             [LangEn] = "On by default: the X sends the launcher to the system tray so it keeps running "
@@ -8827,11 +8236,7 @@ public static partial class Strings
             [LangEn] = "Tell me when someone opens a room",
             [LangEs] = "Avisarme cuando alguien abre una sala",
         },
-        ["DlgSettingsNotifyRoomsHint"] = new()
-        {
-            [LangEn] = "Only for mods you have installed.",
-            [LangEs] = "Solo para mods que tengas instalados.",
-        },
+        ["DlgSettingsNotifyRoomsHint"] = new() { [LangEn] = "Only for mods you have installed.", [LangEs] = "Solo de mods que tienes instalados." },
         // It used to say "only while the window isn't in focus", which stopped being true when the
         // pushed room started drawing its card inside the window too.
         ["DlgSettingsNotifyRoomsTip"] = new()
@@ -8968,19 +8373,13 @@ public static partial class Strings
         },
         ["ModPropSettingsShare"] = new()
         {
-            [LangEn] = "Keep the same settings in every mod",
-            [LangEs] = "Mantener los mismos ajustes en todos los mods",
+            [LangEn] = "Same settings in every mod",
+            [LangEs] = "Mismos ajustes en todos los mods",
         },
         ["ModPropSettingsShareHint"] = new()
         {
-            [LangEn] = "Every mod with this ticked keeps the same graphics, sound and hotkeys: change "
-                     + "them while playing any of them and the rest pick them up. A mod without it is "
-                     + "left alone. The first time this writes, the mod's original settings are saved "
-                     + "beside their file.",
-            [LangEs] = "Todos los mods con esto marcado mantienen los mismos gráficos, sonido y atajos: "
-                     + "los cambias jugando a cualquiera de ellos y el resto los adopta. Un mod sin "
-                     + "marcar no se toca. La primera vez que se escribe, los ajustes originales del mod "
-                     + "se guardan junto a su archivo.",
+            [LangEn] = "Mods with this on share graphics, sound and hotkeys: change them while playing one and the others follow. The first time, a copy of the mod's original settings is saved.",
+            [LangEs] = "Los mods con esto activado comparten gráficos, sonido y atajos: si los cambias jugando a uno, los demás también. La primera vez se guarda una copia de los ajustes originales del mod.",
         },
         ["DlgLauncherSettingsSectionPrivacy"] = new()
         {
@@ -9066,16 +8465,8 @@ public static partial class Strings
         // silent write it was apologising for.
 
         // --- Game recording (how a match result is known at all) ---
-        ["DlgSettingsGameRecording"] = new()
-        {
-            [LangEn] = "Let the launcher switch recording on",
-            [LangEs] = "Dejar que el launcher active la grabación",
-        },
-        ["DlgSettingsGameRecordingHint"] = new()
-        {
-            [LangEn] = "It switches it on once per mod; from then on the setting is yours.",
-            [LangEs] = "La activa una vez por mod; a partir de ahí el ajuste es tuyo.",
-        },
+        ["DlgSettingsGameRecording"] = new() { [LangEn] = "Tick Record Game automatically", [LangEs] = "Marcar Record Game automáticamente" },
+        ["DlgSettingsGameRecordingHint"] = new() { [LangEn] = "The launcher keeps AoE3's recording on before each match.", [LangEs] = "El launcher deja activada la grabación de AoE3 antes de cada partida." },
         ["DlgSettingsGameRecordingTip"] = new()
         {
             [LangEn] = "Writes optionrecordgame in Documents\\My Games\\<mod>\\Users3\\<profile>.xml, keeping a one-time backup. Changes apply the next time you launch each mod. Old automatic recordings (\"Record Game 7\") are cleaned up, keeping the 10 most recent — anything you renamed is kept forever. Off = the launcher writes false once per mod and then leaves your profile alone.",
@@ -9120,16 +8511,8 @@ public static partial class Strings
             [LangEn] = "Don't show this again",
             [LangEs] = "No mostrar más",
         },
-        ["DlgSettingsRecordReminder"] = new()
-        {
-            [LangEn] = "Remind me to tick \"Record Game\" before each match",
-            [LangEs] = "Recordarme marcar «Record Game» antes de cada partida",
-        },
-        ["DlgSettingsRecordReminderHint"] = new()
-        {
-            [LangEn] = "AoE3's own checkbox is separate and has to be ticked by hand every time. One line in the chat when you host.",
-            [LangEs] = "La casilla de la pantalla de configuración de AoE3 es independiente y hay que marcarla a mano cada vez. Una línea en el chat cuando eres anfitrión.",
-        },
+        ["DlgSettingsRecordReminder"] = new() { [LangEn] = "Remind me to record", [LangEs] = "Recordarme grabar" },
+        ["DlgSettingsRecordReminderHint"] = new() { [LangEn] = "A notice at the start if recording is off.", [LangEs] = "Un aviso al empezar si la grabación está apagada." },
         ["DlgSettingsRecordReminderTip"] = new()
         {
             [LangEn] = "Only the host is reminded, because only the host's recording is read to work out who won. Turn this off once you always remember — the launcher will never decide on its own that you no longer need it, since a match that recorded doesn't prove the next one will.",
@@ -9260,7 +8643,7 @@ public static partial class Strings
         ["NotifMarkAllRead"] = new()
         {
             [LangEn] = "Mark all read",
-            [LangEs] = "Marcar todo leído",
+            [LangEs] = "Marcar todo como leído",
         },
         ["NotifClearAll"] = new()
         {
@@ -9705,63 +9088,21 @@ public static partial class Strings
             [LangEn] = "How this works",
             [LangEs] = "Cómo funciona",
         },
-        ["DlgPatchGenHowBody"] = new()
-        {
-            // It used to end at "every release carries patches only", which this same window then
-            // contradicted: once a patch grows past half the mod, DlgPatchGenRebaseline appears and
-            // tells you to publish the full .zip again. A modder who believed the summary kept
-            // shipping patch-only releases past the point where they saved anything — silently,
-            // because the launcher just goes back to choosing the full download.
-            [LangEn] = "You publish the full .zip on a baseline release. Every release after it carries patches only, so you stop re-uploading the whole mod — until this window tells you a patch has grown too big, and that release becomes your new baseline.",
-            [LangEs] = "Publicas el .zip completo en un release base. Cada release posterior lleva solo parches, así que dejas de resubir el mod entero — hasta que esta ventana te avise de que un parche creció demasiado, y ese release pasa a ser tu nueva base.",
-        },
         ["DlgPatchGenTitle"] = new()
         {
             [LangEn] = "Generate patch",
             [LangEs] = "Generar parche",
         },
-        ["DlgPatchGenHeader"] = new()
-        {
-            [LangEn] = "Your release's patches",
-            [LangEs] = "Parches de tu release",
-        },
-        ["DlgPatchGenDescription"] = new()
-        {
-            [LangEn] = "Compares the overlays you point it at and writes the patches that go on the new GitHub release. The .zip files you pick here are only read: they are not what you upload.",
-            [LangEs] = "Compara los overlays que le indiques y escribe los parches que van en el release nuevo de GitHub. Los .zip que eliges aquí solo se leen: no son lo que subes.",
-        },
+        ["DlgPatchGenHeader"] = new() { [LangEn] = "A patch between two versions of your mod", [LangEs] = "Parche entre dos versiones de tu mod" },
+        ["DlgPatchGenDescription"] = new() { [LangEn] = "Compares two .zip files of the mod file by file and writes only what changed. The .zip files are read to compare: what you upload to the new version is the patch.", [LangEs] = "Compara dos .zip del mod archivo por archivo y escribe solo lo que cambió. Los .zip se leen para comparar: lo que subes a la versión nueva es el parche." },
         // One card per release. The field labels are shared by all three — the card
         // title is what says which release they belong to.
-        ["DlgPatchGenFieldZip"] = new()
-        {
-            [LangEn] = "OVERLAY .ZIP",
-            [LangEs] = "OVERLAY .ZIP",
-        },
-        ["DlgPatchGenFieldTag"] = new()
-        {
-            [LangEn] = "TAG ON GITHUB",
-            [LangEs] = "TAG EN GITHUB",
-        },
-        ["DlgPatchGenCardPrev"] = new()
-        {
-            [LangEn] = "Previous release",
-            [LangEs] = "Release anterior",
-        },
-        ["DlgPatchGenCardPrevNote"] = new()
-        {
-            [LangEn] = "already published",
-            [LangEs] = "ya publicado",
-        },
-        ["DlgPatchGenCardNew"] = new()
-        {
-            [LangEn] = "New release",
-            [LangEs] = "Release nuevo",
-        },
-        ["DlgPatchGenCardNewNote"] = new()
-        {
-            [LangEn] = "the one you're publishing",
-            [LangEs] = "el que vas a publicar",
-        },
+        ["DlgPatchGenFieldZip"] = new() { [LangEn] = ".ZIP FILE", [LangEs] = "ARCHIVO .ZIP" },
+        ["DlgPatchGenFieldTag"] = new() { [LangEn] = "VERSION TAG", [LangEs] = "TAG DE LA VERSIÓN" },
+        ["DlgPatchGenCardPrev"] = new() { [LangEn] = "Previous version", [LangEs] = "Versión anterior" },
+        ["DlgPatchGenCardPrevNote"] = new() { [LangEn] = "the one players already have", [LangEs] = "la que ya tienen los jugadores" },
+        ["DlgPatchGenCardNew"] = new() { [LangEn] = "New version", [LangEs] = "Versión nueva" },
+        ["DlgPatchGenCardNewNote"] = new() { [LangEn] = "the one you are about to publish", [LangEs] = "la que vas a publicar" },
         ["DlgPatchGenCardBase"] = new()
         {
             [LangEn] = "Baseline",
@@ -9772,21 +9113,9 @@ public static partial class Strings
         // cumulative patch. So the word carries its consequence now — the planner refuses a route
         // longer than DeltaChainPlanner.MaxHops (4), which is when the omission starts costing
         // every new player the whole mod.
-        ["DlgPatchGenCardBaseNote"] = new()
-        {
-            [LangEn] = "optional — without it, after 4 releases a new player downloads the whole mod",
-            [LangEs] = "opcional — sin ella, pasadas 4 versiones un jugador nuevo se baja el mod entero",
-        },
-        ["DlgPatchGenNotChosen"] = new()
-        {
-            [LangEn] = "not chosen",
-            [LangEs] = "sin elegir",
-        },
-        ["DlgPatchGenNotFilled"] = new()
-        {
-            [LangEn] = "not filled in",
-            [LangEs] = "sin rellenar",
-        },
+        ["DlgPatchGenCardBaseNote"] = new() { [LangEn] = "optional · for the cumulative patch", [LangEs] = "opcional · para el parche acumulado" },
+        ["DlgPatchGenNotChosen"] = new() { [LangEn] = "Not chosen", [LangEs] = "Sin elegir" },
+        ["DlgPatchGenNotFilled"] = new() { [LangEn] = "Not filled in", [LangEs] = "Sin rellenar" },
         ["DlgPatchGenHowHide"] = new()
         {
             [LangEn] = "Hide",
@@ -9797,21 +9126,13 @@ public static partial class Strings
             [LangEn] = "Previous overlay .zip",
             [LangEs] = "Overlay .zip anterior",
         },
-        ["DlgPatchGenOldZipHint"] = new()
-        {
-            [LangEn] = "The full overlay of the previous release. Only read, to compare.",
-            [LangEs] = "El overlay completo del release anterior. Solo se lee para comparar.",
-        },
+        ["DlgPatchGenOldZipHint"] = new() { [LangEn] = "The full .zip of the last published version. It is only read to compare.", [LangEs] = "El .zip completo de la última versión publicada. Solo se lee para comparar." },
         ["DlgPatchGenNewZip"] = new()
         {
             [LangEn] = "New overlay .zip",
             [LangEs] = "Overlay .zip nuevo",
         },
-        ["DlgPatchGenNewZipHint"] = new()
-        {
-            [LangEn] = "The overlay of the version you're putting out now. No need to upload it, unless this release is your new baseline.",
-            [LangEs] = "El overlay de la versión que sacas ahora. No hace falta subirlo, salvo que este release sea tu base nueva.",
-        },
+        ["DlgPatchGenNewZipHint"] = new() { [LangEn] = "The full .zip of the version you are uploading. The tag has to be the one of the GitHub release.", [LangEs] = "El .zip completo de la versión que vas a subir. El tag tiene que ser el de la release de GitHub." },
         ["DlgPatchGenSectionVersions"] = new()
         {
             [LangEn] = "VERSION TAGS",
@@ -9840,53 +9161,21 @@ public static partial class Strings
         // The output preview. Two patches are the product of this window, but the form is
         // organised by input, so without this box they are never seen together — and the
         // release they belong on was stated only inside the explainer.
-        ["DlgPatchGenPreviewHeader"] = new()
-        {
-            [LangEn] = "WILL BE WRITTEN",
-            [LangEs] = "SE ESCRIBIRÁ",
-        },
-        ["DlgPatchGenPreviewTarget"] = new()
-        {
-            [LangEn] = "all to release {0}",
-            [LangEs] = "todo al release {0}",
-        },
+        ["DlgPatchGenPreviewHeader"] = new() { [LangEn] = "WILL BE WRITTEN", [LangEs] = "SE VA A ESCRIBIR" },
+        ["DlgPatchGenPreviewTarget"] = new() { [LangEn] = "on release {0}", [LangEs] = "en la release {0}" },
         ["DlgPatchGenPreviewIncremental"] = new()
         {
             [LangEn] = "incremental",
             [LangEs] = "incremental",
         },
-        ["DlgPatchGenPreviewCumulative"] = new()
-        {
-            [LangEn] = "cumulative",
-            [LangEs] = "acumulativo",
-        },
-        ["DlgPatchGenPreviewIndex"] = new()
-        {
-            [LangEn] = "its index",
-            [LangEs] = "su índice",
-        },
-        ["DlgPatchGenPreviewCumulativeHint"] = new()
-        {
-            [LangEn] = "The cumulative one appears here as soon as you fill in the baseline.",
-            [LangEs] = "El acumulativo aparece aquí en cuanto rellenes la base.",
-        },
-        ["DlgPatchGenPreviewNeedTags"] = new()
-        {
-            [LangEn] = "Fill in both tags and the files appear here, named as they will be written.",
-            [LangEs] = "Rellena los dos tags y aquí aparecen los archivos, con el nombre que van a llevar.",
-        },
+        ["DlgPatchGenPreviewCumulative"] = new() { [LangEn] = "cumulative", [LangEs] = "acumulado" },
+        ["DlgPatchGenPreviewIndex"] = new() { [LangEn] = "index", [LangEs] = "índice" },
+        ["DlgPatchGenPreviewCumulativeHint"] = new() { [LangEn] = "If you fill in the base, the cumulative patch from it is written too.", [LangEs] = "Si rellenas la base, también se escribe el parche acumulado desde ella." },
+        ["DlgPatchGenPreviewNeedTags"] = new() { [LangEn] = "Fill in the tags of the previous and the new version to see the file names.", [LangEs] = "Rellena los tags de la versión anterior y la nueva para ver los nombres de los archivos." },
         // The worst outcome this window has, and it reports no error at all. It used to be
         // the third line of a grey italic paragraph.
-        ["DlgPatchGenTagWarnTitle"] = new()
-        {
-            [LangEn] = "If a tag doesn't exist on GitHub, nobody finds out",
-            [LangEs] = "Si un tag no existe en GitHub, nadie se entera",
-        },
-        ["DlgPatchGenTagWarnBody"] = new()
-        {
-            [LangEn] = "The launcher won't know which versions the patch bridges, so it ignores it in silence and everyone downloads the whole mod. It reports no error. Copy the tags from your releases page; upper and lower case don't matter.",
-            [LangEs] = "El launcher no sabrá qué versiones une el parche, lo ignorará en silencio y todos descargarán el mod completo. No da error. Cópialos de tu página de releases; las mayúsculas no importan.",
-        },
+        ["DlgPatchGenTagWarnTitle"] = new() { [LangEn] = "Tags have to exist on GitHub, spelled the same", [LangEs] = "Los tags tienen que existir en GitHub, escritos igual" },
+        ["DlgPatchGenTagWarnBody"] = new() { [LangEn] = "A patch pointing at a tag that does not exist is ignored without an error: the player downloads the whole mod and nobody finds out.", [LangEs] = "Un parche que apunta a un tag que no existe se ignora sin error: el jugador descarga el mod entero y nadie se entera." },
         // The diagram. Its nodes carry the tags the modder actually typed; a field left
         // empty shows this instead of an invented version, which is the one thing a reader
         // would take at face value.
@@ -9895,36 +9184,12 @@ public static partial class Strings
             [LangEn] = "—",
             [LangEs] = "—",
         },
-        ["DlgPatchGenDiagramBase"] = new()
-        {
-            [LangEn] = "baseline · full .zip",
-            [LangEs] = "base · .zip completo",
-        },
-        ["DlgPatchGenDiagramPrev"] = new()
-        {
-            [LangEn] = "previous",
-            [LangEs] = "anterior",
-        },
-        ["DlgPatchGenDiagramNew"] = new()
-        {
-            [LangEn] = "new",
-            [LangEs] = "nuevo",
-        },
-        ["DlgPatchGenBulletIncremental"] = new()
-        {
-            [LangEn] = "The incremental one is the smallest download for whoever updates every version.",
-            [LangEs] = "El incremental es la descarga más pequeña para quien actualiza cada versión.",
-        },
-        ["DlgPatchGenBulletCumulative"] = new()
-        {
-            [LangEn] = "The cumulative one keeps a fresh install at two downloads, however many releases go by. Leave it out and the launcher chains the incrementals instead — which it refuses past four, so from then on new players download the whole mod.",
-            [LangEs] = "El acumulativo mantiene una instalación nueva en dos descargas, por muchas versiones que pasen. Si no lo generas, el launcher encadena los incrementales — y se niega a partir de cuatro, así que desde ahí los jugadores nuevos se bajan el mod entero.",
-        },
-        ["DlgPatchGenBulletRoute"] = new()
-        {
-            [LangEn] = "Both go on the new release. The launcher picks the cheapest route for each player; you don't decide who uses which.",
-            [LangEs] = "Los dos van en el release nuevo. El launcher elige la ruta más barata para cada jugador; tú no decides quién usa cuál.",
-        },
+        ["DlgPatchGenDiagramBase"] = new() { [LangEn] = "base", [LangEs] = "base" },
+        ["DlgPatchGenDiagramPrev"] = new() { [LangEn] = "previous", [LangEs] = "anterior" },
+        ["DlgPatchGenDiagramNew"] = new() { [LangEn] = "new", [LangEs] = "nueva" },
+        ["DlgPatchGenBulletIncremental"] = new() { [LangEn] = "The incremental is the smallest download for whoever updates version by version.", [LangEs] = "El incremental es la descarga más pequeña para quien actualiza versión a versión." },
+        ["DlgPatchGenBulletCumulative"] = new() { [LangEn] = "The cumulative keeps a fresh install at two downloads, however many versions go by.", [LangEs] = "El acumulado mantiene una instalación de cero en dos descargas, pasen las versiones que pasen." },
+        ["DlgPatchGenBulletRoute"] = new() { [LangEn] = "The launcher picks which to apply according to the version each player has.", [LangEs] = "El launcher elige solo cuál aplicar según la versión que tenga cada jugador." },
         ["DlgPatchGenPickOutput"] = new()
         {
             [LangEn] = "Choose the output folder",
@@ -9935,31 +9200,14 @@ public static partial class Strings
             [LangEn] = "Browse…",
             [LangEs] = "Examinar…",
         },
-        ["DlgPatchGenGenerate"] = new()
-        {
-            [LangEn] = "Generate patches",
-            [LangEs] = "Generar parches",
-        },
-        ["DlgPatchGenWorking"] = new()
-        {
-            [LangEn] = "Generating…",
-            [LangEs] = "Generando…",
-        },
+        ["DlgPatchGenGenerate"] = new() { [LangEn] = "Generate patch", [LangEs] = "Generar parche" },
         ["DlgPatchGenClose"] = new()
         {
             [LangEn] = "Close",
             [LangEs] = "Cerrar",
         },
-        ["DlgPatchGenNeedInputs"] = new()
-        {
-            [LangEn] = "Pick both overlay zips, fill in both tags, and choose an output folder.",
-            [LangEs] = "Elige ambos overlays .zip, completa los dos tags y elige una carpeta de salida.",
-        },
-        ["DlgPatchGenResult"] = new()
-        {
-            [LangEn] = "✓ Patch generated: {0} changed/added, {1} deleted, {2}.",
-            [LangEs] = "✓ Parche generado: {0} cambiados/añadidos, {1} eliminados, {2}.",
-        },
+        ["DlgPatchGenNeedInputs"] = new() { [LangEn] = "Choose both .zip files, fill in both tags and choose an output folder.", [LangEs] = "Elige los dos .zip, rellena los dos tags y elige una carpeta de salida." },
+        ["DlgPatchGenResult"] = new() { [LangEn] = "Patch ready", [LangEs] = "Parche listo" },
         ["DlgPatchGenSectionBaseline"] = new()
         {
             [LangEn] = "BASELINE RELEASE (RECOMMENDED)",
@@ -9975,41 +9223,11 @@ public static partial class Strings
             [LangEn] = "Baseline tag",
             [LangEs] = "Tag de la base",
         },
-        ["DlgPatchGenBaselineHint"] = new()
-        {
-            [LangEn] = "The last release that shipped the full .zip. Fill it in and the cumulative patch is generated too, which keeps a fresh install at two downloads. Empty, only the incremental is written.",
-            [LangEs] = "El último release que llevó el .zip completo. Si lo rellenas se genera además el parche acumulativo, que mantiene una instalación nueva en dos descargas. Vacío, solo se escribe el incremental.",
-        },
-        ["DlgPatchGenResultBoth"] = new()
-        {
-            [LangEn] = "✓ Two patches generated — incremental {0}, cumulative {1}.",
-            [LangEs] = "✓ Dos parches generados: incremental {0}, acumulativo {1}.",
-        },
-        ["DlgPatchGenReminderBoth"] = new()
-        {
-            [LangEn] = "You do NOT need to upload the full overlay .zip — the launcher installs from your baseline release and patches up from there. Then bump approvedReleaseTag in the catalog, unless your mod uses followLatest.",
-            [LangEs] = "NO hace falta que subas el .zip completo: el launcher instala desde tu release base y parchea desde ahí. Después actualiza approvedReleaseTag en el catálogo, salvo que tu mod use followLatest.",
-        },
-        ["DlgPatchGenRebaseline"] = new()
-        {
-            [LangEn] = "⚠ This patch is {0} against a full mod of {1} — it has stopped saving much. Publish this release with the full .zip too, and use this tag as your new baseline from now on.",
-            [LangEs] = "⚠ Este parche pesa {0} frente a un mod completo de {1}: ya casi no ahorra. Publica este release con el .zip completo también y usa esta etiqueta como tu nueva base a partir de ahora.",
-        },
-        ["DlgPatchGenUploadTo"] = new()
-        {
-            [LangEn] = "Upload these files to release {0}, and nowhere else — a patch attached to the wrong release is ignored in silence:",
-            [LangEs] = "Sube estos archivos al release {0} y a ningún otro: un parche puesto en el release equivocado se ignora en silencio:",
-        },
-        ["DlgPatchGenReminder"] = new()
-        {
-            [LangEn] = "You only need the full overlay .zip up there as well if this release is your new baseline. Without a cumulative patch, players installing for the first time simply download the whole mod — nothing breaks, it is just the bigger download.",
-            [LangEs] = "El .zip completo solo hace falta ahí también si este release es tu base nueva. Sin parche acumulativo, quien instala por primera vez descarga el mod entero: no se rompe nada, solo es la descarga grande.",
-        },
-        ["DlgPatchGenErrorPrefix"] = new()
-        {
-            [LangEn] = "Couldn't generate the patch:",
-            [LangEs] = "No se pudo generar el parche:",
-        },
+        ["DlgPatchGenBaselineHint"] = new() { [LangEn] = "The last version uploaded whole. With it, a fresh install downloads two files rather than one per version.", [LangEs] = "La última versión que se subió entera. Con ella, quien instala de cero baja dos archivos y no uno por versión." },
+        ["DlgPatchGenResultBoth"] = new() { [LangEn] = "Two patches ready", [LangEs] = "Dos parches listos" },
+        ["DlgPatchGenRebaseline"] = new() { [LangEn] = "The cumulative patch weighs *`{0}`* and the whole mod *`{1}`*: it hardly saves anything now. On the next version upload the full .zip and start a new base.", [LangEs] = "El parche acumulado pesa *`{0}`* y el mod entero *`{1}`*: ya casi no ahorra nada. En la próxima versión sube el .zip completo y empieza una base nueva." },
+        ["DlgPatchGenUploadTo"] = new() { [LangEn] = "Upload these files to version `{0}` on GitHub, beside the full .zip if this version is going to be a base:", [LangEs] = "Sube estos archivos a la versión `{0}` en GitHub, junto al .zip completo si esta versión va a ser base:" },
+        ["DlgPatchGenErrorPrefix"] = new() { [LangEn] = "The patch could not be generated", [LangEs] = "No se pudo generar el parche" },
         ["DlgLauncherSettingsSectionMaintenance"] = new()
         {
             [LangEn] = "MAINTENANCE",
@@ -10020,11 +9238,7 @@ public static partial class Strings
             [LangEn] = "Clear mod icons cache",
             [LangEs] = "Limpiar caché de íconos de mods",
         },
-        ["DlgLauncherSettingsClearAssetsHint"] = new()
-        {
-            [LangEn] = "Only if you see broken or outdated mod images.",
-            [LangEs] = "Solo si ves imágenes de mods rotas o antiguas.",
-        },
+        ["DlgLauncherSettingsClearAssetsHint"] = new() { [LangEn] = "Only if you see broken or outdated mod images.", [LangEs] = "Solo si ves imágenes de mods rotas o desactualizadas." },
         ["DlgLauncherSettingsClearAssetsTip"] = new()
         {
             [LangEn] = "Deletes the downloaded icon/banner images. They download again by themselves the next "
@@ -10179,96 +9393,28 @@ public static partial class Strings
             [LangEn] = "Uninstall the launcher",
             [LangEs] = "Desinstalar el launcher",
         },
-        ["DlgSelfUninstallHeadline"] = new()
-        {
-            [LangEn] = "Uninstall AoE3 Mod Launcher from this PC?",
-            [LangEs] = "¿Desinstalar AoE3 Mod Launcher de esta PC?",
-        },
-        ["DlgSelfUninstallHeadlinePortable"] = new()
-        {
-            [LangEn] = "Remove AoE3 Mod Launcher from this PC?",
-            [LangEs] = "¿Quitar AoE3 Mod Launcher de esta PC?",
-        },
-        ["DlgSelfUninstallRemovedLabel"] = new()
-        {
-            [LangEn] = "WHAT IS REMOVED",
-            [LangEs] = "LO QUE SE QUITA",
-        },
-        ["DlgSelfUninstallItemProgram"] = new()
-        {
-            [LangEn] = "The launcher, from its folder:",
-            [LangEs] = "El launcher, de su carpeta:",
-        },
-        ["DlgSelfUninstallItemOtherCopy"] = new()
-        {
-            [LangEn] = "The launcher's installed copy:",
-            [LangEs] = "La copia instalada del launcher:",
-        },
-        ["DlgSelfUninstallItemShortcuts"] = new()
-        {
-            [LangEn] = "Its shortcuts on the Desktop and in the Start menu",
-            [LangEs] = "Sus accesos directos del Escritorio y del menú Inicio",
-        },
-        ["DlgSelfUninstallItemStartup"] = new()
-        {
-            [LangEn] = "Its start with Windows and its wol-launcher:// links",
-            [LangEs] = "Su inicio con Windows y sus enlaces wol-launcher://",
-        },
-        ["DlgSelfUninstallItemTemp"] = new()
-        {
-            [LangEn] = "Its temporary download files",
-            [LangEs] = "Sus archivos temporales de descarga",
-        },
-        ["DlgSelfUninstallItemUpdateLeftovers"] = new()
-        {
-            [LangEn] = "Leftovers of earlier updates next to this file",
-            [LangEs] = "Restos de actualizaciones anteriores junto a este archivo",
-        },
-        ["DlgSelfUninstallItemKeys"] = new()
-        {
-            [LangEn] = "{0} leftover registry entries of mods you already uninstalled",
-            [LangEs] = "{0} entradas del registro que quedaron de mods que ya desinstalaste",
-        },
-        ["DlgSelfUninstallItemKeysOne"] = new()
-        {
-            [LangEn] = "1 leftover registry entry of a mod you already uninstalled",
-            [LangEs] = "1 entrada del registro que quedó de un mod que ya desinstalaste",
-        },
-        ["DlgSelfUninstallKeysUac"] = new()
-        {
-            [LangEn] = "Windows will ask for permission once to remove them.",
-            [LangEs] = "Windows pedirá permiso una vez para quitarlas.",
-        },
-        ["DlgSelfUninstallSafeMods"] = new()
-        {
-            [LangEn] = "Not touched: your mods ({0}), Age of Empires III or your saved games. Your mods keep their registry entries, so they keep working.",
-            [LangEs] = "No se tocan: tus mods ({0}), Age of Empires III ni tus partidas guardadas. Tus mods conservan sus entradas del registro, así que siguen funcionando.",
-        },
-        ["DlgSelfUninstallSafeNoMods"] = new()
-        {
-            [LangEn] = "Not touched: Age of Empires III or your saved games.",
-            [LangEs] = "No se tocan: Age of Empires III ni tus partidas guardadas.",
-        },
-        ["DlgSelfUninstallModsHint"] = new()
-        {
-            [LangEn] = "To remove a mod as well, uninstall it first from its own menu — afterwards you would have to delete its folder by hand.",
-            [LangEs] = "Si también quieres quitar un mod, desinstálalo antes desde su propio menú; después tendrías que borrar su carpeta a mano.",
-        },
-        ["DlgSelfUninstallPortableStays"] = new()
-        {
-            [LangEn] = "This file stays: the launcher doesn't delete what you chose to keep. Delete it yourself once it closes:",
-            [LangEs] = "Este archivo se queda: el launcher no borra lo que tú elegiste guardar. Bórralo tú cuando se cierre:",
-        },
+        ["DlgSelfUninstallHeadline"] = new() { [LangEn] = "Uninstall the launcher from this PC", [LangEs] = "Desinstalar el launcher de este PC" },
+        ["DlgSelfUninstallHeadlinePortable"] = new() { [LangEn] = "Remove what the launcher installed on this PC", [LangEs] = "Quitar lo que el launcher instaló en este PC" },
+        ["DlgSelfUninstallRemovedLabel"] = new() { [LangEn] = "REMOVED FROM THIS PC", [LangEs] = "SE QUITA DE ESTE PC" },
+        ["DlgSelfUninstallItemProgram"] = new() { [LangEn] = "The program", [LangEs] = "El programa" },
+        ["DlgSelfUninstallItemOtherCopy"] = new() { [LangEn] = "The other installed copy of the launcher", [LangEs] = "La otra copia instalada del launcher" },
+        ["DlgSelfUninstallItemShortcuts"] = new() { [LangEn] = "The Desktop and Start menu shortcuts", [LangEs] = "Los accesos directos del escritorio y del menú Inicio" },
+        ["DlgSelfUninstallItemStartup"] = new() { [LangEn] = "The “Start with Windows” entry and the wol-launcher:// links", [LangEs] = "La entrada «Arrancar con Windows» y los enlaces wol-launcher://" },
+        ["DlgSelfUninstallItemTemp"] = new() { [LangEn] = "The temporary files from installs", [LangEs] = "Los archivos temporales de instalaciones" },
+        ["DlgSelfUninstallItemUpdateLeftovers"] = new() { [LangEn] = "Leftovers of an earlier update", [LangEs] = "Restos de una actualización anterior" },
+        ["DlgSelfUninstallItemKeys"] = new() { [LangEn] = "{0} registry keys left by mods you already uninstalled", [LangEs] = "{0} claves del registro de mods que ya desinstalaste" },
+        ["DlgSelfUninstallItemKeysOne"] = new() { [LangEn] = "1 registry key left by a mod you already uninstalled", [LangEs] = "1 clave del registro de un mod que ya desinstalaste" },
+        ["DlgSelfUninstallKeysUac"] = new() { [LangEn] = "Windows will ask for administrator permission to remove them.", [LangEs] = "Windows te pedirá permiso de administrador para quitarlas." },
+        ["DlgSelfUninstallSafeMods"] = new() { [LangEn] = "Staying: {0}, with their cities, saved games and recordings. Age of Empires III is not touched.", [LangEs] = "Se quedan: {0}, con sus ciudades, partidas guardadas y grabaciones. Age of Empires III no se toca." },
+        ["DlgSelfUninstallSafeNoMods"] = new() { [LangEn] = "No mods were installed from the launcher. Age of Empires III is not touched.", [LangEs] = "No hay mods instalados desde el launcher. Age of Empires III no se toca." },
+        ["DlgSelfUninstallModsHint"] = new() { [LangEn] = "Mods still open from AoE3 without the launcher. If you want to remove one, do it first from the Library.", [LangEs] = "Los mods se siguen abriendo desde AoE3 sin el launcher. Si quieres quitar alguno, hazlo antes desde la Biblioteca." },
+        ["DlgSelfUninstallPortableStays"] = new() { [LangEn] = "It is yours and the launcher does not delete it. You can remove it by hand once it closes.", [LangEs] = "Es tuyo y el launcher no lo borra. Puedes eliminarlo a mano cuando cierres." },
         ["DlgSelfUninstallDataLabel"] = new()
         {
             [LangEn] = "YOUR DATA",
             [LangEs] = "TUS DATOS",
         },
-        ["DlgSelfUninstallDataTitle"] = new()
-        {
-            [LangEn] = "Also delete my settings and data",
-            [LangEs] = "Borrar también mi configuración y mis datos",
-        },
+        ["DlgSelfUninstallDataTitle"] = new() { [LangEn] = "Also delete my data folder", [LangEs] = "Borrar también mi carpeta de datos" },
         ["DlgSelfUninstallDataDesc"] = new()
         {
             [LangEn] = "Settings, AI game statistics, the history of the decks you played, copies of your addons, "
@@ -10289,21 +9435,9 @@ public static partial class Strings
             [LangEn] = "1 competitive recording is still waiting to upload — ticking this loses it.",
             [LangEs] = "Hay 1 grabación competitiva esperando para subirse: si marcas esto, se pierde.",
         },
-        ["DlgSelfUninstallDataBackups"] = new()
-        {
-            [LangEn] = "That includes the copies Repair kept of game files it replaced.",
-            [LangEs] = "Eso incluye las copias que Reparar guardó de archivos del juego que reemplazó.",
-        },
-        ["DlgSelfUninstallAntivirus"] = new()
-        {
-            [LangEn] = "If you added the launcher's folders to your antivirus exclusions, remove them there yourself — the launcher never changes antivirus settings.",
-            [LangEs] = "Si agregaste carpetas del launcher a las exclusiones de tu antivirus, quítalas tú desde ahí: el launcher nunca cambia la configuración del antivirus.",
-        },
-        ["DlgSelfUninstallConfirmPortable"] = new()
-        {
-            [LangEn] = "Remove",
-            [LangEs] = "Quitar",
-        },
+        ["DlgSelfUninstallDataBackups"] = new() { [LangEn] = "It includes the backups Repair made: if a mod was left half done, the way back is lost.", [LangEs] = "Incluye las copias de seguridad que hizo «Reparar»: si un mod quedó a medias, se pierde la forma de volver atrás." },
+        ["DlgSelfUninstallAntivirus"] = new() { [LangEn] = "If your antivirus has an exclusion for the launcher, remove it yourself in Windows Security: the launcher cannot touch it.", [LangEs] = "Si tu antivirus tiene una exclusión para el launcher, quítala tú desde Seguridad de Windows: el launcher no puede tocarla." },
+        ["DlgSelfUninstallConfirmPortable"] = new() { [LangEn] = "Remove what is installed", [LangEs] = "Quitar lo instalado" },
         ["DlgSelfUninstallBlockedGame"] = new()
         {
             [LangEn] = "Close the game first — the launcher can't be removed while Age of Empires III is running.",
@@ -10804,8 +9938,8 @@ public static partial class Strings
         // dashboard hero's CTA and is shouted for that reason.
         ["DlgInstallConfirm"] = new()
         {
-            [LangEn] = "Install the mod",
-            [LangEs] = "Instalar el mod",
+            [LangEn] = "Install",
+            [LangEs] = "Instalar",
         },
         ["BtnInstall"] = new()
         {
@@ -10821,39 +9955,29 @@ public static partial class Strings
         // -------- Integrated install panel --------
         ["InstallGameNotLaunchedWarning"] = new()
         {
-            [LangEn] = "⚠ We couldn't find Age of Empires III user data. " +
-                       "Open Age of Empires III: The Asian Dynasties at least once " +
-                       "before installing, so it generates its configuration files.",
-            [LangEs] = "⚠ No encontramos los datos de usuario de Age of Empires III. " +
-                       "Abre Age of Empires III: The Asian Dynasties al menos una vez " +
-                       "antes de instalar, para que genere sus archivos de configuración.",
+            [LangEn] = "Open the original AoE3 at least once before installing: that creates its data folder in Documents\\My Games. You can install anyway.",
+            [LangEs] = "Abre el AoE3 original al menos una vez antes de instalar: así crea su carpeta de datos en Documentos\\My Games. Puedes instalar igual.",
         },
         ["InstallAoe3NotDetected"] = new()
         {
-            [LangEn] = "⚠ Age of Empires III was not detected automatically.\n" +
-                       "It's required — the mod is installed on top of a copy of AoE3, so " +
-                       "without the base game there's nothing to install. Use the button " +
-                       "above to select your Age of Empires III folder to continue.",
-            [LangEs] = "⚠ No se detectó Age of Empires III automáticamente.\n" +
-                       "Es obligatorio: el mod se instala sobre una copia de AoE3, así que " +
-                       "sin el juego base no hay nada que instalar. Usa el botón de arriba " +
-                       "para seleccionar tu carpeta de Age of Empires III y poder continuar.",
+            [LangEn] = "We couldn't find your AoE3: The Asian Dynasties. Choose the folder it's installed in, the one with age3y.exe.",
+            [LangEs] = "No encontramos tu AoE3: The Asian Dynasties. Elige la carpeta donde está instalado, la que tiene age3y.exe.",
         },
         // Blocking warning shown above the buttons while the install is
         // gated on a missing AoE3 source. Kept short — the orange status
         // line under the AoE3 field carries the full explanation.
         ["DlgInstallAoe3Required"] = new()
         {
-            [LangEn] = "Select your Age of Empires III folder above to enable installation.",
-            [LangEs] = "Selecciona tu carpeta de Age of Empires III arriba para poder instalar.",
+            [LangEn] = "Choose your AoE3 folder.",
+            [LangEs] = "Elige la carpeta de tu AoE3.",
         },
         // Manual "search my Asian Dynasties" button + its transient states.
         // Shown only while no AoE3 source is set; runs an exhaustive content
         // scan that finds AoE3 even in non-standard folders (e.g. Microsoft Studios).
         ["DlgSearchAoe3Button"] = new()
         {
-            [LangEn] = "Search for my Asian Dynasties…",
-            [LangEs] = "Buscar mi Asian Dynasties…",
+            [LangEn] = "Search my disks…",
+            [LangEs] = "Buscar en mis discos…",
         },
         ["DlgSearchAoe3Searching"] = new()
         {
@@ -10897,8 +10021,8 @@ public static partial class Strings
         // supply them, so a first-ever install never sees it.
         ["DlgInstallCopySettings"] = new()
         {
-            [LangEn] = "Copy graphics, sound and hotkeys from:",
-            [LangEs] = "Copiar gráficos, sonido y atajos de:",
+            [LangEn] = "Copy graphics, sound and keys from",
+            [LangEs] = "Copiar gráficos, sonido y teclas de",
         },
         // Says WHEN, because it is not always now — a promise that quietly does nothing for one
         // launch is worse than no promise. The install creates the settings file of a mod that
@@ -10995,30 +10119,30 @@ public static partial class Strings
         // under the empty field instead, where there is room for it.
         ["DlgAoe3DetectedChip"] = new()
         {
-            [LangEn] = "detected",
-            [LangEs] = "detectado",
+            [LangEn] = "Detected",
+            [LangEs] = "Detectado",
         },
         ["DlgAoe3DetectedChipWithSource"] = new()
         {
-            [LangEn] = "detected in {0}",
-            [LangEs] = "detectado en {0}",
+            [LangEn] = "Detected in {0}",
+            [LangEs] = "Detectado en {0}",
         },
         ["DlgAoe3MissingChip"] = new()
         {
-            [LangEn] = "not found",
-            [LangEs] = "sin encontrar",
+            [LangEn] = "Not found",
+            [LangEs] = "No encontrado",
         },
         ["DlgInstallAoe3Empty"] = new()
         {
-            [LangEn] = "no folder chosen yet",
-            [LangEs] = "sin carpeta elegida",
+            [LangEn] = "No folder chosen",
+            [LangEs] = "Ninguna carpeta elegida",
         },
         // The requirement and the figure that meets it, in ONE line. The requirement is
         // MEASURED from this machine's AoE3, not the constant the old header quoted.
         ["InstallSpaceLine"] = new()
         {
-            [LangEn] = "Needs about {0} and you have {1} free on {2}",
-            [LangEs] = "Necesita unos {0} y tienes {1} libres en {2}",
+            [LangEn] = "It needs about *`{0}`* and you have *`{1}`* free on {2}",
+            [LangEs] = "Necesita unos *`{0}`* y tienes *`{1}`* libres en {2}",
         },
         ["DlgPickInstallFolderLabel"] = new()
         {
@@ -11145,11 +10269,6 @@ public static partial class Strings
         {
             [LangEn] = "Installed copies",
             [LangEs] = "Copias instaladas",
-        },
-        ["RemoveInstallCopy"] = new()
-        {
-            [LangEn] = "Remove from list (doesn't delete files)",
-            [LangEs] = "Quitar de la lista (no borra archivos)",
         },
         ["RemoveInstallBtn"] = new()
         {
@@ -11374,11 +10493,7 @@ public static partial class Strings
             [LangEn] = "Install stopped",
             [LangEs] = "Instalación detenida",
         },
-        ["DlgAntivirusNoticeHeadline"] = new()
-        {
-            [LangEn] = "Windows Defender may delete one of this mod's files",
-            [LangEs] = "Windows Defender puede borrar uno de los archivos de este mod",
-        },
+        ["DlgAntivirusNoticeHeadline"] = new() { [LangEn] = "Windows Defender may delete a file of this mod", [LangEs] = "Windows Defender puede borrar un archivo de este mod" },
         ["DlgAntivirusNoticeTag"] = new()
         {
             [LangEn] = "known false positive · already reported",
@@ -11431,16 +10546,6 @@ public static partial class Strings
             [LangEn] = "Mod folder",
             [LangEs] = "Carpeta del mod",
         },
-        ["DlgAntivirusCopyBoth"] = new()
-        {
-            [LangEn] = "⧉ Copy both",
-            [LangEs] = "⧉ Copiar las dos",
-        },
-        ["DlgAntivirusCopyOne"] = new()
-        {
-            [LangEn] = "⧉ Copy",
-            [LangEs] = "⧉ Copiar",
-        },
         ["DlgAntivirusCopied"] = new()
         {
             [LangEn] = "✓ Copied",
@@ -11451,31 +10556,9 @@ public static partial class Strings
             [LangEn] = "IN WINDOWS SECURITY",
             [LangEs] = "EN SEGURIDAD DE WINDOWS",
         },
-        ["DlgAntivirusOpenSecurity"] = new()
-        {
-            [LangEn] = "Open Windows Security ↗",
-            [LangEs] = "Abrir Seguridad de Windows ↗",
-        },
-        ["DlgAntivirusStep1"] = new()
-        {
-            [LangEn] = "Virus & threat protection",
-            [LangEs] = "Protección antivirus y contra amenazas",
-        },
-        ["DlgAntivirusStep2"] = new()
-        {
-            [LangEn] = "Manage settings",
-            [LangEs] = "Administrar la configuración",
-        },
-        ["DlgAntivirusStep3"] = new()
-        {
-            [LangEn] = "Add or remove exclusions",
-            [LangEs] = "Agregar o quitar exclusiones",
-        },
-        ["DlgAntivirusStep4"] = new()
-        {
-            [LangEn] = "Add an exclusion → **Folder**, once for each path above",
-            [LangEs] = "Agregar una exclusión → **Carpeta**, una vez por cada ruta de arriba",
-        },
+        ["DlgAntivirusStep1"] = new() { [LangEn] = "Open **Manage settings** under Virus & threat protection, in Windows Security.", [LangEs] = "Abre **Administrar la configuración** de Protección antivirus y contra amenazas, en Seguridad de Windows." },
+        ["DlgAntivirusStep2"] = new() { [LangEn] = "**Add or remove exclusions**, in the Exclusions section.", [LangEs] = "**Agregar o quitar exclusiones**, en el apartado Exclusiones." },
+        ["DlgAntivirusStep3"] = new() { [LangEn] = "**Add an exclusion → Folder** and paste a path. Repeat it with the other one.", [LangEs] = "**Agregar una exclusión → Carpeta** y pega una ruta. Repítelo con la otra." },
         ["DlgAntivirusDontShowAgain"] = new()
         {
             [LangEn] = "Don't show this again",
@@ -11484,7 +10567,7 @@ public static partial class Strings
         ["DlgAntivirusContinueInstall"] = new()
         {
             [LangEn] = "Continue install",
-            [LangEs] = "Seguir con la instalación",
+            [LangEs] = "Continuar la instalación",
         },
         ["DlgAntivirusCancel"] = new()
         {
@@ -11842,10 +10925,14 @@ public static partial class Strings
         },
         ["DlgLangRefreshButton"] = new()
         {
-            [LangEn] = "🔄  Check for new translations",
-            [LangEs] = "🔄  Buscar nuevas traducciones",
+            [LangEn] = "Check for new translations",
+            [LangEs] = "Buscar traducciones nuevas",
         },
-        ["DlgLangRefreshing"] = new() { [LangEn] = "⏳  Checking…", [LangEs] = "⏳  Buscando…" },
+        ["DlgLangRefreshing"] = new()
+        {
+            [LangEn] = "Checking…",
+            [LangEs] = "Buscando…",
+        },
         ["ModPropTempSection"] = new()
         {
             [LangEn] = "TEMPORARY FILES",
@@ -11883,8 +10970,16 @@ public static partial class Strings
             [LangEn] = "The translation \"{0}\" was made for the mod \"{1}\", not {2}. Applying it could overwrite this mod's files with the wrong text, so it was blocked.",
             [LangEs] = "La traducción \"{0}\" se hizo para el mod \"{1}\", no para {2}. Aplicarla podría sobrescribir los archivos de este mod con el texto equivocado, así que se bloqueó.",
         },
-        ["LangCardForMod"] = new() { [LangEn] = "For mod {0}", [LangEs] = "Para el mod {0}" },
-        ["LangCardPackVer"] = new() { [LangEn] = "Pack v{0}", [LangEs] = "Pack v{0}" },
+        ["LangCardForMod"] = new()
+        {
+            [LangEn] = "for mod {0}",
+            [LangEs] = "para el mod {0}",
+        },
+        ["LangCardPackVer"] = new()
+        {
+            [LangEn] = "pack v{0}",
+            [LangEs] = "paquete v{0}",
+        },
         ["LangCardActive"] = new() { [LangEn] = "In use ✓", [LangEs] = "En uso ✓" },
         // The active pack checked against the DISK (TranslationService.CheckLive). "In use" is the
         // config's word; these say when the game disagrees. {0} names the compiled twins.
@@ -11906,7 +11001,11 @@ public static partial class Strings
         ["LangLiveRepairBtn"] = new() { [LangEn] = "Repair", [LangEs] = "Reparar" },
         ["LangLiveReapplyBtn"] = new() { [LangEn] = "Apply again", [LangEs] = "Volver a aplicar" },
         ["LangCardUse"] = new() { [LangEn] = "Use", [LangEs] = "Usar" },
-        ["LangCardUseAnyway"] = new() { [LangEn] = "Use anyway", [LangEs] = "Usar igual" },
+        ["LangCardUseAnyway"] = new()
+        {
+            [LangEn] = "Use anyway…",
+            [LangEs] = "Usar igual…",
+        },
         ["LangCardApplyVersion"] = new() { [LangEn] = "Apply this version", [LangEs] = "Aplicar esta versión" },
         ["LangCardVerNewest"] = new() { [LangEn] = "newest", [LangEs] = "más nueva" },
         ["LangCardVerActive"] = new() { [LangEn] = "in use", [LangEs] = "en uso" },
@@ -11918,8 +11017,8 @@ public static partial class Strings
         },
         ["LangCardBlockedHint"] = new()
         {
-            [LangEn] = "⚠ Made for a different mod version. Some text may be wrong, missing, or in English — and it can cause multiplayer sync problems (version mismatch / out-of-sync) with other players. Use it anyway at your own risk.",
-            [LangEs] = "⚠ Hecha para otra versión del mod. Algunos textos pueden quedar incorrectos, faltantes o en inglés, y puede causar problemas de sincronización en multijugador (versión distinta / desincronización) con otros jugadores. Úsala igual bajo tu propia responsabilidad.",
+            [LangEn] = "Made for another version of the mod. Some text may be wrong, missing or in English, and it can cause sync problems with other players. Use it at your own risk.",
+            [LangEs] = "Hecha para otra versión del mod. Puede haber textos mal, que falten o en inglés, y puede causar problemas de sincronización con otros jugadores. Úsala bajo tu responsabilidad.",
         },
         // ---- One card per translator: where a card comes from ----
         ["LangCardSource"] = new() { [LangEn] = "Source: {0}", [LangEs] = "Fuente: {0}" },
@@ -11932,7 +11031,7 @@ public static partial class Strings
         ["LangCardVerForMod"] = new() { [LangEn] = "{0} · for {1}", [LangEs] = "{0} · para {1}" },
 
         // ---- Translation sources (Language tab + Settings) ----
-        ["TxSrcSectionTitle"] = new() { [LangEn] = "TRANSLATION SOURCES", [LangEs] = "FUENTES DE TRADUCCIÓN" },
+        ["TxSrcSectionTitle"] = new() { [LangEn] = "TRANSLATION SOURCES", [LangEs] = "ORÍGENES DE TRADUCCIONES" },
         ["TxSrcAddTitle"] = new()
         {
             [LangEn] = "Follow another translator",
@@ -11955,9 +11054,14 @@ public static partial class Strings
             [LangEn] = "Community translations are turned off in Settings.",
             [LangEs] = "Las traducciones de la comunidad están desactivadas en Configuración.",
         },
-        ["TxSrcKindGitHub"] = new() { [LangEn] = "GitHub repository", [LangEs] = "repositorio de GitHub" },
+        ["TxSrcKindGitHub"] = new()
+        {
+            [LangEn] = "GitHub repository",
+            [LangEs] = "Repositorio de GitHub",
+        },
         ["TxSrcKindLink"] = new() { [LangEn] = "link", [LangEs] = "enlace" },
-        ["TxSrcRowPacks"] = new() { [LangEn] = "{0} translation(s) for this mod", [LangEs] = "{0} traducción(es) para este mod" },
+        ["TxSrcRowPacks"] = new() { [LangEn] = "{0} translations for this mod", [LangEs] = "{0} traducciones para este mod" },
+        ["TxSrcRowPacksOne"] = new() { [LangEn] = "1 translation for this mod", [LangEs] = "1 traducción para este mod" },
         ["TxSrcRowNoPacks"] = new() { [LangEn] = "no translations for {0} yet", [LangEs] = "todavía sin traducciones para {0}" },
         ["TxSrcRowUnreachable"] = new() { [LangEn] = "couldn't be read. {0}", [LangEs] = "no se pudo leer. {0}" },
         ["TxSrcOfficialBadge"] = new() { [LangEn] = "OFFICIAL", [LangEs] = "OFICIAL" },
@@ -12152,59 +11256,21 @@ public static partial class Strings
         // -------- Launcher self-update --------
         ["DlgLauncherUpdateTitle"] = new()
         {
-            [LangEn] = "Launcher update available",
-            [LangEs] = "Actualización del launcher disponible",
+            [LangEn] = "Launcher update",
+            [LangEs] = "Actualización del launcher",
         },
         // Persistent title-bar pill that reminds the user a launcher update is
         // available on every launch (non-invasive replacement for the old
         // auto-modal). {0} = the available version/tag.
         ["LauncherUpdatePill"] = new()
         {
-            [LangEn] = "Update {0}",
-            [LangEs] = "Actualizar {0}",
+            [LangEn] = "Update launcher",
+            [LangEs] = "Actualizar launcher",
         },
         ["LauncherUpdatePillTooltip"] = new()
         {
             [LangEn] = "A new launcher version is available — click to update.",
             [LangEs] = "Hay una nueva versión del launcher — haz clic para actualizar.",
-        },
-        ["DlgLauncherUpdateVersionInfo"] = new()
-        {
-            [LangEn] = "A new version of the launcher is available — " +
-                       "current: {0}, new: {1} ({2}).",
-            [LangEs] = "Hay una nueva versión del launcher disponible — " +
-                       "actual: {0}, nueva: {1} ({2}).",
-        },
-        ["DlgLauncherUpdateConfirmPrompt"] = new()
-        {
-            [LangEn] = "Click DOWNLOAD to fetch the new version. " +
-                       "You'll be asked to restart the launcher when it finishes.",
-            [LangEs] = "Haz clic en DESCARGAR para obtener la nueva versión. " +
-                       "Al terminar te pedirá reiniciar el launcher.",
-        },
-        ["DlgLauncherUpdateReadyToDownload"] = new()
-        {
-            [LangEn] = "Ready to download",
-            [LangEs] = "Listo para descargar",
-        },
-        ["DlgLauncherUpdateDownloading"] = new()
-        {
-            [LangEn] = "Downloading...",
-            [LangEs] = "Descargando...",
-        },
-        ["DlgLauncherUpdateDownloadComplete"] = new()
-        {
-            [LangEn] = "Download complete",
-            [LangEs] = "Descarga completa",
-        },
-        ["DlgLauncherUpdateRestartPrompt"] = new()
-        {
-            [LangEn] = "The new version was downloaded. The launcher needs to restart to apply it.\n" +
-                       "Click RESTART NOW to apply the update, or LATER to keep using this version " +
-                       "(the update will apply next time you open the launcher).",
-            [LangEs] = "Se descargó la nueva versión. El launcher necesita reiniciarse para aplicarla.\n" +
-                       "Haz clic en REINICIAR AHORA para aplicarla, o MÁS TARDE para seguir usando esta " +
-                       "versión (la actualización se aplicará la próxima vez que abras el launcher).",
         },
         ["DlgLauncherUpdateWhatsNew"] = new()
         {
@@ -12213,19 +11279,13 @@ public static partial class Strings
         },
         ["DlgLauncherUpdateVerifyFailed"] = new()
         {
-            [LangEn] = "Verification failed",
-            [LangEs] = "Verificación fallida",
+            [LangEn] = "The download didn't pass the check",
+            [LangEs] = "La descarga no pasó la comprobación",
         },
         ["DlgLauncherUpdateVerifyFailedBody"] = new()
         {
-            [LangEn] = "The downloaded update could not be verified (its checksum or " +
-                       "signature didn't match what the release published). The file was " +
-                       "discarded and your current launcher was left untouched. Please try " +
-                       "again later or download the update manually from GitHub.",
-            [LangEs] = "No se pudo verificar la actualización descargada (su checksum o firma " +
-                       "no coincide con lo publicado en la release). El archivo se descartó y tu " +
-                       "launcher actual quedó intacto. Inténtalo de nuevo más tarde o descarga la " +
-                       "actualización manualmente desde GitHub.",
+            [LangEn] = "The downloaded file doesn't match the published one, so it was deleted. Nothing was installed.",
+            [LangEs] = "El archivo descargado no coincide con el publicado, así que se borró. No se instaló nada.",
         },
 
         // The three failures below all used to render as $"Error: {ex.Message}" — the .NET
@@ -12234,85 +11294,66 @@ public static partial class Strings
         // it; the exception itself goes to the log, which is where the detail belongs.
         ["DlgLauncherUpdateDownloadFailed"] = new()
         {
-            [LangEn] = "Download failed",
-            [LangEs] = "Falló la descarga",
+            [LangEn] = "The update couldn't be downloaded",
+            [LangEs] = "No se pudo descargar la actualización",
         },
         ["DlgLauncherUpdateDownloadFailedBody"] = new()
         {
-            [LangEn] = "The update could not be downloaded. Check your connection and try " +
-                       "again, or download it manually from GitHub.",
-            [LangEs] = "No se pudo descargar la actualización. Verifica tu conexión e " +
-                       "inténtalo de nuevo, o descárgala manualmente desde GitHub.",
+            [LangEn] = "The download was interrupted. Try again, or get it by hand from GitHub.",
+            [LangEs] = "La descarga se interrumpió. Vuelve a intentarlo, o descárgala a mano desde GitHub.",
         },
         ["DlgLauncherUpdateBlocked"] = new()
         {
-            [LangEn] = "Could not save the update",
-            [LangEs] = "No se pudo guardar la actualización",
+            [LangEn] = "The download couldn't be saved",
+            [LangEs] = "No se pudo guardar la descarga",
         },
         // {0} = the full destination path. Naming it is the point: it is the only thing the
         // user can act on, and it is exactly what the generic message could never mention.
         ["DlgLauncherUpdateBlockedBody"] = new()
         {
-            [LangEn] = "The launcher could not write the file it downloads the update into:\n" +
-                       "{0}\n" +
-                       "It may be read-only, in use, or blocked by your antivirus or by " +
-                       "Windows controlled folder access. Delete that file, or move the " +
-                       "launcher to a different folder, and try again — or download the " +
-                       "update manually from GitHub.",
-            [LangEs] = "El launcher no pudo escribir el archivo donde descarga la " +
-                       "actualización:\n{0}\n" +
-                       "Puede estar como solo lectura, en uso, o bloqueado por tu antivirus o " +
-                       "por el acceso controlado a carpetas de Windows. Elimina ese archivo, o " +
-                       "mueve el launcher a otra carpeta, e inténtalo de nuevo — o descarga la " +
-                       "actualización manualmente desde GitHub.",
+            [LangEn] = "Windows didn't let it be saved in the launcher's folder. It's usually the antivirus or controlled folder access.",
+            [LangEs] = "Windows no dejó guardarla en la carpeta del launcher. Suele deberse al antivirus o al acceso controlado a carpetas.",
         },
         ["DlgLauncherUpdateCannotReplaceSelf"] = new()
         {
-            [LangEn] = "This copy cannot update itself",
-            [LangEs] = "Esta copia no puede actualizarse sola",
+            [LangEn] = "The launcher can't replace itself",
+            [LangEs] = "El launcher no puede reemplazarse a sí mismo",
         },
         // {0} = the current file name, {1} = Aoe3ModLauncher.exe.
         ["DlgLauncherUpdateCannotReplaceSelfBody"] = new()
         {
-            [LangEn] = "The launcher is running as «{0}». It can only replace itself when it " +
-                       "runs as «{1}». Close the launcher, rename the file to «{1}», and open " +
-                       "it again — or download the new version manually from GitHub.",
-            [LangEs] = "El launcher se está ejecutando como «{0}». Solo puede reemplazarse a sí " +
-                       "mismo cuando se ejecuta como «{1}». Cierra el launcher, renombra el " +
-                       "archivo a «{1}» y ábrelo de nuevo — o descarga la nueva versión " +
-                       "manualmente desde GitHub.",
+            [LangEn] = "It's running as *`{0}`*. Rename it to *`{1}`* and open it again.",
+            [LangEs] = "Se está ejecutando como *`{0}`*. Cámbiale el nombre a *`{1}`* y vuelve a abrirlo.",
         },
         ["DlgLauncherUpdateRestartFailed"] = new()
         {
-            [LangEn] = "The update could not be applied",
-            [LangEs] = "No se pudo aplicar la actualización",
+            [LangEn] = "The launcher couldn't restart",
+            [LangEs] = "No se pudo reiniciar el launcher",
         },
         ["DlgLauncherUpdateRestartFailedBody"] = new()
         {
-            [LangEn] = "Your current launcher was left untouched. Try again, or download the " +
-                       "new version manually from GitHub.",
-            [LangEs] = "Tu launcher actual quedó intacto. Inténtalo de nuevo, o descarga la " +
-                       "nueva versión manualmente desde GitHub.",
+            [LangEn] = "The new version was downloaded, but it couldn't be opened. Get it by hand from GitHub.",
+            [LangEs] = "La versión nueva se descargó, pero no se pudo abrir. Descárgala a mano desde GitHub.",
         },
         ["DlgLauncherUpdateOpenPage"] = new()
         {
-            [LangEn] = "Download manually",
-            [LangEs] = "Descargar manualmente",
+            [LangEn] = "Download from GitHub ↗",
+            [LangEs] = "Descargar desde GitHub ↗",
         },
         ["DlgLauncherUpdateBtnDownload"] = new()
         {
-            [LangEn] = "DOWNLOAD",
-            [LangEs] = "DESCARGAR",
+            [LangEn] = "Download",
+            [LangEs] = "Descargar",
         },
         ["DlgLauncherUpdateBtnRestart"] = new()
         {
-            [LangEn] = "RESTART NOW",
-            [LangEs] = "REINICIAR AHORA",
+            [LangEn] = "Restart now",
+            [LangEs] = "Reiniciar ahora",
         },
         ["DlgLauncherUpdateBtnRestartLater"] = new()
         {
-            [LangEn] = "LATER",
-            [LangEs] = "MÁS TARDE",
+            [LangEn] = "Later",
+            [LangEs] = "Más tarde",
         },
 
         // ---- Startup auto-update (the window shown BEFORE the launcher opens) ----
@@ -12424,11 +11465,11 @@ public static partial class Strings
         },
         ["DlgBackupConfirmBody"] = new()
         {
-            [LangEn] = "Move the current Wars of Liberty user data to a backup " +
+            [LangEn] = "Move the current {0} user data to a backup " +
                        "folder named with today's timestamp?\n\n" +
                        "The game will create a fresh empty data folder the next " +
                        "time it runs.",
-            [LangEs] = "¿Mover los datos actuales de Wars of Liberty a una " +
+            [LangEs] = "¿Mover los datos actuales de {0} a una " +
                        "carpeta de respaldo con la fecha de hoy?\n\n" +
                        "El juego creará una carpeta nueva vacía la próxima vez " +
                        "que se ejecute.",
@@ -12440,8 +11481,8 @@ public static partial class Strings
         },
         ["DlgBackupNothingBody"] = new()
         {
-            [LangEn] = "There is no Wars of Liberty user data to back up.",
-            [LangEs] = "No hay datos de Wars of Liberty para respaldar.",
+            [LangEn] = "There is no {0} user data to back up.",
+            [LangEs] = "No hay datos de {0} para respaldar.",
         },
 
         // -------- Restore dialog (styled list of backups) --------
@@ -12588,7 +11629,7 @@ public static partial class Strings
         ["MenuLangEnglish"] = new()
         {
             [LangEn] = "English (default)",
-            [LangEs] = "Inglés (predeterminado)",
+            [LangEs] = "English (predeterminado)",
         },
         ["MenuLangRefresh"] = new()
         {
@@ -12618,136 +11659,34 @@ public static partial class Strings
         // retired — the packager lives in Launcher Settings → Translations
         // now, where it's globalised across mods. Strings.MenuLangPackager
         // was deleted with it.)
-        ["DlgPackagerTitle"] = new()
-        {
-            [LangEn] = "Package translation",
-            [LangEs] = "Empaquetar traducción",
-        },
-        ["DlgPackagerSectionMod"] = new()
-        {
-            [LangEn] = "TARGET MOD",
-            [LangEs] = "MOD DE DESTINO",
-        },
-        ["DlgPackagerSectionIdentity"] = new()
-        {
-            [LangEn] = "PACK IDENTITY",
-            [LangEs] = "IDENTIDAD DEL PAQUETE",
-        },
-        ["DlgPackagerSectionSource"] = new()
-        {
-            [LangEn] = "SOURCE FILES",
-            [LangEs] = "ARCHIVOS DE ORIGEN",
-        },
-        ["DlgPackagerSectionCompat"] = new()
-        {
-            [LangEn] = "COMPATIBILITY",
-            [LangEs] = "COMPATIBILIDAD",
-        },
-        ["DlgPackagerSectionOutput"] = new()
-        {
-            [LangEn] = "OUTPUT",
-            [LangEs] = "SALIDA",
-        },
-        ["DlgPackagerFieldMod"] = new()
-        {
-            [LangEn] = "MOD TO TRANSLATE",
-            [LangEs] = "MOD A TRADUCIR",
-        },
-        ["DlgPackagerHintMod"] = new()
-        {
-            [LangEn] = "Drives the originals snapshot, compatibility version and default output filename.",
-            [LangEs] = "Define el snapshot de originales, la versión compatible y el nombre por defecto del archivo de salida.",
-        },
-        ["DlgPackagerModNotInstalled"] = new()
-        {
-            [LangEn] = "not installed",
-            [LangEs] = "sin instalar",
-        },
+        ["DlgPackagerTitle"] = new() { [LangEn] = "Package my translation", [LangEs] = "Empaquetar mi traducción" },
+        ["DlgPackagerSectionMod"] = new() { [LangEn] = "MOD TO TRANSLATE", [LangEs] = "MOD A TRADUCIR" },
+        ["DlgPackagerSectionIdentity"] = new() { [LangEn] = "YOUR TRANSLATION", [LangEs] = "TU TRADUCCIÓN" },
+        ["DlgPackagerSectionSource"] = new() { [LangEn] = "FILES", [LangEs] = "ARCHIVOS" },
+        ["DlgPackagerSectionCompat"] = new() { [LangEn] = "WHICH VERSIONS OF THE MOD IT WORKS WITH", [LangEs] = "CON QUÉ VERSIONES DEL MOD FUNCIONA" },
+        ["DlgPackagerHintMod"] = new() { [LangEn] = "The installed version is used for compatibility and to propose your translation’s version.", [LangEs] = "La versión instalada se usa para la compatibilidad y para proponer la versión de tu traducción." },
+        ["DlgPackagerModNotInstalled"] = new() { [LangEn] = "not installed", [LangEs] = "no instalado" },
         ["DlgPackagerErrorNoMod"] = new()
         {
             [LangEn] = "Pick a mod from the list before packaging.",
             [LangEs] = "Elige un mod en la lista antes de empaquetar.",
         },
-        ["DlgPackagerHeader"] = new()
-        {
-            [LangEn] = "Build a translation pack",
-            [LangEs] = "Crear un paquete de traducción",
-        },
-        ["DlgPackagerDescription"] = new()
-        {
-            [LangEn] = "This generates a ready-to-publish .zip from a folder of " +
-                       "translated XML files. The launcher computes the hashes " +
-                       "and manifest automatically.",
-            [LangEs] = "Genera un .zip listo para publicar a partir de una carpeta " +
-                       "con archivos XML traducidos. El launcher calcula los hashes " +
-                       "y el manifest automáticamente.",
-        },
-        ["DlgPackagerFieldId"] = new()
-        {
-            [LangEn] = "LANGUAGE ID",
-            [LangEs] = "ID DEL IDIOMA",
-        },
-        ["DlgPackagerHintId"] = new()
-        {
-            [LangEn] = "Short identifier — e.g. \"es\", \"fr\", \"pt-br\"",
-            [LangEs] = "Identificador corto — ej. \"es\", \"fr\", \"pt-br\"",
-        },
-        ["DlgPackagerFieldName"] = new()
-        {
-            [LangEn] = "DISPLAY NAME",
-            [LangEs] = "NOMBRE VISIBLE",
-        },
-        ["DlgPackagerFieldAuthor"] = new()
-        {
-            [LangEn] = "AUTHOR / HANDLE",
-            [LangEs] = "AUTOR / NOMBRE DE USUARIO",
-        },
-        ["DlgPackagerFieldVersion"] = new()
-        {
-            [LangEn] = "TRANSLATION VERSION  (e.g. 1.0)",
-            [LangEs] = "VERSIÓN DE LA TRADUCCIÓN  (ej: 1.0)",
-        },
-        ["DlgPackagerHintVersion"] = new()
-        {
-            [LangEn] = "Proposed as <mod version>-r<N> (1.2.0e-r1, then -r2…), so each version says " +
-                       "which mod version it's for and two packs never share a label. It becomes the " +
-                       "folder name translations/<id>/<version>/.",
-            [LangEs] = "Se propone como <versión del mod>-r<N> (1.2.0e-r1, luego -r2…), así cada versión " +
-                       "dice para qué versión del mod es y dos paquetes nunca comparten etiqueta. Será " +
-                       "el nombre de la carpeta translations/<id>/<versión>/.",
-        },
+        ["DlgPackagerHeader"] = new() { [LangEn] = "Turn your translated XMLs into a pack ready to publish", [LangEs] = "Convierte tus XML traducidos en un paquete listo para publicar" },
+        ["DlgPackagerDescription"] = new() { [LangEn] = "You choose the mod, the files and a version; the launcher works out the fingerprints, writes the manifest and leaves the .zip and the folder ready to upload. Nothing has to be touched by hand.", [LangEs] = "Eliges el mod, los archivos y una versión; el launcher calcula las huellas, escribe el manifiesto y deja el .zip y la carpeta para subir. No hace falta tocar nada a mano." },
+        ["DlgPackagerFieldId"] = new() { [LangEn] = "LANGUAGE CODE", [LangEs] = "CÓDIGO DE IDIOMA" },
+        ["DlgPackagerHintId"] = new() { [LangEn] = "Short and with no spaces: es, pt-br, de. It is the folder’s name.", [LangEs] = "Corto y sin espacios: es, pt-br, de. Es el nombre de la carpeta." },
+        ["DlgPackagerFieldName"] = new() { [LangEn] = "NAME PLAYERS WILL SEE", [LangEs] = "NOMBRE QUE VERÁN LOS JUGADORES" },
+        ["DlgPackagerFieldAuthor"] = new() { [LangEn] = "AUTHOR · OPTIONAL", [LangEs] = "AUTOR · OPCIONAL" },
+        ["DlgPackagerFieldVersion"] = new() { [LangEn] = "TRANSLATION VERSION", [LangEs] = "VERSIÓN DE LA TRADUCCIÓN" },
+        ["DlgPackagerHintVersion"] = new() { [LangEn] = "The mod’s version plus your revision: that way anyone can tell which version it was made for.", [LangEs] = "La versión del mod más tu revisión: así se sabe para qué versión se hizo." },
         // {0} the version typed, {1} the next free revision.
-        ["DlgPackagerVersionExists"] = new()
-        {
-            [LangEn] = "⚠ Version \"{0}\" already exists. Publishing different files under it would replace a version players may have installed — use \"{1}\" instead.",
-            [LangEs] = "⚠ La versión \"{0}\" ya existe. Publicar otros archivos con ese nombre reemplazaría una versión que los jugadores pueden tener instalada; usa \"{1}\".",
-        },
-        ["DlgPackagerIndexHeader"] = new()
-        {
-            [LangEn] = "PUBLISH ON GOOGLE DRIVE, DROPBOX OR YOUR WEBSITE (OPTIONAL)",
-            [LangEs] = "PUBLICAR EN GOOGLE DRIVE, DROPBOX O TU WEB (OPCIONAL)",
-        },
-        ["DlgPackagerIndexHint"] = new()
-        {
-            [LangEn] = "Players follow you by adding the link to your translations-index.json in the Language tab. This adds the version above to that file — with its SHA-256 — so they get it on their own.",
-            [LangEs] = "Los jugadores te siguen agregando el enlace a tu translations-index.json en la pestaña Idioma. Esto agrega la versión de arriba a ese archivo, con su SHA-256, para que les llegue sola.",
-        },
-        ["DlgPackagerIndexZipUrl"] = new()
-        {
-            [LangEn] = "ZIP DOWNLOAD LINK (OPTIONAL)",
-            [LangEs] = "ENLACE DE DESCARGA DEL ZIP (OPCIONAL)",
-        },
-        ["DlgPackagerIndexZipUrlHint"] = new()
-        {
-            [LangEn] = "Upload the .zip first and paste its share link (Google Drive, Dropbox…). Leave it empty if the zip sits next to the index on your website or repo, in translations/<id>/<version>/.",
-            [LangEs] = "Primero sube el .zip y pega su enlace para compartir (Google Drive, Dropbox…). Déjalo vacío si el zip va junto al índice en tu web o repo, en translations/<id>/<versión>/.",
-        },
-        ["DlgPackagerIndexAddButton"] = new() { [LangEn] = "Add to my index…", [LangEs] = "Agregar a mi índice…" },
-        ["DlgPackagerIndexWritten"] = new()
-        {
-            [LangEn] = "✓ Saved: {0}\nUpload it REPLACING your previous file so the link players added keeps working (Google Drive: Manage versions → Upload new version; Dropbox: overwrite the file with the same name).",
-            [LangEs] = "✓ Guardado: {0}\nSúbelo REEMPLAZANDO tu archivo anterior para que el enlace que agregaron los jugadores siga funcionando (Google Drive: Administrar versiones → Subir nueva versión; Dropbox: sobrescribe el archivo con el mismo nombre).",
-        },
+        ["DlgPackagerVersionExists"] = new() { [LangEn] = "Version *`{0}`* is already published: there are players who have it. Publishing other files under the same number would make it impossible to know which each one has. The next free one is *`{1}`*.", [LangEs] = "La versión *`{0}`* ya está publicada: hay jugadores que la tienen. Publicar otros archivos con el mismo número haría imposible saber cuál tiene cada uno. La siguiente libre es *`{1}`*." },
+        ["DlgPackagerIndexHeader"] = new() { [LangEn] = "PUBLISHING IT SOMEWHERE ELSE?", [LangEs] = "¿LA PUBLICAS EN OTRO SITIO?" },
+        ["DlgPackagerIndexHint"] = new() { [LangEn] = "If you upload it to Drive, Dropbox or your website, the launcher can write this version into your `translations-index.json`, with its SHA-256 fingerprint already worked out. Whoever added your index in Settings › Translations will see it by themselves.", [LangEs] = "Si la subes a Drive, Dropbox o tu web, el launcher puede escribir esta versión en tu `translations-index.json`, con su huella SHA-256 ya calculada. Quien añadió tu índice en Ajustes › Traducciones la verá sola." },
+        ["DlgPackagerIndexZipUrl"] = new() { [LangEn] = "LINK TO THE .ZIP · OPTIONAL", [LangEs] = "ENLACE AL .ZIP · OPCIONAL" },
+        ["DlgPackagerIndexZipUrlHint"] = new() { [LangEn] = "https://… · empty: the relative path beside the index", [LangEs] = "https://… · vacío: la ruta relativa junto al índice" },
+        ["DlgPackagerIndexAddButton"] = new() { [LangEn] = "Add to my index", [LangEs] = "Añadir a mi índice" },
+        ["DlgPackagerIndexWritten"] = new() { [LangEn] = "Written to `{0}`. Upload the index to the same place as the .zip, REPLACING the previous file so the link players added keeps working.", [LangEs] = "Escrita en `{0}`. Sube el índice al mismo sitio que el .zip, REEMPLAZANDO el archivo anterior para que el enlace que agregaron los jugadores siga funcionando." },
         ["DlgPackagerIndexBadZipUrl"] = new() { [LangEn] = "That zip link can't be used. {0}", [LangEs] = "Ese enlace del zip no sirve. {0}" },
         ["DlgPackagerIndexUnreadable"] = new()
         {
@@ -12756,76 +11695,23 @@ public static partial class Strings
         },
         // The index's own name, shown on players' cards: {0} the translator.
         ["DlgPackagerIndexDefaultName"] = new() { [LangEn] = "{0}'s translations", [LangEs] = "Traducciones de {0}" },
-        ["DlgPackagerVersionLooksLikeMod"] = new()
-        {
-            [LangEn] = "⚠ \"{0}\" looks like a mod version. The translation version is " +
-                       "yours — start with 1.0 and bump it on each release.",
-            [LangEs] = "⚠ \"{0}\" parece una versión del mod. La versión de la " +
-                       "traducción es tuya — empieza con 1.0 y súbela en cada release.",
-        },
-        ["DlgPackagerFieldFolder"] = new()
-        {
-            [LangEn] = "TRANSLATED XML FILES",
-            [LangEs] = "ARCHIVOS XML TRADUCIDOS",
-        },
-        ["DlgPackagerHintFolder"] = new()
-        {
-            [LangEn] = "Pick your translated stringtabley.xml and/or unithelpstringsy.xml. The file name can differ (e.g. stringtabley_translated.xml) — it's matched automatically.",
-            [LangEs] = "Selecciona tu stringtabley.xml y/o unithelpstringsy.xml traducidos. El nombre del archivo puede ser distinto (ej. stringtabley_translated.xml) — se detecta automáticamente.",
-        },
-        ["DlgPackagerFieldOriginals"] = new()
-        {
-            [LangEn] = "ORIGINAL ENGLISH XML FILES",
-            [LangEs] = "ARCHIVOS XML ORIGINALES EN INGLÉS",
-        },
-        ["DlgPackagerHintOriginals"] = new()
-        {
-            [LangEn] = "The same files as above but the ENGLISH versions. The file name can " +
-                       "differ — it's matched automatically. Auto-filled from the launcher's snapshot when available.",
-            [LangEs] = "Los mismos archivos de arriba pero en INGLÉS. El nombre puede ser distinto " +
-                       "— se detecta automáticamente. Se auto-completa con el respaldo del launcher si está disponible.",
-        },
-        ["DlgPackagerFieldCompat"] = new()
-        {
-            [LangEn] = "MOD COMPATIBILITY",
-            [LangEs] = "COMPATIBILIDAD CON EL MOD",
-        },
-        ["DlgPackagerCompatCurrent"] = new()
-        {
-            [LangEn] = "Compatible with current mod version ({0})",
-            [LangEs] = "Compatible con la versión actual del mod ({0})",
-        },
-        ["DlgPackagerHintCompatExtra"] = new()
-        {
-            [LangEn] = "Extra versions, comma-separated (optional)",
-            [LangEs] = "Otras versiones, separadas por coma (opcional)",
-        },
-        ["DlgPackagerFieldOutput"] = new()
-        {
-            [LangEn] = "OUTPUT .ZIP FILE",
-            [LangEs] = "ARCHIVO .ZIP DE SALIDA",
-        },
+        ["DlgPackagerVersionLooksLikeMod"] = new() { [LangEn] = "“{0}” looks like a version of the mod. The translation’s version is yours: start at 1.0 and raise it with each release.", [LangEs] = "«{0}» parece una versión del mod. La versión de la traducción es tuya: empieza con 1.0 y súbela en cada publicación." },
+        ["DlgPackagerFieldFolder"] = new() { [LangEn] = "YOUR TRANSLATED XMLS", [LangEs] = "TUS XML TRADUCIDOS" },
+        ["DlgPackagerHintFolder"] = new() { [LangEn] = "The mod’s text files already translated, under any name: the launcher recognises them by their content.", [LangEs] = "Los archivos de texto del mod ya traducidos, con cualquier nombre: el launcher los reconoce por su contenido." },
+        ["DlgPackagerFieldOriginals"] = new() { [LangEn] = "THE ENGLISH ORIGINALS · OPTIONAL", [LangEs] = "LOS ORIGINALES EN INGLÉS · OPCIONAL" },
+        ["DlgPackagerHintOriginals"] = new() { [LangEn] = "Taken from the installed copy: they let the player be warned when the mod changes a text you translated.", [LangEs] = "Tomados de la copia instalada: sirven para avisar al jugador cuando el mod cambie un texto que tradujiste." },
+        ["DlgPackagerCompatCurrent"] = new() { [LangEn] = "The installed version: {0}", [LangEs] = "La versión instalada: {0}" },
+        ["DlgPackagerHintCompatExtra"] = new() { [LangEn] = "OTHER VERSIONS · SEPARATED BY COMMAS", [LangEs] = "OTRAS VERSIONES · SEPARADAS POR COMAS" },
+        ["DlgPackagerFieldOutput"] = new() { [LangEn] = "SAVE TO", [LangEs] = "GUARDAR EN" },
         ["DlgPackagerBtnGenerate"] = new()
         {
             [LangEn] = "Generate package",
             [LangEs] = "Generar paquete",
         },
         // Errors
-        ["DlgPackagerErrorIdMissing"] = new()
-        {
-            [LangEn] = "Language ID is required (e.g. \"es\").",
-            [LangEs] = "El ID del idioma es obligatorio (ej. \"es\").",
-        },
-        ["DlgPackagerErrorNameMissing"] = new()
-        {
-            [LangEn] = "Display name is required.",
-            [LangEs] = "El nombre visible es obligatorio.",
-        },
-        ["DlgPackagerErrorVersionMissing"] = new()
-        {
-            [LangEn] = "Pack version is required.",
-            [LangEs] = "La versión del paquete es obligatoria.",
-        },
+        ["DlgPackagerErrorIdMissing"] = new() { [LangEn] = "The language code is needed.", [LangEs] = "Hace falta el código de idioma." },
+        ["DlgPackagerErrorNameMissing"] = new() { [LangEn] = "The name is needed.", [LangEs] = "Hace falta el nombre." },
+        ["DlgPackagerErrorVersionMissing"] = new() { [LangEn] = "The version is needed.", [LangEs] = "Hace falta la versión." },
         // The id and the version become folder names, and the launcher refuses a pack whose id
         // isn't a plain one — so the packager says so before building anything.
         ["DlgPackagerErrorIdInvalid"] = new()
@@ -12838,80 +11724,15 @@ public static partial class Strings
             [LangEn] = "The pack version can only use letters, digits, '.', '_', '-' and '+', and must start with a letter or digit (e.g. '1.2.0e-r1').",
             [LangEs] = "La versión del paquete solo puede usar letras, números, '.', '_', '-' y '+', y debe empezar con una letra o un número (por ejemplo '1.2.0e-r1').",
         },
-        ["DlgPackagerErrorFolderMissing"] = new()
-        {
-            [LangEn] = "The translated-files folder doesn't exist.",
-            [LangEs] = "La carpeta con los archivos traducidos no existe.",
-        },
-        ["DlgPackagerErrorOutputMissing"] = new()
-        {
-            [LangEn] = "Output .zip path is required.",
-            [LangEs] = "Falta la ruta del .zip de salida.",
-        },
-        ["DlgPackagerErrorNoCompat"] = new()
-        {
-            [LangEn] = "Specify at least one compatible mod version.",
-            [LangEs] = "Indica al menos una versión del mod compatible.",
-        },
+        ["DlgPackagerErrorFolderMissing"] = new() { [LangEn] = "Choose at least one translated XML.", [LangEs] = "Elige al menos un XML traducido." },
+        ["DlgPackagerErrorOutputMissing"] = new() { [LangEn] = "Choose where to save the .zip.", [LangEs] = "Elige dónde guardar el .zip." },
+        ["DlgPackagerErrorNoCompat"] = new() { [LangEn] = "At least one version is needed: otherwise the launcher will not know whom to offer the translation.", [LangEs] = "Hace falta al menos una versión: si no, el launcher no sabrá a quién ofrecer la traducción." },
         // Result
-        ["DlgPackagerResultHeader"] = new()
-        {
-            [LangEn] = "Package created",
-            [LangEs] = "Paquete creado",
-        },
-        ["DlgPackagerResultFolderPath"] = new()
-        {
-            [LangEn] = "📁 Ready to commit: {0}",
-            [LangEs] = "📁 Listo para commitear: {0}",
-        },
-        ["DlgPackagerResultPath"] = new()
-        {
-            [LangEn] = "📦 {0} ({1})",
-            [LangEs] = "📦 {0} ({1})",
-        },
-        ["DlgPackagerResultJsonPath"] = new()
-        {
-            [LangEn] = "📄 {0}",
-            [LangEs] = "📄 {0}",
-        },
-        ["DlgPackagerResultInstructions"] = new()
-        {
-            [LangEn] = "ⓘ How to publish (pick one):\n" +
-                       "• GitHub folder (recommended): commit the translations/ folder shown above " +
-                       "to github.com/{0} — or to your own repo (push to main or open a PR). It's the ready " +
-                       "translations/<id>/<version>/ layout, so each export adds a new " +
-                       "version to the history — never change the folders already published.\n" +
-                       "• Anywhere else: use \"Add to my index\" below and upload your translations-index.json.\n" +
-                       "Players who follow your source see the new version the next time the launcher refreshes its list.",
-            [LangEs] = "ⓘ Cómo publicar (elige una):\n" +
-                       "• Carpeta en GitHub (recomendado): commitea la carpeta translations/ de arriba " +
-                       "a github.com/{0}, o a tu propio repo (push a main o abre un PR). Ya viene con el layout " +
-                       "translations/<id>/<version>/, así cada export agrega una versión " +
-                       "nueva al historial; nunca cambies las carpetas ya publicadas.\n" +
-                       "• En cualquier otro lugar: usa \"Agregar a mi índice\" abajo y sube tu translations-index.json.\n" +
-                       "Los jugadores que siguen tu fuente verán la versión nueva la próxima vez que el " +
-                       "launcher refresque la lista.",
-        },
-        ["DlgPackagerFieldDescription"] = new()
-        {
-            [LangEn] = "Description / changelog (optional)",
-            [LangEs] = "Descripción / cambios (opcional)",
-        },
-        ["DlgPackagerHintDescription"] = new()
-        {
-            [LangEn] = "Shown when players pick this pack. e.g. what's translated, or what changed in this version.",
-            [LangEs] = "Se muestra cuando los jugadores eligen este pack. Ej.: qué está traducido o qué cambió en esta versión.",
-        },
-        ["DlgPackagerResultPreviewLabel"] = new()
-        {
-            [LangEn] = "MENU PREVIEW (how players will see it):",
-            [LangEs] = "VISTA PREVIA EN EL MENÚ (así lo verán los jugadores):",
-        },
-        ["DlgPackagerBtnOpenFolder"] = new()
-        {
-            [LangEn] = "Open folder",
-            [LangEs] = "Abrir carpeta",
-        },
+        ["DlgPackagerResultHeader"] = new() { [LangEn] = "Your translation is packaged", [LangEs] = "Tu traducción está empaquetada" },
+        ["DlgPackagerFieldDescription"] = new() { [LangEn] = "DESCRIPTION · OPTIONAL", [LangEs] = "DESCRIPCIÓN · OPCIONAL" },
+        ["DlgPackagerHintDescription"] = new() { [LangEn] = "What it is for or what changes from the previous one. It shows in the language menu on hover.", [LangEs] = "Para qué sirve o qué cambia respecto a la anterior. Sale en el menú de idioma al pasar el ratón." },
+        ["DlgPackagerResultPreviewLabel"] = new() { [LangEn] = "HOW PLAYERS WILL SEE IT IN THE LANGUAGE MENU", [LangEs] = "ASÍ LO VERÁN LOS JUGADORES EN EL MENÚ DE IDIOMA" },
+        ["DlgPackagerBtnOpenFolder"] = new() { [LangEn] = "Open the folder", [LangEs] = "Abrir la carpeta" },
         ["DlgPackagerBtnDone"] = new()
         {
             [LangEn] = "Done",
