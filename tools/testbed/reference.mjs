@@ -1,10 +1,11 @@
 // Renders one variant of a design prototype to a PNG, to set beside the launcher.
 //
 //   node tools/testbed/reference.mjs <folder under docs> <prototype> <block id> <out.png>
-//        [--props '{"transparencia":"Media"}'] [--frame N] [--click 'text']
+//        [--props '{"transparencia":"Media"}'] [--frame N] [--click 'text'] [--rects 'css selector']
 //
 // The block id is what the prototype's own heading links to (68a, 97b...). --frame picks which
-// child of that block is the design, default the last: the first is its caption.
+// child of that block is the design, default the last: the first is its caption. --rects prints
+// each match's box and text colour, relative to that design, to check a measure without guessing.
 //
 // Edge, because it is on every Windows 11 and playwright-core needs no browser download. The
 // prototypes load React and Babel from unpkg and a font from Google, so this needs the network.
@@ -26,6 +27,7 @@ const option = name => {
 const props = JSON.parse(option('--props') ?? '{}');
 const frame = option('--frame');
 const click = option('--click');
+const rects = option('--rects');
 const [folder, prototype, block, out] = args;
 if (!out) {
   console.error('usage: reference.mjs <folder> <prototype> <block id> <out.png> [--props JSON] [--frame N]');
@@ -66,6 +68,15 @@ try {
   await target.screenshot({ path: out });
   const box = await target.boundingBox();
   console.log(`${out}: ${prototype} #${block}, ${Math.round(box.width)}x${Math.round(box.height)}`);
+  if (rects) {
+    const found = await target.locator(rects).evaluateAll((all, origin) => all.map(element => {
+      const r = element.getBoundingClientRect(), s = getComputedStyle(element);
+      return { x: r.x - origin.x, y: r.y - origin.y, w: r.width, h: r.height, font: s.fontSize, weight: s.fontWeight,
+               color: s.color, background: s.backgroundColor, radius: s.borderRadius,
+               text: element.textContent.slice(0, 40) };
+    }), box);
+    for (const item of found) console.log(JSON.stringify(item));
+  }
 } finally {
   await browser.close();
   server.close();

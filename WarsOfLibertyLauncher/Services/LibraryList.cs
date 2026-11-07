@@ -88,7 +88,7 @@ public static class LibraryList
 /// <summary>Which part of an image CSS <c>center 25%/cover</c> shows, as a relative Viewbox.</summary>
 public static class HeroCover
 {
-    public static System.Windows.Rect Viewbox(double imageWidth, double imageHeight, double boxWidth, double boxHeight)
+    public static System.Windows.Rect Viewbox(double imageWidth, double imageHeight, double boxWidth, double boxHeight, double top = .25)
     {
         if (imageWidth <= 0 || imageHeight <= 0 || boxWidth <= 0 || boxHeight <= 0)
             return new System.Windows.Rect(0, 0, 1, 1);
@@ -102,7 +102,7 @@ public static class HeroCover
         else
         {
             var visible = image / box;
-            return new System.Windows.Rect(0, (1 - visible) * .25, 1, visible);
+            return new System.Windows.Rect(0, (1 - visible) * top, 1, visible);
         }
     }
 }

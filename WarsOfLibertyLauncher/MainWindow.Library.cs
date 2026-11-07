@@ -54,6 +54,9 @@ public partial class MainWindow
             case "small":
                 PreviewSmallDialog(variant);
                 break;
+            case "createroom":
+                PreviewCreateRoom(variant);
+                break;
             case "matchwatch":
                 PreviewMatchWatch(variant);
                 break;
@@ -119,8 +122,7 @@ public partial class MainWindow
                         DisplayName = "Gorgorito",
                     });
                     if (variant == "account-room") MultiplayerView.PreviewRoomTitle = "Sala de Gorgorito";
-                    Dispatcher.BeginInvoke(() => AccountButton_Click(this, new RoutedEventArgs()),
-                        System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                    OpenPreviewPopup(() => AccountButton_Click(this, new RoutedEventArgs()));
                 }
                 break;
             case "installfolder":
@@ -212,15 +214,59 @@ public partial class MainWindow
                     Strings.Get("MpLeaveDuringMatchYes"), Strings.Get("MpLeaveDuringMatchNo"));
                 break;
             case "n":
-                Dispatcher.BeginInvoke(() => LibraryModMenuButton_Click(this, new RoutedEventArgs()),
-                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                OpenPreviewPopup(() => LibraryModMenuButton_Click(this, new RoutedEventArgs()));
                 break;
             case "o":
                 ConnectionChip.Visibility = Visibility.Visible;
-                Dispatcher.BeginInvoke(() => ConnectionChip_Click(this, new RoutedEventArgs()),
-                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                OpenPreviewPopup(() => ConnectionChip_Click(this, new RoutedEventArgs()));
                 break;
         }
+    }
+
+    /// <summary>Design 88a-c, with the hash and Radmin made up so nothing is read.</summary>
+    private void PreviewCreateRoom(string variant)
+    {
+        ModProfile Mod(string id) => ModRegistry.Find(id) ?? ModRegistry.Default;
+        var mods = new[] { Mod("wol"), Mod("hundred-days"), Mod("improvement-mod") };
+        var copies = new ModCopyInfo(true, true, new[]
+        {
+            new ModCopyChoice("a", @"Steam · D:\Juegos\WoL", variant != "c"),
+            new ModCopyChoice("b", "Copia de pruebas", variant == "c"),
+        });
+        var dialog = new CreateLobbyDialog(
+            new Services.Multiplayer.MultiplayerSession(_config),
+            mods,
+            variant == "b" ? mods[1] : mods[0],
+            _ => variant switch
+            {
+                "b" => new TaskCompletionSource<string>().Task,
+                "c" => throw new InvalidOperationException("preview"),
+                _ => Task.FromResult("3f9a52aab07dc21d"),
+            },
+            mod => mod.Id == "wol" ? copies : new ModCopyInfo(false, false, Array.Empty<ModCopyChoice>()),
+            _ => Task.CompletedTask,
+            developerMode: true,
+            config: _config,
+            openRadminHelp: () => { })
+        { Owner = this };
+        dialog.PaintNetwork(variant != "b", "26.41.8.112");
+        if (variant == "b") dialog.FillPreview("Hundred Days · Ranked 2v2", RoomFormat.TwoVTwo, 1, "guardia");
+        if (variant == "c") dialog.FillPreview("WoL", RoomFormat.Casual, 0, "");
+        if (variant == "a") dialog.SelectKind(RoomFormat.OneVOne);
+        dialog.ShowDialog();
+    }
+
+    /// <summary>The testbed moves the window to the test monitor just after it appears, and a popup
+    /// opened before that stays behind on the other monitor.</summary>
+    private void OpenPreviewPopup(Action open)
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            open();
+        };
+        timer.Start();
     }
 
     /// <summary>Design 74: one mod per state, as the prototype draws them, with the disk figures
@@ -302,6 +348,12 @@ public partial class MainWindow
 
     private void InitializeLibrary()
     {
+        PopupGlass.Register();
+        PopupGlass.Source = target =>
+            LibraryBlurLayer.IsVisible && LibraryBlurLayer.Background is ImageBrush blur
+            && target != null && ReferenceEquals(Window.GetWindow(target), this)
+                ? (blur, LibraryBackdrop, GlassTheme.For(_config.GlassLevel).Menu)
+                : null;
         LibraryRail.IconFor = p => TryLoadTileImage(p.ResolveIconSource());
         LibraryRail.ContextMenuFor = BuildLibraryContextMenu;
         LibraryRail.Selected += (_, profile) => SelectLibraryMod(profile);
@@ -961,7 +1013,7 @@ public partial class MainWindow
     }
 
     /// <summary>The cover drawn small and blurred once, so the panels cost no more than a picture.</summary>
-    private static ImageBrush? BuildBlurredCover(ImageSource source)
+    internal static ImageBrush? BuildBlurredCover(ImageSource source)
     {
         try
         {

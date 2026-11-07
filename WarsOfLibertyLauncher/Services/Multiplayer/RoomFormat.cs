@@ -99,6 +99,25 @@ public static class RoomFormats
         => maxPlayers - (spectatorSlots > 0 ? spectatorSlots : 0);
 
     /// <summary>How many seats this format needs, or 0 when it does not name a number.</summary>
+    /// <summary>The kind as it is kept in the settings, which outlive any renaming of the enum.</summary>
+    public static string KindToken(RoomFormat kind) => kind switch
+    {
+        RoomFormat.OneVOne => "1v1",
+        RoomFormat.TwoVTwo => "2v2",
+        RoomFormat.ThreeVThree => "3v3",
+        _ => "casual",
+    };
+
+    /// <summary>The reverse of <see cref="KindToken"/>. Anything else reads as casual, the kind
+    /// that promises nothing.</summary>
+    public static RoomFormat FromKindToken(string? token) => token switch
+    {
+        "1v1" => RoomFormat.OneVOne,
+        "2v2" => RoomFormat.TwoVTwo,
+        "3v3" => RoomFormat.ThreeVThree,
+        _ => RoomFormat.Casual,
+    };
+
     public static int PlayersFor(RoomFormat format) => format switch
     {
         RoomFormat.OneVOne => OneVOnePlayers,

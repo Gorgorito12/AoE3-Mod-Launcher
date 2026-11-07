@@ -738,6 +738,15 @@ since a backup has no author, and shows the date as its title; 103l has no "en S
 needs a presence field the server does not send. Windows Segoe UI has no Medium weight, so the
 prototype's 500 renders as Regular in WPF and looks lighter than the browser's.
 
+
+**Screen 88 (Crear sala)**, compared with `Crear sala v2.dc.html` in 88a to 88c, the mod list, the
+three glass levels and English. What differs, on purpose: the proposed name is `WoL · Ranked 1v1`
+and not «Wars of Liberty 1v1 competitiva», because a room title is an English network value
+(`RoomTitleProposal`); the observer rows only exist in developer mode, as before; the room needs a
+password when the switch is on (an extra footer error, since an empty one makes a public room); the
+forfeit and recording promises went from the page to the type hint's tooltip; the mod's icon in the
+bar has no tile behind it (shared title bar). Text is one notch lighter than the browser's.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup

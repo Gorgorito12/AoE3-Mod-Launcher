@@ -94,10 +94,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   a time (`_refreshing`) and a `_closed` flag guards the paint and the 1.2-s auto-close. The
   open and close are logged (`Radmin assistant opened (auto|manual), stage=X` / `closed after N
   s`). **The create-room dialog
-  (`CreateLobbyDialog`) surfaces a NON-BLOCKING amber warning (`RadminWarning`,
-  `MpCreateDialogRadminWarning`) when `RadminVpnService.GetStatus().IsServiceRunning`
-  is false at open** — the host can still create the room (peers just can't join until
-  Radmin is on); it never disables Create and a probe failure just hides the warning.
+  (`CreateLobbyDialog`) shows the state in a card of its own (`NetCard`, design 88): green with
+  the 26.x address when ready, amber with "Open the assistant" when not** — the host can still
+  create the room; it never disables Create, and a failed probe reads as not ready.
 
 - **"The Create button gets consumed" was the HOVER, not the busy state — and it took three
   reports because the first two fixes chased the wrong state.** The real cause:
@@ -383,11 +382,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   with Radmin off, and the game auto-injects the 26.x IP regardless — Radmin's
   tunnel is only needed for actual in-game peer connectivity. The old
   `CreateLobbyDialog` warning ("other players won't be able to join until you turn
-  Radmin on") was FALSE and scared testers off; it's now an ℹ info note chosen by
-  `RadminVpnService.TryGetAdapterIp()`: IP present → `MpCreateDialogRadminInfo`
-  (room created, IP `{0}` injected automatically, connect Radmin to play); IP
-  absent → `MpCreateDialogRadminWarning` (install/enable Radmin to play). Same
-  softening on the two launch chat lines (`MpChatRadminNoAdapter` /
+  Radmin on") was FALSE and scared testers off; design 88's card says "you can create the room
+  anyway, but you need it to play". Same softening on the two launch chat lines
+  (`MpChatRadminNoAdapter` /
   `MpChatRadminNotReady`). Don't reword these back to imply Radmin blocks
   create/join, and don't add a Radmin gate to the join path.
 

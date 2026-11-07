@@ -2101,6 +2101,10 @@ public class LauncherConfig
     [JsonPropertyName("lastInstalledLauncherTag")]
     public string LastInstalledLauncherTag { get; set; } = "";
 
+    /// <summary>The room type last created (design 88), which the dialog opens on:
+    /// see <see cref="Services.Multiplayer.RoomFormats.KindToken"/>.</summary>
+    public string LastRoomKind { get; set; } = "casual";
+
     /// <summary>
     /// GitHub release tag the user dismissed via "Later". The launcher won't
     /// prompt again for this exact tag — only when a different tag appears.
