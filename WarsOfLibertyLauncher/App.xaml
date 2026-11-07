@@ -35,6 +35,8 @@
                 <ResourceDictionary Source="/Styles/Badges.xaml"/>
                 <!-- The Library's styles, which the window's XAML reaches with StaticResource. -->
                 <ResourceDictionary Source="/Styles/Library.xaml"/>
+                <!-- The small dialogs (design 103): BasedOn the Window* styles in Library.xaml. -->
+                <ResourceDictionary Source="/Styles/Dialogs.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- ============================================================

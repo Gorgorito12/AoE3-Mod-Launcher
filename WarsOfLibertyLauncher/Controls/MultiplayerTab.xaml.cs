@@ -16516,7 +16516,7 @@ public partial class MultiplayerTab : UserControl
         string? password = null;
         if (lobby.IsPrivate)
         {
-            var prompt = new PasswordPromptDialog()
+            var prompt = new PasswordPromptDialog(null, lobby.Host?.DisplayName, ModRegistry.Find(lobby.ModId))
             {
                 Owner = Window.GetWindow(this),
             };

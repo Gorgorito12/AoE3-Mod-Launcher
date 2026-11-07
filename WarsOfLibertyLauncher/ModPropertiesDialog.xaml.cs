@@ -535,6 +535,7 @@ public partial class ModPropertiesDialog : Window
             var bmp = new System.Windows.Media.Imaging.BitmapImage();
             bmp.BeginInit();
             bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = MainWindow.IconDecodeWidth;
             bmp.UriSource = new System.Uri(uri, System.UriKind.Absolute);
             bmp.EndInit();
             if (bmp.CanFreeze) bmp.Freeze();
@@ -2057,11 +2058,10 @@ public partial class ModPropertiesDialog : Window
         }
 
         // A clear popup so the user actually sees that something happened.
-        MessageBox.Show(this,
-            Strings.Get(ok ? "DlgTempCleared" : "DlgTempClearFailed"),
+        ThemedConfirmDialog.Notice(this,
             Strings.Get("DlgTempClearedTitle"),
-            MessageBoxButton.OK,
-            ok ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            Strings.Get(ok ? "DlgTempCleared" : "DlgTempClearFailed"),
+            ok ? ConfirmTone.Done : ConfirmTone.Caution);
     }
 
     private void ValWebsite_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -3104,10 +3104,10 @@ public partial class ModPropertiesDialog : Window
     /// that matters — that it runs into a temporary folder rather than the game.
     /// </summary>
     private bool ConfirmRunInstaller(AddonEntry entry) =>
-        MessageBox.Show(this,
-            Strings.Format("AddonRunInstallerBody", entry.Name),
+        ThemedConfirmDialog.Ask(this,
             Strings.Get("AddonRunInstallerTitle"),
-            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+            Strings.Format("AddonRunInstallerBody", entry.Name),
+            Strings.Get("DlgYes"), Strings.Get("DlgNo"), ConfirmTone.Info);
 
     private bool ConfirmMultiplayerRisk(AddonRiskAssessment risk)
     {
@@ -3116,9 +3116,10 @@ public partial class ModPropertiesDialog : Window
             ? Strings.Format("AddonVersionMatchConfirmBody", risk.VersionMatchFiles.Count)
             : Strings.Format("AddonSimulationConfirmBody", string.Join(", ", files.Take(3)));
 
-        return MessageBox.Show(this, body,
+        return ThemedConfirmDialog.Ask(this,
             Strings.Get("AddonMultiplayerConfirmTitle"),
-            MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+            body,
+            Strings.Get("DlgYes"), Strings.Get("DlgNo"), ConfirmTone.Caution);
     }
 
     private static AddonRiskLevel ParseRisk(string? raw) =>
@@ -3150,10 +3151,10 @@ public partial class ModPropertiesDialog : Window
                 bool allowRisk = ParseRisk(addon.Risk) != AddonRiskLevel.MultiplayerRisk;
                 if (!allowRisk)
                 {
-                    allowRisk = MessageBox.Show(this,
-                        Strings.Get("AddonSimulationConfirmBody"),
+                    allowRisk = ThemedConfirmDialog.Ask(this,
                         Strings.Get("AddonSimulationConfirmTitle"),
-                        MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+                        Strings.Get("AddonSimulationConfirmBody"),
+                        Strings.Get("DlgYes"), Strings.Get("DlgNo"), ConfirmTone.Caution);
                 }
                 if (!allowRisk) { LoadAddons(); return; }
 

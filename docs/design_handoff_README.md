@@ -705,6 +705,39 @@ Screen 95 (Perfil):
 - **The light under the portrait is omitted** and the age's colour is on the ring and the pill: a
   blurred glow behind the picture would redraw with the badge beside it.
 
+Screen 103 (Diálogos pequeños, menús y popovers):
+
+- **All 41 message boxes went, not the nine the README counts**: 32 of them were in `MainWindow`. The
+  two inside `OnClosing` stay, as the README says.
+- **No blur, so floating surfaces are denser:** .97 / .93 / .88 against the design's .95 / .74 / .6.
+  Those numbers come with 18 to 32 px of blur because a menu sits over text. WPF cannot blur what is
+  behind a popup, and at .74 the text behind read through the menu's own.
+- **103d has no "don't ask again" box.** The question is asked once whatever the answer, so the box
+  would change nothing, which the base forbids. `CompatibilityLayerDialog` keeps the one it has, and
+  that one works.
+- **103e keeps its own text.** The prototype's "Instalar más tarde" is a stand-in: this dialog removes
+  a compatibility mode Windows set, and installs nothing. The third button is "Abrir propiedades".
+- **103f drops "Copiar rutas" as drawn.** The paths are selectable text.
+- **103j counts to 80 and 103k's tag takes 8,** the server's numbers, where the prototype draws 40 and 3.
+- **103n keeps Favorito, Página del mod and Desinstalar,** which have no other place, and gained a
+  visible ⋯ button beside the gear, since a right click may not be the only way to anything.
+- **103o has no servers, latency, "Reconectar" or "Cambiar servidor…".** There is one backend. It says
+  how many players are online, and keeps the Radmin IP and the help.
+- **103p does not replace the brand menu,** whose About, Community and Exit have no other place and
+  which a signed-out player still needs. It keeps the badge selector and the rank guide.
+- **A small dialog of a mod shows its glow and tint, not its image:** that is all the prototype draws.
+- **`StartupUpdateWindow`'s "Reintentar" spends the same attempts as a launch** (`MaxAttemptsPerTag`),
+  so it cannot walk past the loop guard. With none left, the launcher simply opens.
+
+
+Compared frame by frame with `Diálogos pequeños v2.dc.html` afterwards. What still differs, on
+purpose: the text of 103d, 103e and 103f is the launcher's own, because those dialogs say something
+else than the prototype's sample (103d asks about starting with Windows, so it carries no "don't ask
+again"); a dialog that names no bar title of its own reads "AoE3 Mod Launcher"; 103h has no avatars,
+since a backup has no author, and shows the date as its title; 103l has no "en Salas" line, which
+needs a presence field the server does not send. Windows Segoe UI has no Medium weight, so the
+prototype's 500 renders as Regular in WPF and looks lighter than the browser's.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup

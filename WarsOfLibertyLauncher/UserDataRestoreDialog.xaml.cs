@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services;
 
@@ -14,7 +15,7 @@ namespace WarsOfLibertyLauncher;
 /// Restore renames the selected backup back into place and snapshots the
 /// current data first (so swapping is reversible).
 /// </summary>
-public partial class UserDataRestoreDialog : Window
+public partial class UserDataRestoreDialog : BaseDialog
 {
     /// <summary>True if the user clicked Restore AND the operation succeeded.</summary>
     public bool RestorePerformed { get; private set; }
@@ -49,24 +50,24 @@ public partial class UserDataRestoreDialog : Window
         _rows = backups.Select(b => new BackupRow(b)).ToList();
         _userDataFolderName = userDataFolderName ?? "";
 
-        Title = Strings.Get("DlgRestoreDialogTitle");
-        TitleBarControl.Title = Strings.Get("DlgRestoreDialogTitle");
-        HeaderText.Text = Strings.Get("DlgRestoreDialogHeader");
-        DescriptionText.Text = backups.Count == 1
+        SetBarTitle(Strings.Get("DlgRestoreDialogTitle"));
+        SetHeadline(Strings.Get("DlgRestoreDialogHeader"));
+        SetLead(backups.Count == 1
             ? Strings.Get("DlgRestoreDialogDescriptionSingle")
-            : Strings.Format("DlgRestoreDialogDescriptionMultiple", backups.Count);
+            : Strings.Format("DlgRestoreDialogDescriptionMultiple", backups.Count));
         ListLabelText.Text = Strings.Get("DlgRestoreDialogListLabel");
         ReassuranceText.Text = Strings.Get("DlgRestoreDialogReassurance");
-        OpenFolderButton.Content = Strings.Get("DlgUserDataAlertBtnOpen");
-        CancelButton.Content = Strings.Get("BtnCancel");
-        RestoreButton.Content = Strings.Get("DlgRestoreDialogBtnRestore");
+        SetLeftAction(Strings.Get("DlgUserDataAlertBtnOpen"));
+        CancelAction.Content = Strings.Get("BtnCancel");
+        PrimaryAction.Content = Strings.Get("DlgRestoreDialogBtnRestore");
+        PrimaryAction.MinWidth = 150;
 
         BackupsList.ItemsSource = _rows;
         if (_rows.Count > 0)
             BackupsList.SelectedIndex = 0; // newest preselected
     }
 
-    private void RestoreButton_Click(object sender, RoutedEventArgs e)
+    protected override void OnPrimary()
     {
         if (BackupsList.SelectedItem is not BackupRow row) return;
 
@@ -76,19 +77,20 @@ public partial class UserDataRestoreDialog : Window
                 _userDataFolderName, row.Info.Path);
             RestoredBackup = row.Info;
             RestorePerformed = true;
-            DialogResult = true;
+            Answer(true);
         }
         catch (System.Exception ex)
         {
             DiagnosticLog.Write($"Restore from dialog failed: {ex}");
-            MessageBox.Show(this,
-                Strings.Format("DlgRestoreFailedBody", ex.Message),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgRestoreFailedTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Error);
+                Strings.Get("DlgRestoreFailedLead"),
+                ConfirmTone.Caution,
+                detail: ex.Message);
         }
     }
 
-    private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
+    protected override void OnLeft()
     {
         // Open the parent so the user sees the active folder + every .bak side by side
         var folder = UserDataService.GetUserDataFolder(_userDataFolderName);
@@ -109,11 +111,6 @@ public partial class UserDataRestoreDialog : Window
         }
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
-    {
-        DialogResult = false;
-    }
-
     /// <summary>
     /// View-model wrapper around <see cref="UserDataService.BackupInfo"/> with
     /// pre-formatted strings for display in the list. Keeping the formatting
@@ -126,13 +123,11 @@ public partial class UserDataRestoreDialog : Window
 
         public string DateLabel => Info.CreatedAt == System.DateTime.MinValue
             ? "—"
-            : Info.CreatedAt.ToString("yyyy-MM-dd HH:mm");
+            : Info.CreatedAt.ToString("dddd d MMM yyyy · HH:mm", Strings.Culture);
 
-        public string DetailLabel => Info.SavegameCount > 0
+        public string DetailLabel => FormatBytes(Info.TotalBytes) + " · " + (Info.SavegameCount > 0
             ? Strings.Format("DlgRestoreDialogRowDetailWithSaves", Info.FileCount, Info.SavegameCount)
-            : Strings.Format("DlgRestoreDialogRowDetail", Info.FileCount);
-
-        public string SizeLabel => FormatBytes(Info.TotalBytes);
+            : Strings.Format("DlgRestoreDialogRowDetail", Info.FileCount));
 
         public BackupRow(UserDataService.BackupInfo info)
         {

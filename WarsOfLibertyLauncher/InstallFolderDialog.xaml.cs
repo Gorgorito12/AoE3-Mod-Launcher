@@ -699,10 +699,10 @@ public partial class InstallFolderDialog : Window
 
         if (gameFolder == null)
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgInvalidAoE3FolderBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgInvalidAoE3FolderTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                Strings.Get("DlgInvalidAoE3FolderBody"),
+                ConfirmTone.Caution);
             return;
         }
 

@@ -13,7 +13,7 @@ public partial class ModPropertiesDialog
         var accent = ModTheme.AccentOf(_profile.AccentColor, _config.UseModColor);
         Resources["UiToggleOn"] = new SolidColorBrush(accent);
         var image = _config.ShowModImage
-            ? MainWindow.TryLoadTileImage(_profile.ResolveHeroSources().FirstOrDefault())
+            ? MainWindow.TryLoadTileImage(_profile.ResolveHeroSources().FirstOrDefault(), MainWindow.StripDecodeWidth)
             : null;
         // The tile cache is shared, so a brush still downloading may belong to another thread.
         if (image != null && image.CheckAccess())

@@ -174,8 +174,8 @@ public partial class MainWindow
             BorderBrush = (Brush)FindResource("MenuBorder"),
             BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
-            Padding = new Thickness(10),
-            MinWidth = 240,
+            Padding = new Thickness(6),
+            MinWidth = 260,
             MaxWidth = 320,
         };
         var rim = new Border
@@ -203,27 +203,40 @@ public partial class MainWindow
             popup.HorizontalOffset = ConnectionChip.ActualWidth - rim.ActualWidth * UiScale.Current;
 
         var outOfNetwork = _radminOutOfNetwork;
-        var heading = new Grid { Margin = new Thickness(10, 10, 10, 8) };
+        var heading = new Grid { Margin = new Thickness(10, 8, 10, 10) };
         heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         heading.Children.Add(new System.Windows.Shapes.Ellipse
         {
-            Width = 8,
-            Height = 8,
+            Width = 32,
+            Height = 32,
             Fill = ConnectionChipDot.Fill,
-            Margin = new Thickness(0, 5, 9, 0),
+            Margin = new Thickness(0, 0, 10, 0),
             VerticalAlignment = VerticalAlignment.Top,
         });
-        var headingText = new StackPanel();
+        var headingText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         headingText.Children.Add(new TextBlock
         {
             Text = Strings.Get(outOfNetwork ? "MpChipHeadNoNetwork" : "MpChipHeadConnected"),
-            Foreground = ConnectionChipStatus.Foreground,
+            Foreground = outOfNetwork ? ConnectionChipStatus.Foreground : (Brush)FindResource("UiTitleText"),
             FontFamily = (FontFamily)FindResource("BodyFont"),
-            FontSize = (double)FindResource("DialogBodySize"),
+            FontSize = (double)FindResource("SetRowTitleSize"),
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         });
+        // The one line the design asks for that the launcher can back: there is one server, so
+        // no region and no latency to it, and how many players it holds is what is known.
+        if (!outOfNetwork && MultiplayerView?.OnlinePlayerCount is > 0 and var online)
+        {
+            headingText.Children.Add(new TextBlock
+            {
+                Text = Strings.Format("MpChipOnlinePlayers", online),
+                Foreground = (Brush)FindResource("WindowMuted"),
+                FontFamily = (FontFamily)FindResource("BodyFont"),
+                FontSize = (double)FindResource("SetControlSize"),
+                Margin = new Thickness(0, 2, 0, 0),
+            });
+        }
         if (outOfNetwork)
         {
             headingText.Children.Add(new TextBlock
@@ -291,9 +304,8 @@ public partial class MainWindow
     }
 
     private FrameworkElement BuildHelpRow(System.Windows.Controls.Primitives.Popup popup) => BuildSettingsRow(
-        glyph: "\uE897",   // Help
         label: Strings.Get("MpRoomsRadminHelp"),
-        subtitle: Strings.Get("MpRoomsRadminHelpTooltip"),
+        tooltip: Strings.Get("MpRoomsRadminHelpTooltip"),
         click: () =>
         {
             popup.IsOpen = false;
@@ -314,10 +326,9 @@ public partial class MainWindow
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 0, 0),
         };
-        var row = (Button)BuildSettingsRow(
-            glyph: "\uE8C8",   // Copy
+        var row = BuildSettingsRow(
             label: Strings.Get("MpChipYourIp"),
-            subtitle: ip,
+            aux: ip,
             click: () =>
             {
                 try
@@ -334,43 +345,9 @@ public partial class MainWindow
                 }
             });
         var grid = (Grid)row.Content;
-        var stack = FindDescendant<StackPanel>(grid);
-        if (stack is { Children.Count: > 1 } && stack.Children[0] is TextBlock label
-            && stack.Children[1] is TextBlock address)
-        {
-            label.FontSize = (double)FindResource("SetCaptionSize");
-            label.FontWeight = FontWeights.Normal;
-            label.Foreground = (Brush)FindResource("WindowMuted");
-            address.FontFamily = (FontFamily)FindResource("MonoFont");
-            address.FontSize = (double)FindResource("DialogBodySize");
-            address.FontWeight = FontWeights.Medium;
-            address.Foreground = (Brush)FindResource("WindowStrongText");
-            address.Margin = new Thickness(0, 3, 0, 0);
-        }
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(action, 2);
         grid.Children.Add(action);
         return row;
-    }
-
-    /// <summary>
-    /// Rewrite the subtitle of a row built by <c>BuildSettingsRow</c> — the "copied" feedback
-    /// has to appear where the click was, because the clipboard write itself is invisible.
-    /// </summary>
-    private static void SetRowSubtitle(FrameworkElement? row, string text)
-    {
-        if (row == null) return;
-        var stack = FindDescendant<StackPanel>(row);
-        if (stack != null && stack.Children.Count > 1 && stack.Children[1] is TextBlock sub)
-            sub.Text = text;
-    }
-
-    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
-    {
-        foreach (var child in LogicalTreeHelper.GetChildren(root))
-        {
-            if (child is T hit) return hit;
-            if (child is DependencyObject d && FindDescendant<T>(d) is { } deeper) return deeper;
-        }
-        return null;
     }
 }

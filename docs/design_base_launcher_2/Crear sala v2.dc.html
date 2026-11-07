@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}input::placeholder{color:#8C9CB1}</style></helmet>
+<section id="t88" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t88" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">88</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Crear sala, con la base (gemelo de Nuevo torneo, 81)</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px">CreateLobbyDialog con la misma estructura que Nuevo torneo: ventana del mod elegido (franja con su imagen, barra de título con su color), tarjetas de cristal en dos columnas y, abajo, Cancelar y el único botón principal. Los campos son los del código: mod, copia (solo si tienes 2 o más), nombre con dos sugerencias, contraseña, competitiva con su formato, plazas, observadores (que restan plazas para jugar, porque AoE3 no tiene modo espectador) y el estado de Radmin. La huella del mod se ve junto a la copia: sin ella no se puede crear la sala, y el botón lo dice en vez de fallar después del clic. Para que una competitiva cueste menos, el tipo va primero en una sola fila (Casual · 1v1 · 2v2 · 3v3) en lugar de un interruptor y un formato aparte, el nombre se completa solo y el diálogo abre con el último tipo que usaste. Para un 1v1 con quien ya espera rival, la partida rápida de Salas lo hace en un clic.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:44px 40px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="1">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:9px;max-width:760px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <sc-if value="{{ f.hasLog }}" hint-placeholder-val="{{ false }}"><span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55)">{{ f.log }}</span></sc-if>
+        <div style="position:relative;width:760px;box-sizing:border-box;border-radius:10px;overflow:hidden;color-scheme:dark;box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08);background:#0f1c2e;font-family:'Segoe UI',system-ui,sans-serif">
+          <div style="position:absolute;left:0;right:0;top:0;height:300px;background:{{ f.hero }}"></div>
+          <div style="position:absolute;left:0;right:0;top:0;height:302px;background:linear-gradient(180deg,rgba(15,28,46,.35) 0%,rgba(15,28,46,.78) 55%,#0f1c2e 100%)"></div>
+          <div style="position:absolute;left:0;right:0;top:220px;height:360px;background:{{ f.glow }}"></div>
+          <div style="position:relative;height:40px;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ f.barBg }};backdrop-filter:blur({{ f.barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;border-radius:4px;background:{{ f.icon }}"></span><span style="font:500 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Crear sala</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">✕</span></div>
+          <sc-if value="{{ f.pickOpen }}" hint-placeholder-val="{{ false }}"><div onClick="{{ f.closePick }}" style="position:absolute;inset:0;z-index:1"></div></sc-if>
+          <div style="position:relative;padding:20px 22px 18px;display:flex;flex-direction:column;gap:14px">
+            <div style="position:relative;border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:14px 16px;display:flex;flex-direction:column;gap:8px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">TIPO DE SALA</span><div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px"><sc-for list="{{ f.types }}" as="o" hint-placeholder-count="4"><span onClick="{{ o.pick }}" style="cursor:pointer;height:46px;box-sizing:border-box;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ o.bg }};box-shadow:inset 0 0 0 1px {{ o.ring }}"><span style="font:600 14px/1.1 'Segoe UI',system-ui,sans-serif;color:{{ o.c }}">{{ o.t }}</span><span style="font:400 11px/1.1 'Segoe UI',system-ui,sans-serif;color:{{ o.c2 }}">{{ o.sub }}</span></span></sc-for></div><div style="display:flex;align-items:baseline;gap:8px"><sc-if value="{{ f.comp }}" hint-placeholder-val="{{ false }}"><span style="flex:none;width:7px;height:7px;border-radius:4px;background:#E6C06A;transform:translateY(-1px)"></span></sc-if><span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ f.typeHint }}</span></div></div>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start">
+              <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+                <div style="position:relative;z-index:2;border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:14px 16px;display:flex;flex-direction:column;gap:14px">
+                  <div style="position:relative;display:flex;flex-direction:column;gap:7px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">MOD</span>
+                    <span onClick="{{ f.togglePick }}" style="cursor:pointer;height:40px;box-sizing:border-box;padding:0 12px 0 8px;border-radius:8px;display:flex;align-items:center;gap:10px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22)"><span style="flex:none;width:26px;height:26px;border-radius:6px;background:{{ f.icon }}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 14px/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ f.modName }}</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">▾</span></span>
+                    <sc-if value="{{ f.pickOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;box-sizing:border-box;padding:6px;border-radius:12px;background:{{ f.menuBg }};backdrop-filter:blur({{ f.menuBlur }});box-shadow:0 14px 36px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.1);display:flex;flex-direction:column;gap:2px"><span style="padding:8px 10px 4px;font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">INSTALADOS</span><sc-for list="{{ f.mods }}" as="m" hint-placeholder-count="3"><span onClick="{{ m.pick }}" style-hover="background:rgba(255,255,255,.07)" style="cursor:pointer;height:36px;box-sizing:border-box;padding:0 10px;border-radius:7px;display:flex;align-items:center;gap:10px;background:{{ m.bg }};font:500 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb"><span style="flex:none;width:22px;height:22px;border-radius:5px;background:{{ m.icon }}"></span>{{ m.name }}</span></sc-for><span style="padding:6px 10px 4px;font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Solo puedes crear salas de mods instalados.</span></div></sc-if>
+                  </div>
+                  <sc-if value="{{ f.hasCopies }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:7px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">COPIA</span><div style="display:flex;gap:6px;flex-wrap:wrap"><sc-for list="{{ f.copies }}" as="k" hint-placeholder-count="2"><span onClick="{{ k.pick }}" style="cursor:pointer;height:34px;box-sizing:border-box;padding:0 12px;border-radius:8px;display:flex;align-items:center;background:{{ k.bg }};box-shadow:inset 0 0 0 1px {{ k.ring }};font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:{{ k.c }};white-space:nowrap">{{ k.t }}</span></sc-for></div></div></sc-if>
+                  <div style="display:flex;align-items:center;gap:7px;margin-top:-4px;font:400 12px/1.35 'Segoe UI',system-ui,sans-serif;color:{{ f.fpC }}"><span style="flex:none;width:7px;height:7px;border-radius:4px;background:{{ f.fpDot }}"></span><span title="{{ f.fpTip }}">{{ f.fpText }}</span></div>
+                  <div style="display:flex;flex-direction:column;gap:7px"><div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">NOMBRE</span><div style="flex:1"></div><span style="font:400 11px/1 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ f.count }}</span></div><input value="{{ f.name }}" onChange="{{ f.onName }}" maxlength="64" placeholder="Ponle un nombre a la sala" style="height:40px;box-sizing:border-box;padding:0 12px;border-radius:8px;border:none;outline:none;background:#0d1828;box-shadow:inset 0 0 0 1px {{ f.nameRing }};font:400 14px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb"></input><div style="display:flex;gap:6px;flex-wrap:wrap"><sc-for list="{{ f.sugg }}" as="g" hint-placeholder-count="2"><span onClick="{{ g.pick }}" style-hover="background:rgba(255,255,255,.12)" style="cursor:pointer;height:26px;box-sizing:border-box;padding:0 10px;border-radius:13px;display:flex;align-items:center;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:500 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ g.t }}</span></sc-for></div></div>
+                </div>
+                <div style="border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+                  <div onClick="{{ f.togglePriv }}" style="cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start"><div style="display:flex;flex-direction:column;gap:4px"><span style="font:600 14px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Con contraseña</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">La sala sale en la lista, pero solo entra quien sepa la contraseña.</span></div><span style="flex:none;width:38px;height:22px;box-sizing:border-box;padding:3px;border-radius:11px;display:flex;justify-content:{{ f.privJ }};background:{{ f.privBg }}"><span style="width:16px;height:16px;border-radius:8px;background:#ffffff"></span></span></div>
+                  <sc-if value="{{ f.priv }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:8px"><input value="{{ f.pass }}" onChange="{{ f.onPass }}" type="{{ f.passType }}" placeholder="Contraseña" style="flex:1;min-width:0;height:40px;box-sizing:border-box;padding:0 12px;border-radius:8px;border:none;outline:none;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:400 14px/1.3 Consolas,ui-monospace,monospace;color:#f0f5fb"></input><span onClick="{{ f.toggleShow }}" style-hover="background:#213758" style="cursor:pointer;height:40px;box-sizing:border-box;padding:0 12px;border-radius:8px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">{{ f.showT }}</span></div></sc-if>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+                <div style="border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);padding:14px 16px;display:flex;flex-direction:column;gap:14px">
+                  
+                  
+                  <sc-if value="{{ f.casual }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-direction:column;gap:7px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">PLAZAS</span><div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px"><sc-for list="{{ f.seats }}" as="o" hint-placeholder-count="7"><span onClick="{{ o.pick }}" style="cursor:pointer;height:34px;box-sizing:border-box;border-radius:8px;display:flex;align-items:center;justify-content:center;background:{{ o.bg }};box-shadow:inset 0 0 0 1px {{ o.ring }};font:600 13px/1 Consolas,ui-monospace,monospace;color:{{ o.c }}">{{ o.t }}</span></sc-for></div></div></sc-if>
+                  <div style="display:flex;flex-direction:column;gap:7px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">OBSERVADORES</span><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px"><sc-for list="{{ f.obs }}" as="o" hint-placeholder-count="3"><span onClick="{{ o.pick }}" style="cursor:pointer;height:34px;box-sizing:border-box;border-radius:8px;display:flex;align-items:center;justify-content:center;background:{{ o.bg }};box-shadow:inset 0 0 0 1px {{ o.ring }};font:600 13px/1 Consolas,ui-monospace,monospace;color:{{ o.c }}">{{ o.t }}</span></sc-for></div><span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ f.obsHint }}</span></div>
+                  <div style="display:flex;align-items:center;gap:8px;padding-top:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);font:400 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ f.play }}</span><span>para jugar</span><sc-if value="{{ f.hasObs }}" hint-placeholder-val="{{ false }}"><span style="color:#61779a">·</span><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ f.nObs }}</span><span>{{ f.obsWord }}</span></sc-if></div>
+                </div>
+                <div style="border-radius:12px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:{{ f.netRing }};padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;align-items:center;gap:8px"><span style="flex:none;width:8px;height:8px;border-radius:4px;background:{{ f.netDot }}"></span><span style="font:600 14px/1.3 'Segoe UI',system-ui,sans-serif;color:{{ f.netC }}">{{ f.netTitle }}</span></div>
+                  <span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ f.netBody }}</span>
+                  <sc-if value="{{ f.netBad }}" hint-placeholder-val="{{ false }}"><span style-hover="background:#213758" style="align-self:flex-start;cursor:pointer;height:32px;box-sizing:border-box;padding:0 12px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Abrir el asistente</span></sc-if>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:4px">
+              <sc-if value="{{ f.hasErr }}" hint-placeholder-val="{{ false }}"><span style="flex:1;font:400 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#F5BD76">{{ f.err }}</span></sc-if>
+              <span style-hover="background:#213758" style="cursor:pointer;min-width:112px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cancelar</span>
+              <span onClick="{{ f.create }}" title="{{ f.okTip }}" style-hover="filter:brightness(1.08)" style="cursor:pointer;min-width:136px;box-sizing:border-box;height:32px;padding:0 16px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ f.acc }};box-shadow:0 4px 14px {{ f.accSh }};font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ f.onAcc }};opacity:{{ f.okOp }};pointer-events:{{ f.okPe }}">{{ f.okT }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:34px;max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><b>Para Claude Code.</b> Cada campo es uno que ya existe en CreateLobbyDialog: ModLabel, CopyLabel (con CopyHintReadonly cuando solo hay una copia, que aquí se oculta), la huella (MpCreateDialogFingerprintOk/Loading/Failed y su tooltip con el hash), TitleLabel con Suggest1 y Suggest2, MaxPlayers, Observers con su ObserversHint/ObserversCost, PrivateRoomCheck con la contraseña y PasswordRevealButton, CompetitiveCheck con CompetitiveFormat y CompetitiveReplayNote, y el aviso de Radmin (MpCreateDialogRadminInfo/Warning). Errores en el pie: MpCreateDialogTitleTooShort y MpCreateDialogNoFingerprint, y «Creando…» mientras trabaja. El formato competitivo fija las plazas para jugar y los observadores van aparte, como en RoomFormats.Resolve. El tipo sustituye a CompetitiveCheck + CompetitiveFormat. Si el launcher no guarda el último tipo de sala que usaste, hay que empezar a guardarlo para abrir con él.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;ultimo&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Casual&quot;,&quot;1v1&quot;,&quot;2v2&quot;,&quot;3v3&quot;],&quot;default&quot;:&quot;1v1&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { mod: 'wol', name: null, priv: false, pass: '', show: false, type: null, seats: 4, obs: 0, copy: 0, pick: false, busy: false, log: '' };
+  componentWillUnmount() { clearTimeout(this.to); }
+  renderVals() {
+    const p = this.props, s = this.state, set = o => this.setState(o);
+    const NAVY = '#0f1c2e';
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const toHex = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+    const al = (h, a) => 'rgba(' + hex(h).join(',') + ',' + a + ')';
+    const lum = h => { const c = hex(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+    const con = (a, b) => { const A = lum(a) + .05, B = lum(b) + .05; return Math.max(A, B) / Math.min(A, B); };
+    const lvl = p.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px', bar: 1, menu: 'rgba(12,22,38,.95)', mblur: '18px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px', bar: .3, menu: 'rgba(12,22,38,.6)', mblur: '32px' } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px', bar: .42, menu: 'rgba(12,22,38,.74)', mblur: '28px' };
+    const MODS = { wol: ['Wars of Liberty', '#c04444', 'mods/wol/hero.jpg', 2], 'hundred-days': ['Hundred Days', '#a77a3a', 'mods/hundred-days/hero.jpg', 1], 'improvement-mod': ['Improvement Mod', '#3a8cd9', '', 1] };
+    const build = c => {
+      const [mname, acc, hero, ncopies] = MODS[c.mod], selBg = mix(acc, NAVY, .58), selRing = al(acc, .65);
+      const onAcc = con(acc, '#ffffff') >= con(acc, '#0b1422') ? '#ffffff' : '#0b1422', on = c.on || {};
+      const seg = (onIt) => onIt ? { bg: selBg, ring: selRing, c: '#ffffff' } : { bg: '#0d1828', ring: 'rgba(130,175,255,.22)', c: '#c3d2e5' };
+      const nameLen = (c.name ?? '').trim().length, short = c.name != null && nameLen < 3;
+      const fp = c.fp || 'ok';
+      const fmtSeats = { '1v1': 2, '2v2': 4, '3v3': 6 }[c.fmt];
+      const play = c.comp ? fmtSeats : c.seats - c.obs;
+      const obsOpts = [0, 1, 2].filter(n => c.comp ? fmtSeats + n <= 8 : n < c.seats - 1 || n === 0);
+      const err = fp === 'failed' ? 'No se pudo calcular la huella del mod. Comprueba la copia en Ajustes del mod.' : short ? 'El nombre necesita al menos 3 caracteres.' : '';
+      const ok = !short && fp === 'ok' && !c.busy;
+      return {
+        id: c.id, href: '#' + c.id, label: c.label, hasLog: !!c.log, log: c.log || '',
+        hero: hero ? 'url(' + hero + ') center 30%/cover no-repeat' : 'none', glow: 'radial-gradient(60% 60% at 80% 0%, ' + al(acc, .26) + ', transparent 72%)',
+        barBg: al(mix('#0b1422', acc, .22), G.bar), barBlur: lvl === 'Sólida' ? '0px' : '10px', icon: 'url(mods/' + c.mod + '/icon.png) center/cover no-repeat, #1a2c48',
+        gBg: G.bg, gBlur: G.blur, menuBg: G.menu, menuBlur: G.mblur, acc, onAcc, accSh: al(acc, .35),
+        modName: mname, pickOpen: !!c.pick, togglePick: on.togglePick, closePick: on.closePick,
+        mods: Object.keys(MODS).map(k => ({ name: MODS[k][0], icon: 'url(mods/' + k + '/icon.png) center/cover no-repeat, #1a2c48', bg: k === c.mod ? selBg : 'transparent', pick: on.pickMod ? on.pickMod(k) : undefined })),
+        hasCopies: ncopies > 1, copies: ['Steam · D:\\Juegos\\WoL', 'Copia de pruebas'].map((t, i) => ({ t, pick: on.copy ? on.copy(i) : undefined, ...seg(i === (c.copy || 0)) })),
+        fpText: fp === 'ok' ? 'Huella del mod lista · ' + (c.copy ? '7be0…14c9' : '3f9a…c21d') : fp === 'loading' ? 'Calculando la huella del mod…' : 'No se pudo calcular la huella del mod',
+        fpTip: fp === 'ok' ? 'Huella: ' + (c.copy ? '7be01d…e9a714c9' : '3f9a52…b07dc21d') + '. Solo entran quienes tengan la misma.' : '',
+        fpDot: fp === 'ok' ? '#4fd68a' : fp === 'loading' ? '#55ACEE' : '#F4900C', fpC: fp === 'failed' ? '#F5BD76' : '#a8bcd2',
+        name: c.name, onName: on.name, count: nameLen + ' / 64', nameRing: short ? 'rgba(244,144,12,.8)' : 'rgba(130,175,255,.22)',
+        sugg: [mname + ' · casual', c.comp ? mname + ' ' + c.fmt + ' competitiva' : 'Partida de la noche'].map(t => ({ t, pick: on.name ? () => on.setName(t) : undefined })),
+        priv: !!c.priv, togglePriv: on.togglePriv, privJ: c.priv ? 'flex-end' : 'flex-start', privBg: c.priv ? acc : 'rgba(255,255,255,.16)',
+        pass: c.pass || '', onPass: on.pass, passType: c.show ? 'text' : 'password', toggleShow: on.toggleShow, showT: c.show ? 'Ocultar' : 'Mostrar',
+        comp: !!c.comp, casual: !c.comp, toggleComp: on.toggleComp, compJ: c.comp ? 'flex-end' : 'flex-start', compBg: c.comp ? acc : 'rgba(255,255,255,.16)',
+        formats: [],
+        types: [['casual', 'Casual', 'sin ELO'], ['1v1', '1v1', 'competitiva'], ['2v2', '2v2', 'competitiva'], ['3v3', '3v3', 'competitiva']].map(([k, t, sub]) => { const sel = k === (c.comp ? c.fmt : 'casual'), ck = k !== 'casual'; const st = sel && ck ? { bg: 'linear-gradient(180deg,#d9b25a 0%,#b8902f 100%)', ring: 'rgba(255,226,150,.9)', c: '#1c1404' } : ck ? { bg: mix('#E6C06A', NAVY, .86), ring: 'rgba(230,192,106,.5)', c: '#F2D98F' } : seg(sel); return { t, sub, pick: on.type ? on.type(k) : undefined, ...st, c2: ck ? (sel ? '#3a2a08' : '#E6C06A') : (sel ? '#dce7f5' : '#8C9CB1') }; }),
+        typeHint: c.comp ? 'Cuenta para el ELO de todos. Marca «Record Game» en AoE3: el resultado se lee de la grabación.' : 'Sin ELO. Eliges cuántas plazas tiene la sala.',
+        seats: [2, 3, 4, 5, 6, 7, 8].map(n => ({ t: String(n), pick: on.seats ? on.seats(n) : undefined, ...seg(n === c.seats) })),
+        obs: obsOpts.map(n => ({ t: String(n), pick: on.obs ? on.obs(n) : undefined, ...seg(n === c.obs) })),
+        obsHint: c.obs === 0 ? 'Quien observa entra en la partida sin jugar. AoE3 no tiene modo espectador: cada observador ocupa un sitio del mapa.' : c.comp ? 'Van aparte de las ' + fmtSeats + ' plazas del formato y ocupan un sitio del mapa cada uno.' : (c.obs === 1 ? '1 observador deja ' : c.obs + ' observadores dejan ') + play + ' plazas para jugar.',
+        play: String(play), hasObs: c.obs > 0, nObs: String(c.obs), obsWord: c.obs === 1 ? 'observador' : 'observadores',
+        netBad: !!c.vpnBad, netDot: c.vpnBad ? '#F4900C' : '#4fd68a', netC: c.vpnBad ? '#F5BD76' : '#f0f5fb', netTitle: c.vpnBad ? 'Radmin VPN no está listo' : 'Radmin VPN listo',
+        netBody: c.vpnBad ? 'Puedes crear la sala igual, pero lo necesitas para jugar: los demás no te ven en la red hasta que lo esté.' : 'Tu IP en la red de AoE3 es 26.41.8.112. Los demás la reciben al entrar en tu sala.',
+        netRing: c.vpnBad ? 'inset 0 0 0 1px rgba(244,144,12,.45)' : 'inset 0 0 0 1px rgba(255,255,255,.12)',
+        hasErr: !!err, err, okT: c.busy ? 'Creando…' : 'Crear sala', okOp: ok ? '1' : '.45', okPe: ok ? 'auto' : 'none', okTip: err, create: on.create
+      };
+    };
+    const onA = {
+      togglePick: () => set({ pick: !s.pick }), closePick: () => set({ pick: false }), pickMod: k => () => set({ mod: k, pick: false, copy: 0 }),
+      copy: i => () => set({ copy: i }), name: e => set({ name: e.target.value }), setName: t => set({ name: t }),
+      togglePriv: () => set({ priv: !s.priv }), pass: e => set({ pass: e.target.value }), toggleShow: () => set({ show: !s.show }),
+      type: k => () => set({ type: k, obs: 0 }), seats: n => () => set({ seats: n, obs: Math.min(s.obs, Math.max(0, n - 2)) }), obs: n => () => set({ obs: n }),
+      create: () => { set({ busy: true, log: '' }); clearTimeout(this.to); this.to = setTimeout(() => this.setState({ busy: false, log: 'La sala se crea y se abre su ventana (87a).' }), 1200); }
+    };
+const t88 = s.type ?? ({ 'Casual': 'casual', '1v1': '1v1', '2v2': '2v2', '3v3': '3v3' })[p.ultimo] ?? 'casual', mn88 = MODS[s.mod][0];
+    const frames = [
+      build({ id: '88a', mod: s.mod, name: s.name ?? (t88 === 'casual' ? 'Partida de la noche' : mn88 + ' ' + t88 + ' competitiva'), priv: s.priv, pass: s.pass, show: s.show, comp: t88 !== 'casual', fmt: t88 === 'casual' ? '1v1' : t88, seats: s.seats, obs: s.obs, copy: s.copy, pick: s.pick, busy: s.busy, on: onA, log: s.log,
+        label: 'Interactivo. El tipo va primero y en una sola fila: con «1v1» ya es competitiva y el nombre se completa solo con el mod y el formato (hasta que lo escribas tú), así que una 1v1 competitiva son dos clics, 1v1 y Crear sala. En Tweaks, «último» simula el tipo con el que abre el diálogo: el último que usaste. Cambia también el mod, la copia, la contraseña, plazas y observadores.' }),
+      build({ id: '88b', mod: 'hundred-days', name: 'Hundred Days 2v2 competitiva', priv: true, pass: 'guardia', show: false, comp: true, fmt: '2v2', seats: 4, obs: 1, fp: 'loading', vpnBad: true,
+        label: 'Competitiva 2v2 con contraseña y un observador, con una sola copia (no hay selector). La huella todavía se calcula, así que «Crear sala» espera; Radmin no está listo, pero eso solo se avisa.' }),
+      build({ id: '88c', mod: 'wol', name: 'WoL', priv: false, comp: false, seats: 4, obs: 0, copy: 1, fp: 'failed',
+        label: 'Los dos errores del código, en el pie y no después del clic: la huella no se pudo calcular (MpCreateDialogNoFingerprint) y el nombre es demasiado corto (MpCreateDialogTitleTooShort). Se muestra el primero que impide crear.' })
+    ];
+    return { frames };
+  }
+}
+</script>
+</body>
+</html>

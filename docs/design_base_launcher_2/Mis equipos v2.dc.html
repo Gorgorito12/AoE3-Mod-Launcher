@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}input::placeholder{color:#8C9CB1}</style></helmet>
+<section id="t83" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t83" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">83</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Mis equipos, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Hoy Mis equipos es una ventana de 520 px con tarjetas apiladas: arriba las invitaciones y debajo cada equipo con sus jugadores y botones pequeños. «Nuevo equipo» e «Invitar…» abren otras dos ventanas, se invita a un jugador cada vez y solo disolver pide confirmación. Aquí es una ventana de todo el launcher, con neutros y el azul de acción: las invitaciones y tus equipos van en la lista lateral y el elegido a la derecha, con quién está conectado. Crear un equipo e invitar se hacen en la misma ventana, se puede invitar a varios a la vez, y quitar y salir también piden confirmación. Las invitaciones que envió el capitán necesitan un dato nuevo: hoy teams/mine solo devuelve tus equipos y las invitaciones que recibiste. En la segunda vuelta (83h-83m): para qué formatos alcanza cada equipo, aceptar o rechazar desde el aviso, los errores del servidor, «Invitando…» y la ventana sin sesión o sin conexión.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <sc-for list="{{ cases }}" as="c" hint-placeholder-count="4">
+      <div id="{{ c.id }}" style="display:flex;flex-direction:column;gap:10px;width:880px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#{{ c.id }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ c.id }}</a><span>{{ c.note }}</span></div><dc-import name="MisEquiposWindow" modo="{{ c.modo }}" servidor="{{ c.srv }}" transparencia="{{ tr }}" hint-size="880px,640px"></dc-import></div>
+    </sc-for>
+    <div id="83l" style="display:flex;flex-direction:column;gap:10px;width:880px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#83l" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">83l</a><span>Aviso flotante de invitación: «Rechazar» y «Aceptar» sin abrir la ventana, y «Ver» abre la invitación (83c). Si el aviso (TeamInviteNotice) no trae el id de la invitación, el launcher la busca en teams/mine antes de aceptar. Con «No molestar» este aviso no sale y la invitación espera en Mis equipos. Prueba los botones.</span></div>
+      <div style="width:880px;height:260px;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;gap:12px;padding:22px;border-radius:10px;color-scheme:dark;background:linear-gradient(0deg,rgba(15,28,46,.6),rgba(15,28,46,.15)),url(mods/wol/hero.jpg) center 30%/cover no-repeat;font-family:'Segoe UI',system-ui,sans-serif">
+        <sc-if value="{{ T.show }}" hint-placeholder-val="{{ true }}"><div style="width:420px;box-sizing:border-box;padding:14px 14px 12px;border-radius:12px;background:{{ P.bg }};backdrop-filter:blur({{ P.blur }});box-shadow:0 14px 36px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.12);display:flex;flex-direction:column;gap:12px">
+          <div style="display:grid;grid-template-columns:36px minmax(0,1fr) 20px;gap:12px;align-items:start"><span style="width:36px;height:36px;box-sizing:border-box;border-radius:9px;display:flex;align-items:center;justify-content:center;background:{{ T.iconBg }};box-shadow:{{ T.iconRing }};font:700 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ T.iconC }}">{{ T.icon }}</span><div style="min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 13.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#f4f8fc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ T.title }}</span><span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#b9c9de;text-wrap:pretty;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ T.body }}</span></div><span onClick="{{ hideToast }}" style="cursor:pointer;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-align:center;padding-top:2px">✕</span></div>
+          <sc-if value="{{ T.hasActs }}" hint-placeholder-val="{{ true }}"><div style="display:flex;justify-content:flex-end;gap:8px"><sc-for list="{{ T.acts }}" as="a" hint-placeholder-count="3"><span onClick="{{ a.go }}" style-hover="filter:brightness(1.12)" style="cursor:pointer;flex:none;white-space:nowrap;min-width:96px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ a.bg }};box-shadow:{{ a.sh }};font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ a.c }}">{{ a.t }}</span></sc-for></div></sc-if>
+        </div></sc-if>
+        <sc-if value="{{ T.again }}" hint-placeholder-val="{{ false }}"><span onClick="{{ resetToast }}" style="cursor:pointer;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-shadow:0 1px 6px rgba(0,0,0,.7)">Volver a mostrar la invitación</span></sc-if>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { toast: 'nuevo' };
+  renderVals() {
+    const set = o => this.setState(o), tr = this.props.transparencia ?? 'Media';
+    const [bg, blur] = ({ 'Sólida': ['rgba(12,22,38,.95)', '18px'], 'Media': ['rgba(12,22,38,.74)', '28px'], 'Máxima': ['rgba(12,22,38,.6)', '32px'] })[tr] || ['rgba(12,22,38,.74)', '28px'];
+    const sec = { bg: '#1a2c48', sh: 'inset 0 0 0 1px rgba(130,175,255,.22)', c: '#dce7f5' }, pri = { bg: '#2f7fe0', sh: '0 4px 14px rgba(47,127,224,.4)', c: '#ffffff' };
+    const crest = { icon: 'TF', iconBg: '#4f6a8a', iconRing: 'none', iconC: '#ffffff' };
+    const ver = () => { location.hash = '#83c'; };
+    const TS = {
+      nuevo: { ...crest, title: 'Invitación a un equipo', body: 'Te invitaron a unirte a Tercios de Flandes.', acts: [{ t: 'Rechazar', ...sec, go: () => set({ toast: 'rechazada' }) }, { t: 'Ver', ...sec, go: ver }, { t: 'Aceptar', ...pri, go: () => set({ toast: 'aceptada' }) }] },
+      aceptada: { icon: '✓', iconBg: 'rgba(79,214,138,.14)', iconRing: 'inset 0 0 0 1px rgba(79,214,138,.5)', iconC: '#4fd68a', title: 'Te uniste a Tercios de Flandes', body: 'Ya está en Mis equipos. Puedes salir cuando quieras.', acts: [{ t: 'Ver equipo', ...sec, go: ver }] },
+      rechazada: { ...crest, iconBg: 'transparent', iconRing: 'inset 0 0 0 1px rgba(130,175,255,.45)', iconC: '#a8bcd2', title: 'Invitación rechazada', body: 'No te uniste a Tercios de Flandes. Si cambias de idea, el capitán puede volver a invitarte.', acts: [] }
+    };
+    const k = this.state.toast, t = TS[k] || TS.nuevo;
+    return {
+      tr, P: { bg, blur },
+      T: { ...t, show: k !== 'oculto', hasActs: t.acts.length > 0, again: k !== 'nuevo' },
+      hideToast: () => set({ toast: 'oculto' }), resetToast: () => set({ toast: 'nuevo' }),
+      cases: [
+        { id: '83a', modo: 'capitan', note: 'Capitán: los jugadores con su estado y «Invitar…». Bajo el nombre, para qué formatos alcanza el equipo (2v2, 3v3) y cuántos jugadores faltan; la lista lateral lo resume. Con lo que el servidor da hoy. Los jugadores van ordenados (capitán, tú, conectados y desconectados) y con su foto de Discord cuando la tienen. Al pasar el ratón por una fila aparece «Quitar…». «Disolver equipo…» va al final, en rojo y con confirmación. Prueba a cambiar de equipo en la lista.' },
+        { id: '83b', modo: 'miembro', note: 'En el equipo de otro capitán: sin botones que no puedas usar, quién invita y «Salir del equipo…», con confirmación.' },
+        { id: '83c', modo: 'invitacion', note: 'Una invitación: quién te invitó, cuándo y los jugadores del equipo (GetTeamAsync ya existe). «Aceptar invitación» lo pasa a Tus equipos.' },
+        { id: '83d', modo: 'nuevo', note: 'Nuevo equipo en la misma ventana. El escudo y el título cambian mientras escribes y el pie dice qué falta. Prueba a crearlo.' },
+        { id: '83e', modo: 'invitar', note: 'Invitar a varios a la vez, hasta llenar las plazas: los conectados primero y la búsqueda para el resto. Mientras se envía, el botón dice «Invitando…» y no se puede pulsar otra vez. Prueba a invitar a dos.' },
+        { id: '83f', modo: 'vacio', note: 'Sin equipos ni invitaciones: lo explica y ofrece «Crear equipo».' },
+        { id: '83g', modo: 'error', note: 'Si no se pueden cargar: el motivo y «Reintentar», que muestra «Cargando…». Con un servidor sin equipos dice «Los equipos todavía no están disponibles en este servidor» y no ofrece crear.' },
+        { id: '83h', modo: 'invLleno', note: 'Invitación a un equipo que ya tiene 6 de 6: «Aceptar invitación» se desactiva y el pie dice por qué. Se puede rechazar o dejarla esperando una plaza.' },
+        { id: '83i', modo: 'errores', note: 'Si el servidor rechaza una acción (invitar, aceptar, quitar), el motivo sale arriba en naranja, con el texto que el launcher ya saca del código del servidor.' },
+        { id: '83j', modo: 'sinSesion', note: 'Sin sesión: lo dice y ofrece «Iniciar sesión». Prueba a pulsarlo.' },
+        { id: '83k', modo: 'sinConexion', note: 'Sin conexión con el servidor: lo dice, recuerda que las invitaciones esperan y ofrece «Reintentar».' },
+        { id: '83m', modo: 'capitan', srv: 'nuevo', note: 'El mismo equipo con funciones que el servidor todavía no tiene: las invitaciones enviadas con «Anular», «Editar…» para el nombre y la etiqueta, «Hacer capitán…» al pasar el ratón por un jugador (con confirmación) y en qué torneos está inscrito. Hace falta que teams/mine devuelva las invitaciones de cada equipo, rutas para anularlas, renombrar y pasar la capitanía, y que cada inscripción de torneo diga qué equipo guardado la hizo.' }
+      ].map(x => ({ srv: 'hoy', ...x }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}@keyframes rk-sheen{0%{transform:translateX(-130%)}34%,100%{transform:translateX(330%)}}</style></helmet>
+<section id="t93" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t93" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">93</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Clasificación v3: podio, edades y tu posición (moderniza 91)</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px">En 91 todas las filas pesaban lo mismo y el único color era el azul de la barra de ELO. Ahora la jerarquía sale de las edades, que ya existen: los tres primeros suben a un podio (2.º · 1.º · 3.º) con foto grande, insignia, ELO y un pedestal del color de su edad, más alto cuanto mejor es el puesto; el primero lleva un brillo que pasa cada pocos segundos y desaparece con efectos reducidos. La tabla empieza en el 4.º y se agrupa por edad con una cabecera de su color; cada fila y su barra de ELO toman ese tono. A la derecha, encima de «Últimas partidas», va «Tu posición»: tu puesto y tu edad, quién tienes justo encima y debajo con la distancia en ELO y lo que te falta para el siguiente puesto; si estás en posicionamiento, tus partidas y cuántas te quedan. La subida del mes sale de los mismos datos que «Quién más subió». No se pide ningún dato nuevo al servidor.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:44px 40px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="1">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:9px;max-width:1180px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <sc-if value="{{ f.interactive }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><span onClick="{{ f.reset }}" style-hover="background:#f4f2ee" style="cursor:pointer;padding:5px 10px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);color:#1a1a1a">Volver al principio</span><span style="margin-left:4px;color:rgba(0,0,0,.55)">{{ f.log }}</span></div></sc-if>
+        <div style="width:{{ f.w }};height:{{ f.h }};container-type:inline-size;color-scheme:dark;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.3);background:#0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+          <div style="position:absolute;inset:0;background:radial-gradient(42% 50% at 30% 10%, rgba(255,47,69,.2), transparent 72%),radial-gradient(40% 55% at 82% 2%, rgba(167,66,255,.17), transparent 72%),radial-gradient(50% 60% at 0% 100%, rgba(30,159,212,.15), transparent 72%),radial-gradient(45% 55% at 100% 100%, rgba(47,127,224,.16), transparent 72%),linear-gradient(180deg,#101f34,#0b1626)"></div>
+          <div style="position:relative;height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ f.barBg }};backdrop-filter:blur({{ f.barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">AoE3 Mod Launcher</span><span style="height:20px;padding:0 6px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.25);display:flex;align-items:center;font:400 11px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">v1.0.16e</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;display:flex;gap:26px"><span>—</span><span>❐</span><span>✕</span></span></div>
+          <div style="position:relative;height:56px;flex:none;display:flex;align-items:stretch;gap:30px;padding:0 24px 0 32px;background:rgba(10,19,33,.45);backdrop-filter:blur(12px);box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+            <span style="display:flex;align-items:center;font:600 14px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 -2px 0 #2f7fe0">MULTIJUGADOR</span>
+            <span style="display:flex;align-items:center;font:500 14px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">BIBLIOTECA</span>
+            <div style="flex:1"></div>
+            <div style="align-self:center;display:flex;align-items:center;gap:10px">
+              <span style="flex:none;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:7px;background:rgba(79,214,138,.12);box-shadow:inset 0 0 0 1px rgba(79,214,138,.35);font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#7fe0a8"><span style="width:7px;height:7px;border-radius:4px;background:#4fd68a"></span>Conectado<span style="font:400 10px/1 'Segoe UI',system-ui,sans-serif">▾</span></span>
+              <span style="width:1px;height:20px;margin:0 6px;background:rgba(255,255,255,.14)"></span>
+              <span style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:26px;border-radius:13px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">G</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Gorgo</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">1402 ELO · 1v1</span></span></span>
+            </div>
+          </div>
+          <div style="position:relative;height:44px;flex:none;display:flex;align-items:stretch;gap:26px;padding:0 {{ f.mp }};background:rgba(10,19,33,.32);backdrop-filter:blur(10px);box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+            <span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">SALAS</span>
+            <span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">TORNEOS</span>
+            <span style="display:flex;align-items:center;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 -2px 0 #2f7fe0">CLASIFICACIÓN</span>
+            <span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">ESTADÍSTICAS</span>
+          </div>
+          <div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column;gap:{{ f.mp }};padding:{{ f.mp }}">
+            <div style="flex:none;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+              <div style="display:flex;gap:4px;padding:4px;border-radius:19px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 140px),{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 0 1px rgba(255,255,255,.07),0 24px 48px -28px rgba(0,0,0,.85)">
+                <sc-for list="{{ f.modes }}" as="o" hint-placeholder-count="4"><span onClick="{{ o.go }}" style-hover="color:#ffffff" style="cursor:pointer;height:30px;box-sizing:border-box;padding:0 16px;border-radius:15px;display:flex;align-items:center;background:{{ o.bg }};box-shadow:{{ o.ring }};font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ o.c }};white-space:nowrap">{{ o.t }}</span></sc-for>
+              </div>
+              <div style="flex:1"></div>
+              <sc-if value="{{ f.hasSum }}" hint-placeholder-val="{{ true }}"><span style="font:400 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap"><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ f.s1 }}</span>{{ f.t1 }}<span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ f.s2 }}</span>{{ f.t2 }}</span></sc-if>
+              <sc-if value="{{ f.hasPrev }}" hint-placeholder-val="{{ false }}"><span onClick="{{ f.prev }}" style-hover="color:#b9d9fb" style="cursor:pointer;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;white-space:nowrap">Ver septiembre</span></sc-if>
+            </div>
+            <sc-if value="{{ f.isTable }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1;min-height:0;display:flex;gap:{{ f.mp }}">
+                <div style="flex:3 1 640px;min-width:0;min-height:0;display:flex;flex-direction:column;gap:{{ f.mp }}">
+                <sc-if value="{{ f.hasPod }}" hint-placeholder-val="{{ true }}"><div style="position:relative;flex:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:{{ f.mp }};align-items:end">
+                  <div style="position:absolute;left:0;right:0;top:-48px;bottom:-24px;background:{{ f.podGlow }};pointer-events:none"></div>
+                  <sc-for list="{{ f.pod }}" as="p" hint-placeholder-count="3">
+                    <div onClick="{{ p.go }}" style-hover="filter:brightness(1.08)" style="cursor:pointer;position:relative;min-width:0;overflow:hidden;display:flex;flex-direction:column;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:{{ p.ring }}">
+                      <div style="position:absolute;inset:0;background:{{ p.glow }};pointer-events:none"></div>
+                      <sc-if value="{{ p.hasSheen }}" hint-placeholder-val="{{ false }}">{{ p.sheen }}</sc-if>
+                      <div style="position:relative;display:flex;align-items:center;gap:{{ f.podGap }};padding:{{ f.podPad }}">
+                        <span style="position:relative;flex:none;width:{{ f.avP }};height:{{ f.avP }}"><span style="position:absolute;inset:0;border-radius:50%;background:{{ p.av }};display:flex;align-items:center;justify-content:center;font:700 {{ f.iniP }}/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:0 0 0 2px {{ p.light }},0 0 16px {{ p.halo }}">{{ p.ini }}</span><span style="position:absolute;right:-6px;bottom:-7px;display:flex;transform:scale(1.05);transform-origin:100% 100%"><span title="{{ p.badgeTip }}" style="position:relative;flex:none;width:{{ p.bw }};height:21px"><sc-if value="{{ p.dbl }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;left:0;top:2px;width:15px;height:18px;opacity:.75;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ p.bgB }}"></span><span style="position:absolute;right:-1px;top:-1px;width:20px;height:23px;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:rgba(6,12,20,.85)"></span></sc-if><span style="position:absolute;right:0;top:0;width:18px;height:21px;display:flex;align-items:center;justify-content:center"><span style="position:absolute;inset:0;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ p.bgB }}"></span><span style="position:absolute;inset:1.5px;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ p.inner }}"></span><span style="position:relative;top:-2px;font:{{ p.gf }};color:{{ p.gc }}">{{ p.g }}</span></span></span></span></span>
+                        <div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:7px">
+                          <div style="min-width:0;display:flex;align-items:center;gap:8px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 {{ f.podName }}/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ p.name }}</span><sc-if value="{{ p.you }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#9fd0f5">TÚ</span></sc-if></div>
+                          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font:600 {{ f.podElo }}/1 Consolas,ui-monospace,monospace;color:#ffffff">{{ p.elo }}</span><span style="font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#8C9CB1">ELO</span><sc-if value="{{ p.hasDelta }}" hint-placeholder-val="{{ false }}"><span title="{{ p.dTip }}" style="display:flex;align-items:baseline;gap:5px;white-space:nowrap;cursor:help"><span style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#7fe0a8">{{ p.delta }}</span><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">en octubre</span></span></sc-if></div>
+                        </div>
+                      </div>
+                      <div style="position:relative;height:{{ p.ped }};box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 {{ f.podPad }};background:{{ p.pedBg }};box-shadow:inset 0 1px 0 {{ p.pedLine }}">
+                        <span style="font:700 {{ p.numS }}/1 'Source Serif 4',Georgia,serif;color:{{ p.light }};background:linear-gradient(180deg,#ffffff 20%,{{ p.light }});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">{{ p.n }}</span>
+                        <span title="{{ p.badgeTip }}" style="min-width:0;overflow:hidden;text-overflow:ellipsis;font:700 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.08em;color:{{ p.light }};white-space:nowrap">{{ p.tier }}</span>
+                        <div style="flex:1"></div>
+                        <sc-if value="{{ p.hasStreak }}" hint-placeholder-val="{{ false }}"><span title="{{ p.streakTip }}" style="flex:none;height:20px;box-sizing:border-box;padding:0 7px;border-radius:10px;display:flex;align-items:center;background:rgba(255,140,60,.16);font:600 11.5px/1 Consolas,ui-monospace,monospace;color:#ffb27a;white-space:nowrap">{{ p.streak }}</span></sc-if>
+                        <span title="{{ p.peakTip }}" style="flex:none;font:400 12px/1 Consolas,ui-monospace,monospace;color:#c3d2e5;white-space:nowrap">máx. {{ p.peak }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div></sc-if>
+                <div style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 140px),{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 0 1px rgba(255,255,255,.07),0 24px 48px -28px rgba(0,0,0,.85);overflow:hidden">
+                  <sc-if value="{{ f.hasCols }}" hint-placeholder-val="{{ true }}"><div style="flex:none;display:grid;grid-template-columns:40px minmax(180px,2fr) minmax(200px,1.3fr) minmax(64px,.45fr);column-gap:{{ f.gap }};align-items:center;height:38px;box-sizing:border-box;padding:4px 20px 0;font:700 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a"><span>#</span><span>JUGADOR</span><span>ELO</span><span title="El ELO más alto que alcanzó cada jugador desde que terminó el posicionamiento." style="cursor:help">MÁXIMO</span></div></sc-if>
+                  <sc-if value="{{ f.noRanked }}" hint-placeholder-val="{{ false }}"><div style="flex:none;margin:2px 8px 6px;display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:start;box-sizing:border-box;padding:12px 14px;border-radius:10px;background:rgba(85,172,238,.08);box-shadow:inset 0 0 0 1px rgba(85,172,238,.3)"><span style="width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(85,172,238,.16);font:700 12px/1 'Segoe UI',system-ui,sans-serif;color:#55ACEE">i</span><div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.35 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Nadie completó todavía el posicionamiento</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">Los primeros puestos aparecen cuando alguien juegue sus 10 partidas puntuadas.</span></div></div></sc-if>
+                  <sc-if value="{{ f.empty }}" hint-placeholder-val="{{ false }}"><div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center"><span style="font:700 clamp(18px,1.3cqw,24px)/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Todavía nadie jugó una partida puntuada</span><span style="max-width:52ch;font:400 13.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">Crea una sala competitiva y activa Record Game para que el resultado cuente.</span><span onClick="{{ f.create }}" style-hover="filter:brightness(1.08)" style="margin-top:6px;cursor:pointer;height:34px;box-sizing:border-box;padding:0 14px;border-radius:8px;display:flex;align-items:center;background:#2f7fe0;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;white-space:nowrap">+ Crear sala</span></div></sc-if>
+                  <sc-if value="{{ f.hasRows }}" hint-placeholder-val="{{ true }}"><div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;display:flex;flex-direction:column;gap:4px;padding:2px 8px 8px">
+                    <sc-for list="{{ f.rows }}" as="r" hint-placeholder-count="8">
+                      <sc-if value="{{ r.isHead }}" hint-placeholder-val="{{ false }}"><div title="{{ r.hTip }}" style="flex:none;display:flex;align-items:center;gap:9px;height:32px;box-sizing:border-box;padding:10px 12px 2px;cursor:help"><span style="flex:none;width:11px;height:13px;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ r.bgB }}"></span><span style="flex:none;font:700 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.08em;color:{{ r.light }}">{{ r.tier }}</span><span style="flex:none;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ r.range }}</span><span style="flex:1;height:1px;background:{{ r.hLine }}"></span></div></sc-if><sc-if value="{{ r.isRow }}" hint-placeholder-val="{{ true }}"><div onClick="{{ r.go }}" style-hover="background:rgba(255,255,255,.07)" style="cursor:pointer;flex:none;display:grid;grid-template-columns:40px minmax(180px,2fr) minmax(200px,1.3fr) minmax(64px,.45fr);column-gap:{{ f.gap }};align-items:center;height:{{ r.h }};box-sizing:border-box;padding:0 12px;border-radius:10px;background:{{ r.bg }};box-shadow:{{ r.ring }}">
+                        <span style="font:700 {{ f.numS }}/1 'Source Serif 4',Georgia,serif;color:{{ r.numC }}">{{ r.n }}</span>
+                        <div style="min-width:0;display:flex;align-items:center;gap:10px">
+                          <span title="{{ r.badgeTip }}" style="position:relative;flex:none;width:{{ r.bw }};height:21px"><sc-if value="{{ r.dbl }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;left:0;top:2px;width:15px;height:18px;opacity:.75;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ r.bgB }}"></span><span style="position:absolute;right:-1px;top:-1px;width:20px;height:23px;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:rgba(6,12,20,.85)"></span></sc-if><span style="position:absolute;right:0;top:0;width:18px;height:21px;display:flex;align-items:center;justify-content:center"><span style="position:absolute;inset:0;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ r.bgB }}"></span><span style="position:absolute;inset:1.5px;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ r.inner }}"></span><span style="position:relative;top:-2px;font:{{ r.gf }};color:{{ r.gc }}">{{ r.g }}</span></span></span>
+                          <span style="flex:none;width:{{ f.avS }};height:{{ f.avS }};border-radius:50%;opacity:{{ r.avO }};background:{{ r.av }};display:flex;align-items:center;justify-content:center;font:700 12px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)">{{ r.ini }}</span>
+                          <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:{{ r.nameW }} {{ f.nameS }}/1.3 'Segoe UI',system-ui,sans-serif;color:{{ r.nameC }}">{{ r.name }}</span>
+                          <sc-if value="{{ r.you }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#9fd0f5">TÚ</span></sc-if>
+                          <sc-if value="{{ r.hasStreak }}" hint-placeholder-val="{{ false }}"><span title="{{ r.streakTip }}" style="flex:none;height:20px;box-sizing:border-box;padding:0 7px;border-radius:10px;display:flex;align-items:center;background:rgba(255,140,60,.14);font:600 11.5px/1 Consolas,ui-monospace,monospace;color:#ffb27a;white-space:nowrap">{{ r.streak }}</span></sc-if>
+                          <sc-if value="{{ r.inactive }}" hint-placeholder-val="{{ false }}"><span title="Inactivo: lleva 30 días sin jugar una partida puntuada. Conserva su puesto en la tabla." style="flex:none;height:20px;box-sizing:border-box;padding:0 8px;border-radius:10px;display:flex;align-items:center;gap:5px;background:rgba(244,144,12,.1);box-shadow:inset 0 0 0 1px rgba(244,144,12,.4);font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#F5BD76;white-space:nowrap"><span style="width:6px;height:6px;border-radius:3px;background:#F4900C"></span>INACTIVO</span></sc-if>
+                        </div>
+                        <div style="min-width:0">
+                          <sc-if value="{{ r.ranked }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-direction:column;gap:5px"><span style="font:600 {{ f.eloS }}/1 Consolas,ui-monospace,monospace;color:{{ r.eloC }}">{{ r.elo }}</span><span style="display:block;max-width:300px;height:6px;border-radius:3px;background:rgba(0,0,0,.32);box-shadow:inset 0 1px 1px rgba(0,0,0,.35)"><span style="display:block;width:{{ r.barW }};height:6px;border-radius:3px;background:{{ r.barC }};box-shadow:0 0 10px {{ r.barG }}"></span></span></div></sc-if>
+                          <sc-if value="{{ r.placing }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:6px"><span style="display:flex;align-items:baseline;gap:8px;white-space:nowrap"><sc-if value="{{ r.provOn }}" hint-placeholder-val="{{ false }}"><span title="ELO provisional: se ajusta durante el posicionamiento. Solo lo ves tú." style="font:600 {{ f.eloS }}/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ r.prov }}<span style="color:#F5BD76">?</span></span></sc-if><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ r.pl }}</span></span><span style="display:flex;max-width:300px;gap:3px"><sc-for list="{{ r.segs }}" as="g" hint-placeholder-count="10"><span title="{{ g.tip }}" style="flex:1;height:4px;border-radius:1px;background:{{ g.c }}"></span></sc-for></span></div></sc-if>
+                        </div>
+                        <span title="{{ r.peakTip }}" style="font:400 {{ f.peakS }}/1 Consolas,ui-monospace,monospace;color:{{ r.peakC }}">{{ r.peak }}</span>
+                      </div></sc-if>
+                    </sc-for>
+                  </div></sc-if>
+                  <sc-if value="{{ f.hasFoot }}" hint-placeholder-val="{{ true }}"><div style="flex:none;display:flex;align-items:baseline;gap:16px;padding:10px 20px 12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)"><span style="flex:1;min-width:0;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">Solo cuentan partidas competitivas con resultado. 🔥 marca 3 o más victorias seguidas. Inactivo: sin partidas decididas en 30 días.</span><span onClick="{{ f.howElo }}" style-hover="color:#b9d9fb" style="flex:none;cursor:pointer;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;white-space:nowrap">Cómo funciona el ELO</span></div></sc-if>
+                </div>
+                </div>
+                <div style="flex:2 1 340px;min-width:0;min-height:0;display:flex;flex-direction:column;gap:{{ f.mp }}">
+                <sc-if value="{{ f.hasMe }}" hint-placeholder-val="{{ true }}"><div onClick="{{ f.me.go }}" style-hover="filter:brightness(1.06)" style="cursor:pointer;flex:none;position:relative;overflow:hidden;display:flex;flex-direction:column;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 1px 0 rgba(159,208,245,.25),inset 0 0 0 1px rgba(85,172,238,.38),0 18px 40px -22px rgba(47,127,224,.75)">
+                  <div style="position:absolute;inset:0;background:{{ f.me.glow }};pointer-events:none"></div>
+                  <div style="position:relative;display:flex;align-items:center;gap:10px;padding:12px 16px 0"><span style="font:600 15px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Tu posición</span><span style="font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ f.me.mode }}</span><div style="flex:1"></div><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;white-space:nowrap">Ver mi perfil →</span></div>
+                  <div style="position:relative;display:flex;align-items:center;gap:14px;padding:10px 16px 10px">
+                    <span style="position:relative;flex:none;width:40px;height:40px"><span style="position:absolute;inset:0;border-radius:50%;background:{{ f.me.av }};display:flex;align-items:center;justify-content:center;font:700 15px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:0 0 0 2px {{ f.me.light }}">{{ f.me.ini }}</span><span style="position:absolute;right:-6px;bottom:-7px;display:flex;transform:scale(1.05);transform-origin:100% 100%"><span title="{{ f.me.badgeTip }}" style="position:relative;flex:none;width:{{ f.me.bw }};height:21px"><sc-if value="{{ f.me.dbl }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;left:0;top:2px;width:15px;height:18px;opacity:.75;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ f.me.bgB }}"></span><span style="position:absolute;right:-1px;top:-1px;width:20px;height:23px;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:rgba(6,12,20,.85)"></span></sc-if><span style="position:absolute;right:0;top:0;width:18px;height:21px;display:flex;align-items:center;justify-content:center"><span style="position:absolute;inset:0;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ f.me.bgB }}"></span><span style="position:absolute;inset:1.5px;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ f.me.inner }}"></span><span style="position:relative;top:-2px;font:{{ f.me.gf }};color:{{ f.me.gc }}">{{ f.me.g }}</span></span></span></span></span>
+                    <div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:5px">
+                      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span style="font:700 22px/1 'Source Serif 4',Georgia,serif;color:#ffffff">{{ f.me.big }}</span><span style="font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap">{{ f.me.of }}</span><span style="font:700 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.08em;color:{{ f.me.light }};white-space:nowrap">{{ f.me.tier }}</span></div>
+                      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span title="{{ f.me.eloTip }}" style="font:600 15px/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ f.me.elo }}<span style="color:#F5BD76">{{ f.me.q }}</span></span><span style="font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#8C9CB1">ELO</span><sc-if value="{{ f.me.hasDelta }}" hint-placeholder-val="{{ false }}"><span title="{{ f.me.dTip }}" style="display:flex;align-items:baseline;gap:5px;white-space:nowrap;cursor:help"><span style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#7fe0a8">{{ f.me.delta }}</span><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">en octubre</span></span></sc-if><sc-if value="{{ f.me.hasStreak }}" hint-placeholder-val="{{ false }}"><span title="{{ f.me.streakTip }}" style="height:20px;box-sizing:border-box;padding:0 7px;border-radius:10px;display:flex;align-items:center;background:rgba(255,140,60,.16);font:600 11.5px/1 Consolas,ui-monospace,monospace;color:#ffb27a;white-space:nowrap">{{ f.me.streak }}</span></sc-if></div>
+                    </div>
+                  </div>
+                  <sc-if value="{{ f.me.ranked }}" hint-placeholder-val="{{ true }}"><div style="position:relative;display:flex;flex-direction:column;gap:2px;padding:0 8px 10px">
+                    <sc-for list="{{ f.me.nb }}" as="b" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:22px 24px minmax(0,1fr) auto 40px;gap:10px;align-items:center;height:30px;box-sizing:border-box;padding:0 8px;border-radius:8px;background:{{ b.bg }}"><span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:#8C9CB1;text-align:right">{{ b.n }}</span><span style="width:24px;height:24px;border-radius:50%;background:{{ b.av }};display:flex;align-items:center;justify-content:center;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)">{{ b.ini }}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:{{ b.nameF }};color:{{ b.nameC }}">{{ b.name }}</span><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ b.elo }}</span><span style="font:400 12px/1 Consolas,ui-monospace,monospace;color:#a8bcd2;text-align:right">{{ b.d }}</span></div></sc-for>
+                    <span style="padding:6px 8px 0;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ f.me.next }}</span>
+                  </div></sc-if>
+                  <sc-if value="{{ f.me.placing }}" hint-placeholder-val="{{ false }}"><div style="position:relative;display:flex;flex-direction:column;gap:8px;padding:0 16px 12px">
+                    <span style="display:flex;gap:4px"><sc-for list="{{ f.me.segs }}" as="g" hint-placeholder-count="5"><span title="{{ g.tip }}" style="flex:1;height:5px;border-radius:3px;background:{{ g.c }}"></span></sc-for></span>
+                    <span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ f.me.plTxt }}</span>
+                  </div></sc-if>
+                </div></sc-if>
+                <div style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 140px),{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 0 1px rgba(255,255,255,.07),0 24px 48px -28px rgba(0,0,0,.85);overflow:hidden">
+                  <div style="flex:none;display:flex;align-items:center;gap:10px;padding:14px 18px 6px"><span style="font:600 15px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Últimas partidas</span><div style="flex:1"></div><span onClick="{{ f.goMatches }}" style-hover="color:#b9d9fb" style="cursor:pointer;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;white-space:nowrap">Todas las partidas →</span></div>
+                  <div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;padding:0 18px 10px">
+                    <sc-for list="{{ f.latest }}" as="x" hint-placeholder-count="6"><div style="position:relative"><dc-import name="ReplayRow" r="{{ x.row }}" hint-size="100%,50px"></dc-import><sc-if value="{{ x.hit }}" hint-placeholder-val="{{ false }}"><span onClick="{{ x.go }}" onMouseEnter="{{ x.enter }}" onMouseLeave="{{ x.leave }}" style="position:absolute;right:{{ x.hitR }};bottom:0;width:28px;height:28px;border-radius:14px;cursor:pointer"></span></sc-if></div></sc-for>
+                  </div>
+                </div>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ f.isHl }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;display:grid;grid-template-columns:{{ f.hlCols }};gap:{{ f.mp }};align-content:start">
+                <sc-for list="{{ f.cards }}" as="c" hint-placeholder-count="4">
+                  <div style="min-width:0;box-sizing:border-box;padding:14px 14px 12px 16px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 140px),{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 0 1px rgba(255,255,255,.07),0 24px 48px -28px rgba(0,0,0,.85);display:flex;flex-direction:column;gap:10px">
+                    <div style="display:flex;align-items:flex-start;gap:10px">
+                      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><span style="font:600 15px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ c.t }}</span><span style="font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ c.rule }}</span></div>
+                      <sc-if value="{{ c.sw }}" hint-placeholder-val="{{ false }}"><div style="flex:none;display:flex;gap:3px;padding:3px;border-radius:13px;background:rgba(5,10,18,.4)"><sc-for list="{{ c.tabs }}" as="t" hint-placeholder-count="2"><span onClick="{{ t.go }}" style="cursor:pointer;height:20px;box-sizing:border-box;padding:0 10px;border-radius:10px;display:flex;align-items:center;background:{{ t.bg }};font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ t.c }}">{{ t.t }}</span></sc-for></div></sc-if>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:3px">
+                      <sc-for list="{{ c.rows }}" as="r" hint-placeholder-count="5">
+                        <div style="display:grid;grid-template-columns:14px 28px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:46px;box-sizing:border-box;padding:6px 8px;border-radius:9px;background:{{ r.bg }};box-shadow:{{ r.ring }}">
+                          <span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:{{ r.pc }}">{{ r.n }}</span>
+                          <span style="width:28px;height:{{ r.ah }};border-radius:{{ r.ar }};background:{{ r.av }};display:flex;align-items:center;justify-content:center;font:700 12px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)">{{ r.ini }}</span>
+                          <div style="min-width:0;display:flex;flex-direction:column;gap:3px"><div style="min-width:0;display:flex;align-items:center;gap:7px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 13.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ r.name }}</span><sc-if value="{{ r.you }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;color:#9fd0f5">TÚ</span></sc-if></div><sc-if value="{{ r.hasD }}" hint-placeholder-val="{{ true }}"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ r.d }}</span></sc-if></div>
+                          <sc-if value="{{ r.isFig }}" hint-placeholder-val="{{ true }}"><span style="font:600 15px/1 Consolas,ui-monospace,monospace;color:{{ r.fc }};white-space:nowrap">{{ r.fig }}</span></sc-if>
+                          <sc-if value="{{ r.isStreak }}" hint-placeholder-val="{{ false }}"><span title="{{ r.stTip }}" style="height:22px;box-sizing:border-box;padding:0 8px;border-radius:11px;display:flex;align-items:center;background:rgba(255,140,60,.14);font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#ffb27a;white-space:nowrap">{{ r.st }}</span></sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ f.isMatches }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;min-height:0;display:flex;flex-direction:column;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 140px),{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 0 1px rgba(255,255,255,.07),0 24px 48px -28px rgba(0,0,0,.85);overflow:hidden">
+                <div style="flex:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 18px 12px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.07)">
+                  <label style="width:clamp(240px,22cqw,420px);height:34px;box-sizing:border-box;padding:0 12px;border-radius:8px;display:flex;align-items:center;gap:8px;background:rgba(5,10,18,.4);box-shadow:inset 0 0 0 1px {{ f.qRing }}"><span style="flex:none;font:400 14px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">⌕</span><input value="{{ f.q }}" onChange="{{ f.onQ }}" placeholder="Buscar jugador…" style="flex:1;min-width:0;height:30px;padding:0;background:transparent;border:0;outline:0;font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb"></label>
+                  <span onClick="{{ f.toggleRep }}" style="cursor:pointer;height:30px;box-sizing:border-box;padding:0 12px 0 9px;border-radius:15px;display:flex;align-items:center;gap:8px;background:{{ f.chipBg }};box-shadow:inset 0 0 0 1px {{ f.chipRing }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ f.chipC }};white-space:nowrap"><span style="width:14px;height:14px;box-sizing:border-box;border-radius:4px;display:flex;align-items:center;justify-content:center;background:{{ f.boxBg }};box-shadow:inset 0 0 0 1.5px {{ f.boxRing }};font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ f.tick }}</span>Solo con grabación</span>
+                  <span onClick="{{ f.modPick }}" style-hover="background:rgba(255,255,255,.1)" style="cursor:pointer;height:34px;box-sizing:border-box;padding:0 12px;border-radius:8px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">Todos los mods<span style="font:400 10px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">▾</span></span>
+                </div>
+                <div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;display:flex;flex-direction:column;gap:14px;padding:6px 18px 18px">
+                  <sc-for list="{{ f.groups }}" as="g" hint-placeholder-count="2">
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                      <div style="display:flex;align-items:baseline;gap:10px;padding-top:8px"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#c3d2e5">{{ g.h }}</span><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ g.note }}</span></div>
+                      <div style="display:grid;grid-template-columns:{{ f.mCols }};gap:8px">
+                        <sc-for list="{{ g.rows }}" as="x" hint-placeholder-count="6"><div style="position:relative;min-width:0"><dc-import name="ReplayRow" r="{{ x.row }}" hint-size="100%,50px"></dc-import><sc-if value="{{ x.hit }}" hint-placeholder-val="{{ false }}"><span onClick="{{ x.go }}" onMouseEnter="{{ x.enter }}" onMouseLeave="{{ x.leave }}" style="position:absolute;right:{{ x.hitR }};bottom:0;width:28px;height:28px;border-radius:14px;cursor:pointer"></span></sc-if></div></sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ f.hasMore }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;justify-content:center;gap:14px;padding-top:4px"><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ f.shown }}</span><span onClick="{{ f.loadMore }}" style-hover="background:#223757" style="cursor:pointer;height:32px;min-width:96px;box-sizing:border-box;padding:0 16px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">Cargar 30 más</span></div></sc-if>
+                  <sc-if value="{{ f.hasEnd }}" hint-placeholder-val="{{ false }}"><span style="align-self:center;padding-top:4px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Son todas las partidas de esta búsqueda.</span></sc-if>
+                  <sc-if value="{{ f.mEmpty }}" hint-placeholder-val="{{ false }}"><div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px;text-align:center"><span style="max-width:60ch;font:600 15px/1.35 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;text-wrap:pretty">{{ f.eT }}</span><span style="max-width:60ch;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ f.eB }}</span><span onClick="{{ f.clear }}" style-hover="background:#223757" style="margin-top:4px;cursor:pointer;height:32px;min-width:96px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Quitar filtros</span></div></sc-if>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+          <sc-if value="{{ f.hasToast }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:{{ f.mp }};bottom:{{ f.mp }};z-index:20;width:420px;box-sizing:border-box;padding:14px 14px 12px 16px;border-radius:12px;background:{{ f.flBg }};backdrop-filter:blur({{ f.flBlur }});box-shadow:0 14px 36px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.14);display:grid;grid-template-columns:28px minmax(0,1fr);gap:4px 12px"><span style="grid-row:span 2;width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(79,214,138,.16);font:700 13px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a">✓</span><div style="min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 14px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Grabación guardada</span><span style="font:400 12px/1.35 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.tSub }}</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ f.tBody }}</span></div><div style="grid-column:2;display:flex;justify-content:flex-end;gap:8px;padding-top:8px"><span onClick="{{ f.tClose }}" style-hover="background:#223757" style="cursor:pointer;height:32px;min-width:96px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Cerrar</span><span onClick="{{ f.tShow }}" style-hover="filter:brightness(1.08)" style="cursor:pointer;height:32px;min-width:96px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;white-space:nowrap">Mostrar en la carpeta</span></div></div></sc-if>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;ventana&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;1366×768&quot;,&quot;1920×1080&quot;,&quot;2560×1392&quot;],&quot;default&quot;:&quot;1920×1080&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;93a&quot;},&quot;efectos&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Completos&quot;,&quot;Reducidos&quot;],&quot;default&quot;:&quot;Completos&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Apariencia&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Apariencia&quot;}}">
+class Component extends DCLogic {
+  state = { mode: 'solo', log: '', dl: {}, hov: '', toast: null, rep: false, q: '', more: false, hlT: {} };
+  componentWillUnmount() { clearTimeout(this.to); }
+  renderVals() {
+    const p = this.props, s = this.state, set = o => this.setState(o), ME = 'Gorgo';
+    const fx = (p.efectos ?? 'Completos') !== 'Reducidos', lvl = fx ? (p.transparencia ?? 'Media') : 'Sólida';
+    const SHEEN = React.createElement('span', { style: { position: 'absolute', top: 0, bottom: 0, left: 0, width: '42%', background: 'linear-gradient(100deg,transparent 10%,rgba(255,255,255,.07) 40%,rgba(255,255,255,.16) 50%,rgba(255,255,255,.07) 60%,transparent 90%)', transform: 'translateX(-130%)', animation: 'rk-sheen 7.5s ease-in-out 1.2s infinite', pointerEvents: 'none' } });
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px', bar: 1, fl: 'rgba(12,22,38,.95)', flB: '18px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px', bar: .3, fl: 'rgba(12,22,38,.6)', flB: '32px' } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px', bar: .42, fl: 'rgba(12,22,38,.74)', flB: '28px' };
+    const [W, H] = ({ '1366×768': [1366, 768], '2560×1392': [2560, 1392] })[p.ventana] || [1920, 1080];
+    const F = { bg: 'linear-gradient(#f0f0f0 33%,#2a7a3a 33% 66%,#d02a2a 66%)', bo: 'linear-gradient(#d52b1e 33%,#f9e300 33% 66%,#007934 66%)', uy: 'repeating-linear-gradient(#fff 0 1.4px,#3a6fd0 1.4px 2.8px)', mx: 'linear-gradient(90deg,#006847 33%,#fff 33% 66%,#ce1126 66%)', dk: 'linear-gradient(#c8102e 40%,#fff 40% 60%,#c8102e 60%)', fr: 'linear-gradient(90deg,#0055a4 33%,#fff 33% 66%,#ef4135 66%)', ru: 'linear-gradient(#fff 33%,#0039a6 33% 66%,#d52b1e 66%)', dark: 'linear-gradient(135deg,#2a2a2a,#555)' };
+    const VER = { 'Wars of Liberty': '1.6.2', 'Hundred Days': '2.1', 'Improvement Mod': '3.0b' };
+    const DARK = 'linear-gradient(160deg,rgba(6,12,20,.8),rgba(6,12,20,.45))';
+    const AGE = {
+      sov: ['Soberano', 'linear-gradient(160deg,#ffffff,#ff2f45 62%,#2e0209)', '★', '#ffffff', "700 8px/1 'Segoe UI',system-ui,sans-serif", 'linear-gradient(160deg,rgba(6,12,20,.55),rgba(6,12,20,.2))'],
+      imp: ['Imperial', 'linear-gradient(160deg,#ffd76b,#a742ff 62%,#1d0636)', 'V', '#ffd76b', '700 7.5px/1 Consolas,monospace'],
+      ind: ['Industrial', 'linear-gradient(160deg,#ffc247,#e06a12 62%,#2b1000)', 'IV', '#ffc247', '700 7px/1 Consolas,monospace'],
+      fort: ['Fortaleza', 'linear-gradient(160deg,#a8ecff,#1e9fd4 62%,#03151f)', 'III', '#a8ecff', '700 7px/1 Consolas,monospace'],
+      col: ['Colonial', 'linear-gradient(160deg,#f0a75a,#a85c1e 62%,#241002)', 'II', '#f0a75a', '700 7px/1 Consolas,monospace'],
+      disc: ['Descubrimiento', 'linear-gradient(160deg,#5d6f8a,#2a3b55 62%,#101a2a)', 'I', '#c3d2e5', '700 7.5px/1 Consolas,monospace']
+    };
+    const ageOf = (i, n) => i === 1 || i / n <= .1 ? 'sov' : i / n <= .25 ? 'imp' : i / n <= .45 ? 'ind' : i / n <= .7 ? 'fort' : 'col';
+    const AVI = { Cuzco: 'a1', Malinche: 'a2', Rioplatense: 'nathan' };
+    const AVC = ['#3f6a8a', '#6a4f8a', '#3f7a6a', '#8a5a3f', '#5a6b8c', '#7a3f4f', '#4f6b3f', '#6b5a3f'];
+    const hash = t => [...t].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 9973, 7);
+    const av = n => AVI[n] ? { av: 'url(avatars/' + AVI[n] + '-full.png) center/cover no-repeat', ini: '' } : { av: n === ME ? '#2f7fe0' : AVC[hash(n) % AVC.length], ini: n.charAt(0).toUpperCase() };
+    const say = (on, t) => on ? () => set({ log: t }) : undefined;
+
+    const LAD = {
+      solo: { ranked: [['Kaiser', 1630, 1652, '19 oct', 4], ['UnstoppableStreletsy', 1588, 1601, '11 oct', 0], ['Cuzco', 1541, 1566, '3 oct', 0], ['Comandante_Supremo_de_la_Gran_Armada_Libertadora', 1467, 1490, '27 sep', 3], ['Gorgo', 1402, 1418, '12 oct', 3], ['Malinche', 1395, 1430, '20 sep', 0], ['Aluclown', 1371, 1402, '8 oct', 0], ['El Taita', 1342, 1390, '14 ago', 0, true], ['Rioplatense', 1288, 1320, '2 oct', 0]],
+        placing: [['Almirante', 8, 10], ['Zanjón', 6, 10, 3], ['Lord_Wellington_of_the_Peninsular_Campaign', 3, 10], ['Bicorne', 1, 10]] },
+      team: { ranked: [['Aluclown', 1588, 1601, '24 oct', 5], ['Kaiser', 1544, 1570, '9 oct', 0], ['Malinche', 1502, 1502, '27 oct', 3], ['Zanjón', 1460, 1477, '1 oct', 0], ['Rioplatense', 1431, 1455, '15 sep', 0, true], ['Almirante', 1388, 1410, '6 oct', 0]],
+        placing: [['Cuzco', 4, 5], ['Gorgo', 2, 5, 0, 1490, ['w', 'l']], ['Bicorne', 1, 5]] },
+      none: { ranked: [], placing: [['Kaiser', 9, 10, 3], ['Aluclown', 7, 10], ['Gorgo', 4, 10, 0, 1468, ['w', 'w', 'l', 'w']], ['UnstoppableStreletsy', 3, 10], ['Lord_Wellington_of_the_Peninsular_Campaign', 1, 10]] },
+      empty: { ranked: [], placing: [] }
+    };
+    const TIER = { sov: ['#ff2f45', '#ff9aa6'], imp: ['#a742ff', '#ffd76b'], ind: ['#e06a12', '#ffc247'], fort: ['#1e9fd4', '#a8ecff'], col: ['#a85c1e', '#f0a75a'], disc: ['#5d6f8a', '#c3d2e5'] };
+    const RULE = { sov: 'Soberano: el 1.º de la tabla, y hasta el 10 % en tablas grandes.', imp: 'Imperial: hasta el 25 % de la tabla.', ind: 'Industrial: del 25 % al 45 % de la tabla.', fort: 'Fortaleza: del 45 % al 70 % de la tabla.', col: 'Colonial: el 30 % restante.' };
+    const rgba = (h, a) => { const v = parseInt(h.slice(1), 16); return 'rgba(' + (v >> 16) + ',' + ((v >> 8) & 255) + ',' + (v & 255) + ',' + a + ')'; };
+    const ladder = (L, team, fl, on) => {
+      const n = L.ranked.length, top = n ? L.ranked[0][1] : 0, tierOf = i => ageOf(i + 1, n);
+      const climb = {}; HL[0][team ? 'team' : 'solo'].forEach(([nm, d, t]) => { climb[nm] = { delta: d, dTip: 'Desde el 1 de octubre: ' + t }; });
+      const dl = nm => climb[nm] ? { hasDelta: true, ...climb[nm] } : { hasDelta: false, delta: '', dTip: '' };
+      const badge = (ag, tip) => ({ bgB: ag[1], g: ag[2], gc: ag[3], gf: ag[4], inner: ag[5] || DARK, badgeTip: tip, dbl: team, bw: team ? '24px' : '18px' });
+      const streakOf = st => ({ hasStreak: (st || 0) >= 3, streak: '🔥' + st, streakTip: st + ' victorias seguidas. Se corta al perder o tras 14 días sin jugar una partida puntuada.' });
+      const mine = me => ({ you: me, bg: me ? 'linear-gradient(90deg,rgba(85,172,238,.22),rgba(85,172,238,.07))' : null, ring: me ? 'inset 0 0 0 1px rgba(85,172,238,.4)' : 'inset 0 1px 0 rgba(255,255,255,.05)' });
+      const span = {}; L.ranked.forEach((_, i) => { const k = tierOf(i); span[k] = span[k] ? [span[k][0], i + 1] : [i + 1, i + 1]; });
+      const head = (k, tier, range, tip) => ({ isHead: true, isRow: false, tier, range, hTip: tip, light: TIER[k][1], bgB: AGE[k][1], hLine: 'linear-gradient(90deg,' + rgba(TIER[k][0], .55) + ',transparent)' });
+      const podN = Math.min(3, n), rows = []; let last = '';
+      L.ranked.forEach(([name, elo, peak, at, st, ina], i) => {
+        if (i < podN) return;
+        const k = tierOf(i), ag = AGE[k], c = TIER[k][0], l = TIER[k][1];
+        if (k !== last) { last = k; const sp = span[k]; rows.push(head(k, ag[0].toUpperCase(), sp[0] === sp[1] ? 'puesto ' + sp[0] : 'puestos ' + sp[0] + '–' + sp[1], RULE[k])); }
+        const me = name === ME, fr = Math.max(.06, Math.min(1, (elo - 1000) / Math.max(1, top - 1000))), M = mine(me);
+        rows.push({ isHead: false, isRow: true, name, ...av(name), ...badge(ag, ag[0] + ' · puesto ' + (i + 1) + ' de ' + n), ...streakOf(st), ...M, bg: M.bg || 'linear-gradient(90deg,' + rgba(c, .22) + ',' + rgba(c, .06) + ' 42%,rgba(255,255,255,.03))', avO: '1', n: String(i + 1), numC: '#cdd9e9', h: fl.row + 'px', nameC: me ? '#ffffff' : ina ? '#b9c9de' : '#f0f5fb', nameW: '600', ranked: true, placing: false, elo: String(elo), eloC: ina ? '#b9c9de' : '#f0f5fb', barW: (fr * 100).toFixed(1) + '%', barC: ina ? '#4a6a96' : 'linear-gradient(90deg,' + c + ',' + l + ')', barG: ina ? 'transparent' : rgba(c, .55), peak: String(peak), peakC: '#c3d2e5', peakTip: 'Máximo alcanzado el ' + at, inactive: !!ina, provOn: false, prov: '', pl: '', segs: [], go: say(on, 'Se abre el perfil de ' + name + '.') });
+      });
+      if (L.placing.length) rows.push(head('disc', 'EN POSICIONAMIENTO', L.placing.length === 1 ? '1 jugador' : L.placing.length + ' jugadores', 'Descubrimiento: todavía no jugaron sus ' + L.placing[0][2] + ' partidas puntuadas. No tienen puesto hasta terminarlas.'));
+      L.placing.forEach(([name, done, req, st, prov, res]) => {
+        const me = name === ME, own = me && !!res, M = mine(me);
+        rows.push({ isHead: false, isRow: true, name, ...av(name), ...badge(AGE.disc, 'Descubrimiento · en posicionamiento'), ...streakOf(st), ...M, bg: M.bg || 'rgba(255,255,255,.02)', avO: '.8', n: '', numC: '#61779a', h: fl.prow + 'px', nameC: me ? '#ffffff' : '#a8bcd2', nameW: '500', ranked: false, placing: true, elo: '', eloC: '', barW: '0%', barC: '', peak: '—', peakC: '#61779a', peakTip: 'Se muestra al terminar el posicionamiento.', inactive: false, provOn: own, prov: String(prov || ''), pl: 'Posicionamiento ' + done + '/' + req,
+          segs: Array.from({ length: req }, (_, k) => k >= done ? { c: 'rgba(130,175,255,.14)', tip: 'Por jugar' } : own ? (res[k] === 'w' ? { c: '#4fd68a', tip: 'Partida ' + (k + 1) + ': victoria' } : { c: '#c84a4a', tip: 'Partida ' + (k + 1) + ': derrota' }) : { c: '#55667e', tip: 'Jugada' }),
+          go: say(on, me ? 'Se abre tu perfil, con el detalle de tu posicionamiento.' : 'Se abre el perfil de ' + name + '.') });
+      });
+      const order = podN === 3 ? [1, 0, 2] : Array.from({ length: podN }, (_, i) => i);
+      const pod = order.map(i => {
+        const [name, elo, peak, at, st] = L.ranked[i], k = tierOf(i), ag = AGE[k], c = TIER[k][0], l = TIER[k][1], me = name === ME, one = i === 0;
+        return { name, ...av(name), ...badge(ag, ag[0] + ' · puesto ' + (i + 1) + ' de ' + n), ...streakOf(st), ...dl(name), you: me, n: String(i + 1), tier: ag[0].toUpperCase(), light: l, halo: rgba(c, one ? .6 : .35), elo: String(elo), peak: String(peak), peakTip: 'Máximo alcanzado el ' + at,
+          ring: 'inset 0 1px 0 ' + rgba(l, .35) + ',' + (me ? 'inset 0 0 0 1px rgba(85,172,238,.6)' : 'inset 0 0 0 1px ' + rgba(c, one ? .6 : .38)) + ',0 18px 40px -20px ' + rgba(c, one ? .95 : .55),
+          glow: 'linear-gradient(155deg,' + rgba(c, one ? .45 : .32) + ',' + rgba(c, .1) + ' 48%,transparent 80%)', wmC: rgba(l, one ? .16 : .11),
+          ped: Math.round(fl.ped * (one ? 1 : i === 1 ? .86 : .76)) + 'px', numS: Math.round(fl.podNum * (one ? 1 : .86)) + 'px',
+          pedBg: 'linear-gradient(90deg,' + rgba(c, one ? .55 : .4) + ',' + rgba(c, .14) + ' 70%,' + rgba(l, .08) + ')', pedLine: rgba(l, one ? .5 : .35),
+          hasSheen: one && fx, sheen: one && fx ? SHEEN : null, go: say(on, 'Se abre el perfil de ' + name + '.') };
+      });
+      const myI = L.ranked.findIndex(x => x[0] === ME), myP = L.placing.find(x => x[0] === ME);
+      let meC = null;
+      if (myI >= 0) {
+        const elo = L.ranked[myI][1], st = L.ranked[myI][4], k = tierOf(myI), ag = AGE[k], c = TIER[k][0];
+        const nb = [myI - 1, myI, myI + 1].filter(j => j >= 0 && j < n).map(j => { const nm = L.ranked[j][0], e = L.ranked[j][1], self = j === myI; return { n: String(j + 1), name: nm, ...av(nm), elo: String(e), d: self ? '' : (e > elo ? '+' : '−') + Math.abs(e - elo), bg: self ? 'rgba(85,172,238,.14)' : 'transparent', nameC: self ? '#ffffff' : '#dce7f5', nameF: (self ? '600' : '500') + " 13px/1.3 'Segoe UI',system-ui,sans-serif" }; });
+        const up = myI - 1, gap = up >= 0 ? L.ranked[up][1] - elo + 1 : 0, kUp = up >= 0 ? tierOf(up) : k;
+        meC = { mode: team ? 'Equipos' : '1v1', ...av(ME), ...badge(ag, ag[0] + ' · puesto ' + (myI + 1) + ' de ' + n), ...streakOf(st), ...dl(ME), big: '#' + (myI + 1), of: 'de ' + n, tier: ag[0].toUpperCase(), light: TIER[k][1], elo: String(elo), q: '', eloTip: '', ranked: true, placing: false, nb,
+          next: up < 0 ? 'Vas primero en la tabla.' : 'Te faltan ' + gap + ' ELO para el ' + (up + 1) + '.º puesto' + (kUp !== k ? ' y subir a ' + AGE[kUp][0] + '.' : '.'), segs: [], plTxt: '', glow: 'linear-gradient(155deg,' + rgba(c, .3) + ',' + rgba(c, .07) + ' 50%,transparent 85%)', go: say(on, 'Se abre tu perfil.') };
+      } else if (myP) {
+        const [, done, req, st, prov, res] = myP, left = req - done;
+        meC = { mode: team ? 'Equipos' : '1v1', ...av(ME), ...badge(AGE.disc, 'Descubrimiento · en posicionamiento'), ...streakOf(st), hasDelta: false, delta: '', dTip: '', big: done + '/' + req, of: '', tier: 'EN POSICIONAMIENTO', light: '#c3d2e5', elo: String(prov), q: '?', eloTip: 'ELO provisional: se ajusta durante el posicionamiento. Solo lo ves tú.', ranked: false, placing: true, nb: [], next: '',
+          segs: Array.from({ length: req }, (_, k) => k >= done ? { c: 'rgba(130,175,255,.16)', tip: 'Por jugar' } : res[k] === 'w' ? { c: '#4fd68a', tip: 'Partida ' + (k + 1) + ': victoria' } : { c: '#c84a4a', tip: 'Partida ' + (k + 1) + ': derrota' }),
+          plTxt: (left === 1 ? 'Te queda 1 partida puntuada' : 'Te quedan ' + left + ' partidas puntuadas') + ' para entrar en la tabla.', glow: 'linear-gradient(155deg,rgba(93,111,138,.34),rgba(93,111,138,.08) 50%,transparent 85%)', go: say(on, 'Se abre tu perfil, con el detalle de tu posicionamiento.') };
+      }
+      return { rows, pod, me: meC };
+    };
+
+    const HL = [
+      { k: 'climb', t: 'Quién más subió', rule: 'Desde 5 partidas puntuadas tras el posicionamiento', pos: true, solo: [['Kaiser', '+96', '1534 → 1630 · 18 partidas'], ['Gorgo', '+31', '1371 → 1402 · 21 partidas'], ['Cuzco', '+27', '1514 → 1541 · 9 partidas'], ['Rioplatense', '+11', '1277 → 1288 · 8 partidas']], team: [['Aluclown', '+58', '1530 → 1588 · 9 partidas'], ['Malinche', '+31', '1471 → 1502 · 7 partidas'], ['Zanjón', '+12', '1448 → 1460 · 6 partidas']] },
+      { k: 'wins', t: 'Más victorias', rule: 'Si empatan, gana quien jugó menos', solo: [['Kaiser', '13', 'de 18 partidas · 72 %'], ['UnstoppableStreletsy', '12', 'de 23 partidas · 52 %'], ['Gorgo', '11', 'de 21 partidas · 52 %'], ['Cuzco', '6', 'de 9 partidas · 67 %'], ['Malinche', '5', 'de 11 partidas · 45 %']] },
+      { k: 'games', t: 'Más partidas', rule: 'Puntuadas, 1v1 y Equipos', solo: [['UnstoppableStreletsy', '23', '12 ganadas'], ['Gorgo', '21', '11 ganadas'], ['Kaiser', '18', '13 ganadas'], ['Malinche', '11', '5 ganadas'], ['Aluclown', '10', '4 ganadas']] },
+      { k: 'streak', t: 'Mejor racha', rule: 'Victorias seguidas dentro del mes', streak: true, solo: [['Kaiser', 6], ['UnstoppableStreletsy', 4], ['Gorgo', 3]], team: [['Aluclown', 5], ['Malinche', 3]] },
+      { k: 'rate', t: 'Mejor % de victorias', rule: 'Desde 8 partidas puntuadas en el mes', solo: [['Kaiser', '72 %', '13 de 18 partidas'], ['Cuzco', '67 %', '6 de 9 partidas'], ['Gorgo', '52 %', '11 de 21 partidas'], ['UnstoppableStreletsy', '52 %', '12 de 23 partidas'], ['Malinche', '45 %', '5 de 11 partidas']] },
+      { k: 'upset', t: 'Mayor sorpresa', rule: 'ELO medio antes de la partida · solo jugadores ya posicionados', pos: true, solo: [['Rioplatense', '+214', 'le ganó a Kaiser · 1302 contra 1516'], ['Gorgo', '+168', 'le ganó a Kaiser · 1388 contra 1556'], ['Malinche y Zanjón', '+97', 'les ganaron a Aluclown y Kaiser · 1455 contra 1552']] },
+      { k: 'civ', t: 'Civilización del mes', rule: 'La más elegida en partidas puntuadas · desde 3 elecciones', civ: true, solo: [['Rusos', '18', '11 ganadas · 61 %', F.ru], ['Franceses', '14', '7 ganadas · 50 %', F.fr], ['Mexicanos', '11', '6 ganadas · 55 %', F.mx], ['Austriacos', '9', '5 ganadas · 56 %', F.dk]] }
+    ];
+    const hlCards = (sel, on) => HL.map(c => {
+      const team = !!(c.team && sel[c.k]);
+      const rows = (team ? c.team : c.solo).map((x, i) => {
+        const nm = x[0], me = nm === ME, a = c.civ ? { av: x[3], ini: '' } : av(nm.split(' y ')[0]);
+        return { n: String(i + 1), name: nm, you: me, ...a, ah: c.civ ? '19px' : '28px', ar: c.civ ? '3px' : '14px', hasD: !c.streak, d: c.streak ? '' : x[2], isFig: !c.streak, fig: c.streak ? '' : x[1], fc: c.pos ? '#7fe0a8' : '#f0f5fb', isStreak: !!c.streak, st: c.streak ? '🔥' + x[1] : '', stTip: c.streak ? x[1] + ' victorias seguidas' : '', bg: me ? 'rgba(85,172,238,.08)' : i === 0 ? 'linear-gradient(90deg,rgba(244,217,160,.13),rgba(244,217,160,.02))' : 'transparent', ring: me ? 'inset 0 0 0 1px rgba(85,172,238,.35)' : i === 0 ? 'inset 0 0 0 1px rgba(244,217,160,.2)' : 'none', pc: i === 0 ? '#f4d9a0' : '#8C9CB1' };
+      });
+      const sw = !!c.team;
+      return { t: c.t, rule: c.rule, rows, sw, tabs: sw ? [['1v1', false], ['Equipos', true]].map(([t, v]) => ({ t, bg: team === v ? 'rgba(255,255,255,.14)' : 'transparent', c: team === v ? '#ffffff' : '#a8bcd2', go: on ? () => set({ hlT: { ...s.hlT, [c.k]: v } }) : undefined })) : [] };
+    });
+
+    const OCT = [
+      ['m1', 'Gorgo', 'w', 'Kaiser', F.mx, F.dk, false, '1v1', false, 'ESOC Florida', '31 min', 'Wars of Liberty', 'hace 2 h', '29 oct', 'idle'],
+      ['m2', 'Aluclown', 'w', 'Malinche', F.bg, F.mx, false, '1v1', false, 'ESOC Yukon', '27 min', 'Wars of Liberty', 'hace 5 h', '29 oct', 'idle'],
+      ['m3', 'Kaiser', 'vs', 'UnstoppableStreletsy', F.dk, F.ru, false, '1v1', true, 'ESOC Indonesia', '8 min', 'Wars of Liberty', 'hace 9 h', '28 oct', 'none'],
+      ['m4', 'Rioplatense', 'w', 'Almirante', F.uy, F.bo, true, '2v2', false, 'Great Plains', '42 min', 'Hundred Days', 'hace 1 d', '28 oct', 'none'],
+      ['m5', 'Kaiser', 'w', 'Rioplatense', F.dk, F.uy, false, '1v1', false, 'ESOC Parallel Rivers', '24 min', 'Wars of Liberty', 'hace 1 d', '27 oct', 'idle'],
+      ['m6', 'Cuzco', 'w', 'Bicorne', F.bo, F.fr, false, '1v1', false, 'ESOC Florida', '19 min', 'Improvement Mod', 'hace 2 d', '27 oct', 'idle'],
+      ['m7', 'Gorgo', 'w', 'Almirante', F.mx, F.bo, false, '1v1', false, 'ESOC Yukon', '33 min', 'Wars of Liberty', 'hace 3 d', '26 oct', 'done'],
+      ['m8', 'Malinche', 'vs', 'Zanjón', F.mx, F.dark, true, '1v1', true, 'Texas', '12 min', 'Wars of Liberty', 'hace 3 d', '26 oct', 'none'],
+      ['m9', 'UnstoppableStreletsy', 'w', 'Aluclown', F.ru, F.bg, false, '1v1', false, 'ESOC Indonesia', '38 min', 'Wars of Liberty', 'hace 4 d', '25 oct', 'idle'],
+      ['m10', 'Zanjón', 'w', 'Gorgo', F.dark, F.mx, false, '1v1', false, 'ESOC Florida', '22 min', 'Wars of Liberty', 'hace 4 d', '25 oct', 'idle']
+    ];
+    const SEP = [
+      ['s1', 'Kaiser', 'w', 'Gorgo', F.dk, F.mx, false, '1v1', false, 'ESOC Yukon', '29 min', 'Wars of Liberty', '', '30 sep', 'idle'],
+      ['s2', 'Almirante', 'w', 'Cuzco', F.bo, F.bo, true, '1v1', false, 'Saguenay', '35 min', 'Wars of Liberty', '', '28 sep', 'none'],
+      ['s3', 'Aluclown', 'w', 'Kaiser', F.bg, F.dk, false, '1v1', false, 'ESOC Indonesia', '35 min', 'Wars of Liberty', '', '27 sep', 'idle'],
+      ['s4', 'Malinche', 'w', 'Rioplatense', F.mx, F.uy, false, '1v1', false, 'ESOC Parallel Rivers', '26 min', 'Hundred Days', '', '25 sep', 'idle']
+    ];
+    const AUG = [
+      ['a1', 'Cuzco', 'w', 'Kaiser', F.bo, F.dk, false, '1v1', false, 'ESOC Florida', '27 min', 'Wars of Liberty', '', '30 ago', 'idle'],
+      ['a2', 'Bicorne', 'vs', 'Almirante', F.fr, F.bo, false, '1v1', true, 'ESOC Yukon', '6 min', 'Wars of Liberty', '', '29 ago', 'none'],
+      ['a3', 'Gorgo', 'w', 'Malinche', F.mx, F.mx, false, '1v1', false, 'ESOC Indonesia', '41 min', 'Hundred Days', '', '27 ago', 'idle'],
+      ['a4', 'Kaiser', 'w', 'Zanjón', F.dk, F.dark, true, '1v1', false, 'Great Plains', '30 min', 'Wars of Liberty', '', '24 ago', 'none']
+    ];
+    const dlGo = (on, id, a, b, map, mod) => {
+      if (!on) return undefined;
+      return () => {
+        const cur = s.dl[id] || (id === 'm7' ? 'done' : '');
+        if (cur === 'done') { set({ log: 'Se abre la carpeta Savegame de ' + mod + ' con la grabación seleccionada. No se descarga otra vez.' }); return; }
+        if (cur === 'loading') return;
+        set({ dl: { ...s.dl, [id]: 'loading' }, log: '' });
+        clearTimeout(this.to);
+        this.to = setTimeout(() => this.setState(st => ({ dl: { ...st.dl, [id]: 'done' }, toast: { sub: a + ' vs ' + b + ' · ' + map, body: 'Ábrela en AoE3 › Cargar partida grabada, con ' + mod + ' ' + VER[mod] + '.' } })), 1300);
+      };
+    };
+    const mrow = (x, variant, page, zebra, on) => {
+      const [id, a, v, b, f1, f2, casual, fmt, nores, map, dur, mod, agoS, agoL, st0] = x;
+      const S = on ? s : { dl: {}, hov: '' }, cur = S.dl[id] || st0;
+      const st = cur === 'idle' && S.hov === id ? 'hover' : cur;
+      const tip = st === 'hover' ? ['Descargar la grabación', 'Se guarda en tu carpeta Savegame. Se ve bien con ' + mod + ' ' + VER[mod] + ', la versión con que se jugó.'] : cur === 'done' && S.hov === id ? ['Ya está en tu carpeta Savegame', 'Haz clic para mostrarla en la carpeta.'] : null;
+      return { id, row: { a, verb: v === 'w' ? 'venció a' : 'vs', b, f1, f2, mode: casual ? 'CASUAL' : 'COMPETITIVA', casual, fmt, extra: nores ? ' · sin resultado' : '', map, dur, modName: page ? ' · ' + mod : '', age: page ? agoL : agoS, st, result: !nores, variant, zebra, tip1: tip ? tip[0] : '', tip2: tip ? tip[1] : '' }, hit: st0 !== 'none', hitR: variant === 'tile' ? '8px' : '-4px', go: dlGo(on, id, a, b, map, mod), enter: on ? () => set({ hov: id }) : undefined, leave: on ? () => set({ hov: '' }) : undefined };
+    };
+
+    const build = c => {
+      const on = !!c.interactive, m = c.w >= 1600 ? 16 : 12, pageW = c.w - 2 * m, q = pageW / 100;
+      const cl = (v, a, b) => Math.max(a, Math.min(b, v)), hp = v => Math.round(v * 2) / 2;
+      const fl = { gap: Math.round(cl(q, 14, 28)), row: Math.round(cl(q * 2.3, 48, 62)), prow: Math.round(cl(q * 2.5, 54, 68)), name: hp(cl(q * .6, 13.5, 16)), elo: hp(cl(q * .58, 13, 16)), ped: Math.round(cl(q * 2.2, 30, 52)), podNum: Math.round(cl(q * 1.15, 17, 28)) };
+      const mode = c.mode, isTable = mode === 'solo' || mode === 'team', L = LAD[c.lad || mode] || LAD.solo;
+      const LR = isTable ? ladder(L, mode === 'team', fl, on) : { rows: [], pod: [], me: null }, rows = LR.rows;
+      const nR = L.ranked.length, nP = L.placing.length;
+      const modes = [['solo', '1v1'], ['team', 'Equipos'], ['hl', 'Destacados'], ['matches', 'Partidas']].map(([k, t]) => ({ t, bg: k === mode ? 'linear-gradient(180deg,#2e4d7a,#1e3455)' : 'transparent', ring: k === mode ? 'inset 0 1px 0 rgba(255,255,255,.16),inset 0 0 0 1px rgba(130,175,255,.3),0 6px 14px -6px rgba(0,0,0,.7)' : 'none', c: k === mode ? '#ffffff' : '#a8bcd2', go: on ? () => set({ mode: k, log: '' }) : undefined }));
+      const MS = on ? s : { rep: false, q: '', more: false, hlT: {} };
+      const qq = (MS.q || '').trim(), filtered = !!MS.rep || !!qq;
+      const okRow = x => (!MS.rep || x[14] !== 'none') && (!qq || (x[1] + ' ' + x[3]).toLowerCase().includes(qq.toLowerCase()));
+      const listW = pageW - 36, mCols = listW >= 1900 ? 'repeat(3,minmax(0,1fr))' : listW >= 900 ? 'repeat(2,minmax(0,1fr))' : 'minmax(0,1fr)';
+      const groups = mode === 'matches' ? [['OCTUBRE 2026', 38, OCT], ['SEPTIEMBRE 2026', 61, SEP], ...(MS.more ? [['AGOSTO 2026', 54, AUG]] : [])].map(([h, total, R]) => { const rs = R.filter(okRow); return { h, note: filtered ? (rs.length === 1 ? '1 partida' : rs.length + ' partidas') : total + ' partidas', rows: rs.map(x => mrow(x, 'tile', true, false, on)) }; }).filter(g => g.rows.length) : [];
+      const nFound = groups.reduce((a, g) => a + g.rows.length, 0);
+      let s1 = '', t1 = '', s2 = '', t2 = '';
+      if (isTable && (nR || nP)) { s1 = String(nR); t1 = ' clasificados · '; s2 = String(nP); t2 = ' en posicionamiento'; }
+      else if (mode === 'hl') { s1 = '137'; t1 = ' partidas puntuadas en octubre hasta hoy'; }
+      else if (mode === 'matches') { if (filtered) { s1 = String(nFound); t1 = nFound === 1 ? ' partida' : ' partidas'; } else { s1 = '412'; t1 = ' partidas en los últimos 12 meses'; } }
+      const cards = mode === 'hl' ? hlCards(MS.hlT || {}, on) : [];
+      const nc = cards.length, hlCols = (() => { for (const k of [nc, Math.ceil(nc / 2), Math.ceil(nc / 3), 2, 1]) if (k > 0 && (pageW - (k - 1) * m) / k >= 300) return 'repeat(' + k + ',minmax(0,1fr))'; return 'minmax(0,1fr)'; })();
+      const latestSrc = c.lad === 'empty' ? OCT.filter(x => x[6]) : OCT;
+      const toast = on ? s.toast : null;
+      return {
+        id: c.id, href: '#' + c.id, label: c.label, w: c.w + 'px', h: c.h + 'px', interactive: on, log: on ? s.log : '',
+        reset: () => { clearTimeout(this.to); set({ mode: 'solo', log: '', dl: {}, hov: '', toast: null, rep: false, q: '', more: false, hlT: {} }); },
+        barBg: 'rgba(11,20,34,' + G.bar + ')', barBlur: lvl === 'Sólida' ? '0px' : '10px', gBg: G.bg, gBlur: G.blur, flBg: G.fl, flBlur: G.flB, mp: m + 'px',
+        modes, hasSum: !!t1, s1, t1, s2, t2, hasPrev: mode === 'hl', prev: say(on, 'Se cargan los destacados de septiembre y el enlace pasa a «Volver a octubre».'),
+        isTable, isHl: mode === 'hl', isMatches: mode === 'matches',
+        gap: fl.gap + 'px', numS: fl.name + 'px', nameS: fl.name + 'px', eloS: fl.elo + 'px', peakS: (fl.elo - .5) + 'px', avS: Math.round(fl.row * .58) + 'px',
+        rows, hasRows: rows.length > 0, hasCols: rows.length > 0, noRanked: isTable && nR === 0 && nP > 0, empty: isTable && nR + nP === 0, hasFoot: rows.length > 0,
+        hasPod: LR.pod.length > 0, pod: LR.pod, podGlow: fx ? 'radial-gradient(46% 72% at 50% 46%,rgba(255,47,69,.17),transparent 72%)' : 'none', podPad: Math.round(cl(q * .7, 10, 18)) + 'px', podGap: Math.round(cl(q * .6, 10, 16)) + 'px', podName: hp(cl(q * .7, 13.5, 18)) + 'px', podElo: Math.round(cl(q * 1, 17, 28)) + 'px', wmS: Math.round(cl(q * 6, 84, 160)) + 'px', avP: Math.round(cl(q * 2.6, 36, 64)) + 'px', iniP: Math.round(cl(q * 2.6, 36, 64) * .38) + 'px', hasMe: !!LR.me, me: LR.me || { nb: [], segs: [] },
+        create: say(on, 'Se abre «Crear sala» con Competitiva marcada.'), howElo: say(on, 'Se abre docs/ELO.md en el navegador.'),
+        goMatches: on ? () => set({ mode: 'matches', log: '' }) : undefined,
+        latest: latestSrc.map((x, i) => mrow(x, 'strong', false, i % 2 === 1, on)),
+        cards, hlCols,
+        q: MS.q || '', onQ: on ? e => set({ q: e.target.value }) : undefined, qRing: qq ? '#2f7fe0' : 'rgba(130,175,255,.22)',
+        toggleRep: on ? () => set({ rep: !s.rep }) : undefined, chipBg: MS.rep ? 'rgba(47,127,224,.18)' : 'transparent', chipRing: MS.rep ? '#2f7fe0' : 'rgba(130,175,255,.22)', chipC: MS.rep ? '#ffffff' : '#dce7f5', boxBg: MS.rep ? '#2f7fe0' : 'transparent', boxRing: MS.rep ? '#2f7fe0' : '#8C9CB1', tick: MS.rep ? '✓' : '',
+        modPick: say(on, 'Se abre la lista de mods: Todos los mods, el juego base y cada mod con partidas.'),
+        mCols, groups, hasMore: mode === 'matches' && !filtered, shown: 'Mostrando ' + (MS.more ? 60 : 30) + ' de 412', loadMore: on ? () => set({ more: true }) : undefined,
+        hasEnd: mode === 'matches' && filtered && nFound > 0, mEmpty: mode === 'matches' && filtered && nFound === 0,
+        eT: MS.rep ? (qq ? 'Ninguna partida con grabación de «' + qq + '» en los últimos 12 meses' : 'Ninguna partida con grabación en los últimos 12 meses') : 'Ninguna partida de «' + qq + '» en los últimos 12 meses',
+        eB: MS.rep ? 'Revisa cómo se escribe el nombre, o quita «Solo con grabación» para ver también las partidas sin grabar.' : 'Revisa cómo se escribe el nombre.',
+        clear: on ? () => set({ q: '', rep: false }) : undefined,
+        hasToast: !!toast, tSub: toast ? toast.sub : '', tBody: toast ? toast.body : '', tClose: on ? () => set({ toast: null }) : undefined, tShow: on ? () => set({ toast: null, log: 'Se abre la carpeta Savegame con la grabación seleccionada.' }) : undefined
+      };
+    };
+    const frames = [
+      build({ id: '93a', interactive: true, w: W, h: H, mode: s.mode, label: 'Interactivo. Cambia de modo arriba a la izquierda; pulsa el podio, una fila o «Tu posición» para abrir ese perfil, o la descarga de una partida para guardar su grabación. En Tweaks: tamaño de ventana, transparencia y efectos (con «Reducidos» se quita el brillo y los paneles pasan a sólidos).' }),
+      build({ id: '93b', w: 1366, h: 768, mode: 'solo', label: 'Portátil, 1366 × 768: el podio queda en su mínimo (fotos de 46 px, ELO a 20 px, pedestales de 42, 34 y 29 px) y la tabla, que empieza en el 4.º, se desplaza dentro de su placa. Tú vas 5.º: «Tu posición» muestra al 4.º y al 6.º y los 66 ELO que te faltan para subir a Industrial.' }),
+      build({ id: '93c', w: 2560, h: 1392, mode: 'team', label: 'Equipos en 2560 × 1392: insignias de dos escudos en el podio y en la tabla. Como estás en posicionamiento (2/5), «Tu posición» muestra tus resultados, tu ELO con «?» y cuántas partidas te quedan.' }),
+      build({ id: '93d', w: 1366, h: 768, mode: 'solo', lad: 'none', label: 'Nadie completó todavía el posicionamiento: no hay podio; el aviso va arriba y debajo el grupo «En posicionamiento». «Tu posición» sigue tus 4 de 10 partidas.' }),
+      build({ id: '93e', w: 1366, h: 768, mode: 'solo', lad: 'empty', label: 'Tabla vacía: sin podio ni «Tu posición». Un solo botón, «+ Crear sala».' }),
+      build({ id: '93f', w: 1920, h: 1080, mode: 'hl', label: 'Destacados: como en 91f, con el primero de cada placa resaltado en dorado suave.' })
+    ];
+    return { frames };
+  }
+}
+</script>
+</body>
+</html>

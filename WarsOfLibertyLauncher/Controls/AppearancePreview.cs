@@ -33,7 +33,7 @@ public sealed class AppearancePreview : Border
         _root.Children.Clear();
 
         Brush? image = showImage && !reduced && mod != null
-            ? MainWindow.TryLoadTileImage(mod.ResolveHeroSources().FirstOrDefault())
+            ? MainWindow.TryLoadTileImage(mod.ResolveHeroSources().FirstOrDefault(), 640)
             : null;
         _root.Children.Add(new Border { Background = image ?? ModTheme.QuietBackground(accent) });
 

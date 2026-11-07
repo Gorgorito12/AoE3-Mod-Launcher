@@ -1,14 +1,15 @@
-using System.Windows;
 using System.Windows.Controls;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// A new persistent team: a name (2 to 40 characters, the server's bounds) and an optional tag
-/// of up to 8. Only collects; the tab creates the team.
+/// A new persistent team (design 103k): a name (2 to 40 characters, the server's bounds) and an
+/// optional tag of up to 8, in one double field. The prototype draws a three-letter tag; the
+/// server takes eight. Only collects; the tab creates the team.
 /// </summary>
-public partial class CreateTeamDialog : Window
+public partial class CreateTeamDialog : BaseDialog
 {
     private const int MinNameLength = 2;
 
@@ -18,30 +19,27 @@ public partial class CreateTeamDialog : Window
     public CreateTeamDialog()
     {
         InitializeComponent();
-        Title = Strings.Get("MpTeamsCreateTitle");
-        TitleBarControl.Title = Strings.Get("MpTeamsCreateTitle");
-        NameLabel.Text = Strings.Get("MpTeamsCreateName");
-        TagLabel.Text = Strings.Get("MpTeamsCreateTag");
-        HintText.Text = Strings.Get("MpTeamsCreateHint");
-        CancelButton.Content = Strings.Get("BtnCancel");
-        OkButton.Content = Strings.Get("MpTeamsCreateButton");
+        SetBarTitle(Strings.Get("MpTeamsCreateTitle"));
+        SetHeadline(Strings.Get("MpTeamsCreateHeadline"));
+        SetLead(Strings.Get("MpTeamsCreateHint"));
+        TagHint.Text = Strings.Get("MpTeamsCreateTagHint");
+        NameLabel.Text = Strings.Get("MpTeamsCreateFieldLabel");
+        CancelAction.Content = Strings.Get("BtnCancel");
+        PrimaryAction.Content = Strings.Get("MpTeamsCreateButton");
+        PrimaryAction.IsEnabled = false;
     }
 
     /// <summary>Whether the typed name may be sent. For the tests and the button.</summary>
     internal bool CanConfirm => NameEntry.Text.Trim().Length >= MinNameLength;
 
     private void Field_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (OkButton != null) OkButton.IsEnabled = CanConfirm;
-    }
+        => PrimaryAction.IsEnabled = CanConfirm;
 
-    private void OkButton_Click(object sender, RoutedEventArgs e)
+    protected override void OnPrimary()
     {
         if (!CanConfirm) return;
         EnteredName = NameEntry.Text.Trim();
         EnteredTag = TagEntry.Text.Trim();
-        DialogResult = true;
+        Answer(true);
     }
-
-    private void CancelButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }

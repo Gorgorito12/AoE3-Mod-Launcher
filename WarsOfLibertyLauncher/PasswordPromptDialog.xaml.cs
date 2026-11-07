@@ -1,15 +1,15 @@
 ﻿using System.Windows;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
+using WarsOfLibertyLauncher.Models;
 
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Tiny modal that asks the user for a password and returns it via
-/// <see cref="EnteredPassword"/>. Used by the multiplayer join flow to
-/// gate private rooms without dragging in <c>Microsoft.VisualBasic</c>
-/// just for its <c>InputBox</c>.
+/// Asks for the password of a private room and returns it via <see cref="EnteredPassword"/>
+/// (design 103i). It is a dialog of the room's mod: its tint on the bar and its colour on "Join".
 /// </summary>
-public partial class PasswordPromptDialog : Window
+public partial class PasswordPromptDialog : BaseDialog
 {
     public string EnteredPassword { get; private set; } = "";
 
@@ -18,27 +18,53 @@ public partial class PasswordPromptDialog : Window
     /// a hardcoded English sentence passed in from the join flow, which is how this dialog came
     /// to be the one untranslated window in the multiplayer surface.
     /// </param>
-    public PasswordPromptDialog(string? prompt = null)
+    /// <param name="hostName">Whose room it is, for the headline. Null says "Private room".</param>
+    /// <param name="mod">The room's mod.</param>
+    public PasswordPromptDialog(string? prompt = null, string? hostName = null, ModProfile? mod = null)
     {
         InitializeComponent();
-        Title = Strings.Get("MpJoinPasswordTitle");
-        TitleBarControl.Title = Strings.Get("MpJoinPasswordTitle");
-        PromptText.Text = prompt ?? Strings.Get("MpJoinPasswordPrompt");
-        OkButton.Content = Strings.Get("MpJoinPasswordEnter");
-        CancelButton.Content = Strings.Get("BtnCancel");
+        SetBarTitle(Strings.Get("MpJoinPasswordTitle"));
+        SetHeadline(string.IsNullOrWhiteSpace(hostName)
+            ? Strings.Get("MpJoinPasswordTitle")
+            : Strings.Format("MpJoinPasswordHeadline", hostName));
+        SetLead(prompt ?? Strings.Get("MpJoinPasswordPrompt"));
+        FieldLabel.Text = Strings.Get("MpJoinPasswordField");
+        Placeholder.Text = Strings.Get("MpJoinPasswordPlaceholder");
+        RevealButton.Content = Strings.Get("MpCreateDialogShowPassword");
+        PrimaryAction.Content = Strings.Get("MpJoinPasswordEnter");
+        CancelAction.Content = Strings.Get("BtnCancel");
+        UseMod(mod);
         Loaded += (_, _) => PasswordEntry.Focus();
     }
 
-    private void OkButton_Click(object sender, RoutedEventArgs e)
+    private bool Revealed => PasswordPlain.Visibility == Visibility.Visible;
+
+    private void PasswordEntry_Changed(object sender, RoutedEventArgs e)
+        => Placeholder.Visibility = PasswordEntry.Password.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    private void RevealButton_Click(object sender, RoutedEventArgs e)
     {
-        EnteredPassword = PasswordEntry.Password ?? "";
-        DialogResult = true;
-        Close();
+        if (Revealed)
+        {
+            PasswordEntry.Password = PasswordPlain.Text;
+            PasswordPlain.Visibility = Visibility.Collapsed;
+            PasswordEntry.Visibility = Visibility.Visible;
+            RevealButton.Content = Strings.Get("MpCreateDialogShowPassword");
+            PasswordEntry.Focus();
+            return;
+        }
+        PasswordPlain.Text = PasswordEntry.Password;
+        PasswordEntry.Visibility = Visibility.Collapsed;
+        PasswordPlain.Visibility = Visibility.Visible;
+        Placeholder.Visibility = Visibility.Collapsed;
+        RevealButton.Content = Strings.Get("MpCreateDialogHidePassword");
+        PasswordPlain.Focus();
+        PasswordPlain.CaretIndex = PasswordPlain.Text.Length;
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    protected override void OnPrimary()
     {
-        DialogResult = false;
-        Close();
+        EnteredPassword = (Revealed ? PasswordPlain.Text : PasswordEntry.Password) ?? "";
+        Answer(true);
     }
 }

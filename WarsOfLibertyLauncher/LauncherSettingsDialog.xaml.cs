@@ -798,10 +798,11 @@ public partial class LauncherSettingsDialog : Window
             // Naming the cause is the feature: the catalog CI only tells a modder their
             // manifest is wrong after they have opened the PR.
             Services.DiagnosticLog.Write($"Add local mod: rejected '{path}': {ex.Message}");
-            MessageBox.Show(this,
-                Strings.Format("ModsBrowserAddLocalInvalidBody", ex.Message),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("ModsBrowserAddLocalInvalidTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                Strings.Get("ModsBrowserAddLocalInvalidLead"),
+                ConfirmTone.Caution,
+                detail: ex.Message);
             return;
         }
 
@@ -1615,11 +1616,10 @@ public partial class LauncherSettingsDialog : Window
                 exePathOverride: Services.SelfInstallService.CanonicalExe);
         }
 
-        var relaunch = MessageBox.Show(
-            Strings.Get("DlgLauncherSettingsInstallRelaunchBody"),
+        if (ThemedConfirmDialog.Ask(this,
             Strings.Get("DlgLauncherSettingsInstallRelaunchTitle"),
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (relaunch == MessageBoxResult.Yes)
+            Strings.Get("DlgLauncherSettingsInstallRelaunchBody"),
+            Strings.Get("DlgYes"), Strings.Get("DlgNo")))
             Services.SelfInstallService.RelaunchInstalledAndExit();
         else
             SelfInstallButton.IsEnabled = true;

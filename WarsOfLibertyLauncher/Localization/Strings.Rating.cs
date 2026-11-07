@@ -26,6 +26,7 @@ public static partial class Strings
         foreach (var kv in PlacementTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in QuickMatchTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in LibraryTable) Table.Add(kv.Key, kv.Value);
+        foreach (var kv in SmallDialogsTable) Table.Add(kv.Key, kv.Value);
     }
 
     private static readonly Dictionary<string, Dictionary<string, string>> RatingTable = new()

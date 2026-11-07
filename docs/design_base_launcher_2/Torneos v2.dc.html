@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t80" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t80" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">80</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Pestaña Torneos, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px">La lista va a la izquierda (se pliega a 72 px) y el torneo elegido a la derecha, con la imagen de su mod detrás y su color en la selección, en el botón principal y en tu partido. Cada torneo de la lista es un caso: 32 jugadores en curso con tu partido por jugar, 3v3 con la sala abierta por tu rival, inscripción con solicitudes (tuyo), terminado y borrador (tuyo). Se mantiene lo de los turnos 8 y 14: conectores del cuadro, semillas en monoespaciada, ganador en blanco y perdedor atenuado, «Ganador de…» en los lados sin decidir, la alineación de cada equipo, los grupos Solicitudes · Dentro · Fuera del cuadro, la zona de peligro aparte y celdas del cuadro que no crecen ni llevan botones. Cambios: lo que te toca va arriba, en una tarjeta con el único botón principal; el detalle se divide en Cuadro, Participantes y Organizar (solo quien organiza), en vez de una página larga; con 32 o más, el cuadro se desplaza en las dos direcciones con las rondas fijas arriba, salta a cada ronda, tiene «Ir a mi partido» y zoom; y Participantes dice en qué ronda cayó cada uno. Prueba a elegir torneos, aceptar solicitudes en «Relámpago», plegar la lista y usar el zoom.</div>
+  <div id="80a" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#80a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">80a</a><span>Interactivo. Cambia el tamaño de la ventana y la transparencia en Tweaks.</span></div>
+    <div style="width:{{ fw }};height:{{ fh }};container-type:inline-size;color-scheme:dark;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.3);background:#0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+      <div style="position:absolute;inset:0;background:{{ heroBg }}"></div>
+      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,28,46,.9) 0%,rgba(15,28,46,.72) 30%,rgba(15,28,46,.5) 62%,rgba(15,28,46,.34) 100%),linear-gradient(0deg,rgba(15,28,46,.94) 0%,rgba(15,28,46,.55) 45%,rgba(15,28,46,.15) 100%)"></div>
+      <div style="position:relative;height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ barBg }};backdrop-filter:blur({{ barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">AoE3 Mod Launcher</span><span style="height:20px;padding:0 6px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.25);display:flex;align-items:center;font:400 11px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">v1.0.16e</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;display:flex;gap:26px"><span>—</span><span>❐</span><span>✕</span></span></div>
+      <div style="position:relative;height:56px;flex:none;display:flex;align-items:stretch;gap:30px;padding:0 24px 0 32px;background:rgba(10,19,33,.45);backdrop-filter:blur(12px);box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+        <span style="display:flex;align-items:center;font:600 14px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 -2px 0 #2f7fe0">MULTIJUGADOR</span>
+        <span style="display:flex;align-items:center;font:500 14px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">BIBLIOTECA</span>
+        <div style="flex:1"></div>
+        <div style="align-self:center;display:flex;align-items:center"><span style="flex:none;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:7px;background:rgba(79,214,138,.12);box-shadow:inset 0 0 0 1px rgba(79,214,138,.35);font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#7fe0a8"><span style="width:7px;height:7px;border-radius:4px;background:#4fd68a"></span>Conectado<span style="font:400 10px/1 'Segoe UI',system-ui,sans-serif">▾</span></span><span style="width:1px;height:20px;margin:0 16px;background:rgba(255,255,255,.14)"></span><span style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:26px;border-radius:13px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">G</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Gorgo</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">1383 ELO · 1v1</span></span></span></div>
+      </div>
+      <div style="position:relative;height:44px;flex:none;display:flex;align-items:stretch;gap:26px;padding:0 32px;background:rgba(10,19,33,.32);backdrop-filter:blur(10px);box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)"><span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">SALAS</span><span style="display:flex;align-items:center;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 -2px 0 #2f7fe0">TORNEOS</span><span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">CLASIFICACIÓN</span><span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">ESTADÍSTICAS</span></div>
+      <div style="position:relative;flex:1;min-height:0;display:grid;grid-template-columns:{{ listCol }} minmax(0,1fr);gap:16px;padding:16px 20px 20px">
+        <div style="min-height:0;display:flex;flex-direction:column;border-radius:14px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);overflow:hidden">
+          <sc-if value="{{ listOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="flex:none;padding:14px 14px 12px;display:flex;flex-direction:column;gap:10px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.08)">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">TORNEOS</span><span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ total }}</span><div style="flex:1"></div><span onClick="{{ toggleList }}" title="Plegar la lista" style="cursor:pointer;width:32px;height:32px;box-sizing:border-box;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">«</span></div>
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"><span style="cursor:pointer;white-space:nowrap;height:32px;box-sizing:border-box;padding:0 10px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">+ Nuevo torneo</span><span style="cursor:pointer;white-space:nowrap;height:32px;box-sizing:border-box;padding:0 10px;border-radius:7px;display:flex;align-items:center;justify-content:center;gap:7px;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Mis equipos<span style="min-width:18px;height:18px;box-sizing:border-box;padding:0 5px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:#55ACEE;font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#0f1c2e">1</span></span></div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ filters }}" as="f" hint-placeholder-count="4"><span onClick="{{ f.pick }}" style="cursor:pointer;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:6px;background:{{ f.bg }};box-shadow:{{ f.ring }};font:{{ f.w }} 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ f.c }}">{{ f.t }}<span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:{{ f.nc }}">{{ f.n }}</span></span></sc-for></div>
+            </div>
+            <div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;padding:6px;display:flex;flex-direction:column;gap:2px">
+              <sc-for list="{{ listGroups }}" as="lg" hint-placeholder-count="3"><span style="padding:10px 10px 5px;font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ lg.t }}</span><sc-for list="{{ lg.rows }}" as="r" hint-placeholder-count="2">
+                <div onClick="{{ r.pick }}" style="cursor:pointer;display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:11px;align-items:center;padding:10px;border-radius:10px;background:{{ r.bg }};box-shadow:{{ r.ring }}" style-hover="filter:brightness(1.14)">
+                  <span style="width:36px;height:36px;border-radius:8px;background:{{ r.icon }}"></span>
+                  <div style="min-width:0;display:flex;flex-direction:column;gap:5px"><span style="font:600 13.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span><span style="display:flex;align-items:center;gap:6px;min-width:0;font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap;overflow:hidden"><span style="flex:none;width:7px;height:7px;border-radius:4px;background:{{ r.dot }}"></span><span style="overflow:hidden;text-overflow:ellipsis">{{ r.sub }}</span></span></div>
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><sc-if value="{{ r.mine }}" hint-placeholder-val="{{ false }}"><span style="height:20px;padding:0 8px;border-radius:10px;display:flex;align-items:center;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">MÍO</span></sc-if><sc-if value="{{ r.alert }}" hint-placeholder-val="{{ false }}"><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ r.alertC }};white-space:nowrap">{{ r.alert }}</span></sc-if></div>
+                </div>
+              </sc-for></sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ listClosed }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:14px 0 10px;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.08)"><span onClick="{{ toggleList }}" title="Mostrar la lista" style="cursor:pointer;width:32px;height:32px;box-sizing:border-box;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">»</span></div>
+            <div style="flex:1;min-height:0;overflow:auto;padding:10px 0;display:flex;flex-direction:column;align-items:center;gap:8px">
+              <sc-for list="{{ rows }}" as="r" hint-placeholder-count="5"><span onClick="{{ r.pick }}" title="{{ r.name }}" style="cursor:pointer;position:relative;width:44px;height:44px;box-sizing:border-box;padding:4px;border-radius:11px;box-shadow:{{ r.iconRing }}"><span style="display:block;width:36px;height:36px;border-radius:8px;background:{{ r.icon }}"></span><span style="position:absolute;right:1px;bottom:1px;width:10px;height:10px;border-radius:5px;background:{{ r.dot }};box-shadow:0 0 0 2px #0f1c2e"></span></span></sc-for>
+            </div>
+          </sc-if>
+        </div>
+        <div style="min-width:0;min-height:0;display:flex;flex-direction:column;gap:14px">
+          <div style="flex:none;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap">
+            <div style="flex:1 1 420px;min-width:0;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="height:26px;padding:0 10px 0 5px;border-radius:13px;display:flex;align-items:center;gap:7px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><span style="width:18px;height:18px;border-radius:5px;background:{{ D.icon }}"></span>{{ D.modName }}</span><span style="height:26px;padding:0 11px;border-radius:13px;display:flex;align-items:center;gap:7px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ D.stC }}"><span style="width:7px;height:7px;border-radius:4px;background:{{ D.stDot }}"></span>{{ D.stT }}</span><sc-if value="{{ D.mine }}" hint-placeholder-val="{{ false }}"><span style="height:26px;padding:0 10px;border-radius:13px;display:flex;align-items:center;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">ORGANIZAS TÚ</span></sc-if></div>
+              <span style="font:700 {{ titleSize }}/1.08 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 3px 18px rgba(0,0,0,.55);text-wrap:balance">{{ D.name }}</span>
+              <span style="font:400 13px/1.3 Consolas,ui-monospace,monospace;color:#c3d2e5;text-shadow:0 1px 8px rgba(0,0,0,.5)">{{ D.meta }}</span>
+              <sc-if value="{{ notCompact }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px"><sc-for list="{{ D.steps }}" as="st" hint-placeholder-count="5"><span style="height:24px;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:6px;background:{{ st.bg }};box-shadow:inset 0 0 0 1px {{ st.ring }};font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ st.c }};white-space:nowrap">{{ st.g }} {{ st.t }}</span></sc-for></div></sc-if>
+            </div>
+            <div style="flex:{{ acFlex }};min-width:0;box-sizing:border-box;padding:{{ acPad }};border-radius:14px;background:{{ A.cardBg }};backdrop-filter:blur({{ G.blur }});box-shadow:{{ A.cardSh }};display:grid;grid-template-columns:{{ acCols }};gap:8px 16px;align-items:center">
+              <div style="min-width:0;display:flex;flex-direction:column;gap:7px">
+              <sc-if value="{{ A.showKicker }}" hint-placeholder-val="{{ true }}"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;color:{{ A.kc }}">{{ A.kicker }}</span></sc-if>
+              <sc-if value="{{ A.champ }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:14px;min-width:0;padding:2px 0"><span style="flex:none;width:44px;height:52px;box-sizing:border-box;padding-bottom:7px;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ A.champGrad }};display:flex;align-items:center;justify-content:center;font:700 19px/1 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 1px 4px rgba(0,0,0,.5)">{{ A.champIni }}</span><div style="min-width:0;display:flex;flex-direction:column;gap:5px"><span style="font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ accLight }}">CAMPEÓN</span><span style="font:700 24px/1.4 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 2px 10px rgba(0,0,0,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ A.champName }}</span><span style="font:400 12.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ A.champSub }}</span></div></div></sc-if>
+              <sc-if value="{{ A.hasTitle }}" hint-placeholder-val="{{ false }}"><span style="font:600 16px/1.3 'Segoe UI',system-ui,sans-serif;color:#ffffff;text-wrap:pretty">{{ A.title }}</span></sc-if>
+              <sc-if value="{{ A.vs }}" hint-placeholder-val="{{ true }}"><div style="position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:linear-gradient(90deg,{{ A.vsL }} 0%,rgba(10,19,33,.4) 42%,rgba(10,19,33,.4) 58%,rgba(63,106,138,.34) 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)"><span style="position:absolute;left:18%;right:18%;top:50%;height:1px;background:rgba(255,255,255,.16)"></span><div style="position:relative;display:flex;align-items:center;gap:9px;min-width:0"><span style="flex:none;width:32px;height:32px;border-radius:{{ A.vs.r }};display:flex;align-items:center;justify-content:center;background:{{ acc }};box-shadow:0 0 0 2px rgba(255,255,255,.18);font:700 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ onAcc }}">{{ A.vs.meI }}</span><span style="min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 14.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#ffffff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ A.vs.meN }}</span><span style="font:400 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap">{{ A.vs.meT }} · semilla {{ A.vs.meS }}</span></span></div><span style="position:relative;flex:none;width:36px;height:36px;border-radius:18px;display:flex;align-items:center;justify-content:center;background:#0f1c2e;box-shadow:0 0 0 1px rgba(255,255,255,.22),0 0 0 5px rgba(15,28,46,.55);font:800 12px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">VS</span><div style="position:relative;display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0"><span style="min-width:0;display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right"><span style="max-width:100%;font:600 14.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#ffffff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ A.vs.opN }}</span><span style="font:400 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap">{{ A.vs.opT }} · semilla {{ A.vs.opS }}</span></span><span style="flex:none;width:32px;height:32px;border-radius:{{ A.vs.r }};display:flex;align-items:center;justify-content:center;background:{{ A.vs.opBg }};box-shadow:0 0 0 2px rgba(255,255,255,.18);font:700 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ A.vs.opI }}</span></div></div></sc-if>
+              <sc-if value="{{ A.showSub }}" hint-placeholder-val="{{ true }}"><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ A.sub }}</span></sc-if>
+              <sc-if value="{{ A.next }}" hint-placeholder-val="{{ false }}"><span style="font:400 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty"><span style="font-weight:600;color:{{ accLight }}">{{ A.nextPre }}</span>{{ A.next }}</span></sc-if>
+              <sc-if value="{{ A.warn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:9px;padding:9px 11px;border-radius:8px;background:rgba(244,144,12,.12);box-shadow:inset 0 0 0 1px rgba(244,144,12,.45)"><span style="flex:none;font:700 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#F4900C">!</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#F5BD76;text-wrap:pretty">{{ A.warn }}</span></div></sc-if>
+              </div>
+              <sc-if value="{{ A.btn }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-direction:column;align-items:stretch;gap:6px"><span style="cursor:pointer;white-space:nowrap;min-width:170px;padding:0 22px;height:52px;box-sizing:border-box;border-radius:10px;display:flex;align-items:center;justify-content:center;background:{{ acc }};box-shadow:0 8px 24px {{ accSh }};font:600 16px/1 'Segoe UI',system-ui,sans-serif;color:{{ onAcc }}">{{ A.btn }}</span><sc-if value="{{ A.btnNote }}" hint-placeholder-val="{{ false }}"><span style="text-align:center;font:400 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ A.btnNote }}</span></sc-if></div></sc-if>
+            </div>
+          </div>
+          <div style="flex:none;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="display:flex;gap:3px;padding:3px;border-radius:9px;background:rgba(10,19,33,.62);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)"><sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="3"><span onClick="{{ tb.pick }}" style="cursor:pointer;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;gap:7px;background:{{ tb.bg }};font:{{ tb.w }} 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ tb.c }}">{{ tb.t }}<sc-if value="{{ tb.n }}" hint-placeholder-val="{{ false }}"><span style="font:600 11.5px/1 Consolas,ui-monospace,monospace;color:{{ tb.nc }}">{{ tb.n }}</span></sc-if></span></sc-for></div>
+            <div style="flex:1"></div>
+            <sc-if value="{{ showSearch }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:8px;width:220px;height:32px;box-sizing:border-box;padding:0 10px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px {{ qRing }}"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#8C9CB1" stroke-width="1.5" stroke-linecap="round"><circle cx="5.5" cy="5.5" r="4.2"></circle><path d="M8.7 8.7 12 12"></path></svg><input value="{{ q }}" onChange="{{ onQ }}" placeholder="{{ qPh }}" style="flex:1;min-width:0;border:0;outline:0;background:transparent;color:#e8eef6;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif"><sc-if value="{{ hasQ }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font:600 11px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">{{ qN }}</span><span onClick="{{ clearQ }}" style="cursor:pointer;flex:none;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">✕</span></sc-if></div></sc-if>
+            <sc-if value="{{ showTools }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><sc-for list="{{ BR.anchors }}" as="an" hint-placeholder-count="5"><span onClick="{{ an.go }}" style="cursor:pointer;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 11px;border-radius:15px;display:flex;align-items:center;gap:6px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px {{ an.ring }};font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ an.c }}"><sc-if value="{{ an.now }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:3px;background:{{ accLight }}"></span></sc-if>{{ an.t }}</span></sc-for></div>
+              <sc-if value="{{ BR.hasMine }}" hint-placeholder-val="{{ false }}"><span onClick="{{ goMine }}" style="cursor:pointer;white-space:nowrap;height:32px;box-sizing:border-box;padding:0 12px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Ir a mi partido</span></sc-if>
+              <div style="display:flex;align-items:center;height:32px;border-radius:7px;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22)"><span onClick="{{ zoomOut }}" title="Alejar" style="cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font:600 15px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">−</span><span style="width:46px;text-align:center;font:600 11.5px/1 Consolas,ui-monospace,monospace;color:#c3d2e5">{{ zoomT }}</span><span onClick="{{ zoomIn }}" title="Acercar" style="cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font:600 15px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">+</span></div>
+            </sc-if>
+          </div>
+          <div style="flex:1;min-height:0;border-radius:14px;background:{{ G.bg }};backdrop-filter:blur({{ G.blur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);overflow:hidden;display:flex;flex-direction:column">
+            <sc-if value="{{ isBracket }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1;min-height:0;display:flex"><div ref="{{ scRef }}" style="flex:1;min-width:0;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent">
+                <div style="position:sticky;top:0;z-index:3;display:flex;width:{{ BR.w }};min-width:100%;padding:12px 0 9px;background:rgba(12,22,38,.88);box-shadow:inset 0 -1px 0 rgba(255,255,255,.07)"><sc-for list="{{ BR.heads }}" as="h" hint-placeholder-count="5"><div style="flex:none;box-sizing:border-box;width:{{ h.w }};padding-left:{{ h.pl }};display:flex;align-items:baseline;gap:7px;white-space:nowrap;overflow:hidden"><span style="font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ h.c }}">{{ h.t }}</span><span style="font:400 11px/1 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ h.n }}</span></div></sc-for></div>
+                <div style="position:relative;width:{{ BR.w }};height:{{ BR.h }}">
+                  <div style="position:absolute;left:0;top:0;width:{{ BR.cw }};height:{{ BR.ch }};transform:scale({{ BR.z }});transform-origin:0 0">
+                    <sc-for list="{{ BR.lines }}" as="l" hint-placeholder-count="0"><span style="position:absolute;left:{{ l.x }};top:{{ l.y }};width:{{ l.w }};height:{{ l.h }};background:rgba(255,255,255,.16)"></span></sc-for>
+                    <sc-for list="{{ BR.path }}" as="l" hint-placeholder-count="0"><span style="position:absolute;left:{{ l.x }};top:{{ l.y }};width:{{ l.w }};height:{{ l.h }};background:{{ accLight }};opacity:.85"></span></sc-for>
+                    <sc-for list="{{ BR.cards }}" as="c" hint-placeholder-count="0">
+                      <div onClick="{{ c.go }}" style="cursor:pointer;position:absolute;left:{{ c.x }};top:{{ c.y }};width:{{ c.w }};height:{{ c.h }};box-sizing:border-box;border-radius:9px;background:{{ c.bg }};box-shadow:{{ c.ring }};opacity:{{ c.op }};transition:opacity .2s;overflow:hidden;display:flex;flex-direction:column">
+                        <sc-for list="{{ c.rows }}" as="sd" hint-placeholder-count="2"><div style="flex:1;min-height:0;display:grid;grid-template-columns:{{ BR.rowCols }};gap:8px;align-items:center;padding:0 10px;overflow:hidden;box-shadow:{{ sd.line }}"><span style="font:500 10.5px/1 Consolas,ui-monospace,monospace;color:#61779a;text-align:right">{{ sd.seed }}</span><sc-if value="{{ BR.soloMode }}" hint-placeholder-val="{{ true }}"><span style="width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:{{ sd.avBg }};box-shadow:0 0 0 1px rgba(255,255,255,.14);font:700 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ sd.avT }}</span></sc-if><sc-if value="{{ BR.teamsMode }}" hint-placeholder-val="{{ false }}"><span style="width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ sd.crestBg }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ sd.crest }}</span></sc-if><div style="min-width:0;display:flex;align-items:center;gap:8px"><span style="flex:1;display:flex;align-items:center;gap:6px;min-width:0"><span style="min-width:0;font:{{ sd.w }} 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:{{ sd.c }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sd.name }}</span><sc-if value="{{ sd.me }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font:700 9.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ accLight }}">TÚ</span></sc-if></span><sc-if value="{{ sd.hasMem }}" hint-placeholder-val="{{ false }}"><span style="flex:none;display:flex;align-items:center;gap:3px"><sc-for list="{{ sd.mem }}" as="mm" hint-placeholder-count="3"><span title="{{ mm.n }}" style="flex:none;width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:#2c4560;box-shadow:{{ mm.ring }};font:700 9px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ mm.i }}</span></sc-for></span></sc-if></div><sc-if value="{{ sd.num }}" hint-placeholder-val="{{ false }}"><span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:{{ sd.nc }}">{{ sd.num }}</span></sc-if><sc-if value="{{ sd.tag }}" hint-placeholder-val="{{ false }}"><span style="height:18px;padding:0 7px;border-radius:9px;display:flex;align-items:center;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:700 9.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ sd.tc }}">{{ sd.tag }}</span></sc-if></div></sc-for>
+                        <sc-if value="{{ c.live }}" hint-placeholder-val="{{ false }}"><span title="Jugándose ahora" style="position:absolute;right:7px;top:7px;width:7px;height:7px;border-radius:4px;background:#4fd68a;box-shadow:0 0 0 3px rgba(79,214,138,.22)"></span></sc-if>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ BR.champ }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:{{ BR.champ.x }};top:{{ BR.champ.y }};width:200px;box-sizing:border-box;padding:18px 16px 16px;border-radius:14px;background:{{ BR.champ.bg }};box-shadow:inset 0 0 0 1.5px {{ BR.champ.ring }},0 0 38px {{ BR.champ.glow }};display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center"><span style="width:46px;height:54px;box-sizing:border-box;padding-bottom:7px;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ BR.champ.grad }};display:flex;align-items:center;justify-content:center;font:700 20px/1 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 1px 4px rgba(0,0,0,.5)">{{ BR.champ.ini }}</span><span style="font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ accLight }}">CAMPEÓN</span><span style="font:700 22px/1.15 'Source Serif 4',Georgia,serif;color:#ffffff;text-shadow:0 2px 10px rgba(0,0,0,.5)">{{ BR.champ.name }}</span><span style="font:400 12px/1.35 'Segoe UI',system-ui,sans-serif;color:#dce7f5;text-wrap:pretty">{{ BR.champ.sub }}</span></div></sc-if>
+                  </div>
+                </div>
+              </div>
+              <sc-if value="{{ PK.open }}" hint-placeholder-val="{{ false }}"><div style="flex:none;width:300px;box-sizing:border-box;padding:14px 16px;background:rgba(12,22,38,.62);box-shadow:inset 1px 0 0 rgba(255,255,255,.08);display:flex;flex-direction:column;gap:12px;overflow:auto">
+                  <div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font:700 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">{{ PK.round }}</span><span onClick="{{ closePick }}" title="Cerrar" style="cursor:pointer;width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">✕</span></div>
+                  <sc-for list="{{ PK.sides }}" as="ps" hint-placeholder-count="2"><div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;background:{{ ps.bg }};box-shadow:inset 0 0 0 1px {{ ps.ring }}"><span style="flex:none;width:30px;height:30px;border-radius:{{ ps.r }};display:flex;align-items:center;justify-content:center;background:{{ ps.av }};font:700 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ ps.ini }}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:600 13.5px/1.35 'Segoe UI',system-ui,sans-serif;color:{{ ps.c }};text-wrap:pretty">{{ ps.name }}</span><span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ ps.sub }}</span></div><sc-if value="{{ ps.res }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font:700 12px/1 Consolas,ui-monospace,monospace;color:{{ ps.rc }}">{{ ps.res }}</span></sc-if></div></sc-for>
+                  <span style="display:flex;align-items:center;gap:8px;font:600 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:{{ PK.sc }}"><span style="flex:none;width:7px;height:7px;border-radius:4px;background:{{ PK.sd }}"></span>{{ PK.state }}</span>
+                  <sc-if value="{{ PK.btn }}" hint-placeholder-val="{{ false }}"><span style="cursor:pointer;white-space:nowrap;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ PK.btn }}</span></sc-if>
+                  <sc-if value="{{ PK.note }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ PK.note }}</span></sc-if>
+                  <sc-if value="{{ PK.hasOrg }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:8px;padding-top:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)"><span style="font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">COMO ORGANIZADOR</span><sc-for list="{{ PK.org }}" as="ob" hint-placeholder-count="2"><span style="cursor:pointer;white-space:nowrap;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px {{ ob.ring }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ ob.c }}">{{ ob.t }}</span></sc-for><span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ PK.orgNote }}</span></div></sc-if>
+                </div></sc-if>
+              </div>
+              <div style="flex:none;display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:9px 16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07);font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2"><span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:10px;border-radius:3px;background:{{ selBg }};box-shadow:inset 0 0 0 1px {{ selRing }}"></span>Tu partido</span><span style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:4px;background:#4fd68a"></span>Jugándose ahora</span><span style="display:flex;align-items:center;gap:6px"><span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:#8fe0b0">1</span>/<span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:#61779a">0</span> ganó / perdió</span><span>AUSENTE no se presentó · DQ descalificado · PASA sin rival</span></div>
+            </sc-if>
+            <sc-if value="{{ bracketEmpty }}" hint-placeholder-val="{{ false }}"><div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:30px;text-align:center"><span style="font:600 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Todavía no hay cuadro</span><span style="max-width:420px;font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ emptyT }}</span></div></sc-if>
+            <sc-if value="{{ isPeople }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;padding:14px 16px 18px;display:flex;flex-direction:column;gap:18px">
+                <sc-for list="{{ P.groups }}" as="g" hint-placeholder-count="2">
+                  <div style="display:flex;flex-direction:column;gap:7px">
+                    <div style="display:flex;align-items:baseline;gap:8px;padding:0 4px;flex-wrap:wrap"><span style="font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ g.c }}">{{ g.t }}</span><span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:{{ g.c }}">{{ g.n }}</span><span style="font:400 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ g.hint }}</span></div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax({{ g.min }},1fr));gap:8px">
+                      <sc-for list="{{ g.rows }}" as="p" hint-placeholder-count="6"><div style="display:grid;grid-template-columns:22px 30px minmax(0,1fr) auto;gap:9px;align-items:center;min-height:54px;box-sizing:border-box;padding:8px 10px;border-radius:9px;background:{{ p.bg }};box-shadow:inset 0 0 0 1px {{ p.ring }}"><span style="font:600 11px/1 Consolas,ui-monospace,monospace;color:#8C9CB1;text-align:right">{{ p.seed }}</span><span style="width:30px;height:30px;border-radius:{{ p.avR }};display:flex;align-items:center;justify-content:center;background:{{ p.av }};font:700 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ p.ini }}</span><div style="min-width:0;display:flex;flex-direction:column;gap:3px"><span style="display:flex;align-items:center;gap:7px;min-width:0"><span style="min-width:0;font:600 13px/1.4 'Segoe UI',system-ui,sans-serif;color:{{ p.nc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span><sc-if value="{{ p.me }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:{{ accLight }}">TÚ</span></sc-if></span><sc-if value="{{ p.hasMem }}" hint-placeholder-val="{{ false }}"><span style="display:flex;flex-wrap:wrap;gap:4px;padding:1px 0"><sc-for list="{{ p.mem }}" as="mm" hint-placeholder-count="3"><span style="height:20px;padding:0 7px;border-radius:10px;display:flex;align-items:center;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px {{ mm.ring }};font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">{{ mm.t }}</span></sc-for></span></sc-if><span style="display:flex;align-items:center;gap:6px;min-width:0;font:500 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:{{ p.sc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="flex:none;width:6px;height:6px;border-radius:3px;background:{{ p.sd }}"></span>{{ p.st }}</span></div><div style="display:flex;flex-direction:column;gap:5px"><sc-for list="{{ p.acts }}" as="b" hint-placeholder-count="0"><span onClick="{{ b.go }}" style="cursor:pointer;white-space:nowrap;height:28px;box-sizing:border-box;padding:0 11px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.c }}">{{ b.t }}</span></sc-for></div></div></sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ P.empty }}" hint-placeholder-val="{{ false }}"><div style="padding:40px 20px;text-align:center;font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ P.empty }}</div></sc-if>
+              </div>
+            </sc-if>
+            <sc-if value="{{ isOrg }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;align-content:start">
+                <sc-for list="{{ O }}" as="o" hint-placeholder-count="3">
+                  <div style="padding:14px 16px;border-radius:12px;background:rgba(10,19,33,.55);box-shadow:inset 0 0 0 1px {{ o.ring }};display:flex;flex-direction:column;gap:10px">
+                    <span style="font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ o.tc }}">{{ o.t }}</span>
+                    <span style="font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ o.d }}</span>
+                    <sc-if value="{{ o.hasChips }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ o.chips }}" as="ch" hint-placeholder-count="1"><span style="height:28px;padding:0 6px 0 4px;border-radius:14px;display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><span style="width:20px;height:20px;border-radius:10px;background:#3f6a8a;display:flex;align-items:center;justify-content:center;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">{{ ch.i }}</span>{{ ch.t }}<span style="cursor:pointer;width:20px;text-align:center;color:#8C9CB1">✕</span></span></sc-for></div></sc-if>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:4px"><sc-for list="{{ o.btns }}" as="b" hint-placeholder-count="1"><span style="cursor:pointer;white-space:nowrap;min-width:200px;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px {{ b.ring }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.c }}">{{ b.t }}</span></sc-for></div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;ventana&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;1366×768&quot;,&quot;1600×960&quot;,&quot;1920×1080&quot;],&quot;default&quot;:&quot;1600×960&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { sel: 'copa', tab: {}, list: true, filter: 'all', zoom: 100, req: {}, q: '', pick: null };
+  scRef = React.createRef();
+  renderVals() {
+    const s = this.state, set = o => this.setState(o);
+    const [W, H] = ({ '1366×768': [1366, 768], '1600×960': [1600, 960], '1920×1080': [1920, 1080] })[this.props.ventana ?? '1600×960'] || [1600, 960];
+    const lvl = this.props.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px' }, 'Media': { bg: 'rgba(10,19,33,.5)', blur: '16px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px' } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px' };
+    const NAVY = '#0f1c2e';
+    const compact = H < 900, q = (s.q || '').trim().toLowerCase();
+    const hx = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const toHex = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+    const mix = (a, b, t) => { const A = hx(a), B = hx(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+    const al = (h, a) => 'rgba(' + hx(h).join(',') + ',' + a + ')';
+    const lum = h => { const c = hx(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+    const con = (a, b) => { const A = lum(a) + .05, B = lum(b) + .05; return Math.max(A, B) / Math.min(A, B); };
+    const accText = a => { let t = .3, c = mix(a, '#ffffff', t); while (con(c, NAVY) < 5 && t < .9) { t += .08; c = mix(a, '#ffffff', t); } return c; };
+    const MODS = { wol: ['Wars of Liberty', '#c8102e', 1], 'hundred-days': ['Hundred Days', '#a37c42', 1], 'improvement-mod': ['Improvement Mod', '#3a8cd9', 0], 'aoe3-tad': ['The Asian Dynasties', '#caa14a', 1], 'the-ottoman-empire': ['The Ottoman Empire', '#b83932', 1] };
+    const icon = id => 'url(mods/' + id + '/icon.png) center/cover no-repeat, #1a2c48';
+    const NAMES = ['Mariscal', 'Aluclown', 'Rioplatense', 'TercioViejo', 'Vandalia', 'ElNorte', 'Sombrerete', 'Cuzco', 'Malinche', 'Gorgo', 'Bicorne', 'Zanjón', 'PatagonBravo', 'Almirante', 'Chasqui', 'Filibustero', 'Kaiser', 'Geaf_Argento', 'UnstoppableStreletsy', 'El Taita', 'NathanR06', 'alexari2040', 'Jenízaro', 'Granadero', 'Corsario', 'Lancero', 'Mosquetero', 'Húsar', 'Coracero', 'Fusilero', 'Artillero', 'Dragón'];
+    const TEAMS = [['Los Andes', ['Gorgo', 'Cuzco', 'Malinche']], ['Guardia Vieja', ['Mariscal', 'Bicorne', 'Almirante']], ['Compañía de Indias', ['Aluclown', 'Corsario', 'Lancero']], ['Hermandad del Sur', ['Rioplatense', 'PatagonBravo', 'Chasqui']], ['Tercio de Flandes', ['TercioViejo', 'Mosquetero', 'Húsar']], ['Granaderos a Caballo', ['Granadero', 'ElNorte', 'Zanjón']], ['Los Libertadores', ['Kaiser', 'Geaf_Argento', 'El Taita']], ['Coraceros del Plata', ['Coracero', 'Fusilero', 'Artillero']]];
+    const SKIP = ['de', 'del', 'a', 'la', 'las', 'el'];
+    const ini2 = n => n.split(' ').filter(w => !SKIP.includes(w.toLowerCase())).slice(0, 2).map(w => w.charAt(0).toUpperCase()).join('');
+    const TEAMC = ['#3f6a8a', '#6a4f8a', '#3f7a6a', '#8a5a3f', '#5a6b8c', '#7a3f4f', '#4f6b3f', '#6b5a3f'];
+    const AV = { NathanR06: 'url(avatars/nathan.png) center/cover no-repeat' };
+    const RN = m => ({ 1: 'Final', 2: 'Semifinal', 4: 'Cuartos', 8: 'Octavos', 16: 'Dieciseisavos', 32: 'Treintaidosavos' })[m] || 'Ronda';
+    const order = n => n === 1 ? [1] : order(n / 2).flatMap(x => [x, n + 1 - x]);
+    const upset = (a, b) => (a * 7 + b * 3) % 5 === 0;
+    const build = (cap, count, cfg) => {
+      const R = Math.log2(cap), ord = order(cap), rounds = [];
+      for (let r = 0; r < R; r++) {
+        const m = cap / Math.pow(2, r + 1), arr = [];
+        for (let p = 0; p < m; p++) {
+          let a, b;
+          if (r === 0) { a = ord[2 * p] <= count ? ord[2 * p] : null; b = ord[2 * p + 1] <= count ? ord[2 * p + 1] : null; }
+          else { a = rounds[r - 1][2 * p].win || 0; b = rounds[r - 1][2 * p + 1].win || 0; }
+          if (r === 0 && (a == null) !== (b == null)) { arr.push({ r, p, a, b, win: a ?? b, state: 'bye' }); continue; }
+          const st = cfg(r, p);
+          let win = 0;
+          if (st.state === 'done' && a && b) win = st.out && st.out !== 'played' ? Math.min(a, b) : (upset(a, b) ? Math.max(a, b) : Math.min(a, b));
+          arr.push({ r, p, a, b, win, ...st });
+        }
+        rounds.push(arr);
+      }
+      return rounds;
+    };
+    const T = [
+      { id: 'copa', name: 'Copa de Octubre', mod: 'wol', fmt: '1v1', cap: 32, count: 29, status: 'running', mine: false, org: 'Kaiser', me: 10, cur: 1,
+        cfg: (r, p) => r === 0 ? { state: 'done', out: p === 3 ? 'wo' : p === 6 ? 'dq' : 'played' } : r === 1 ? ([0, 1, 4].includes(p) ? { state: 'done', out: 'played' } : (p === 2 || p === 6) ? { state: 'live' } : p === 5 ? { state: 'mine' } : { state: 'pending' }) : { state: 'pending' } },
+      { id: 'liga', name: 'Liga 3v3 de la Guardia', mod: 'hundred-days', fmt: '3v3', cap: 8, count: 8, status: 'running', mine: false, org: 'Almirante', me: 1, cur: 0, teams: true,
+        cfg: (r, p) => r === 0 ? (p === 0 ? { state: 'join' } : p === 1 ? { state: 'done', out: 'played' } : p === 2 ? { state: 'live' } : { state: 'pending' }) : { state: 'pending' } },
+      { id: 'casa', name: 'Torneo de la Casa', mod: 'wol', fmt: '1v1', cap: 8, count: 8, status: 'running', mine: true, org: 'Gorgo', me: 0, cur: 0,
+        cfg: (r, p) => r === 0 ? (p === 2 ? { state: 'live' } : p === 3 ? { state: 'pending' } : { state: 'done', out: 'played' }) : { state: 'pending' } },
+      { id: 'rel', name: 'Relámpago de Improvement', mod: 'improvement-mod', fmt: '1v1', cap: 16, status: 'registration', mine: true, approval: true },
+      { id: 'clasico', name: 'Clásico de las Dinastías', mod: 'aoe3-tad', fmt: '1v1', cap: 8, count: 8, status: 'finished', mine: false, org: 'Mariscal', cur: 3, cfg: () => ({ state: 'done', out: 'played' }) },
+      { id: 'invierno', name: 'Copa de Invierno', mod: 'the-ottoman-empire', fmt: '2v2', cap: 16, status: 'draft', mine: true }
+    ];
+    const REL = { ok: ['Kaiser', 'Aluclown', 'Mariscal', 'Cuzco', 'Bicorne', 'Almirante', 'Chasqui', 'Zanjón', 'ElNorte'], pend: ['Rioplatense', 'TercioViejo', 'Malinche'], out: ['Vandalia'] };
+    const relPend = REL.pend.filter(n => !s.req[n]), relOk = [...REL.ok, ...REL.pend.filter(n => s.req[n] === 'ok')], relOut = [...REL.out.map(n => [n, 'Se retiró']), ...REL.pend.filter(n => s.req[n] === 'no').map(n => [n, 'Rechazado'])];
+    const ST = { draft: ['Borrador', '#8C9CB1', '#c3d2e5'], registration: ['Inscripción abierta', '#55ACEE', '#9fd2f6'], ready: ['Semillas', '#55ACEE', '#9fd2f6'], running: ['En curso', '#4fd68a', '#8fe0b0'], finished: ['Terminado', '#8C9CB1', '#c3d2e5'] };
+    const t = T.find(x => x.id === s.sel) || T[0];
+    const [modName, acc, hero] = MODS[t.mod];
+    const accLight = accText(acc), selBg = mix(acc, NAVY, .58), selRing = al(acc, .65);
+    const nameOf = seed => { if (!seed) return '—'; const v = t.teams ? TEAMS[seed - 1] : NAMES[seed - 1]; return v ? (t.teams ? v[0] : v) : '—'; };
+    const rounds = t.cfg ? build(t.cap, t.count, t.cfg) : null;
+    const R = Math.log2(t.cap);
+    const mineMatch = rounds ? rounds.flat().find(m => (m.state === 'mine' || m.state === 'join') && (m.a === t.me || m.b === t.me)) : null;
+    const final = rounds ? rounds[R - 1][0] : null, champ = t.status === 'finished' && final && final.win ? final.win : 0;
+    const pendCount = t.id === 'rel' ? relPend.length : 0;
+    const rowsList = T.filter(x => s.filter === 'all' || x.status === s.filter).map(x => {
+      const [, xa, xh] = MODS[x.mod]; const on = x.id === t.id;
+      const xr = x.cfg ? build(x.cap, x.count, x.cfg) : null, xf = xr ? xr[Math.log2(x.cap) - 1][0] : null;
+      const sub = x.status === 'running' ? 'En curso · ' + RN(x.cap / Math.pow(2, x.cur + 1)) : x.status === 'registration' ? 'Inscripción · ' + (x.id === 'rel' ? relOk.length : 0) + '/' + x.cap : x.status === 'finished' ? 'Terminado · ganó ' + (xf && xf.win ? (x.teams ? TEAMS[xf.win - 1][0] : NAMES[xf.win - 1]) : '—') : 'Borrador';
+      const alert = x.id === 'copa' ? 'Te toca jugar' : x.id === 'liga' ? 'Tu rival te espera' : x.id === 'rel' && relPend.length ? relPend.length + (relPend.length === 1 ? ' solicitud' : ' solicitudes') : '';
+      return { grp: x.me ? 0 : x.mine ? 1 : 2, urg: alert ? 0 : 1, name: x.name, icon: icon(x.mod), sub: sub + ' · ' + x.fmt, dot: ST[x.status][1], mine: !!x.mine, alert, alertC: x.id === 'rel' ? '#F5BD76' : accText(xa), bg: on ? mix(xa, NAVY, .58) : 'transparent', ring: on ? 'inset 0 0 0 1px ' + al(xa, .6) : 'none', iconRing: on ? '0 0 0 2px ' + accText(xa) : 'none', pick: () => set({ sel: x.id }) };
+    });
+    const FILT = [['all', 'Todos'], ['registration', 'Inscripción'], ['running', 'En curso'], ['finished', 'Terminados']].map(([k, tt]) => { const on = s.filter === k; return { t: tt, n: k === 'all' ? T.length : T.filter(x => x.status === k).length, pick: () => set({ filter: k }), bg: on ? '#233a5c' : 'rgba(10,19,33,.5)', ring: on ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.1)', c: on ? '#ffffff' : '#a8bcd2', w: on ? 600 : 500, nc: on ? '#c3d2e5' : '#8C9CB1' }; });
+    const stIdx = { draft: 0, registration: 1, ready: 2, running: 3, finished: 4 }[t.status];
+    const steps = ['Creado', 'Inscripción', 'Semillas', 'En curso', 'Terminado'].map((x, i) => ({ t: x, g: i < stIdx || (t.status === 'finished' && i === 4) ? '✓' : i === stIdx ? '●' : '○', bg: i === stIdx ? 'rgba(10,19,33,.7)' : 'rgba(10,19,33,.45)', ring: i === stIdx ? al(acc, .7) : 'rgba(255,255,255,.1)', c: i === stIdx ? accLight : i < stIdx ? '#c3d2e5' : '#8C9CB1' }));
+    const meta = { copa: '1v1 · 32 plazas · 29 inscritos · ronda 2 de 5 · organiza Kaiser', liga: '3v3 · 8 equipos · ronda 1 de 3 · organiza Almirante', rel: '1v1 · 16 plazas · con aprobación · organizas tú', clasico: '1v1 · 8 plazas · organizó Mariscal', casa: '1v1 · 8 plazas · ronda 1 de 3 · organizas tú', invierno: '2v2 · 16 equipos · organizas tú' }[t.id];
+    const opp = mineMatch ? nameOf(mineMatch.a === t.me ? mineMatch.b : mineMatch.a) : '', oppSeed = mineMatch ? (mineMatch.a === t.me ? mineMatch.b : mineMatch.a) : 0;
+    const A = (({
+      copa: () => ({ kicker: 'TE TOCA JUGAR · ' + RN(16 / 2).toUpperCase(), vs: { meI: 'G', meN: 'Gorgo', meS: '10', meT: 'Tú', opI: opp.charAt(0), opN: opp, opS: String(oppSeed), opT: 'Rival', r: '16px', opBg: '#3f6a8a' }, btn: 'Abrir mi sala', btnNote: 'Solo entran ustedes dos.' }),
+      liga: () => ({ kicker: 'TU RIVAL ABRIÓ LA SALA · CUARTOS', vs: { meI: 'LA', meN: 'Los Andes', meS: '1', meT: 'Tu equipo', opI: ini2(opp), opN: opp, opS: String(oppSeed), opT: 'Rival', r: '9px', opBg: TEAMC[(oppSeed - 1) % 8] }, btnNote: 'Solo entran los dos equipos.', warn: 'En el juego, Los Andes va en el equipo 1 y ' + opp + ' en el 2. Si no coinciden, la partida no cuenta.', btn: 'Entrar en la sala' }),
+      casa: () => ({ kicker: 'ORGANIZAS ESTE TORNEO', title: 'Cuartos en juego', sub: 'Pulsa un partido del cuadro para resolverlo: dar la victoria si alguien no se presentó, repetirlo o descalificar.', btn: '' }),
+      rel: () => ({ kicker: 'INSCRIPCIÓN ABIERTA · ' + relOk.length + ' DE 16', title: relPend.length ? relPend.length + (relPend.length === 1 ? ' solicitud por decidir' : ' solicitudes por decidir') : 'No quedan solicitudes por decidir', sub: 'Al cerrarla se reparten las semillas y el torneo puede empezar.', btn: 'Cerrar inscripción' }),
+      clasico: () => ({ champ: true, champName: nameOf(champ), champIni: nameOf(champ).charAt(0), champSub: final ? 'Ganó la final a ' + nameOf(final.a === champ ? final.b : final.a) + '.' : '', btn: '' }),
+      invierno: () => ({ kicker: 'BORRADOR', title: 'Nadie puede inscribirse todavía', sub: 'Abre la inscripción cuando quieras recibir equipos.', btn: 'Abrir inscripción' })
+    })[t.id] || (() => ({ kicker: '', title: '', btn: '' })))();
+    const defTab = t.id === 'rel' ? 'people' : t.id === 'invierno' ? 'org' : 'bracket';
+    const tab = s.tab[t.id] || defTab;
+    let nextT = '';
+    if (mineMatch && mineMatch.r < R - 1) {
+      const mr = mineMatch.r, op = rounds[mr][mineMatch.p ^ 1];
+      const who = op.win ? nameOf(op.win) : (op.a && op.b ? 'el ganador de ' + nameOf(op.a) + ' – ' + nameOf(op.b) : 'el ganador de ' + RN(rounds[mr].length) + ' ' + ((mineMatch.p ^ 1) + 1));
+      nextT = 'en ' + RN(rounds[mr + 1].length) + ' contra ' + who + '.';
+    }
+    const nPeople = t.id === 'rel' ? relOk.length : t.count || 0;
+    const tabs = [['bracket', 'Cuadro', ''], ['people', 'Participantes', nPeople ? String(nPeople) : ''], ...(t.mine ? [['org', 'Organizar', '']] : [])].map(([k, tt, n]) => { const on = tab === k; return { t: tt, n: k === 'people' && pendCount ? n + ' · ' + pendCount + ' por decidir' : n, nc: k === 'people' && pendCount ? '#F5BD76' : on ? '#c3d2e5' : '#8C9CB1', pick: () => set({ tab: { ...s.tab, [t.id]: k } }), bg: on ? '#233a5c' : 'transparent', c: on ? '#ffffff' : '#a8bcd2', w: on ? 600 : 500 }; });
+    const z = s.zoom / 100;
+    const pk = s.pick && s.pick.t === t.id ? s.pick.k : null;
+    const colW = t.teams ? 320 : 220, gut = 40, pad = 16, cardH = t.teams ? 74 : 60, rowH = cardH + 12, top = 8;
+    const BR = { anchors: [], heads: [], lines: [], cards: [], path: [], hits: 0, teamsMode: !!t.teams, soloMode: !t.teams, rowCols: t.teams ? '18px 26px minmax(0,1fr) auto' : '18px 20px minmax(0,1fr) auto', hasMine: !!mineMatch, champ: null, w: '0px', h: '0px', cw: '0px', ch: '0px', z: String(z) };
+    let minePos = null;
+    const scroll = (x, y) => { const el = this.scRef.current; if (el) el.scrollTo({ left: Math.max(0, x), top: Math.max(0, y), behavior: 'smooth' }); };
+    if (rounds) {
+      const m0 = t.cap / 2, xOf = r => pad + r * (colW + gut), cy = (r, p) => top + (p + .5) * rowH * Math.pow(2, r);
+      const cw = pad * 2 + R * (colW + gut) - gut + (champ ? gut + 200 : 0), ch = top * 2 + m0 * rowH;
+      BR.cw = cw + 'px'; BR.ch = ch + 'px'; BR.w = Math.ceil(cw * z) + 'px'; BR.h = Math.ceil(ch * z) + 'px';
+      const pathKeys = new Set();
+      if (mineMatch) {
+        let r = mineMatch.r, p = mineMatch.p;
+        while (r < R - 1) {
+          const nr = r + 1, np = Math.floor(p / 2), xr = xOf(r) + colW, xm = xr + gut / 2, yf = cy(r, p), yc2 = cy(nr, np);
+          BR.path.push({ x: xr + 'px', y: (yf - .5) + 'px', w: gut / 2 + 'px', h: '2px' }, { x: (xm - .5) + 'px', y: Math.min(yf, yc2) + 'px', w: '2px', h: Math.abs(yc2 - yf) + 'px' }, { x: xm + 'px', y: (yc2 - .5) + 'px', w: gut / 2 + 'px', h: '2px' });
+          pathKeys.add(nr + '-' + np); r = nr; p = np;
+        }
+      } else if (champ) {
+        rounds.forEach((arr, r) => {
+          if (r >= R - 1) return;
+          const mt = arr.find(m => m.a === champ || m.b === champ); if (!mt) return;
+          const p = mt.p, nr = r + 1, np = Math.floor(p / 2), xr = xOf(r) + colW, xm = xr + gut / 2, yf = cy(r, p), yc2 = cy(nr, np);
+          BR.path.push({ x: xr + 'px', y: (yf - .5) + 'px', w: gut / 2 + 'px', h: '2px' }, { x: (xm - .5) + 'px', y: Math.min(yf, yc2) + 'px', w: '2px', h: Math.abs(yc2 - yf) + 'px' }, { x: xm + 'px', y: (yc2 - .5) + 'px', w: gut / 2 + 'px', h: '2px' });
+          pathKeys.add(r + '-' + p); pathKeys.add(nr + '-' + np);
+        });
+      }
+      rounds.forEach((arr, r) => {
+        const m = arr.length;
+        BR.heads.push({ t: RN(m).toUpperCase(), n: m + (m === 1 ? ' partido' : ' partidos'), c: r === t.cur && t.status === 'running' ? accLight : '#c3d2e5', w: ((r === 0 ? pad : 0) + colW + gut) * z + 'px', pl: (r === 0 ? pad : 0) * z + 'px' });
+        BR.anchors.push({ t: RN(m), now: r === t.cur && t.status === 'running', c: r === t.cur && t.status === 'running' ? '#ffffff' : '#c3d2e5', ring: r === t.cur && t.status === 'running' ? al(acc, .7) : 'rgba(255,255,255,.12)', go: () => scroll(xOf(r) * z - 12, 0) });
+        arr.forEach(mt => {
+          const x = xOf(r), yc = cy(r, mt.p), mine = mt.state === 'mine' || mt.state === 'join';
+          if (r > 0) {
+            const y1 = cy(r - 1, 2 * mt.p), y2 = cy(r - 1, 2 * mt.p + 1), xr = xOf(r - 1) + colW, xm = xr + gut / 2;
+            BR.lines.push({ x: xr + 'px', y: y1 + 'px', w: gut / 2 + 'px', h: '1px' }, { x: xr + 'px', y: y2 + 'px', w: gut / 2 + 'px', h: '1px' }, { x: xm + 'px', y: y1 + 'px', w: '1px', h: (y2 - y1) + 'px' }, { x: xm + 'px', y: yc + 'px', w: gut / 2 + 'px', h: '1px' });
+          }
+          const side = (seed, other, fi) => {
+            if (seed == null) return null;
+            const known = seed > 0, done = mt.state === 'done' && known && mt.win;
+            const won = done && mt.win === seed, lost = done && mt.win !== seed;
+            let num = '', tag = '', tc = '#c3d2e5';
+            if (mt.state === 'bye') { tag = 'PASA'; }
+            else if (done) { if (mt.out === 'wo') { if (won) { num = '✓'; } else { tag = 'AUSENTE'; tc = '#F5BD76'; } } else if (mt.out === 'dq') { if (won) { tag = 'DQ'; tc = '#f0a6a6'; } } else num = won ? '1' : '0'; }
+            const tm = t.teams && known ? TEAMS[seed - 1] : null;
+            const nm = known ? nameOf(seed) : '';
+            return { avBg: known ? (AV[nm] || (seed === t.me ? acc : '#3f6a8a')) : 'rgba(255,255,255,.06)', avT: known && !AV[nm] ? nm.charAt(0).toUpperCase() : '', seed: known ? String(seed) : '', name: known ? nameOf(seed) : 'Ganador de ' + RN(rounds[r - 1].length) + ' ' + (2 * mt.p + fi + 1), me: known && seed === t.me, members: tm ? tm[1].join(' ') : '', hasMem: !!tm, mem: tm ? tm[1].map((n, i) => ({ i: n.charAt(0).toUpperCase(), n: n + (i === 0 ? ' (capitán)' : ''), ring: i === 0 ? '0 0 0 1.5px ' + accLight : '0 0 0 1px rgba(255,255,255,.18)' })) : [], capT: tm ? 'cap. ' + tm[1][0] : '', crest: tm ? ini2(tm[0]) : '', crestBg: tm ? (seed === t.me ? acc : TEAMC[(seed - 1) % 8]) : 'rgba(255,255,255,.05)', c: !known ? '#8C9CB1' : won ? '#f0f5fb' : lost ? '#8C9CB1' : '#dce7f5', w: won ? 700 : 500, num, nc: won ? '#8fe0b0' : '#61779a', tag, tc };
+          };
+          const sides = [side(mt.a, mt.b, 0), side(mt.b, mt.a, 1)].filter(Boolean).map((sd, i, a) => ({ ...sd, line: i < a.length - 1 ? 'inset 0 -1px 0 rgba(255,255,255,.08)' : 'none' }));
+          const h = mt.state === 'bye' ? cardH / 2 + 2 : cardH;
+          if (mine) minePos = { x, y: yc - h / 2 };
+          const hit = !!q && sides.some(sd => (sd.name + ' ' + sd.members).toLowerCase().includes(q));
+          if (hit) BR.hits++;
+          const onPath = pathKeys.has(r + '-' + mt.p), picked = pk === r + '-' + mt.p;
+          BR.cards.push({ x: x + 'px', y: (yc - h / 2) + 'px', w: colW + 'px', h: h + 'px', rows: sides, live: mt.state === 'live', op: q ? (hit ? 1 : .3) : 1, bg: mine ? selBg : mt.state === 'bye' ? 'rgba(18,33,58,.55)' : '#12213a', go: () => set({ pick: picked ? null : { t: t.id, k: r + '-' + mt.p } }), ring: picked ? 'inset 0 0 0 2px ' + accLight : hit ? 'inset 0 0 0 2px #ffffff' : mine ? 'inset 0 0 0 1px ' + selRing : mt.state === 'live' ? 'inset 0 0 0 1px rgba(79,214,138,.6)' : onPath ? 'inset 0 0 0 1px ' + al(acc, .4) : 'inset 0 0 0 1px rgba(255,255,255,.1)' });
+        });
+      });
+      if (champ) {
+        const xr = xOf(R - 1) + colW, yc = cy(R - 1, 0);
+        BR.path.push({ x: xr + 'px', y: (yc - .5) + 'px', w: gut + 'px', h: '2px' });
+        const fo = final.a === champ ? final.b : final.a;
+        BR.champ = { x: (xr + gut) + 'px', y: (yc - 82) + 'px', name: nameOf(champ), ini: nameOf(champ).charAt(0), sub: 'Ganó la final a ' + nameOf(fo) + '.', bg: 'radial-gradient(120% 90% at 50% 0%, ' + al(acc, .5) + ', transparent 70%), ' + mix(acc, NAVY, .62), ring: al(accLight, .85), glow: al(acc, .45), grad: 'linear-gradient(160deg, ' + mix(accLight, '#ffffff', .3) + ', ' + acc + ' 60%, ' + mix(acc, '#000000', .55) + ')' };
+        BR.heads.push({ t: 'CAMPEÓN', n: '', c: accLight, w: 200 * z + 'px', pl: '0px' });
+      }
+    }
+    let PK = { open: false, sides: [], round: '', state: '', sc: '#c3d2e5', sd: '#8C9CB1', btn: '', note: '', hasOrg: false, org: [], orgNote: '' };
+    if (pk && rounds) {
+      const [pr, pp] = pk.split('-').map(Number), mt = rounds[pr] && rounds[pr][pp];
+      if (mt) {
+        const done = mt.state === 'done' && mt.win;
+        const ps = (seed, fi) => {
+          if (seed == null) return null;
+          if (!seed) return { name: 'Ganador de ' + RN(rounds[pr - 1].length) + ' ' + (2 * pp + fi + 1), sub: 'Todavía no se sabe quién', ini: '?', av: '#2c3e55', r: t.teams ? '8px' : '15px', c: '#a8bcd2', bg: 'rgba(10,19,33,.35)', ring: 'rgba(255,255,255,.08)', res: '', rc: '#61779a' };
+          const me = seed === t.me, won = done && mt.win === seed, tm = t.teams ? TEAMS[seed - 1] : null;
+          let res = '', rc = '#61779a';
+          if (mt.state === 'bye') { res = 'PASA'; rc = '#c3d2e5'; } else if (done) { if (mt.out === 'wo') { if (won) { res = '✓'; rc = '#8fe0b0'; } else { res = 'AUSENTE'; rc = '#F5BD76'; } } else if (mt.out === 'dq') { if (won) { res = 'DQ'; rc = '#f0a6a6'; } } else { res = won ? '1' : '0'; rc = won ? '#8fe0b0' : '#61779a'; } }
+          return { name: nameOf(seed), sub: 'Semilla ' + seed + (tm ? ' · ' + tm[1].map((n, i) => i === 0 ? n + ' (cap.)' : n).join(', ') : ''), ini: tm ? ini2(tm[0]) : AV[nameOf(seed)] ? '' : nameOf(seed).charAt(0), av: !tm && AV[nameOf(seed)] ? AV[nameOf(seed)] : me ? acc : tm ? TEAMC[(seed - 1) % 8] : '#3f6a8a', r: t.teams ? '8px' : '15px', c: done && !won ? '#a8bcd2' : '#ffffff', bg: me ? selBg : won ? 'rgba(79,214,138,.08)' : 'rgba(10,19,33,.45)', ring: me ? selRing : won ? 'rgba(79,214,138,.35)' : 'rgba(255,255,255,.08)', res, rc };
+        };
+        const sides = [ps(mt.a, 0), ps(mt.b, 1)].filter(Boolean);
+        const wn = mt.win ? nameOf(mt.win) : '', ln = done ? nameOf(mt.win === mt.a ? mt.b : mt.a) : '';
+        let state = 'Por jugar', sc = '#c3d2e5', sd = '#8C9CB1', btn = '', note = '';
+        if (mt.state === 'bye') { state = wn + ' pasa sin rival'; }
+        else if (mt.state === 'live') { state = 'Jugándose ahora'; sc = '#8fe0b0'; sd = '#4fd68a'; btn = 'Ver partida'; note = 'La sala solo admite a los dos ' + (t.teams ? 'equipos' : 'jugadores') + ' del cruce. Puedes verla desde fuera.'; }
+        else if (mt.state === 'mine') { state = 'Te toca jugar'; sc = accLight; sd = accLight; note = 'Ábrela con «Abrir mi sala», arriba.'; }
+        else if (mt.state === 'join') { state = 'Tu rival abrió la sala'; sc = accLight; sd = accLight; note = 'Entra con «Entrar en la sala», arriba.'; }
+        else if (done) { state = mt.out === 'wo' ? 'Ganó ' + wn + ': ' + ln + ' no se presentó' : mt.out === 'dq' ? 'Ganó ' + wn + ': ' + ln + ' fue descalificado' : 'Terminado · ganó ' + wn; sc = '#dce7f5'; sd = '#8fe0b0'; }
+        else if (!mt.a || !mt.b) { state = 'Esperando a la ronda anterior'; }
+        const isOrg = t.mine && t.status === 'running', SEC = 'rgba(130,175,255,.22)';
+        const org = !isOrg || mt.state === 'bye' ? [] : done ? [{ t: 'Repetir partido', c: '#dce7f5', ring: SEC }] : (mt.a && mt.b) ? [{ t: 'Dar la victoria a ' + nameOf(mt.a), c: '#dce7f5', ring: SEC }, { t: 'Dar la victoria a ' + nameOf(mt.b), c: '#dce7f5', ring: SEC }, { t: 'Descalificar…', c: '#f0a6a6', ring: 'rgba(200,74,74,.6)' }] : [];
+        PK = { open: true, round: RN(rounds[pr].length).toUpperCase() + ' · PARTIDO ' + (pp + 1), sides, state, sc, sd, btn, note, hasOrg: org.length > 0, org, orgNote: done ? 'Se vuelve a jugar desde cero.' : 'Úsalo si el rival no se presentó. Un resultado dado no se puede deshacer.' };
+      }
+    }
+    const outRound = seed => { if (!rounds) return null; for (const arr of rounds) for (const mt of arr) if ((mt.a === seed || mt.b === seed) && mt.state === 'done' && mt.win && mt.win !== seed) return [mt.r, mt.out]; return null; };
+    const statusOf = seed => {
+      if (t.status === 'finished') { if (seed === champ) return ['Campeón', '#8fe0b0', '#4fd68a']; const o = outRound(seed); return o && o[0] === R - 1 ? ['Finalista', '#dce7f5', '#c3d2e5'] : ['Fuera en ' + RN(rounds[o[0]].length), '#a8bcd2', '#61779a']; }
+      const o = outRound(seed);
+      if (!o) return ['Sigue · ' + RN(t.cap / Math.pow(2, t.cur + 1)), '#8fe0b0', '#4fd68a'];
+      if (o[1] === 'wo') return ['No se presentó · ' + RN(rounds[o[0]].length), '#F5BD76', '#F4900C'];
+      if (o[1] === 'dq') return ['Descalificado · ' + RN(rounds[o[0]].length), '#f0a6a6', '#c84a4a'];
+      return ['Fuera en ' + RN(rounds[o[0]].length), '#a8bcd2', '#61779a'];
+    };
+    const prow = (seed, name, st, extra = {}) => { const me = name === 'Gorgo' || (t.teams && seed === t.me); return { seed: seed ? String(seed) : '—', name, me, ini: AV[name] ? '' : name.charAt(0).toUpperCase(), av: AV[name] || (me ? acc : '#3f6a8a'), avR: '15px', hasMem: false, mem: [], members: '', st: st[0], sc: st[1], sd: st[2], nc: '#f0f5fb', acts: [], bg: me ? selBg : 'rgba(10,19,33,.45)', ring: me ? selRing : 'rgba(255,255,255,.08)', ...extra }; };
+    let P = { groups: [], empty: '' };
+    if (t.id === 'rel') {
+      if (relPend.length) P.groups.push({ t: 'SOLICITUDES', n: String(relPend.length), c: '#F5BD76', hint: 'Solo entran si las aceptas.', min: '300px', rows: relPend.map(n => prow(0, n, ['Pide entrar', '#F5BD76', '#F4900C'], { bg: 'rgba(244,144,12,.08)', ring: 'rgba(244,144,12,.35)', acts: [{ t: '✓ Aceptar', c: '#8fe0b0', go: () => set({ req: { ...s.req, [n]: 'ok' } }) }, { t: 'Rechazar', c: '#dce7f5', go: () => set({ req: { ...s.req, [n]: 'no' } }) }] })) });
+      P.groups.push({ t: 'DENTRO', n: relOk.length + ' de 16', c: '#c3d2e5', min: '220px', hint: 'Las semillas se reparten al cerrar la inscripción.', rows: relOk.map(n => prow(0, n, ['Confirmado', '#8fe0b0', '#4fd68a'])) });
+      if (relOut.length) P.groups.push({ t: 'FUERA DEL CUADRO', n: String(relOut.length), c: '#8C9CB1', hint: '', min: '220px', rows: relOut.map(([n, why]) => prow(0, n, [why, '#8C9CB1', '#61779a'], { nc: '#a8bcd2', bg: 'rgba(10,19,33,.28)', av: '#2c3e55' })) });
+    } else if (rounds) {
+      const seeds = Array.from({ length: t.count }, (_, i) => i + 1);
+      P.groups.push({ t: 'DENTRO', n: t.teams ? t.count + ' equipos' : String(t.count), c: '#c3d2e5', min: t.teams ? '280px' : '220px', hint: t.teams ? 'Cada equipo juega con la alineación con la que se inscribió.' : '', rows: seeds.map(sd => prow(sd, nameOf(sd), statusOf(sd), t.teams ? { members: TEAMS[sd - 1][1].join(' '), hasMem: true, mem: TEAMS[sd - 1][1].map((n, i) => ({ t: i === 0 ? n + ' ©' : n, ring: i === 0 ? al(acc, .6) : 'rgba(255,255,255,.12)' })), ini: ini2(TEAMS[sd - 1][0]), av: sd === t.me ? acc : TEAMC[(sd - 1) % 8], avR: '8px' } : {})) });
+    } else P.empty = 'La inscripción todavía no está abierta.';
+    let peopleN = 0;
+    if (q) {
+      P.groups = P.groups.map(g => ({ ...g, rows: g.rows.filter(p => (p.name + ' ' + p.members).toLowerCase().includes(q)) })).filter(g => g.rows.length);
+      P.groups.forEach(g => { peopleN += g.rows.length; });
+      if (!P.groups.length && !P.empty) P.empty = 'Nadie coincide con «' + s.q.trim() + '».';
+    }
+    const O = t.mine ? [
+      { t: 'CO-ORGANIZADORES', tc: '#a8bcd2', ring: 'rgba(255,255,255,.1)', d: 'Pueden cerrar la inscripción, repartir semillas, empezar y resolver partidos. Cancelar el torneo es solo tuyo.', hasChips: t.id === 'rel', chips: t.id === 'rel' ? [{ i: 'A', t: 'Almirante' }] : [], btns: [{ t: 'Añadir co-organizador…', c: '#dce7f5', ring: 'rgba(130,175,255,.22)' }] },
+      ...(t.status === 'running' ? [{ t: 'RESOLVER PARTIDOS', tc: '#a8bcd2', ring: 'rgba(255,255,255,.1)', d: 'Pulsa un partido en el cuadro para dar la victoria si alguien no se presentó, repetirlo o descalificar a alguien. Un resultado dado no se puede deshacer.', hasChips: false, chips: [], btns: [{ t: 'Ir al cuadro', c: '#dce7f5', ring: 'rgba(130,175,255,.22)' }] }] : []),
+      ...(t.status === 'registration' ? [{ t: 'INSCRIPCIÓN', tc: '#a8bcd2', ring: 'rgba(255,255,255,.1)', d: 'Con aprobación: cada solicitud espera a que la aceptes. Las que no decidas no entran al cerrar.', hasChips: false, chips: [], btns: [] }] : []),
+      { t: 'ZONA DE PELIGRO', tc: '#f0a6a6', ring: 'rgba(200,74,74,.45)', d: 'Cancelar el torneo no se puede deshacer.', hasChips: false, chips: [], btns: [{ t: 'Cancelar torneo', c: '#f0a6a6', ring: 'rgba(200,74,74,.6)' }] }
+    ] : [];
+    return {
+      fw: W + 'px', fh: H + 'px', G, barBg: 'rgba(11,20,34,' + (({ 'Sólida': 1, 'Media': .42, 'Máxima': .3 })[lvl] ?? .42) + ')', barBlur: lvl === 'Sólida' ? '0px' : '10px',
+      heroBg: hero ? 'url(mods/' + t.mod + '/hero.jpg) center 25%/cover no-repeat' : 'radial-gradient(1200px 800px at 85% 10%, ' + al(acc, .45) + ', transparent 70%), ' + NAVY,
+      listCol: s.list ? 'clamp(300px,21cqw,420px)' : '72px', listOpen: s.list, listClosed: !s.list, toggleList: () => set({ list: !s.list }),
+      total: String(T.length), filters: FILT, rows: rowsList,
+      listGroups: ['JUEGAS', 'ORGANIZAS', 'OTROS TORNEOS'].map((g, gi) => ({ t: g, rows: rowsList.filter(r => r.grp === gi).sort((a, b) => a.urg - b.urg) })).filter(g => g.rows.length),
+      D: { icon: icon(t.mod), modName, stT: ST[t.status][0], stDot: ST[t.status][1], stC: ST[t.status][2], mine: t.mine, name: t.name, meta, steps },
+      A: { kc: t.id === 'rel' ? '#9fd2f6' : accLight, warn: '', sub: '', ...A, vsL: al(acc, .32), champ: !!A.champ, showKicker: !A.champ, champGrad: 'linear-gradient(160deg, ' + mix(accLight, '#ffffff', .3) + ', ' + acc + ' 60%, ' + mix(acc, '#000000', .55) + ')', cardBg: A.champ ? 'radial-gradient(120% 120% at 0% 0%, ' + al(acc, .45) + ', transparent 65%), ' + mix(acc, NAVY, .64) : G.bg, cardSh: A.champ ? 'inset 0 0 0 1.5px ' + al(accLight, .85) + ', 0 0 36px ' + al(acc, .4) : 'inset 0 0 0 1px rgba(255,255,255,.12)', hasTitle: !!A.title && !A.vs, vs: A.vs || null, btnNote: A.btnNote || '', showSub: !compact && !!A.sub, next: nextT, nextPre: t.teams ? 'Si ganan: ' : 'Si ganas: ' }, acc, accLight, onAcc: con('#ffffff', acc) >= 4.5 ? '#ffffff' : NAVY, accSh: al(acc, .4), selBg, selRing,
+      tabs, isBracket: tab === 'bracket' && !!rounds, bracketEmpty: tab === 'bracket' && !rounds, emptyT: t.status === 'draft' ? 'El cuadro se arma cuando empieza el torneo. Antes hay que abrir la inscripción.' : 'El cuadro se arma al cerrar la inscripción y repartir las semillas.',
+      isPeople: tab === 'people', isOrg: tab === 'org', showTools: tab === 'bracket' && !!rounds,
+      BR, scRef: this.scRef, P, O, PK, closePick: () => set({ pick: null }),
+      titleSize: compact ? 'clamp(24px,1.8cqw,34px)' : 'clamp(28px,2.1cqw,44px)', notCompact: !compact,
+      acFlex: '1 1 520px', acPad: compact ? '12px 14px 12px 16px' : '14px 16px', acCols: A.btn ? 'minmax(0,1fr) auto' : '1fr',
+      q: s.q || '', hasQ: !!q, onQ: e => set({ q: e.target.value }), clearQ: () => set({ q: '' }), qPh: t.teams ? 'Buscar equipo o jugador' : 'Buscar jugador', qRing: q ? '#2f7fe0' : 'rgba(130,175,255,.22)',
+      qN: tab === 'bracket' ? String(BR.hits) : String(peopleN), showSearch: (tab === 'bracket' && !!rounds) || (tab === 'people' && (t.id === 'rel' || !!rounds)),
+      goMine: () => { if (minePos) scroll(minePos.x * z - 60, minePos.y * z - 80); },
+      zoomT: s.zoom + ' %', zoomOut: () => set({ zoom: Math.max(60, s.zoom - 20) }), zoomIn: () => set({ zoom: Math.min(100, s.zoom + 20) })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -521,6 +521,15 @@ rather than the reverse.
   of the window's root grid, and `DashboardBgFill` is no longer inside `PlayView`. The hero is CSS
   `center 25%/cover` through a computed `Viewbox` (`HeroCover`): the old `Stretch.Fill`, and the
   paragraph below explaining why, are gone. The hero brushes are therefore NOT frozen.
+  **What a picture costs is a decode, and it is outside the managed heap.** An image left behind
+  stays in memory until a collection a launcher at rest may not run for hours, so the cover is read
+  ONCE: `HeroBrushFor` keeps the brush of the local file on screen (`ForgetHeroBrush` when a
+  revalidation replaces the file) and `ModAssetCacheService.PrimeHeroPaths` finds the file on disk
+  before the first paint. Without those two every launch downloaded the picture it already had and
+  decoded it three times, 24 MB of the 230 at idle. `TryLoadTileImage` takes the width it is drawn
+  at (`IconDecodeWidth`, `StripDecodeWidth`), because that cache lives as long as the process and a
+  catalog icon is often 1024 px. `BitmapScalingMode` on the cover is NOT the lever: Linear measured
+  the same as HighQuality.
   (2) **The glass is one image blurred once** (`BuildBlurredCover`, 320 px wide) in
   `LibraryBlurLayer`, clipped to the panels by `UpdateLibraryBlurClip`; never a live `BlurEffect`
   behind them. The panels are SIBLINGS of the backdrop, so the clip needs `TransformToVisual`:
@@ -558,6 +567,24 @@ rather than the reverse.
   `LauncherUpdateService.MarkStaged`, one session only because `CleanupOldVersion` sweeps the staged
   file. The Radmin assistant has THREE steps and installs Radmin itself. `--preview-dialog=` also
   takes `launcherupdate:*`, `installfolder:*`, `radmin:*`, `publish:<step>`, `updatepill:*`, `bar:*`.
+
+- **Screen 103 of `docs/design_base_launcher_2` SUPERSEDES what this file says about small dialogs,
+  popups and menus.** Every small dialog derives from `Controls/BaseDialog` (bar of 40, a tone tile
+  beside a serif headline, a footer with Cancel beside the one primary button), whose
+  `[ContentProperty("Body")]` is why a derived XAML can keep its x:Names while the window's `Content`
+  is already filled. Escape and the ✕ are Cancel; Enter is the primary button except on
+  `DialogTone.Destructive`, which also makes it red (`Answer` closes, tolerating a non-modal window).
+  A dialog about a mod calls `UseMod`, tinted by that mod and not by the Library's. **There are no
+  Windows message boxes**: `ThemedConfirmDialog.Ask` / `AskThreeWay` / `Notice`, with the technical
+  text in `detail`. The two in `MultiplayerTab` stay because they answer inside `MainWindow.OnClosing`,
+  and `SmallDialogTests.THE_ONE_THAT_MATTERS_NoWindowsMessageBoxOutsideTheClosingPath` counts them.
+  **A bare `ContextMenu` IS themed now**: `Styles/Dialogs.xaml` declares the implicit styles. Header
+  popovers use `BuildSettingsRow` (32 px, no icons, a subtitle became a tooltip). Menus, popovers and
+  toasts follow the glass level through `GlassTheme.FloatingKeys`, with `Spec.Floating` denser than
+  the design's numbers: those assume a blur WPF cannot do behind a popup. `--preview-dialog=small:a..o`
+  paints each one. The two-tone rim below is now a single 1-px rim. The dialog's two glows are in
+  PIXELS (`BaseDialog.PaintGlow`, 520×340 and 420×300 as drawn), not relative to the window, which
+  in a small dialog reaches far less than the design does.
 
 - **Screen 71 of `docs/design_base_launcher` SUPERSEDES these claims further down.** LOCAL FILES is
   one card of copies with the copy in use first (no longer ordered by folder), and the other copies
@@ -7552,8 +7579,8 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   account's folder is resolved **exactly** (name → SID → `ProfileImagePath`, then
   `Directory.Exists`) or not shown at all — `C:\Users\<name>` is wrong for Microsoft
   accounts, and a plausible wrong path sends the player looking in the wrong place.
-  Surfaces: a one-time themed `CrossUserAccountDialog` (modelled on
-  `AntivirusExclusionDialog`; it **copies the paths, never opens them** — launching
+  Surfaces: a one-time themed `CrossUserAccountDialog` (it **shows the paths as selectable
+  text, never opens them** — launching
   `explorer.exe` from the elevated process opens the shell as that account again),
   which runs FIRST in `MainWindow`'s `Loaded` and **suppresses both the self-install
   offer and the tray seed balloon**, because a durable install under the wrong
@@ -9020,12 +9047,9 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `RemoveFromCollectionDialog`…) hardcodes its strings, so the repair's download-cost question and
   the low-disk-space warning straight after it (`DiskSpacePrompt`, five callers) stayed white in a
   dark flow. Only the confirm button answers yes; Cancel, ✕ and Escape are all no, which is the
-  `MessageBox` contract those callers were written against. Its buttons are `DialogButton` +
-  `PrimaryButton`, **not** `SidebarPrimaryButton`: that template paints its own gold gradient and
-  ignores `Background`, so the `Background="#3a3d44"` the older prompts put on their "No" button
-  does nothing and both of their buttons render gold. About twenty `MessageBox` calls remain and
-  were left alone on purpose, including the two in `MultiplayerTab` that MUST stay one (they run
-  synchronously inside `MainWindow.OnClosing`, which needs the answer before it returns). Pinned by
+  `MessageBox` contract those callers were written against. The only `MessageBox` calls left are the
+  two in `MultiplayerTab` that MUST stay one (they run synchronously inside `MainWindow.OnClosing`,
+  which needs the answer before it returns). Pinned by
   `DialogXamlTests.TheThemedConfirmLoadsInBothLanguages_AndNeverAnswersOnItsOwn`.
 
 ## Conventions

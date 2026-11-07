@@ -296,6 +296,12 @@ public partial class MultiplayerTab
         UpdateMyTeamsButton();
     }
 
+    /// <summary>Who the presence socket says is connected, for the connection menu.</summary>
+    internal int OnlinePlayerCount => _globalOnlineUsers.Count;
+
+    /// <summary>How many team invitations are waiting, for the account menu.</summary>
+    internal int TeamInviteCount => _teamInviteCount;
+
     private void UpdateMyTeamsButton()
     {
         if (TournamentsMyTeamsButton == null) return;

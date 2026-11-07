@@ -447,31 +447,48 @@
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
                     <TextBlock Text="{TemplateBinding Header}"
-                               Margin="10,6,10,8"
-                               FontSize="11"
-                               FontWeight="SemiBold"
+                               Margin="10,6,10,4"
+                               FontSize="{DynamicResource SetGroupLabelSize}"
+                               FontWeight="Bold"
                                TextTrimming="CharacterEllipsis"
-                               Foreground="{DynamicResource UiMutedText}"/>
+                               Foreground="{DynamicResource UiTextFaint}"/>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
 
     <Style x:Key="LibraryMenuItem" TargetType="MenuItem">
-        <Setter Property="Foreground" Value="#E8EEF6"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiBodyText}"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
-                    <Border Height="32" CornerRadius="6" Padding="10,0" Background="{TemplateBinding Background}">
-                        <TextBlock Text="{TemplateBinding Header}"
-                                   VerticalAlignment="Center"
-                                   FontSize="12.5"
-                                   FontWeight="Medium"
-                                   TextTrimming="CharacterEllipsis"
-                                   Foreground="{TemplateBinding Foreground}"/>
+                    <Border x:Name="Row" Height="32" CornerRadius="7" Padding="10,0" Background="{TemplateBinding Background}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{TemplateBinding Header}"
+                                       VerticalAlignment="Center"
+                                       FontSize="{DynamicResource DialogBodySize}"
+                                       LineHeight="18.2"
+                                       FontWeight="Medium"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{TemplateBinding Foreground}"/>
+                            <TextBlock Grid.Column="1" Text="{TemplateBinding InputGestureText}"
+                                       Margin="10,0,0,0" VerticalAlignment="Center"
+                                       FontFamily="Consolas, Courier New, monospace"
+                                       FontSize="{DynamicResource SetDescSize}"
+                                       Foreground="{DynamicResource WindowFineText}"/>
+                        </Grid>
                     </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Row" Property="Opacity" Value=".45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -486,7 +503,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Separator">
-                    <Border Height="1" Margin="6,4" Background="{DynamicResource GlassRim}"/>
+                    <Border Height="1" Margin="6,4" Background="{DynamicResource WindowFooterRule}"/>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

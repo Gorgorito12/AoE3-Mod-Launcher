@@ -3325,7 +3325,7 @@ public class DialogXamlTests
     /// Every string a code-built subtree renders, joined. Rows assembled in code carry no text
     /// the visual tree exposes as one property, so this walks them.
     /// </summary>
-    private static string RenderedText(System.Windows.DependencyObject root)
+    internal static string RenderedText(System.Windows.DependencyObject root)
     {
         var sb = new System.Text.StringBuilder();
         void Walk(System.Windows.DependencyObject d)
@@ -6068,9 +6068,9 @@ public class DialogXamlTests
                     Assert.NotEqual("StartupUpdateBody", win.BodyText.Text);
                     Assert.NotEqual("StartupUpdateProgressLabel", win.ProgressLabelText.Text);
 
-                    // The version has to REACH the body: this window's whole job is telling
+                    // The version has to REACH the headline: this window's whole job is telling
                     // somebody what is being installed under them.
-                    Assert.Contains("v1.0.15", win.BodyText.Text);
+                    Assert.Contains("v1.0.15", win.HeaderText.Text);
 
                     // It is the process's only window, so it must be reachable from the
                     // taskbar, and centred on the screen rather than on an owner it has not got
@@ -6118,7 +6118,7 @@ public class DialogXamlTests
         // Text BEFORE Buttons, as App.xaml merges them: SidebarNavLabel is BasedOn the
         // implicit TextBlock style that lives in Text.xaml, and a StaticResource in a
         // merged dictionary can only see dictionaries merged before it.
-        foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs", "Controls", "Badges", "Library" })
+        foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs", "Controls", "Badges", "Library", "Dialogs" })
         {
             app.Resources.MergedDictionaries.Add(new ResourceDictionary
             {

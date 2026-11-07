@@ -30,7 +30,7 @@ internal static class ModDialogChrome
         var accent = ModTheme.AccentOf(mod.AccentColor, config.UseModColor);
         var rows = System.Math.Max(1, root.RowDefinitions.Count);
 
-        var image = config.ShowModImage ? MainWindow.TryLoadTileImage(mod.ResolveHeroSources().FirstOrDefault()) : null;
+        var image = config.ShowModImage ? MainWindow.TryLoadTileImage(mod.ResolveHeroSources().FirstOrDefault(), MainWindow.StripDecodeWidth) : null;
         if (image != null)
         {
             var strip = image.Clone();
@@ -81,6 +81,21 @@ internal static class ModDialogChrome
         bottom.SetResourceReference(Shape.FillProperty, "WindowGlowBottom");
         root.Children.Insert(0, Layer(top, rows));
         root.Children.Insert(1, Layer(bottom, rows));
+    }
+
+    /// <summary>
+    /// A small dialog about one mod (103c, 103i, 103j, 103l): no image, only its tint on the bar
+    /// and its colour on the action, for a mod that can be another than the one the Library shows.
+    /// Returns the colour, or null with no settings to read, which leaves the dialog global.
+    /// </summary>
+    internal static Color? AttachTint(Window window, TitleBar bar, ModProfile mod)
+    {
+        if (Config is not { } config) return null;
+        var accent = ModTheme.AccentOf(mod.AccentColor, config.UseModColor);
+        bar.Background = new SolidColorBrush(GlassTheme.ModBar(accent, config.GlassLevel));
+        if (MainWindow.TryLoadTileImage(mod.ResolveIconSource()) is { } icon) bar.TitleIcon = icon.ImageSource;
+        window.Resources["MpAction"] = new SolidColorBrush(accent);
+        return accent;
     }
 
     /// <summary>A CSS line-height: from the text's own size, so it follows the text-size setting.</summary>

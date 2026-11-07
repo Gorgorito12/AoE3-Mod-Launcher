@@ -177,6 +177,6 @@ public static partial class Strings
             [LangEn] = "You are its captain. A team holds up to 6 players, so it can carry reserves; you choose who plays when you enter a tournament.",
             [LangEs] = "Tú eres el capitán. Un equipo admite hasta 6 jugadores, así que puede tener suplentes; eliges quién juega al inscribirte en un torneo.",
         },
-        ["MpTeamsCreateButton"] = new() { [LangEn] = "Create", [LangEs] = "Crear" },
+        ["MpTeamsCreateButton"] = new() { [LangEn] = "Create team", [LangEs] = "Crear equipo" },
     };
 }

@@ -1346,6 +1346,14 @@
                                                FontFamily="Segoe MDL2 Assets" FontSize="20"
                                                Foreground="{DynamicResource UiBodyText}"/>
                                 </Button>
+                                <Button x:Name="LibraryModMenuButton"
+                                        Style="{StaticResource LibraryGlassButton}"
+                                        Width="52" Padding="0"
+                                        Margin="0,0,10,10"
+                                        Click="LibraryModMenuButton_Click">
+                                    <TextBlock Text="&#x22EF;" FontSize="20" FontWeight="Bold"
+                                               Foreground="{DynamicResource UiBodyText}"/>
+                                </Button>
                                 <!-- Retired by the list on the left; kept collapsed because the
                                      operation gate still writes to it. -->
                                 <Button x:Name="DashboardChangeModButton"

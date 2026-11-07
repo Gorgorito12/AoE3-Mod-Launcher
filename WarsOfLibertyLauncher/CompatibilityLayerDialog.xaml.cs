@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Windows;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services;
 
@@ -19,44 +20,49 @@ namespace WarsOfLibertyLauncher;
 /// and the Remove button is hidden — undoing someone's own deliberate choice, or writing
 /// to HKLM, is not ours to offer.</para>
 /// </summary>
-public partial class CompatibilityLayerDialog : Window
+public partial class CompatibilityLayerDialog : BaseDialog
 {
     private readonly string _exePath;
+    private readonly bool _canRemove;
 
     internal CompatibilityLayerDialog(string exePath, AppCompatLayerInfo layer)
     {
         InitializeComponent();
         _exePath = exePath;
 
-        bool canRemove = layer.AppliedByWindows && layer.InCurrentUserHive;
+        _canRemove = layer.AppliedByWindows && layer.InCurrentUserHive;
 
-        Chrome.Title = Strings.Get("DlgCompatLayerTitle");
-        BodyText.Text = Strings.Get(canRemove ? "DlgCompatLayerBody" : "DlgCompatLayerBodyManual");
-        FileLabel.Text = Strings.Get("DlgCompatLayerFileLabel");
-        FilePathText.Text = exePath;
-        DontAskCheck.Content = Strings.Get("DlgCompatLayerDontAsk");
+        SetBarTitle(Strings.Get("DlgCompatLayerBar"));
+        SetHeadline(Strings.Get("DlgCompatLayerTitle"));
+        SetLead(Strings.Get(_canRemove ? "DlgCompatLayerBody" : "DlgCompatLayerBodyManual"));
+        SetDetail(Strings.Get("DlgCompatLayerFileLabel"), exePath);
+        DontAskText.Text = Strings.Get("DlgCompatLayerDontAsk");
         SupportLinkHost.Content = Controls.SupportLink.Build();
-        LaterButton.Content = Strings.Get("DlgCompatLayerLater");
-        PropertiesButton.Content = Strings.Get("DlgCompatLayerProperties");
-        RemoveButton.Content = Strings.Get("DlgCompatLayerRemove");
+        CancelAction.Content = Strings.Get("DlgCompatLayerLater");
 
-        if (!canRemove)
+        // With nothing to remove, the way to Properties is the one thing left to do, so it is
+        // the primary button rather than a third one to the left of it.
+        if (_canRemove)
         {
-            RemoveButton.Visibility = Visibility.Collapsed;
-            PropertiesButton.IsDefault = true;
+            SetLeftAction(Strings.Get("DlgCompatLayerProperties"));
+            PrimaryAction.Content = Strings.Get("DlgCompatLayerRemove");
+        }
+        else
+        {
+            PrimaryAction.Content = Strings.Get("DlgCompatLayerProperties");
         }
     }
 
     /// <summary>The user ticked "don't show this again".</summary>
     public bool DontAskAgain => DontAskCheck.IsChecked == true;
 
-    private void RemoveButton_Click(object sender, RoutedEventArgs e)
+    protected override void OnPrimary()
     {
-        DialogResult = true;
-        Close();
+        if (_canRemove) Answer(true);
+        else OnLeft();
     }
 
-    private void PropertiesButton_Click(object sender, RoutedEventArgs e)
+    protected override void OnLeft()
     {
         try
         {
@@ -74,13 +80,6 @@ public partial class CompatibilityLayerDialog : Window
             DiagnosticLog.Write($"CompatibilityLayerDialog: could not open properties: {ex.Message}");
         }
 
-        DialogResult = false;
-        Close();
-    }
-
-    private void LaterButton_Click(object sender, RoutedEventArgs e)
-    {
-        DialogResult = false;
-        Close();
+        Answer(false);
     }
 }

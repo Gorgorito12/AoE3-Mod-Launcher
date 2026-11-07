@@ -185,9 +185,8 @@ public static class StartupUpdateGate
         // - a failed swap, a machine switched off, a binary that comes back still reporting the
         // old version - has to count, or the loop guard guards nothing and a release that
         // cannot recognise itself re-downloads ~165 MB on every single launch, for ever.
-        StartupUpdateState.RecordAttempt(
-            check.RemoteTag,
-            AutoUpdatePolicy.NextAttemptCount(check.RemoteTag, state.AttemptTag, state.AttemptCount));
+        var attempts = AutoUpdatePolicy.NextAttemptCount(check.RemoteTag, state.AttemptTag, state.AttemptCount);
+        StartupUpdateState.RecordAttempt(check.RemoteTag, attempts);
 
         // The language, resolved the way MainWindow will resolve it in a moment. Strings default
         // to English until MainWindow's constructor runs, and on this path our window can be the
@@ -210,6 +209,8 @@ public static class StartupUpdateGate
             window.Show();
         }
 
+        string? retryFailure = null;
+        retry:
         try
         {
             var progress = window == null
@@ -238,6 +239,7 @@ public static class StartupUpdateGate
 
             DiagnosticLog.Write($"Startup auto-update: restarting into {check.RemoteTag}.");
             DiagnosticLog.Flush();
+            window?.CloseByOwner();
             return new Outcome(true, check, AutoUpdateDecision.Apply);
         }
         catch (OperationCanceledException)
@@ -245,6 +247,7 @@ public static class StartupUpdateGate
             // Skip, or the headless ceiling ran out. Neither is a failure and neither burns the
             // tag: the .part file survives, so the next launch resumes where this one stopped.
             DiagnosticLog.Write("Startup auto-update: cancelled; opening the launcher.");
+            window?.CloseByOwner();
             return new Outcome(false, check, AutoUpdateDecision.Apply);
         }
         catch (UpdateVerificationException ex)
@@ -255,17 +258,41 @@ public static class StartupUpdateGate
             DiagnosticLog.Write(
                 $"Startup auto-update: verification failed ({ex.Message}); burning the tag.");
             StartupUpdateState.RecordAttempt(check.RemoteTag, AutoUpdatePolicy.BurnedAttemptCount);
+            window?.CloseByOwner();
             return new Outcome(false, check, AutoUpdateDecision.Apply);
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Startup auto-update failed: {ex.Message}");
-            return new Outcome(false, check, AutoUpdateDecision.Apply);
+            retryFailure = ex.Message;
         }
-        finally
+
+        // Out of the catch because a catch cannot await its way back to the top. The attempt
+        // counts like any other, so "Try again" cannot walk past the loop guard.
+        if (window != null && attempts < AutoUpdatePolicy.MaxAttemptsPerTag
+            && await AskToRetryAsync(window, retryFailure!, cts.Token))
         {
-            window?.CloseByOwner();
+            attempts++;
+            StartupUpdateState.RecordAttempt(check.RemoteTag, attempts);
+            DiagnosticLog.Write($"Startup auto-update: the user asked to try again (attempt {attempts}).");
+            retryFailure = null;
+            window.ShowRetrying(check.LatestVersion);
+            goto retry;
         }
+        window?.CloseByOwner();
+        return new Outcome(false, check, AutoUpdateDecision.Apply);
+    }
+
+    /// <summary>True for "Try again". Skipping, which cancels the token, is false.</summary>
+    private static async Task<bool> AskToRetryAsync(StartupUpdateWindow window, string detail, CancellationToken skipped)
+    {
+        var answer = new TaskCompletionSource<bool>();
+        void Retry() => answer.TrySetResult(true);
+        window.RetryRequested += Retry;
+        using var skip = skipped.Register(() => answer.TrySetResult(false));
+        window.ShowFailed(detail);
+        try { return await answer.Task; }
+        finally { window.RetryRequested -= Retry; }
     }
 
     /// <summary>

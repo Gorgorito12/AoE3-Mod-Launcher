@@ -219,6 +219,22 @@ def place(window):
     return True
 
 
+def fit(pid, width, height):
+    """The window opens on the primary monitor, at that monitor's scale, and when it does not fit the
+    test monitor as such Windows moves it there without rescaling: asking for 1920 left it wider
+    than the screen. So the size asked for is set again, in the test monitor's own pixels."""
+    monitor = test_monitor()
+    left, top, right, bottom = monitor["work"]
+    found = windows(pid)
+    if not found:
+        return
+    main = max(found, key=lambda w: (w["rect"][2] - w["rect"][0]) * (w["rect"][3] - w["rect"][1]))
+    w, h = round(width * monitor["scale"]), round(height * monitor["scale"])
+    x, y = left + max(0, (right - left - w) // 2), top + max(0, (bottom - top - h) // 2)
+    user32.SetWindowPos(main["hwnd"], None, x, y, w, h, 0x0004 | 0x0010)  # SWP_NOZORDER | SWP_NOACTIVATE
+    time.sleep(0.3)
+
+
 # --- fixtures --------------------------------------------------------------------------------------
 
 def fake_install(folder, mod_id, version, files):
@@ -364,6 +380,8 @@ def launch(args):
     time.sleep(0.5)
     for window in windows(process.pid):
         place(window)
+    if args.size and not args.max:
+        fit(process.pid, *map(int, args.size.lower().split("x")))
     stolen = user32.GetForegroundWindow() != foreground
     monitor = test_monitor()
     print(f"testbed: launcher ready, pid {process.pid}, on {monitor['name']} ({monitor['device']})"

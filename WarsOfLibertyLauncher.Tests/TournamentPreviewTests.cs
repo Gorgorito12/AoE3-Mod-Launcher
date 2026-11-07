@@ -605,14 +605,13 @@ public class TournamentPreviewTests
     {
         var host = tab.TabRootGrid;
         if (host.Children.Count == 0) return null;
-        if (host.Children[^1] is not Border { Child: Border card }) return null;
-        if (card.Child is not StackPanel stack || stack.Children.Count < 3) return null;
-        if (stack.Children[0] is not StackPanel header) return null;
+        if (host.Children[^1] is not Border { Child: StackPanel stack } || stack.Children.Count < 2) return null;
+        if (stack.Children[0] is not Grid header) return null;
+        if (header.Children.OfType<StackPanel>().FirstOrDefault() is not { } words) return null;
 
-        var title = header.Children.OfType<TextBlock>().Skip(1).FirstOrDefault()?.Text ?? "";
-        var body = (stack.Children[1] as TextBlock)?.Text ?? "";
-        var buttons = Logical(stack.Children[2]).OfType<Button>().ToList();
-        if (stack.Children[2] is Panel row) buttons = row.Children.OfType<Button>().ToList();
+        var title = (words.Children[0] as TextBlock)?.Text ?? "";
+        var body = (words.Children[1] as TextBlock)?.Text ?? "";
+        var buttons = stack.Children[1] is Panel row ? row.Children.OfType<Button>().ToList() : new List<Button>();
         return new AlertCard(title, body, buttons);
     }
 

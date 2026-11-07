@@ -2580,16 +2580,8 @@ public static partial class Strings
         },
         ["DlgRemoveModBodyInstalled"] = new()
         {
-            [LangEn] = "This mod will stop appearing in your MODS list, but it "
-                     + "stays installed: no file is deleted and nothing is "
-                     + "downloaded again if you add it back from the Workshop. "
-                     + "To free up disk space you have to uninstall it instead, "
-                     + "from the gear menu.",
-            [LangEs] = "Este mod va a dejar de aparecer en tu lista de MODS, pero "
-                     + "sigue instalado: no se borra ningún archivo y no se "
-                     + "descarga nada de nuevo si lo vuelves a agregar desde el "
-                     + "Workshop. Para liberar espacio en disco tienes que "
-                     + "desinstalarlo, desde el menú de configuración.",
+            [LangEn] = "It stops appearing in your Library. The installed files are not touched: if you add it back, it is ready at once.",
+            [LangEs] = "Deja de aparecer en tu Biblioteca. Los archivos instalados no se tocan: si lo vuelves a añadir, está listo al momento.",
         },
         ["DlgRemoveModPathLabel"] = new()
         {
@@ -2598,8 +2590,8 @@ public static partial class Strings
         },
         ["DlgRemoveModConfirm"] = new()
         {
-            [LangEn] = "Remove",
-            [LangEs] = "Quitar",
+            [LangEn] = "Remove from collection",
+            [LangEs] = "Quitar de la colección",
         },
         ["DlgRemoveModCancel"] = new()
         {
@@ -2955,11 +2947,6 @@ public static partial class Strings
         },
         // {0} = the actual reason (JSON error with line, missing id, ...). Naming the
         // cause is the point: the catalog CI only tells you after you open the PR.
-        ["ModsBrowserAddLocalInvalidBody"] = new()
-        {
-            [LangEn] = "The mod was not added:\n\n{0}",
-            [LangEs] = "El mod no se agregó:\n\n{0}",
-        },
         ["ModsBrowserLocalBadge"] = new()
         {
             [LangEn] = "Local",
@@ -3902,7 +3889,7 @@ public static partial class Strings
         // The account button's tooltip. It names the MENU, not one of its items: the click
         // opens a menu, so "Profile" here would be a promise the click does not keep.
         ["MpAccountMenuTooltip"] = new() { [LangEn] = "Your account", [LangEs] = "Tu cuenta" },
-        ["MpAccountMenuProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
+        ["MpAccountMenuProfile"] = new() { [LangEn] = "View my profile", [LangEs] = "Ver mi perfil" },
         ["MpAccountMenuSignOut"] = new() { [LangEn] = "Sign out", [LangEs] = "Cerrar sesión" },
         // Centred day divider in the global chat. "Today" instead of a date, because a
         // date on the line you are reading right now is noise.
@@ -6359,8 +6346,8 @@ public static partial class Strings
         },
         ["MpJoinPasswordPrompt"] = new()
         {
-            [LangEn] = "This room is password-protected. Enter the password to join.",
-            [LangEs] = "Esta sala tiene contraseña. Escríbela para entrar.",
+            [LangEn] = "Ask for it in chat or on Discord. It is not saved.",
+            [LangEs] = "Pídesela por el chat o por Discord. No se guarda.",
         },
         ["MpJoinPasswordEnter"] = new()
         {
@@ -6379,8 +6366,8 @@ public static partial class Strings
         },
         ["MpRenameDialogTitle"] = new()
         {
-            [LangEn] = "Change the name",
-            [LangEs] = "Cambiar el nombre",
+            [LangEn] = "Change the room name",
+            [LangEs] = "Cambiar el nombre de la sala",
         },
         ["MpRenameDialogPrompt"] = new()
         {
@@ -9879,14 +9866,8 @@ public static partial class Strings
         },
         ["DlgGameRunningBody"] = new()
         {
-            [LangEn] = "Age of Empires III is currently running.\n\n" +
-                       "• Yes — Close the game and continue\n" +
-                       "• No — Continue without closing (not recommended)\n" +
-                       "• Cancel — Go back",
-            [LangEs] = "Age of Empires III está actualmente en ejecución.\n\n" +
-                       "• Sí — Cerrar el juego y continuar\n" +
-                       "• No — Continuar sin cerrar (no recomendado)\n" +
-                       "• Cancelar — Volver",
+            [LangEn] = "Age of Empires III is running. Close it first, or continue with it open (not recommended).",
+            [LangEs] = "Age of Empires III está en ejecución. Ciérralo primero, o continúa con él abierto (no recomendado).",
         },
         ["DlgGameLaunchErrorTitle"] = new()
         {
@@ -11367,10 +11348,8 @@ public static partial class Strings
         },
         ["StartupUpdateBody"] = new()
         {
-            [LangEn] = "A new version ({0}) is available and is being installed. " +
-                       "The launcher will restart by itself when it finishes.",
-            [LangEs] = "Hay una versión nueva ({0}) y se está instalando. " +
-                       "El launcher se reiniciará solo cuando termine.",
+            [LangEn] = "It opens by itself when it finishes. If you prefer, you can close this and carry on with the current version.",
+            [LangEs] = "Se abre sola cuando termine. Si lo prefieres, puedes cerrar y seguir con la versión actual.",
         },
         ["StartupUpdateProgressLabel"] = new()
         {
@@ -11389,8 +11368,8 @@ public static partial class Strings
         },
         ["StartupUpdateBtnSkip"] = new()
         {
-            [LangEn] = "Skip for now",
-            [LangEs] = "Omitir por ahora",
+            [LangEn] = "Keep this version",
+            [LangEs] = "Seguir con la actual",
         },
         // Shown by the NEW binary, once, after it restarts itself: a launcher that closes
         // and reopens on its own has to say why, or it reads as a crash.

@@ -51,6 +51,9 @@ public partial class MainWindow
             case "signin":
                 new GitHubLoginDialog(_multiplayerSession, variant) { Owner = this }.ShowDialog();
                 break;
+            case "small":
+                PreviewSmallDialog(variant);
+                break;
             case "matchwatch":
                 PreviewMatchWatch(variant);
                 break;
@@ -126,6 +129,96 @@ public partial class MainWindow
             case "updatepill":
                 ApplyLauncherUpdatePillText(LauncherUpdateDemo.Result(false), staged: variant == "ready");
                 LauncherUpdatePill.Visibility = Visibility.Visible;
+                break;
+        }
+    }
+
+    /// <summary>Design 103: each small dialog, menu and popover, with made-up contents.</summary>
+    private void PreviewSmallDialog(string variant)
+    {
+        var mod = _updateService.Profile;
+        switch (variant)
+        {
+            case "a":
+                ThemedConfirmDialog.Ask(this, Strings.Get("DlgLauncherSettingsInstallRelaunchTitle"),
+                    Strings.Get("DlgLauncherSettingsInstallRelaunchBody"), Strings.Get("DlgYes"), Strings.Get("DlgNo"));
+                break;
+            case "b":
+                ThemedConfirmDialog.Notice(this, Strings.Get("ModsBrowserAddLocalInvalidTitle"),
+                    Strings.Get("ModsBrowserAddLocalInvalidLead"), ConfirmTone.Caution,
+                    detail: "mod.json: \"id\" is missing (line 3).");
+                break;
+            case "c":
+                new RemoveFromCollectionDialog(mod.DisplayName, @"D:\Juegos\Wars of Liberty", mod).ShowOver(this);
+                break;
+            case "c2":
+                ThemedConfirmDialog.Ask(this, Strings.Get("DlgGameRunningTitle"), Strings.Get("DlgGameRunningBody"),
+                    Strings.Get("DlgGameRunningClose"), Strings.Get("BtnCancel"), ConfirmTone.Destructive, mod: mod);
+                break;
+            case "d":
+                new BackgroundConsentDialog().ShowOver(this);
+                break;
+            case "e":
+                new CompatibilityLayerDialog(@"C:\Games\Age of Empires III\bin\age3y.exe",
+                    AppCompatLayerService.Parse("~ WINXPSP3", inCurrentUserHive: true)).ShowOver(this);
+                break;
+            case "e2":
+                ThemedConfirmDialog.AskThreeWay(this, Strings.Get("DlgGameRunningTitle"), Strings.Get("DlgGameRunningBody"),
+                    Strings.Get("DlgGameRunningClose"), Strings.Get("BtnCancel"), Strings.Get("DlgGameRunningKeep"), ConfirmTone.Caution);
+                break;
+            case "f":
+                new CrossUserAccountDialog(new RunningAccount.AccountInfo("a-admin", "Miro", Elevated: true, Mismatch: true),
+                    @"C:\Users\a-admin\Documents\My Games", @"C:\Users\Miro\Documents\My Games").ShowOver(this);
+                break;
+            case "g":
+            case "g2":
+                var update = new StartupUpdateWindow("v1.0.17");
+                update.Report(new DownloadProgress(14_200_000, 48_000_000, 30));
+                if (variant == "g2") update.ShowFailed("The remote server returned an error: (503) Server Unavailable.");
+                update.Show();
+                break;
+            case "h":
+                new UserDataRestoreDialog(new[]
+                {
+                    new UserDataService.BackupInfo(@"C:\a", new DateTime(2026, 11, 4, 9, 12, 0), 214, 3, 2_200_000),
+                    new UserDataService.BackupInfo(@"C:\b", new DateTime(2026, 11, 3, 22, 40, 0), 210, 3, 2_150_000),
+                    new UserDataService.BackupInfo(@"C:\c", new DateTime(2026, 11, 1, 18, 3, 0), 198, 0, 1_900_000),
+                }, "Wars of Liberty").ShowOver(this);
+                break;
+            case "i":
+                new PasswordPromptDialog(null, "Pedro", mod).ShowOver(this);
+                break;
+            case "j":
+                new RenameRoomDialog("Noche de 2v2, sin lag", mod).ShowOver(this);
+                break;
+            case "k":
+                new CreateTeamDialog().ShowOver(this);
+                break;
+            case "l":
+                new PlayerPickerDialog("Invitar jugadores", Strings.Format("MpTeamsInviteIntro", "Los Andes"), Strings.Get("MpTeamsCreateName"),
+                    new[]
+                    {
+                        new PickCandidate("p", "Pedro", "1380 ELO"),
+                        new PickCandidate("m", "Mariana", "1512 ELO"),
+                        new PickCandidate("l", "Lucas", Disabled: true, DisabledReason: Strings.Get("MpTournamentAlreadyIn")),
+                        new PickCandidate("a", "Ana"),
+                    },
+                    required: 2, okLabel: "", okLabelFormat: Strings.Get("MpPickInvite"), mod: mod).ShowOver(this);
+                break;
+            case "m":
+                SwitchTopTab(TopTab.Multiplayer);
+                _ = Controls.MpAlertOverlay.ConfirmAsync(MultiplayerView.TabRootGrid,
+                    Strings.Get("MpLeaveDuringMatchTitle"), Strings.Get("MpLeaveDuringMatchHost"),
+                    Strings.Get("MpLeaveDuringMatchYes"), Strings.Get("MpLeaveDuringMatchNo"));
+                break;
+            case "n":
+                Dispatcher.BeginInvoke(() => LibraryModMenuButton_Click(this, new RoutedEventArgs()),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                break;
+            case "o":
+                ConnectionChip.Visibility = Visibility.Visible;
+                Dispatcher.BeginInvoke(() => ConnectionChip_Click(this, new RoutedEventArgs()),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 break;
         }
     }
@@ -525,7 +618,7 @@ public partial class MainWindow
             {
                 Width = width,
                 Height = width * 9 / 16,
-                Background = TryLoadTileImage(_libraryShots[i]),
+                Background = TryLoadTileImage(_libraryShots[i], 360),
                 Style = (Style)FindResource("LibraryThumb"),
                 ToolTip = TooltipHelper.Wrap(Strings.Get("LibShotTip")),
             };
@@ -850,8 +943,10 @@ public partial class MainWindow
     private void PaintLibraryBlur(ImageBrush cover)
     {
         if (!_libraryCoverBrushes.Contains(cover)) return;
-        var blurred = BuildBlurredCover(cover.ImageSource);
+        var blurred = ReferenceEquals(cover, _heroBrush) ? _heroBlurBrush : null;
+        blurred ??= BuildBlurredCover(cover.ImageSource);
         if (blurred == null) return;
+        if (ReferenceEquals(cover, _heroBrush)) _heroBlurBrush = blurred;
         LibraryBlurLayer.Background = blurred;
         LibraryBlurLayer.Visibility = Visibility.Visible;
         _libraryCoverBrushes.Add(blurred);
@@ -873,9 +968,15 @@ public partial class MainWindow
             if (source is not BitmapSource { PixelWidth: > 0 } bitmap) return null;
             const int width = 320;
             var height = Math.Max(1, width * bitmap.PixelHeight / bitmap.PixelWidth);
+            // Rendered off screen this goes through the software rasterizer, which keeps its own copy
+            // of what it was handed. Handing it the size it needs keeps that copy small.
+            var fit = (width + 24.0) / bitmap.PixelWidth;
+            var small = new CachedBitmap(new TransformedBitmap(bitmap, new ScaleTransform(fit, fit)),
+                BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+            small.Freeze();
             var image = new Image
             {
-                Source = source,
+                Source = small,
                 Stretch = Stretch.Fill,
                 Margin = new Thickness(-12),
                 Effect = new BlurEffect { Radius = 7 },
@@ -952,9 +1053,9 @@ public partial class MainWindow
         }
     }
 
-    private MenuItem MenuRow(string label, Action action, bool danger = false)
+    private MenuItem MenuRow(string label, Action action, bool danger = false, string? aux = null)
     {
-        var item = new MenuItem { Header = label, Style = (Style)FindResource("LibraryMenuItem") };
+        var item = new MenuItem { Header = label, Style = (Style)FindResource("LibraryMenuItem"), InputGestureText = aux ?? "" };
         if (danger) item.SetResourceReference(ForegroundProperty, "UiDangerText");
         AutomationProperties.SetName(item, label);
         item.Click += (_, _) => action();
@@ -994,7 +1095,6 @@ public partial class MainWindow
         var favorite = _config.IsFavoriteMod(profile.Id);
 
         var menu = new ContextMenu { Style = (Style)FindResource("LibraryMenu") };
-        menu.Items.Add(new MenuItem { Header = profile.DisplayName, Style = (Style)FindResource("LibraryMenuHeader") });
 
         if (installed && !running)
             menu.Items.Add(MenuRow(Strings.Get("LibMenuPlay"), () => WithLibraryMod(profile, () => ExecutePlay(this, new RoutedEventArgs()))));
@@ -1011,24 +1111,28 @@ public partial class MainWindow
             menu.Items.Add(MenuRow(Strings.Get("LibMenuCancel"), () => DashboardCancelButton_Click(this, new RoutedEventArgs())));
         }
 
-        menu.Items.Add(MenuLine());
-        menu.Items.Add(MenuRow(Strings.Get(favorite ? "LibFavoriteRemove" : "LibFavoriteAdd"), () => ToggleLibraryFavorite(profile)));
         if (installed)
         {
             menu.Items.Add(MenuRow(Strings.Get("LibSettingsTip"), () => WithLibraryMod(profile, () => DashboardSettingsButton_Click(this, new RoutedEventArgs()))));
             menu.Items.Add(MenuRow(Strings.Get("LibMenuFolder"), () => WithLibraryMod(profile, () => OpenFolderButton_Click(this, new RoutedEventArgs()))));
+            if (!profile.IsStockGame && !running)
+                menu.Items.Add(MenuRow(Strings.Get("LibMenuCheckUpdate"), () => WithLibraryMod(profile, () =>
+                {
+                    InvalidateActiveModCheckCache();
+                    _ = CheckAsync();
+                }), aux: state.CurrentVersion));
         }
+        menu.Items.Add(MenuRow(Strings.Get(favorite ? "LibFavoriteRemove" : "LibFavoriteAdd"), () => ToggleLibraryFavorite(profile)));
         var links = ModLink.BuildDisplayList(profile.OfficialWebsite, profile.Links);
         if (links.Count > 0)
             menu.Items.Add(MenuRow(Strings.Get("LibMenuPage"), () => SafeUrl.TryOpen(links[0].Url)));
-        if (state.Status == ModRowStatus.NotInstalled && state.IsInUserCollection && !state.IsBuiltIn)
+        var removable = state.IsInUserCollection && !state.IsBuiltIn;
+        var uninstallable = installed && !profile.IsStockGame && !running;
+        if (removable || uninstallable) menu.Items.Add(MenuLine());
+        if (removable)
+            menu.Items.Add(MenuRow(Strings.Get("LibMenuRemove"), () => ModsBrowserView_RemoveFromCollectionRequested(this, profile), danger: true));
+        if (uninstallable)
         {
-            menu.Items.Add(MenuLine());
-            menu.Items.Add(MenuRow(Strings.Get("LibMenuRemove"), () => ModsBrowserView_RemoveFromCollectionRequested(this, profile)));
-        }
-        if (installed && !profile.IsStockGame && !running)
-        {
-            menu.Items.Add(MenuLine());
             var copy = SubtitleFor(profile) != null ? CopyDisplayLabel(null, _config.GetState(profile.Id).InstallPath) : null;
             menu.Items.Add(MenuRow(
                 copy != null ? Strings.Format("LibMenuUninstallCopy", copy) : Strings.Get("LibMenuUninstall"),
@@ -1036,6 +1140,17 @@ public partial class MainWindow
                 danger: true));
         }
         return menu;
+    }
+
+    /// <summary>The mod's menu, the same one as a right click: a right click is a shortcut and is
+    /// never the only way to anything (BASE.md).</summary>
+    private void LibraryModMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = BuildLibraryContextMenu(_updateService.Profile);
+        menu.PlacementTarget = LibraryModMenuButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+        menu.VerticalOffset = -6;
+        menu.IsOpen = true;
     }
 
     private void DashboardCopyChip_Click(object sender, RoutedEventArgs e)

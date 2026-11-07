@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t85" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t85" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">85</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Sala de un cruce de torneo, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px">Es la misma ventana de sala (LobbyWindow) en modo torneo, pasada a la base de ventanas: franja con la imagen del mod arriba, barra de título con su color y paneles de cristal. Se mantiene la idea de 15a: en un cruce solo entran sus jugadores, así que no hay Invitar, código, contraseña ni plazas libres, y la cabecera dice el torneo, la ronda y quién juega contra quién. El chip dice «Torneo» y no «Competitiva», como ya hace el launcher. Lo nuevo: el estado de la sala y el único botón principal van en el pie y cambian con cada paso (esperar, listos, cuenta atrás, en partida, resultado). «Para que cuente» explica que el resultado se lee de la grabación, y «Qué está en juego» dice, con el cuadro, contra quién sigue el ganador. En 3v3, los bandos y las alineaciones son los del cuadro. Salir antes de empezar no pide confirmación; abandonar con la partida en marcha, sí.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:44px 40px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="1">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:9px;max-width:{{ f.w }};font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <sc-if value="{{ f.interactive }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)">
+            <span>Simular:</span>
+            <sc-if value="{{ f.hasNext }}" hint-placeholder-val="{{ true }}"><span onClick="{{ f.next }}" style-hover="background:#f4f2ee" style="cursor:pointer;padding:5px 10px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);color:#1a1a1a">{{ f.nextLabel }}</span></sc-if>
+            <sc-if value="{{ f.hasNext2 }}" hint-placeholder-val="{{ false }}"><span onClick="{{ f.next2 }}" style-hover="background:#f4f2ee" style="cursor:pointer;padding:5px 10px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);color:#1a1a1a">{{ f.next2Label }}</span></sc-if>
+            <span onClick="{{ f.reset }}" style-hover="background:#f4f2ee" style="cursor:pointer;padding:5px 10px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);color:#1a1a1a">Volver al principio</span>
+            <span style="margin-left:4px;color:rgba(0,0,0,.55)">{{ f.log }}</span>
+          </div>
+        </sc-if>
+        <div style="width:{{ f.w }};height:{{ f.h }};container-type:inline-size;color-scheme:dark;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.3);background:#0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+          <sc-if value="{{ f.isWol }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;left:0;right:0;top:0;height:340px;background:url(mods/wol/hero.jpg) center 30%/cover no-repeat"></div></sc-if><sc-if value="{{ f.isHd }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:0;height:340px;background:url(mods/hundred-days/hero.jpg) center 30%/cover no-repeat"></div></sc-if>
+          <div style="position:absolute;left:0;right:0;top:0;height:342px;background:linear-gradient(180deg,rgba(15,28,46,.2) 0%,rgba(15,28,46,.55) 55%,#0f1c2e 100%),linear-gradient(90deg,rgba(15,28,46,.72) 0%,rgba(15,28,46,.25) 55%,rgba(15,28,46,0) 100%)"></div>
+          <div style="position:absolute;left:0;right:0;top:300px;height:460px;background:{{ f.glow }}"></div>
+          <div style="position:relative;height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ f.barBg }};backdrop-filter:blur({{ f.barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><sc-if value="{{ f.isWol }}" hint-placeholder-val="{{ true }}"><span style="flex:none;width:18px;height:18px;border-radius:4px;background:url(mods/wol/icon.png) center/cover no-repeat, #1a2c48"></span></sc-if><sc-if value="{{ f.isHd }}" hint-placeholder-val="{{ false }}"><span style="flex:none;width:18px;height:18px;border-radius:4px;background:url(mods/hundred-days/icon.png) center/cover no-repeat, #1a2c48"></span></sc-if><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 13px/1.4 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ f.barTitle }}</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;display:flex;gap:26px"><span>—</span><span>❐</span><span>✕</span></span></div>
+          <div style="position:relative;flex:none;display:flex;align-items:flex-end;gap:20px;padding:clamp(16px,2.2cqw,30px) 28px 16px">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+              <span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:{{ f.accT }};text-shadow:0 1px 6px rgba(0,0,0,.5)">{{ f.kicker }}</span>
+              <span style="font:700 clamp(26px,3.1cqw,40px)/1.12 'Source Serif 4',Georgia,serif;color:#f0f5fb;text-wrap:pretty;text-shadow:0 2px 14px rgba(0,0,0,.45)">{{ f.title }}</span>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
+                <span style="height:24px;box-sizing:border-box;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:6px;background:{{ f.gBg }};backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><span style="width:6px;height:6px;border-radius:3px;background:{{ f.accT }}"></span>{{ f.modeChip }}</span>
+                <span style="height:24px;box-sizing:border-box;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:6px;background:{{ f.gBg }};backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1 1h5l5 5-5 5-5-5z" fill="#7ee08b"></path><circle cx="3.6" cy="3.6" r="1" fill="#0f1c2e"></circle></svg>{{ f.verName }}<span style="font:600 11px/1 Consolas,ui-monospace,monospace">{{ f.verNum }}</span></span>
+                <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-left:8px;text-shadow:0 1px 6px rgba(0,0,0,.55)"><sc-for list="{{ f.path }}" as="q" hint-placeholder-count="5"><span style="font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;font-weight:{{ q.fw }};color:{{ q.c }}">{{ q.t }}</span><sc-if value="{{ q.sep }}" hint-placeholder-val="{{ true }}"><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#61779a">›</span></sc-if></sc-for></div>
+              </div>
+            </div>
+            <sc-if value="{{ f.hasElo }}" hint-placeholder-val="{{ false }}"><div style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:6px;box-sizing:border-box;padding:10px 14px;border-radius:14px;background:{{ f.cardBg }};backdrop-filter:blur({{ f.cardBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#a8bcd2">TU ELO</span><div style="display:flex;align-items:center;gap:10px"><span style="font:600 clamp(28px,3cqw,38px)/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ f.eloTo }}</span><span style="height:24px;box-sizing:border-box;padding:0 10px;border-radius:12px;display:flex;align-items:center;background:{{ f.eloBg }};box-shadow:inset 0 0 0 1px {{ f.eloRing }};font:600 12px/1 Consolas,ui-monospace,monospace;color:{{ f.eloC }};text-shadow:none">{{ f.eloDelta }}</span></div><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Antes: <span style="font-family:Consolas,ui-monospace,monospace">{{ f.eloFrom }}</span></span></div></sc-if>
+            <sc-if value="{{ f.showCuadro }}" hint-placeholder-val="{{ true }}"><span onClick="{{ f.cuadro }}" style-hover="background:#213758" style="flex:none;cursor:pointer;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">Ver cuadro</span></sc-if>
+          </div>
+          <div style="position:relative;flex:1;min-height:0;display:grid;grid-template-columns:{{ f.cols }};grid-template-rows:{{ f.rows }};grid-template-areas:{{ f.areas }};gap:12px 16px;padding:0 28px 16px">
+            <div style="grid-area:a;align-self:start;max-height:100%;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:{{ f.scroll }} transparent;box-sizing:border-box;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:14px 16px">
+              <span style="display:block;font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">EL CRUCE</span>
+              <sc-for list="{{ f.groups }}" as="g" hint-placeholder-count="1">
+                <div style="display:flex;flex-direction:column">
+                  <sc-if value="{{ g.head }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:baseline;gap:8px;padding:12px 0 2px"><span style="font:600 13.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ g.name }}</span><span title="Cabeza de serie" style="font:400 12px/1.2 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ g.meta }}</span><div style="flex:1"></div><span style="font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ g.side }}</span></div></sc-if>
+                  <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2">
+                    <div style="display:grid;grid-template-columns:32px minmax(0,1fr);gap:11px;align-items:center;padding:9px 0;box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);opacity:{{ r.op }}">
+                      <span style="width:32px;height:32px;box-sizing:border-box;border-radius:16px;display:flex;align-items:center;justify-content:center;background:{{ r.av }};box-shadow:{{ r.avRing }};font:700 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ r.avC }}">{{ r.init }}</span>
+                      <div style="min-width:0;display:flex;flex-direction:column;gap:4px">
+                        <div style="display:flex;align-items:center;gap:7px;min-width:0"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 14px/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ r.name }}</span><span style="flex:none;font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ r.tags }}</span><div style="flex:1"></div><span style="flex:none;display:flex;align-items:center;gap:6px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ r.stC }};white-space:nowrap"><span style="width:7px;height:7px;box-sizing:border-box;border-radius:4px;background:{{ r.dot }};box-shadow:{{ r.dotRing }}"></span>{{ r.st }}</span></div>
+                        <div style="display:flex;align-items:baseline;min-width:0;overflow:hidden;white-space:nowrap;font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">
+                          <sc-if value="{{ r.hasSeed }}" hint-placeholder-val="{{ true }}"><span title="Cabeza de serie" style="font:400 12px/1.2 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ r.seed }}</span><span style="white-space:pre"> · </span></sc-if>
+                          <sc-if value="{{ r.hasElo }}" hint-placeholder-val="{{ true }}"><span style="font:400 12px/1.2 Consolas,ui-monospace,monospace;color:#c3d2e5">{{ r.elo }}</span><span style="white-space:pre"> ELO</span></sc-if>
+                          <sc-if value="{{ r.hasPlace }}" hint-placeholder-val="{{ false }}"><span style="white-space:pre">En posicionamiento </span><span style="font:400 12px/1.2 Consolas,ui-monospace,monospace;color:#c3d2e5">{{ r.place }}</span></sc-if>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+              <span style="display:block;padding-top:10px;font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ f.cruceNote }}</span>
+            </div>
+            <div style="grid-area:b;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:{{ f.scroll }} transparent;display:flex;flex-direction:column;gap:12px">
+              <div style="flex:none;box-sizing:border-box;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:{{ f.recRing }};padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+                <span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">PARA QUE CUENTE</span>
+                <div style="display:grid;grid-template-columns:18px minmax(0,1fr);gap:10px;align-items:start">
+                  <span style="width:18px;height:18px;box-sizing:border-box;border-radius:9px;display:flex;align-items:center;justify-content:center;background:rgba(85,172,238,.14);box-shadow:inset 0 0 0 1px rgba(85,172,238,.5);font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#55ACEE">i</span>
+                  <span style="font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">Antes de empezar en AoE3, marca «Record Game». El resultado se lee de la grabación: sin ella, el cruce no avanza. <span onClick="{{ f.recHelp }}" style="cursor:pointer;font-weight:600;color:{{ f.accT }}">¿Dónde está?</span></span>
+                </div>
+              </div>
+              <div style="flex:none;box-sizing:border-box;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:14px 16px;display:flex;flex-direction:column;gap:9px">
+                <span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">{{ f.stakesLabel }}</span>
+                <sc-for list="{{ f.stakes }}" as="k" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:7px minmax(0,1fr);gap:10px;align-items:start"><span style="width:7px;height:7px;margin-top:6px;border-radius:4px;background:{{ k.c }}"></span><span style="font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ k.t }}</span></div></sc-for>
+              </div>
+            </div>
+            <div style="grid-area:c;min-height:0;display:flex;flex-direction:column;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);overflow:hidden">
+              <div style="flex:none;height:46px;display:flex;align-items:center;gap:10px;padding:0 10px 0 16px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.08)"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">CHAT DE LA SALA</span><div style="flex:1"></div><span title="Borra el chat solo en tu launcher" style-hover="background:#213758" style="cursor:pointer;height:32px;box-sizing:border-box;padding:0 12px;border-radius:7px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Limpiar</span></div>
+              <div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:{{ f.scroll }} transparent;display:flex;flex-direction:column;gap:11px;padding:14px 16px">
+                <sc-for list="{{ f.chat }}" as="m" hint-placeholder-count="3">
+                  <sc-if value="{{ m.sys }}" hint-placeholder-val="{{ true }}"><span style="font:400 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ m.t }}</span></sc-if>
+                  <sc-if value="{{ m.msg }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ m.who }}</span><span style="font:400 11px/1 Consolas,ui-monospace,monospace;color:#61779a">{{ m.at }}</span></div><span style="font:400 13.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ m.t }}</span></div></sc-if>
+                </sc-for>
+              </div>
+              <div style="flex:none;display:flex;align-items:center;gap:8px;padding:10px 12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)"><div style="flex:1;min-width:0;height:34px;box-sizing:border-box;padding:0 12px;border-radius:8px;display:flex;align-items:center;background:rgba(5,10,18,.45);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Escribe un mensaje…</div><span style-hover="background:#213758" style="cursor:pointer;height:34px;box-sizing:border-box;padding:0 14px;border-radius:8px;display:flex;align-items:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Enviar</span></div>
+            </div>
+          </div>
+          <div style="position:relative;flex:none;display:flex;align-items:center;gap:10px;padding:14px 28px 16px;background:{{ f.footBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 1px 0 rgba(255,255,255,.08)">
+            <sc-for list="{{ f.left }}" as="b" hint-placeholder-count="1"><sc-if value="{{ b.prim }}" hint-placeholder-val="{{ false }}"><span onClick="{{ b.go }}" style-hover="filter:brightness(1.08)" style="flex:none;cursor:pointer;height:52px;box-sizing:border-box;padding:0 26px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:{{ b.bg }};box-shadow:{{ b.sh }};font:600 16px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.fg }};white-space:nowrap">{{ b.t }}</span></sc-if><sc-if value="{{ b.sec }}" hint-placeholder-val="{{ true }}"><span onClick="{{ b.go }}" style-hover="background:#213758" style="flex:none;cursor:pointer;height:52px;box-sizing:border-box;padding:0 20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 15px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">{{ b.t }}</span></sc-if><sc-if value="{{ b.danger }}" hint-placeholder-val="{{ false }}"><span onClick="{{ b.go }}" style-hover="background:#2b2638" style="flex:none;cursor:pointer;height:52px;box-sizing:border-box;padding:0 20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(200,74,74,.55);font:600 15px/1 'Segoe UI',system-ui,sans-serif;color:#f0a6a6;white-space:nowrap">{{ b.t }}</span></sc-if></sc-for>
+            <div style="order:-1;margin-right:8px;flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><span style="flex:none;width:8px;height:8px;border-radius:4px;background:{{ f.ftDot }}"></span><span style="font:600 15px/1.2 'Segoe UI',system-ui,sans-serif;color:{{ f.ftC }}">{{ f.ftTitle }}</span><sc-if value="{{ f.hasNum }}" hint-placeholder-val="{{ false }}"><span style="font:600 17px/1 Consolas,ui-monospace,monospace;color:{{ f.numC }}">{{ f.ftNum }}</span></sc-if></div>
+              <span style="font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ f.ftSub }}</span>
+            </div>
+            <sc-for list="{{ f.right }}" as="b" hint-placeholder-count="1"><sc-if value="{{ b.prim }}" hint-placeholder-val="{{ true }}"><span onClick="{{ b.go }}" style-hover="filter:brightness(1.08)" style="flex:none;cursor:pointer;height:52px;box-sizing:border-box;padding:0 26px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:{{ b.bg }};box-shadow:{{ b.sh }};font:600 16px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.fg }};white-space:nowrap">{{ b.t }}</span></sc-if><sc-if value="{{ b.sec }}" hint-placeholder-val="{{ false }}"><span onClick="{{ b.go }}" style-hover="background:#213758" style="flex:none;cursor:pointer;height:52px;box-sizing:border-box;padding:0 20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);font:600 15px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">{{ b.t }}</span></sc-if><sc-if value="{{ b.danger }}" hint-placeholder-val="{{ false }}"><span onClick="{{ b.go }}" style-hover="background:#2b2638" style="flex:none;cursor:pointer;height:52px;box-sizing:border-box;padding:0 20px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(200,74,74,.55);font:600 15px/1 'Segoe UI',system-ui,sans-serif;color:#f0a6a6;white-space:nowrap">{{ b.t }}</span></sc-if></sc-for>
+          </div>
+          <sc-if value="{{ f.ov }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;inset:0;background:rgba(5,10,18,.72);display:flex;align-items:center;justify-content:center;padding:20px">
+              <div style="width:440px;max-width:100%;box-sizing:border-box;border-radius:12px;background:#12213a;box-shadow:0 18px 50px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.08);padding:22px 22px 18px;display:flex;flex-direction:column;gap:10px">
+                <span style="font:700 19px/1.25 'Source Serif 4',Georgia,serif;color:#f0f5fb">{{ f.ovTitle }}</span>
+                <span style="font:400 13.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ f.ovBody }}</span>
+                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+                  <sc-for list="{{ f.ovBtns }}" as="b" hint-placeholder-count="2"><span onClick="{{ b.go }}" style-hover="filter:brightness(1.1)" style="cursor:pointer;min-width:96px;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ b.bg }};box-shadow:{{ b.ring }};font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ b.fg }};white-space:nowrap">{{ b.t }}</span></sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div id="85j" data-screen-label="85j" style="display:flex;flex-direction:column;gap:10px;margin-top:44px">
+    <div style="display:flex;align-items:baseline;gap:9px;max-width:760px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#85j" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">85j</a><span>Aviso flotante cuando entra el rival y la ventana de la sala no está al frente: en el escritorio si el launcher está minimizado o en la bandeja, y abajo a la derecha del launcher si estás en otra pestaña. Es el mismo mecanismo que ya usa la partida rápida al encontrar rival. Va en neutros porque puede salir encima de cualquier pantalla, y «Ver sala» trae la ventana de la sala al frente.</span></div>
+    <div style="width:760px;height:240px;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.3);background:linear-gradient(135deg,#1d2c44 0%,#101b2c 100%)">
+      <div style="position:absolute;right:16px;bottom:16px;width:420px;box-sizing:border-box;border-radius:12px;background:{{ toastBg }};backdrop-filter:blur({{ toastBlur }});box-shadow:0 12px 34px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.1);padding:14px;display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:4px 12px">
+        <span style="grid-row:1 / span 2;width:36px;height:36px;border-radius:8px;background:url(mods/wol/icon.png) center/cover no-repeat, #1a2c48;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"></span>
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 14px/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Cuzco entró en la sala del cruce</span>
+        <span style="font:400 14px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;cursor:pointer">✕</span>
+        <span style="grid-column:2 / span 2;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">Copa de Octubre · Octavos de final. Márcate como listo para empezar.</span>
+        <div style="grid-column:1 / span 3;display:flex;justify-content:flex-end;margin-top:8px"><span style-hover="filter:brightness(1.1)" style="cursor:pointer;min-width:96px;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#2f7fe0;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">Ver sala</span></div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:34px;max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><b>Para Claude Code.</b> El texto listo para pegar está en handoff_sala_torneo_v2/PROMPT.md. La sala solo trae tournament_match_id: la cabecera y «Qué está en juego» necesitan el torneo y el cruce siguiente del TournamentDetail que ya carga Torneos. La tarjeta de resultado de un cruce no debe ofrecer «Buscar otra»: hoy OffersFindAnother solo mira que la partida sea 1v1. Hay que confirmar dos reglas: qué pasa al abandonar un cruce en marcha (el texto de 85c supone la regla de las partidas competitivas, abandono después de 5 minutos, y que el rival pasa de ronda) y si, después de una partida que no cuenta (85e), la sala sigue abierta para repetirla.</div>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0f1c2e"></rect><text x="50" y="62" font-family="Georgia,serif" font-size="34" font-weight="700" fill="#e08a8a" text-anchor="middle">85</text></svg></template>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;ventana&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;900×600&quot;,&quot;1180×760&quot;,&quot;1440×900&quot;,&quot;1920×1080&quot;],&quot;default&quot;:&quot;1180×760&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;hospedas&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;tuRadmin&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { step: 'solo', me: false, riv: false, cd: 5, t: 0, w: 0, ov: null, log: '' };
+  componentDidMount() {
+    this.iv = setInterval(() => {
+      const s = this.state;
+      if (s.step === 'cuenta') this.setState(s.cd <= 1 ? { step: 'juego', t: 0 } : { cd: s.cd - 1 });
+      else if (s.step === 'juego' && !s.ov) this.setState({ t: s.t + 1 });
+      else if (s.step === 'solo') this.setState({ w: s.w + 1 });
+    }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+  renderVals() {
+    const p = this.props, s = this.state, set = o => this.setState(o);
+    const NAVY = '#0f1c2e';
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const toHex = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+    const al = (h, a) => 'rgba(' + hex(h).join(',') + ',' + a + ')';
+    const lum = h => { const c = hex(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+    const con = (a, b) => { const A = lum(a) + .05, B = lum(b) + .05; return Math.max(A, B) / Math.min(A, B); };
+    const accText = a => { let t = .3, c = mix(a, '#ffffff', t); while (con(c, NAVY) < 5 && t < .9) { t += .08; c = mix(a, '#ffffff', t); } return c; };
+    const mmss = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
+    const lvl = p.transparencia ?? 'Media', host = p.hospedas ?? true;
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px', foot: 'rgba(12,22,38,.94)', bar: 1, card: 'rgba(12,22,38,.95)', cblur: '18px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px', foot: 'rgba(10,19,33,.42)', bar: .3, card: 'rgba(12,22,38,.6)', cblur: '32px' } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px', foot: 'rgba(10,19,33,.62)', bar: .42, card: 'rgba(12,22,38,.74)', cblur: '28px' };
+    const MODS = { wol: { dir: 'wol', hero: 'mods/wol/hero.jpg', icon: 'mods/wol/icon.png', name: 'Wars of Liberty', acc: '#c04444', ver: '1.6.2', tour: 'Copa de Octubre', rounds: ['Dieciseisavos', 'Octavos', 'Cuartos', 'Semifinal', 'Final'], cur: 1 }, hd: { dir: 'hundred-days', hero: 'mods/hundred-days/hero.jpg', icon: 'mods/hundred-days/icon.png', name: 'Hundred Days', acc: '#a77a3a', ver: '1.4.0', tour: 'Liga 3v3 de la Guardia', rounds: ['Cuartos', 'Semifinal', 'Final'], cur: 2 } };
+    const AV = { Gorgo: '#2f7fe0', Cuzco: '#7a5bb5', Malinche: '#2e8a6e', Mariscal: '#9a6a2e', Bicorne: '#3d6fa8', Almirante: '#8a4a6a' };
+    const ST = { ready: ['Listo', '#7fe0a8', '#4fd68a', 'none', '1'], notready: ['No está listo', '#a8bcd2', '#61779a', 'none', '1'], absent: ['No ha entrado', '#8C9CB1', 'transparent', 'inset 0 0 0 1.5px #61779a', '1'], vpn: ['Esperando VPN', '#a8bcd2', 'transparent', 'inset 0 0 0 1.5px #8C9CB1', '.6'], playing: ['En partida', '#7fe0a8', '#4fd68a', 'none', '1'], win: ['Pasa', '#7fe0a8', '#4fd68a', 'none', '1'], loss: ['Eliminado', '#a8bcd2', '#61779a', 'none', '1'] };
+    const row = (name, st, o = {}) => { const S = ST[st], ab = st === 'absent'; return { name, init: name.charAt(0), av: ab ? 'transparent' : AV[name], avRing: ab ? 'inset 0 0 0 1.5px rgba(168,188,210,.45)' : 'none', avC: ab ? '#8C9CB1' : '#ffffff', tags: o.tags || '', hasSeed: !!o.seed, seed: o.seed || '', hasElo: !!o.elo, elo: o.elo || '', hasPlace: !!o.place, place: o.place || '', st: S[0], stC: S[1], dot: S[2], dotRing: S[3], op: S[4] }; };
+    const sys = t => ({ sys: true, msg: false, t, who: '', at: '' });
+    const msg = (who, at, t) => ({ sys: false, msg: true, who, at, t });
+
+    const win = c => {
+      const m = MODS[c.mod], acc = m.acc, accT = accText(acc), onAcc = con(acc, '#ffffff') >= con(acc, '#0b1422') ? '#ffffff' : '#0b1422';
+      const on = c.on || {}, team = c.fmt === '3v3', st = c.step, three = c.w >= 1400, vpnBad = c.vpnOk === false && (st === 'solo' || st === 'dentro');
+      const btn = (t, kind, go) => ({ t, prim: kind === 'prim', sec: kind === 'sec', danger: kind === 'danger', go, bg: acc, fg: onAcc, sh: '0 6px 20px ' + al(acc, .35) });
+      const ovb = (t, k, go) => ({ t, go, bg: k === 'prim' ? acc : k === 'danger' ? '#c84a4a' : '#1a2c48', fg: k === 'prim' ? onAcc : k === 'danger' ? '#ffffff' : '#dce7f5', ring: k === 'sec' ? 'inset 0 0 0 1px rgba(130,175,255,.22)' : 'none' });
+      let groups, chat, stakes, stakesLabel = 'QUÉ ESTÁ EN JUEGO', ft;
+      if (!team) {
+        const meSt = vpnBad ? 'vpn' : st === 'juego' ? 'playing' : st === 'resultado' ? 'win' : st === 'derrota' ? 'loss' : c.me ? 'ready' : 'notready';
+        const rvSt = st === 'solo' ? 'absent' : st === 'juego' ? 'playing' : st === 'resultado' ? 'loss' : st === 'derrota' ? 'win' : c.riv ? 'ready' : 'notready';
+        groups = [{ head: false, name: '', meta: '', side: '', rows: [row('Gorgo', meSt, { tags: c.host ? 'tú · anfitrión' : 'tú', seed: '#10', elo: '1383' }), row('Cuzco', rvSt, { tags: c.host ? '' : 'anfitrión', seed: '#7', place: '4/10' })] }];
+        chat = [sys(c.host ? 'Abriste la sala del cruce. Cuzco la ve en Torneos, en su cruce.' : 'Entraste en la sala del cruce que abrió Cuzco.')];
+        if (st !== 'solo') { if (c.host) chat.push(sys('Cuzco entró en la sala.')); chat.push(msg('Cuzco', '20:41', 'buenas! dame un minuto que abro Radmin')); }
+        if (c.riv && st !== 'solo') chat.push(sys('Cuzco está listo.'));
+        if (['cuenta', 'juego', 'resultado', 'derrota'].includes(st)) chat.push(sys('Los dos están listos. La partida empieza en 5 segundos.'));
+        if (st === 'juego' || st === 'resultado' || st === 'derrota') chat.push(sys('Partida en marcha.'));
+        if (st === 'resultado') { chat.push(sys('Ganaste. El cuadro avanzó: juegas los cuartos contra quien gane Mariscal – Almirante.')); chat.push(msg('Cuzco', '21:08', 'gg, bien jugado')); }
+        if (st === 'derrota') { chat.push(sys('Perdiste. El cuadro avanzó: Cuzco juega los cuartos contra quien gane Mariscal – Almirante.')); chat.push(msg('Cuzco', '21:08', 'gg, estuvo cerrada')); }
+        if (st === 'resultado') { stakesLabel = 'RESULTADO'; stakes = [{ t: 'Pasas a los cuartos.', c: '#4fd68a' }, { t: 'Cuzco queda fuera del torneo.', c: '#61779a' }]; }
+        else if (st === 'derrota') { stakesLabel = 'RESULTADO'; stakes = [{ t: 'Quedas fuera de la Copa de Octubre.', c: '#61779a' }, { t: 'Cuzco pasa a los cuartos.', c: '#61779a' }]; }
+        else stakes = [{ t: 'Quien gane juega los cuartos contra quien gane Mariscal – Almirante.', c: accT }, { t: 'Quien pierda queda eliminado.', c: '#61779a' }, { t: 'Cuenta para el ELO de los dos.', c: '#55ACEE' }];
+        
+        const readyBtn = c.me ? btn('Ya no estoy listo', 'sec', on.ready) : btn('Estoy listo', 'prim', on.ready);
+        const leaveBtn = btn('Salir de la sala', 'sec', on.leave);
+        if (st === 'solo') ft = { dot: '#61779a', title: c.me ? 'Estás listo · falta que entre Cuzco' : 'Esperando a Cuzco', num: mmss(c.wait || 0), numC: '#a8bcd2', sub: 'Cuzco ve la sala en Torneos. Si no llega, Kaiser, que organiza el torneo, puede darte la victoria.', left: [leaveBtn], right: [readyBtn] };
+        else if (st === 'dentro') ft = { dot: c.me || c.riv ? '#4fd68a' : '#61779a', title: c.me && !c.riv ? 'Estás listo · falta Cuzco' : c.riv && !c.me ? 'Cuzco está listo' : c.host ? 'Cuzco entró' : 'Estás en la sala de Cuzco', sub: 'La partida empieza sola cuando los dos estén listos.', left: [leaveBtn], right: [readyBtn] };
+        else if (st === 'cuenta') ft = { dot: accT, title: 'La partida empieza en', num: String(c.cd), numC: accT, sub: c.host ? 'Cuando se abra AoE3, crea la partida en Multijugador → LAN y marca «Record Game».' : 'Cuando se abra AoE3, únete a la partida de Cuzco desde Multijugador → LAN.', left: [], right: [btn('Cancelar', 'sec', on.cancelCd)] };
+        else if (st === 'juego') ft = { dot: '#4fd68a', title: 'En partida', num: mmss(c.t || 0), numC: '#dce7f5', sub: c.host ? 'Al terminar, tu launcher envía el resultado: no lo cierres hasta entonces.' : 'Al terminar, el launcher de Cuzco envía el resultado.', left: [btn('Abandonar la partida', 'danger', on.abandon)], right: [] };
+        else if (st === 'derrota') ft = { dot: '#61779a', title: 'El cuadro ya avanzó', elo: ['1383', '1371', '−12', '#c3d2e5', 'rgba(255,255,255,.08)', 'rgba(255,255,255,.16)'], sub: 'Puedes seguir el resto del torneo en Torneos.', left: [leaveBtn], right: [btn('Ver cuadro', 'prim', on.cuadro)] };
+        else ft = { dot: '#4fd68a', title: 'El cuadro ya avanzó', elo: ['1383', '1399', '+16', '#7fe0a8', 'rgba(79,214,138,.14)', 'rgba(79,214,138,.42)'], sub: 'Juegas los cuartos contra quien gane Mariscal – Almirante.', left: [leaveBtn], right: [btn('Ver cuadro', 'prim', on.cuadro)] };
+        if (vpnBad) ft = { ...ft, dot: '#F4900C', titleC: '#F5BD76', title: 'Tu Radmin VPN no está listo', num: '', sub: 'Los demás no te ven en la red hasta que lo esté. Puedes marcarte listo igual, pero lo necesitas para jugar.', right: [btn('Abrir el asistente', 'sec', on.radmin)].concat(ft.right) };
+      } else {
+        const conf = st === 'confirmar', after = st === 'nocuenta' || conf;
+        groups = [
+          { head: true, name: 'Los Andes', meta: '#1', side: 'Bando 1', rows: [row('Gorgo', 'notready', { tags: c.host ? 'tú · capitán · anfitrión' : 'tú · capitán', elo: '1290' }), row('Cuzco', conf ? 'notready' : 'ready', { place: '6/10' }), row('Malinche', after ? 'notready' : 'vpn', { elo: '1188' })] },
+          { head: true, name: 'Guardia Vieja', meta: '#2', side: 'Bando 2', rows: [row('Mariscal', conf ? 'notready' : 'ready', { tags: c.host ? 'capitán' : 'capitán · anfitrión', elo: '1402' }), row('Bicorne', conf ? 'notready' : 'ready', { elo: '1318' }), row('Almirante', after ? 'notready' : 'absent', { elo: '1265' })] }
+        ];
+        chat = conf ? [sys('Partida terminada.'), sys('Tu launcher envió el resultado: ganó Los Andes.'), sys('Falta que un jugador de Guardia Vieja lo confirme en su launcher.'), msg('Bicorne', '22:10', 'gg, buena final')] : after ? [sys('Partida terminada.'), sys('No se pudo leer un resultado de la grabación.'), msg('Mariscal', '21:44', 'no marqué Record Game, perdón. ¿La repetimos?'), msg('Cuzco', '21:45', 'dale, ya me marqué listo')]
+          : [sys('Mariscal abrió la sala del cruce.'), sys('Bicorne entró.'), sys('Cuzco entró.'), sys('Malinche entró.'), sys('Entraste en la sala.'), msg('Mariscal', '21:02', 'cuando llegue Almirante arrancamos'), msg('Malinche', '21:03', 'reinicio Radmin y vuelvo')];
+        stakes = [{ t: 'El equipo que gane se lleva la liga.', c: accT }, { t: 'Para que el cuadro avance, un jugador del otro equipo confirma el resultado en su launcher.', c: '#61779a' }, { t: 'Cuenta para el ELO de los seis.', c: '#55ACEE' }];
+        ft = conf ? { dot: '#55ACEE', title: 'Resultado enviado · falta la confirmación', sub: 'Jugada. Falta que un jugador del otro equipo confirme el resultado en su launcher; entonces el cuadro avanza.', left: [btn('Salir de la sala', 'sec')], right: [btn('Ver cuadro', 'prim')] } : after ? { dot: '#F4900C', titleC: '#F5BD76', title: 'La partida no cuenta todavía', sub: 'Se jugó, pero no se pudo leer un resultado de la grabación. Vuelvan a jugarla, o decide el organizador.', left: [btn('Salir de la sala', 'sec')], right: [btn('Estoy listo', 'prim')] }
+          : { dot: '#61779a', title: 'Esperando a Almirante', sub: 'La partida empieza sola cuando los seis estén listos.', left: [btn('Salir de la sala', 'sec')], right: [btn('Estoy listo', 'prim')] };
+      }
+      const OV = {
+        record: { title: 'Antes de empezar', body: 'Cuando se abra AoE3, crea la partida en Multijugador → LAN y marca «Record Game». El resultado del cruce se lee de la grabación: sin ella, no cuenta.', btns: [ovb('Cancelar', 'sec', on.recNo), ovb('Empezar', 'prim', on.recYes)] },
+        leave: { title: '¿Abandonar la partida?', body: 'La partida del cruce está en marcha. Si sales después de los primeros 5 minutos, cuenta como abandono: pierdes el cruce y Cuzco pasa a los cuartos.', btns: [ovb('Seguir jugando', 'sec', on.stay), ovb('Abandonar', 'danger', on.leaveGame)] }
+      };
+      const ov = c.ov ? OV[c.ov] : null;
+      return {
+        id: c.id, isWol: c.mod === 'wol', isHd: c.mod === 'hd', href: '#' + c.id, label: c.label, w: c.w + 'px', h: c.h + 'px', interactive: !!c.interactive,
+        hasNext: !!c.next, nextLabel: c.nextLabel || '', next: c.next, hasNext2: !!c.next2, next2Label: c.next2Label || '', next2: c.next2, reset: c.reset, log: c.log || '',
+        hero: 'url(' + m.hero + ') center 30%/cover no-repeat',
+        glow: 'radial-gradient(70% 55% at 28% 0%, ' + al(acc, .2) + ', transparent 72%)',
+        barBg: al(mix('#0b1422', acc, .22), G.bar), barBlur: lvl === 'Sólida' ? '0px' : '10px',
+        icon: 'url(' + m.icon + ') center/cover no-repeat, #1a2c48',
+        barTitle: 'Sala del cruce · ' + m.tour,
+        kicker: m.tour.toUpperCase(), path: m.rounds.map((t, i) => ({ t, c: i < m.cur ? '#8C9CB1' : i === m.cur ? accT : '#61779a', fw: i === m.cur ? '600' : '400', sep: i < m.rounds.length - 1 })),
+        title: team ? 'Los Andes contra Guardia Vieja' : st === 'resultado' ? 'Ganaste contra Cuzco' : st === 'derrota' ? 'Perdiste contra Cuzco' : 'Gorgo contra Cuzco',
+        modeChip: 'Torneo · ' + c.fmt, verName: m.name, verNum: m.ver,
+        showCuadro: !['resultado', 'derrota', 'confirmar'].includes(st), cuadro: on.cuadro, recHelp: on.recHelp,
+        accT, gBg: G.bg, gBlur: G.blur, cardBg: G.card, cardBlur: G.cblur, footBg: G.foot, scroll: al(acc, .55),
+        cols: three ? 'clamp(320px,26cqw,440px) clamp(280px,23cqw,400px) minmax(0,1fr)' : 'clamp(300px,32cqw,420px) minmax(0,1fr)',
+        rows: three ? 'minmax(0,1fr)' : 'minmax(0,max-content) minmax(0,1fr)',
+        areas: three ? '"a b c"' : '"a c" "b c"',
+        groups, cruceNote: team ? 'Los bandos y las alineaciones los fija el cuadro: si se juega con otros, la partida no cuenta.' : 'Solo pueden entrar los dos jugadores del cruce: no hay plazas libres ni código que compartir.',
+        recRing: st === 'nocuenta' ? 'inset 0 0 0 1px rgba(244,144,12,.6)' : 'inset 0 0 0 1px rgba(255,255,255,.1)',
+        stakesLabel, stakes, chat,
+        ftDot: ft.dot, ftC: ft.titleC || '#f0f5fb', ftTitle: ft.title, hasNum: !!ft.num, ftNum: ft.num || '', numC: ft.numC || '#dce7f5', hasElo: !!ft.elo, eloFrom: ft.elo ? ft.elo[0] : '', eloTo: ft.elo ? ft.elo[1] : '', eloDelta: ft.elo ? ft.elo[2] : '', eloC: ft.elo ? ft.elo[3] : '#dce7f5', eloBg: ft.elo ? ft.elo[4] : 'none', eloRing: ft.elo ? ft.elo[5] : 'transparent', ftSub: ft.sub, left: ft.left, right: ft.right,
+        ov: !!ov, ovTitle: ov ? ov.title : '', ovBody: ov ? ov.body : '', ovBtns: ov ? ov.btns : []
+      };
+    };
+
+    const W0 = ({ '900×600': [900, 600], '1440×900': [1440, 900], '1920×1080': [1920, 1080] })[p.ventana] || [1180, 760];
+    let step = s.step; if (!host && step === 'solo') step = 'dentro';
+    const reset = log => set({ step: 'solo', me: false, riv: false, cd: 5, t: 0, w: 0, ov: null, log: log || '' });
+    const bothReady = () => host ? set({ me: true, riv: true, step: 'dentro', ov: 'record', log: '' }) : set({ me: true, riv: true, step: 'cuenta', cd: 5, ov: null, log: '' });
+    const on = {
+      ready: () => { if (!s.me && s.riv && step === 'dentro') bothReady(); else set({ me: !s.me, step, log: '' }); },
+      leave: () => reset('Saliste de la sala. Puedes volver a abrirla desde Torneos mientras el cruce siga pendiente.'),
+      cancelCd: () => set({ step: 'dentro', me: false, riv: false, cd: 5, log: 'Cuenta atrás cancelada: los dos vuelven a «No está listo».' }),
+      abandon: () => set({ ov: 'leave' }),
+      stay: () => set({ ov: null }),
+      leaveGame: () => reset('Abandonaste la partida: Cuzco pasa a los cuartos.'),
+      recNo: () => set({ ov: null, me: false }),
+      recYes: () => set({ ov: null, step: 'cuenta', cd: 5 }),
+      cuadro: () => set({ log: 'Se abre Torneos en el cuadro de la Copa de Octubre, con tu cruce a la vista.' }),
+      recHelp: () => set({ log: 'Se abre la explicación de dónde está «Record Game» en AoE3.' }),
+      radmin: () => set({ log: 'Se abre el Asistente de Radmin.' })
+    };
+    let next = null, nextLabel = '', next2 = null, next2Label = '';
+    if (step === 'solo') { nextLabel = 'Entra Cuzco'; next = () => set({ step: 'dentro', log: '' }); }
+    else if (step === 'dentro' && !s.riv && !s.ov) { nextLabel = 'Cuzco se marca listo'; next = () => (s.me ? bothReady() : set({ riv: true, step: 'dentro', log: '' })); }
+    else if (step === 'juego' && !s.ov) { nextLabel = 'Termina la partida (ganas)'; next = () => set({ step: 'resultado', log: '' }); next2Label = 'Termina la partida (pierdes)'; next2 = () => set({ step: 'derrota', log: '' }); }
+    const hint = step === 'dentro' && s.riv && !s.me && !s.ov ? 'Pulsa «Estoy listo» en la ventana.' : step === 'cuenta' ? 'La cuenta atrás corre sola.' : '';
+
+    const frames = [
+      win({ id: '85a', interactive: true, w: W0[0], h: W0[1], mod: 'wol', fmt: '1v1', host, step, me: s.me, riv: s.riv, cd: s.cd, t: s.t, ov: s.ov, on, next, nextLabel, next2, next2Label, reset: () => reset(''), log: s.log || hint, wait: s.w, vpnOk: p.tuRadmin ?? true,
+        label: 'Interactivo, 1v1. Usa «Simular» para que entre Cuzco, se marque listo y termine la partida, ganando o perdiendo; los botones de la ventana también funcionan. En Tweaks cambias el tamaño, la transparencia, quién hospeda y si tu Radmin está listo.' }),
+      win({ id: '85b', w: 1440, h: 900, mod: 'hd', fmt: '3v3', host: false, step: 'dentro3',
+        label: '3v3 a 1440 × 900, en tres columnas. Abrió la sala Mariscal, del otro equipo. Malinche está dentro, pero su Radmin todavía no anunció la IP, así que su fila va en gris.' }),
+      win({ id: '85c', w: 1180, h: 760, mod: 'wol', fmt: '1v1', host: true, step: 'juego', me: true, riv: true, t: 493, ov: 'leave',
+        label: 'Con la partida en marcha, salir pide confirmación y dice lo que cuesta. Antes de empezar no se pregunta, porque puedes volver a la sala desde Torneos.' }),
+      win({ id: '85d', w: 900, h: 600, mod: 'wol', fmt: '1v1', host: true, step: 'dentro', me: false, riv: true,
+        label: 'El tamaño mínimo de la ventana de sala (900 × 600). La columna del cruce baja a 300 px y lo que no cabe a la izquierda se desplaza.' }),
+      win({ id: '85e', w: 1440, h: 900, mod: 'hd', fmt: '3v3', host: false, step: 'nocuenta',
+        label: '3v3, después de una partida que no se grabó. El texto es el que ya usa el launcher para este caso y «Para que cuente» se marca en naranja. Con «Estoy listo» se repite en la misma sala.' }),
+      win({ id: '85f', w: 1180, h: 760, mod: 'wol', fmt: '1v1', host: true, step: 'solo', wait: 880,
+        label: 'El rival no llega. La sala sabe cuándo se abrió, así que el pie lleva el tiempo de espera y dice quién lo resuelve: Kaiser, que organiza el torneo, puede darte la victoria desde el cuadro.' }),
+      win({ id: '85g', w: 1180, h: 760, mod: 'wol', fmt: '1v1', host: true, step: 'dentro', riv: true, vpnOk: false,
+        label: 'Tu Radmin VPN no está listo. Tu fila va en gris, como la ven los demás, y el pie lo dice con «Abrir el asistente» junto a «Estoy listo». No bloquea nada, pero sin Radmin no se puede jugar.' }),
+      win({ id: '85h', w: 1180, h: 760, mod: 'wol', fmt: '1v1', host: true, step: 'derrota', me: true, riv: true,
+        label: 'Perder el cruce. El resultado pasa a la cabecera, en grande, con tu ELO nuevo y la diferencia; «Resultado» dice qué cambia en el torneo y el pie, qué sigue. «Ver cuadro» es el único botón principal: lleva a Torneos, donde se sigue el resto del torneo.' }),
+      win({ id: '85i', w: 1440, h: 900, mod: 'hd', fmt: '3v3', host: true, step: 'confirmar',
+        label: '3v3, con el resultado enviado y sin confirmar. El texto es el que ya usa el launcher para este caso: el cuadro avanza cuando un jugador de Guardia Vieja lo confirma en su launcher.' })
+    ];
+    return { frames, toastBg: G.card, toastBlur: G.cblur };
+  }
+}
+</script>
+</body>
+</html>

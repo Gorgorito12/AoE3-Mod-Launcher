@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using WarsOfLibertyLauncher.Localization;
 
@@ -196,40 +197,36 @@ internal static class MpAlertOverlay
         //      fully covered. ----
         var scrim = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xB4, 0x05, 0x07, 0x0A)),
+            Background = new SolidColorBrush(Color.FromArgb(0xB8, 0x05, 0x0A, 0x12)),
         };
         if (host.RowDefinitions.Count > 0) Grid.SetRowSpan(scrim, host.RowDefinitions.Count);
         if (host.ColumnDefinitions.Count > 0) Grid.SetColumnSpan(scrim, host.ColumnDefinitions.Count);
 
-        // ---- Card: MpSurface fill, two-tone rim (bright inner over a dark
-        //      outer band, the launcher's standard "punched-out" popup look),
-        //      drop shadow on the outer band. ----
-        var outer = new Border
+        // ---- Card (103m): the small dialog's measures and tone, without its bar. ----
+        var card = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
-            CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(1),
+            Background = new SolidColorBrush(Color.FromRgb(0x12, 0x21, 0x3A)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(22, 20, 22, 18),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            MaxWidth = 460,
+            Width = 440,
+            MaxWidth = 440,
             Margin = new Thickness(24),
         };
-        if (host.RowDefinitions.Count > 0) Grid.SetRowSpan(outer, host.RowDefinitions.Count);
-        if (host.ColumnDefinitions.Count > 0) Grid.SetColumnSpan(outer, host.ColumnDefinitions.Count);
+        if (host.RowDefinitions.Count > 0) Grid.SetRowSpan(card, host.RowDefinitions.Count);
+        if (host.ColumnDefinitions.Count > 0) Grid.SetColumnSpan(card, host.ColumnDefinitions.Count);
 
-        // The shadow lives on a SIBLING underneath, never on `outer` — whose child is the
-        // card, whose children are the title and the body text. An Effect on an ancestor
-        // sends the whole subtree through a composition pass and ClearType is disabled for
-        // every glyph inside it: the dialog's text renders softer than the text behind it.
-        //
-        // This is the rule the rest of the multiplayer surface already follows and states
-        // in MultiplayerTab.xaml (~:920) — this file simply never got it. The underlay is
-        // sized off `outer` rather than given fixed dimensions because the card is
-        // content-sized and the shadow has to track it.
+        // The shadow lives on a SIBLING underneath, never on the card — whose children are the
+        // title and the body text. An Effect on an ancestor sends the whole subtree through a
+        // composition pass and ClearType is disabled for every glyph inside it: the dialog's text
+        // renders softer than the text behind it. Sized off the card, which is content-sized.
         var shadow = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
-            CornerRadius = new CornerRadius(9),
+            CornerRadius = new CornerRadius(12),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(24),
@@ -238,64 +235,64 @@ internal static class MpAlertOverlay
             Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
                 Color = Colors.Black,
-                ShadowDepth = 0,
-                BlurRadius = 24,
-                Opacity = 0.55,
+                ShadowDepth = 20,
+                Direction = 270,
+                BlurRadius = 50,
+                Opacity = 0.5,
             },
         };
         shadow.SetBinding(FrameworkElement.WidthProperty,
-            new System.Windows.Data.Binding(nameof(FrameworkElement.ActualWidth)) { Source = outer });
+            new System.Windows.Data.Binding(nameof(FrameworkElement.ActualWidth)) { Source = card });
         shadow.SetBinding(FrameworkElement.HeightProperty,
-            new System.Windows.Data.Binding(nameof(FrameworkElement.ActualHeight)) { Source = outer });
+            new System.Windows.Data.Binding(nameof(FrameworkElement.ActualHeight)) { Source = card });
         if (host.RowDefinitions.Count > 0) Grid.SetRowSpan(shadow, host.RowDefinitions.Count);
         if (host.ColumnDefinitions.Count > 0) Grid.SetColumnSpan(shadow, host.ColumnDefinitions.Count);
-
-        var card = new Border
-        {
-            Background = Res("MpSurface"),
-            BorderBrush = Res("MpDivider"),
-            BorderThickness = new Thickness(2),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(24, 20, 24, 18),
-        };
-        outer.Child = card;
 
         var stack = new StackPanel();
         card.Child = stack;
 
-        // Header row: ⚠ glyph + title.
-        var headerRow = new StackPanel
+        // The tile beside the words, like the small dialog.
+        var tone = danger ? "Destructive" : "Info";
+        var header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var glyph = new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 10),
-        };
-        headerRow.Children.Add(new TextBlock
-        {
-            Text = danger ? "⚠" : "ℹ",
-            FontSize = 20,
-            Foreground = danger ? Res("DangerAlertFg") : Res("MpBlue"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 12, 0),
-        });
-        headerRow.Children.Add(new TextBlock
-        {
-            Text = title,
-            FontSize = (double)Application.Current.FindResource("FontSizeTitle"),
+            Text = danger ? "!" : "i",
+            FontSize = 15,
             FontWeight = FontWeights.Bold,
-            Foreground = Res("TextPrimary"),
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
+            Foreground = Res($"DialogTone{tone}Glyph"),
+        };
+        header.Children.Add(new Border
+        {
+            Width = 32,
+            Height = 32,
+            CornerRadius = new CornerRadius(9),
+            BorderThickness = new Thickness(1),
+            Background = Res($"DialogTone{tone}Fill"),
+            BorderBrush = Res($"DialogTone{tone}Ring"),
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 0, 14, 0),
+            Child = glyph,
         });
-        stack.Children.Add(headerRow);
 
-        stack.Children.Add(new TextBlock
+        var words = new StackPanel();
+        Grid.SetColumn(words, 1);
+        var headline = new TextBlock { Text = title, Style = (Style)Application.Current.FindResource("DialogHeadline") };
+        headline.LineHeight = (double)Application.Current.FindResource("DialogSubheadSize") * 1.3;
+        words.Children.Add(headline);
+        var lead = new TextBlock
         {
             Text = body,
-            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
-            Foreground = Res("TextSecondary"),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 20),
-        });
+            Style = (Style)Application.Current.FindResource("WindowBody"),
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        lead.LineHeight = (double)Application.Current.FindResource("DialogBodySize") * 1.55;
+        words.Children.Add(lead);
+        header.Children.Add(words);
+        stack.Children.Add(header);
 
         // Button row, right-aligned. Cancel (neutral) then primary, so the
         // primary sits at the far right where the eye lands last.
@@ -305,13 +302,24 @@ internal static class MpAlertOverlay
             HorizontalAlignment = HorizontalAlignment.Right,
         };
 
+        KeyEventHandler? onKey = null;
         void Close(bool result)
         {
+            host.PreviewKeyDown -= onKey;
             host.Children.Remove(scrim);
             host.Children.Remove(shadow);   // it is a sibling now, so it needs its own removal
-            host.Children.Remove(outer);
+            host.Children.Remove(card);
             tcs.TrySetResult(result);
         }
+
+        // Escape is Cancel, and acknowledges a notice: the card has no bar, so no ✕.
+        onKey = (_, e) =>
+        {
+            if (e.Key != Key.Escape) return;
+            e.Handled = true;
+            Close(!isConfirm);
+        };
+        host.PreviewKeyDown += onKey;
 
         // Cancel button only exists for confirms; a notice is OK-only.
         if (isConfirm && cancelLabel != null)
@@ -319,10 +327,9 @@ internal static class MpAlertOverlay
             var cancelBtn = new Button
             {
                 Content = cancelLabel,
-                Style = (Style)Application.Current.FindResource("MpSecondaryButton"),
-                MinWidth = 96,
-                Padding = new Thickness(18, 8, 18, 8),
-                Margin = new Thickness(0, 0, 10, 0),
+                Style = (Style)Application.Current.FindResource("WindowSecondaryButton"),
+                MinWidth = 112,
+                Margin = new Thickness(0, 0, 8, 0),
             };
             cancelBtn.Click += (_, _) => Close(false);
             buttonRow.Children.Add(cancelBtn);
@@ -331,10 +338,10 @@ internal static class MpAlertOverlay
         var primaryBtn = new Button
         {
             Content = primaryLabel,
-            Style = (Style)Application.Current.FindResource(danger ? "MpDangerButton" : "MpPrimaryButton"),
-            MinWidth = 120,
-            Padding = new Thickness(18, 8, 18, 8),
-            IsDefault = true,
+            Style = (Style)Application.Current.FindResource(danger ? "WindowDangerButton" : "WindowPrimaryButton"),
+            MinWidth = 112,
+            // Enter must not carry out what cannot be undone.
+            IsDefault = !danger,
         };
         // A notice's single button resolves true (acknowledged); a confirm's
         // primary also resolves true (the "do it" answer).
@@ -349,10 +356,12 @@ internal static class MpAlertOverlay
 
         host.Children.Add(scrim);
         host.Children.Add(shadow);   // under the card, so its Effect never covers text
-        host.Children.Add(outer);
+        host.Children.Add(card);
 
-        // Focus the primary so Enter confirms / acknowledges immediately.
-        primaryBtn.Loaded += (_, _) => primaryBtn.Focus();
+        // Focus the primary so Enter confirms / acknowledges immediately. A destructive card
+        // keeps the keyboard on its neutral button.
+        var firstFocus = danger && buttonRow.Children.Count > 1 ? (Button)buttonRow.Children[0] : primaryBtn;
+        firstFocus.Loaded += (_, _) => firstFocus.Focus();
 
         return tcs.Task;
     }

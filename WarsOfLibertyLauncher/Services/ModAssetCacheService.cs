@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using WarsOfLibertyLauncher.Models;
 
 namespace WarsOfLibertyLauncher.Services;
 
@@ -82,6 +83,35 @@ public class ModAssetCacheService
     public Task<string?> GetBannerPathAsync(
         string modId, string? remoteUrl, CancellationToken ct = default)
         => GetAssetAsync(modId, "banner", remoteUrl, ct);
+
+    /// <summary>
+    /// Fills in the hero paths already on disk, without the network. The async pass below runs after
+    /// the first paint, so until it landed every launch downloaded a picture it already had, decoded
+    /// it, and decoded it again from the file.
+    /// </summary>
+    internal static void PrimeHeroPaths(ModProfile profile)
+    {
+        if (profile.LocalHeroImagePaths.Count == 0 && profile.HeroImageUrls.Count > 0)
+        {
+            var found = profile.HeroImageUrls.Take(MaxHeroes)
+                .Select((url, i) => CachedPathOf(profile.Id, $"hero-{i}", url)).ToList();
+            if (found.All(path => path != null)) profile.LocalHeroImagePaths = found!;
+        }
+        if (string.IsNullOrEmpty(profile.LocalHeroImagePath))
+            profile.LocalHeroImagePath = CachedPathOf(profile.Id, "hero", profile.HeroImageUrl);
+    }
+
+    /// <summary>The same test as the fast path of <see cref="GetAssetAsync"/>: this file came from
+    /// this URL.</summary>
+    internal static string? CachedPathOf(string modId, string role, string? remoteUrl)
+    {
+        if (string.IsNullOrWhiteSpace(modId) || !IsHttpUrl(remoteUrl)) return null;
+        var (localPath, metaPath) = PathsFor(modId, role, remoteUrl!);
+        var meta = ReadMeta(metaPath);
+        return File.Exists(localPath) && meta is not null
+               && string.Equals(meta.Value.url, remoteUrl, StringComparison.Ordinal)
+            ? localPath : null;
+    }
 
     /// <summary>Same as <see cref="GetIconPathAsync"/> for the dashboard hero image.</summary>
     public Task<string?> GetHeroImagePathAsync(

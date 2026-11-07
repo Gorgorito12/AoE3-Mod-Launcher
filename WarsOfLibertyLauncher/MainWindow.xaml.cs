@@ -1606,18 +1606,18 @@ public partial class MainWindow : Window
         // re-read _updateService (repair / verify / uninstall) still block a switch.
         if (_isBusy && !_isCheckOnly && !_operationIsBackgroundable)
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgModSwitchBusyBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgModSwitchBlockedTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                Strings.Get("DlgModSwitchBusyBody"),
+                ConfirmTone.Info);
             return;
         }
         if (_isGameRunning)
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgModSwitchGameRunningBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgModSwitchBlockedTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                Strings.Get("DlgModSwitchGameRunningBody"),
+                ConfirmTone.Info);
             return;
         }
 
@@ -1766,18 +1766,18 @@ public partial class MainWindow : Window
         // its active install). A background op on ANOTHER mod doesn't block it.
         if (DisplayedModIsOperating)
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgModSwitchBusyBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgModSwitchBlockedTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                Strings.Get("DlgModSwitchBusyBody"),
+                ConfirmTone.Info);
             return;
         }
         if (_isGameRunning)
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgModSwitchGameRunningBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgModSwitchBlockedTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                Strings.Get("DlgModSwitchGameRunningBody"),
+                ConfirmTone.Info);
             return;
         }
 
@@ -1927,10 +1927,20 @@ public partial class MainWindow : Window
     /// rows through the SAME cache. A second cache would be a second thing for
     /// <see cref="InvalidateTileImageCache"/> to miss when a mod replaces its icon.
     /// </remarks>
-    internal static System.Windows.Media.ImageBrush? TryLoadTileImage(string? uri)
+    /// <summary>The widest an icon is drawn: 80 px at 300 %. A catalog icon is often 1024 px, 4 MB
+    /// decoded, and this cache keeps every one it has seen for the life of the process.</summary>
+    internal const int IconDecodeWidth = 256;
+
+    /// <summary>The strip of a mod's image across the top of a window.</summary>
+    internal const int StripDecodeWidth = 1280;
+
+    /// <param name="maxWidth">The width to decode at, for what is drawn smaller than the file. This
+    /// cache lives as long as the launcher, so a picture decoded whole stays whole.</param>
+    internal static System.Windows.Media.ImageBrush? TryLoadTileImage(string? uri, int maxWidth = IconDecodeWidth)
     {
         if (string.IsNullOrWhiteSpace(uri)) return null;
-        if (s_tileImageCache.TryGetValue(uri, out var cached)) return cached;
+        var cacheKey = $"{uri}|{maxWidth}";
+        if (s_tileImageCache.TryGetValue(cacheKey, out var cached)) return cached;
         // Decoding happens on whatever thread paints, which at startup is the UI thread.
         // The line below already said WHICH icon loaded; it never said what it cost.
         var decodeStarted = Environment.TickCount64;
@@ -1981,13 +1991,14 @@ public partial class MainWindow : Window
                 // session dedupe — bypassing it would re-download per render.
                 if (!isHttp)
                     bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+                bmp.DecodePixelWidth = maxWidth;
                 bmp.UriSource = sourceUri;
                 bmp.EndInit();
                 // A remote bitmap downloads async; if it fails, evict the memo so
                 // the next render retries instead of serving an empty brush all
                 // session (the memo caches the brush below before completion).
                 if (isHttp && bmp.IsDownloading)
-                    bmp.DownloadFailed += (_, _) => s_tileImageCache.Remove(uri);
+                    bmp.DownloadFailed += (_, _) => s_tileImageCache.Remove(cacheKey);
                 source = bmp;
             }
 
@@ -2001,13 +2012,13 @@ public partial class MainWindow : Window
                 Stretch = System.Windows.Media.Stretch.UniformToFill,
             };
             if (brush.CanFreeze) brush.Freeze();
-            s_tileImageCache[uri] = brush;
+            s_tileImageCache[cacheKey] = brush;
             return brush;
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Mod tile image load failed for '{uri}': {ex.Message}");
-            s_tileImageCache[uri] = null;
+            s_tileImageCache[cacheKey] = null;
             return null;
         }
     }
@@ -2021,8 +2032,9 @@ public partial class MainWindow : Window
     /// </summary>
     private static void InvalidateTileImageCache(string? path)
     {
-        if (!string.IsNullOrEmpty(path))
-            s_tileImageCache.Remove(path);
+        if (string.IsNullOrEmpty(path)) return;
+        foreach (var key in s_tileImageCache.Keys.Where(k => k.StartsWith(path + "|", StringComparison.Ordinal)).ToList())
+            s_tileImageCache.Remove(key);
     }
 
     // ------------------------------------------------------------------------
@@ -3470,10 +3482,10 @@ public partial class MainWindow : Window
         if (!ok)
         {
             DiagnosticLog.Write($"First-launch self-install failed: {msg}");
-            MessageBox.Show(this,
-                Strings.Get("DlgSettingsBgInstallFailed"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgSettingsBgInstallPromptTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                Strings.Get("DlgSettingsBgInstallFailed"),
+                ConfirmTone.Caution);
             return true; // stay portable
         }
 
@@ -3872,10 +3884,10 @@ public partial class MainWindow : Window
 
         if (resolvedExe == null)
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgInvalidAoE3FolderBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgInvalidAoE3FolderTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                Strings.Get("DlgInvalidAoE3FolderBody"),
+                ConfirmTone.Caution);
             return;
         }
 
@@ -4254,6 +4266,9 @@ public partial class MainWindow : Window
     private System.Windows.Threading.DispatcherTimer? _heroRotateTimer;
     private List<string> _heroRotateList = new();
     private int _heroRotateIndex;
+    private System.Windows.Media.ImageBrush? _heroBrush;
+    private System.Windows.Media.ImageBrush? _heroBlurBrush;
+    private string? _heroBrushSource;
 
     /// <summary>
     /// Resolves the active mod's effective hero list and paints the dashboard
@@ -4271,10 +4286,11 @@ public partial class MainWindow : Window
         // Stop any in-flight rotation/animation before repainting (mod switch).
         StopHeroRotation();
 
+        ModAssetCacheService.PrimeHeroPaths(profile);
         var heroes = profile.ResolveHeroSources().ToList();
 
         // Paint the first frame (or the gradient fallback) on the base layer.
-        var first = heroes.Count > 0 ? BuildHeroFillBrush(heroes[0]) : null;
+        var first = heroes.Count > 0 ? HeroBrushFor(heroes[0]) : null;
         PaintLibraryCover(profile, heroes, first);
         if (DashboardBgFillB != null)
         {
@@ -4345,6 +4361,31 @@ public partial class MainWindow : Window
             DashboardBgFillB.Opacity = 0;
         };
         DashboardBgFillB.BeginAnimation(System.Windows.UIElement.OpacityProperty, fade);
+    }
+
+    /// <summary>The cover on screen is painted again by every refresh. Each decode is 8 MB outside the
+    /// managed heap, so a picture left behind stays in memory until a collection that a launcher at
+    /// rest may not run for hours.</summary>
+    private System.Windows.Media.ImageBrush? HeroBrushFor(string uri)
+    {
+        if (_heroBrush != null && string.Equals(uri, _heroBrushSource, StringComparison.Ordinal))
+            return _heroBrush;
+        var brush = BuildHeroFillBrush(uri);
+        // A remote one is not kept: its download can still fail, and WPF shares those by address.
+        bool local = !uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                     && !uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        _heroBrush = local ? brush : null;
+        _heroBrushSource = local ? uri : null;
+        _heroBlurBrush = null;
+        return brush;
+    }
+
+    /// <summary>A file replaced under the same name has to be read again.</summary>
+    private void ForgetHeroBrush()
+    {
+        _heroBrush = null;
+        _heroBrushSource = null;
+        _heroBlurBrush = null;
     }
 
     /// <summary>Builds a Stretch.Fill hero brush with a decode cap (4K → bounded RAM, crisp downscale).</summary>
@@ -4453,7 +4494,7 @@ public partial class MainWindow : Window
         // otherwise the built-in tile image (BannerImage — this small sidebar
         // tile is the one banner surface where the packed .ico still looks
         // fine). All paths flow through TryLoadTileImage.
-        var imgBrush = TryLoadTileImage(profile.ResolveBannerSource() ?? profile.BannerImage);
+        var imgBrush = TryLoadTileImage(profile.ResolveBannerSource() ?? profile.BannerImage, StripDecodeWidth);
         if (imgBrush != null)
         {
             // Show the image plus a dark vignette gradient for legible text.
@@ -4884,6 +4925,7 @@ public partial class MainWindow : Window
             if (hero != RevalidateOutcome.Unchanged)
             {
                 InvalidateTileImageCache(profile.LocalHeroImagePath);
+                ForgetHeroBrush();
                 if (hero == RevalidateOutcome.Removed) profile.LocalHeroImagePath = null;
                 revalidated = true;
             }
@@ -4895,6 +4937,7 @@ public partial class MainWindow : Window
                 && await cache.RevalidateHeroesAsync(profile.Id, profile.HeroImageUrls))
             {
                 foreach (var p in profile.LocalHeroImagePaths) InvalidateTileImageCache(p);
+                ForgetHeroBrush();
                 profile.LocalHeroImagePaths =
                     profile.LocalHeroImagePaths.Where(System.IO.File.Exists).ToList();
                 revalidated = true;
@@ -5308,7 +5351,7 @@ public partial class MainWindow : Window
         if (IsProfileInstalledLocally(profile))
         {
             var dialog = new RemoveFromCollectionDialog(
-                profile.DisplayName, ResolveDisplayInstallPath(profile))
+                profile.DisplayName, ResolveDisplayInstallPath(profile), profile)
             {
                 Owner = this,
             };
@@ -6174,9 +6217,9 @@ public partial class MainWindow : Window
             BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
             BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
-            Padding = new Thickness(10),
+            Padding = new Thickness(6),
             MinWidth = 260,
-            MaxWidth = 360,
+            MaxWidth = 320,
         };
 
         // Shadow on the OUTER band so it skirts the whole composite rim; on the inner
@@ -6206,20 +6249,19 @@ public partial class MainWindow : Window
         content.Children.Add(new System.Windows.Controls.TextBlock
         {
             Text = Strings.Get("BrandMenuTitle"),
-            FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
-            FontSize = (double)FindResource("FontSizeCaption"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
-            Margin = new Thickness(8, 4, 8, 8),
+            FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
+            FontSize = (double)FindResource("SetGroupLabelSize"),
+            FontWeight = FontWeights.Bold,
+            Foreground = (System.Windows.Media.Brush)FindResource("UiTextFaint"),
+            Margin = new Thickness(10, 6, 10, 4),
         });
 
         // Launcher settings — opens the existing LauncherSettingsDialog.
         // Reuses the LauncherSettingsButton_Click handler so the
         // dialog wiring (refresh-on-close, etc.) stays in one place.
         content.Children.Add(BuildSettingsRow(
-            glyph: "",   // Settings (gear)
             label: Strings.Get("BrandMenuLauncherSettings"),
-            subtitle: Strings.Get("BrandMenuLauncherSettingsSubtitle"),
+            tooltip: Strings.Get("BrandMenuLauncherSettingsSubtitle"),
             click: () =>
             {
                 popup.IsOpen = false;
@@ -6228,9 +6270,8 @@ public partial class MainWindow : Window
 
         // About — small info MessageBox with version + credits.
         content.Children.Add(BuildSettingsRow(
-            glyph: "",   // Info
             label: Strings.Get("BrandMenuAbout"),
-            subtitle: Strings.Get("BrandMenuAboutSubtitle"),
+            tooltip: Strings.Get("BrandMenuAboutSubtitle"),
             click: () =>
             {
                 popup.IsOpen = false;
@@ -6242,9 +6283,8 @@ public partial class MainWindow : Window
         // support channel exists. Before this there was NO route from the app to the project at
         // all: not a repo link, not a "report a bug", nothing.
         content.Children.Add(BuildSettingsRow(
-            glyph: "",   // Message — the same glyph the Workshop uses for a Discord link
             label: Strings.Get("BrandMenuCommunity"),
-            subtitle: Strings.Get("BrandMenuCommunitySubtitle"),
+            tooltip: Strings.Get("BrandMenuCommunitySubtitle"),
             click: () =>
             {
                 popup.IsOpen = false;
@@ -6255,9 +6295,8 @@ public partial class MainWindow : Window
 
         // Exit — closes the launcher entirely.
         content.Children.Add(BuildSettingsRow(
-            glyph: "",   // ChromeClose / Sign-out
             label: Strings.Get("BrandMenuExit"),
-            subtitle: Strings.Get("BrandMenuExitSubtitle"),
+            tooltip: Strings.Get("BrandMenuExitSubtitle"),
             click: () =>
             {
                 popup.IsOpen = false;
@@ -6282,8 +6321,10 @@ public partial class MainWindow : Window
     {
         var version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "?";
         var body = Strings.Format("AboutDialogBody", version);
-        MessageBox.Show(this, body, Strings.Get("AboutDialogTitle"),
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        ThemedConfirmDialog.Notice(this,
+            Strings.Get("AboutDialogTitle"),
+            body,
+            ConfirmTone.Info);
     }
 
     // The custom title-bar min/max/close handlers + the maximize-glyph sync
@@ -6449,211 +6490,59 @@ public partial class MainWindow : Window
     // the gear button — that popup was folded into ModPropertiesDialog,
     // but the row + divider widgets still earn their keep elsewhere.
 
-    /// <summary>Thin horizontal divider between popup sections.</summary>
+    /// <summary>The line between groups of a menu (103n to 103p).</summary>
     private FrameworkElement BuildSettingsDivider() => new System.Windows.Controls.Border
     {
         Height = 1,
-        Background = (System.Windows.Media.Brush)FindResource("ChromeRim"),
-        Margin = new Thickness(8, 6, 8, 6),
-        Opacity = 0.6,
+        Background = (System.Windows.Media.Brush)FindResource("WindowFooterRule"),
+        Margin = new Thickness(6, 4, 6, 4),
     };
 
     /// <summary>
-    /// One leaf / sub-view-opener row in a popup menu. Visual language
-    /// mirrors the MODS popup: icon column, label, optional chevron,
-    /// hover flips to the 12% dorado tint + gold text/icon.
-    /// <paramref name="subtitle"/> renders as a small cool-grey
-    /// second line under the main label — gives each row a
-    /// "what does this do?" hint so the popup doesn't feel like a
-    /// bare list of one-word commands.
+    /// One row of a header menu: 32 px, its word, and at the right end a value in Consolas. No
+    /// icons (BASE.md); what a row used to say underneath, it says as a tooltip, so nothing that
+    /// was reachable stopped being.
     /// </summary>
-    private FrameworkElement BuildSettingsRow(string glyph, string label,
-                                              Action click,
-                                              string? subtitle = null,
-                                              bool hasChevron = false,
-                                              bool destructive = false,
-                                              bool enabled = true,
-                                              bool activeAccent = false)
+    private System.Windows.Controls.Button BuildSettingsRow(string label, Action click,
+        string? aux = null, bool destructive = false, string? tooltip = null)
     {
-        var iconBrush = destructive
-            ? (System.Windows.Media.Brush)FindResource("ErrorBrush")
-            : (activeAccent
-                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                : (System.Windows.Media.Brush)FindResource("ChromeTextDim"));
-        var labelBrush = destructive
-            ? (System.Windows.Media.Brush)FindResource("ErrorBrush")
-            : (activeAccent
-                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                : (System.Windows.Media.Brush)FindResource("ChromeTextStrong"));
-
         var row = new System.Windows.Controls.Grid();
-        row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
         row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
         row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
 
-        var icon = new System.Windows.Controls.TextBlock
-        {
-            Text = glyph,
-            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-            FontSize = 13,
-            Width = 22,
-            Margin = new Thickness(2, 0, 10, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = iconBrush,
-        };
-        System.Windows.Controls.Grid.SetColumn(icon, 0);
-        row.Children.Add(icon);
-
-        // Label + optional subtitle stacked vertically. The
-        // StackPanel sits in the * column so it gets the
-        // auto-width residue after icon + chevron are measured.
-        var labelStack = new System.Windows.Controls.StackPanel
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        labelStack.Children.Add(new System.Windows.Controls.TextBlock
+        var size = (double)FindResource("DialogBodySize");
+        row.Children.Add(new System.Windows.Controls.TextBlock
         {
             Text = label ?? "",
             FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
-            FontSize = 13,
-            FontWeight = activeAccent ? FontWeights.Bold : FontWeights.SemiBold,
-            Foreground = labelBrush,
+            FontSize = size,
+            LineHeight = size * 1.4,
+            FontWeight = FontWeights.Medium,
+            Foreground = (System.Windows.Media.Brush)FindResource(destructive ? "UiDangerText" : "UiBodyText"),
+            VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
-        if (!string.IsNullOrEmpty(subtitle))
+        if (!string.IsNullOrEmpty(aux))
         {
-            labelStack.Children.Add(new System.Windows.Controls.TextBlock
+            var value = new System.Windows.Controls.TextBlock
             {
-                Text = subtitle,
-                FontSize = (double)FindResource("FontSizeCaption"),
-                FontWeight = FontWeights.Normal,
-                // Slightly dimmed cool tone — present but recedes
-                // behind the main label.
-                Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
-                Margin = new Thickness(0, 1, 0, 0),
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            });
-        }
-        System.Windows.Controls.Grid.SetColumn(labelStack, 1);
-        row.Children.Add(labelStack);
-
-        if (hasChevron)
-        {
-            var chevron = new System.Windows.Controls.TextBlock
-            {
-                Text = "",   // ChevronRight
-                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                FontSize = 11,
-                Margin = new Thickness(8, 0, 2, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
+                Text = aux,
+                Style = (Style)FindResource("MenuRowAux"),
+                Margin = new Thickness(10, 0, 0, 0),
             };
-            System.Windows.Controls.Grid.SetColumn(chevron, 2);
-            row.Children.Add(chevron);
+            System.Windows.Controls.Grid.SetColumn(value, 1);
+            row.Children.Add(value);
         }
 
-        // SidebarSecondaryButton already provides the BgNeutral hover
-        // we don't want here, so build the row as a plain Button with
-        // a Tag-driven hover handled in code (saves cloning the whole
-        // style just to flip the hover brush). Active rows skip the
-        // dorado hover so they don't double-emphasise.
         var btn = new System.Windows.Controls.Button
         {
             Content = row,
-            Background = System.Windows.Media.Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(10, 9, 10, 9),
-            Margin = new Thickness(0, 1, 0, 1),
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Cursor = enabled ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
-            IsEnabled = enabled,
-            // Custom one-shot template so the row reads as a flat
-            // pill with a hover background — WPF's default Button
-            // template paints a Windows-grey raised border which
-            // would clash with the popup chrome.
-            Template = BuildSettingsRowTemplate(destructive),
-            Opacity = enabled ? 1.0 : 0.5,
+            Style = (Style)FindResource("MenuRowButton"),
         };
+        if (!string.IsNullOrEmpty(tooltip)) btn.ToolTip = WarsOfLibertyLauncher.TooltipHelper.Wrap(tooltip);
+        System.Windows.Automation.AutomationProperties.SetName(btn, label ?? "");
         btn.Click += (_, _) => click();
         return btn;
-    }
-
-    /// <summary>
-    /// Helper to resolve a SolidColorBrush resource to a hex string
-    /// usable inside a XAML template literal. The settings popup
-    /// builds its row template from a string (XamlReader.Parse), so
-    /// we can't bind `{DynamicResource}` directly — instead we bake
-    /// the *current* token value into the string at construction
-    /// time. The popup is rebuilt every time it opens, so a theme
-    /// swap would still propagate to the next open.
-    ///
-    /// <paramref name="alpha"/> overrides the brush's own alpha when
-    /// you want a different opacity (e.g. derive a 20% danger tint
-    /// from a 100% DangerAlert brush). Pass null to use the brush's
-    /// own alpha.
-    /// </summary>
-    private string HexFromBrush(string resourceKey, byte? alpha = null)
-    {
-        try
-        {
-            if (FindResource(resourceKey) is System.Windows.Media.SolidColorBrush b)
-            {
-                var c = b.Color;
-                byte a = alpha ?? c.A;
-                return $"#{a:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
-            }
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"HexFromBrush({resourceKey}) failed: {ex.Message}");
-        }
-        // Defensive fallback — matches the historical hardcoded
-        // tint so the popup stays legible if resource lookup fails.
-        return "#1FD8B66A";
-    }
-
-    /// <summary>
-    /// One-shot ControlTemplate for settings-row buttons. Transparent
-    /// at rest, dorado 12% tint on hover (or destructive-red tint
-    /// for the Uninstall row). 6px corner radius matches the
-    /// MODS-popup row treatment exactly.
-    /// </summary>
-    private System.Windows.Controls.ControlTemplate BuildSettingsRowTemplate(bool destructive)
-    {
-        // Hover tint pulled from the centralized interaction tokens
-        // (TintGoldHover / a low-alpha derivative of DangerAlert) so a
-        // future palette swap in Colors.xaml propagates here too. We
-        // resolve to a hex string because this template is built from
-        // a XAML string literal — `{DynamicResource}` inside a parsed
-        // template string is brittle, but baking the *current* colour
-        // value at construction is fine since these popups are rebuilt
-        // every time they open. The dim red for destructive uses
-        // DangerAlert at 20% alpha so the row tints toward "danger"
-        // without flooding the popup.
-        var hoverHex = destructive
-            ? HexFromBrush("DangerAlert", alpha: 0x33)
-            : HexFromBrush("TintGoldHover");
-
-        var xaml = @"
-<ControlTemplate TargetType='Button'
-                 xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
-                 xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>
-    <Border x:Name='border'
-            Background='{TemplateBinding Background}'
-            CornerRadius='6'
-            Padding='{TemplateBinding Padding}'>
-        <ContentPresenter HorizontalAlignment='Stretch'
-                          VerticalAlignment='Center'/>
-    </Border>
-    <ControlTemplate.Triggers>
-        <Trigger Property='IsMouseOver' Value='True'>
-            <Setter TargetName='border' Property='Background' Value='" + hoverHex + @"'/>
-        </Trigger>
-    </ControlTemplate.Triggers>
-</ControlTemplate>";
-
-        return (System.Windows.Controls.ControlTemplate)System.Windows.Markup.XamlReader.Parse(xaml);
     }
 
     /// <summary>
@@ -7324,10 +7213,10 @@ public partial class MainWindow : Window
         if (resolved == null)
         {
             DiagnosticLog.Write($"Change mod folder ('{profile.Id}'): rejected '{chosen}' (reason={reason}).");
-            MessageBox.Show(this,
-                InvalidFolderMessage(profile, reason),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgInvalidFolderTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                InvalidFolderMessage(profile, reason),
+                ConfirmTone.Caution);
             return;
         }
 
@@ -7523,9 +7412,10 @@ public partial class MainWindow : Window
         if (resolved == null)
         {
             DiagnosticLog.Write($"Add existing folder ('{profile.Id}'): rejected '{chosen}' (reason={reason}).");
-            MessageBox.Show(this,
+            ThemedConfirmDialog.Notice(this,
+                Strings.Get("DlgInvalidFolderTitle"),
                 InvalidFolderMessage(profile, reason),
-                Strings.Get("DlgInvalidFolderTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                ConfirmTone.Caution);
             return false;
         }
 
@@ -7551,9 +7441,10 @@ public partial class MainWindow : Window
         // There IS an active install — register the folder as an inactive copy.
         if (!st.RegisterInstall(resolved, Path.GetFileName(resolved)))
         {
-            MessageBox.Show(this,
-                Strings.Format("DlgInstallCopyExistsBody", resolved), Strings.Get("DlgInstallCopyExistsTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedConfirmDialog.Notice(this,
+                Strings.Get("DlgInstallCopyExistsTitle"),
+                Strings.Format("DlgInstallCopyExistsBody", resolved),
+                ConfirmTone.Info);
             return false;
         }
         _config.Save();
@@ -7806,10 +7697,10 @@ public partial class MainWindow : Window
 
         if (hits.Count == 0)
         {
-            MessageBox.Show(this,
-                Strings.Format("SearchInstallNotFound", profile.DisplayName),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("SearchInstallButton"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                Strings.Format("SearchInstallNotFound", profile.DisplayName),
+                ConfirmTone.Info);
             return;
         }
 
@@ -7827,8 +7718,10 @@ public partial class MainWindow : Window
         var body = hits.Count == 1
             ? Strings.Format("SearchInstallFound", chosen)
             : Strings.Format("SearchInstallFoundMultiple", chosen, hits.Count - 1);
-        MessageBox.Show(this, body, Strings.Get("SearchInstallButton"),
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        ThemedConfirmDialog.Notice(this,
+            Strings.Get("SearchInstallButton"),
+            body,
+            ConfirmTone.Info);
     }
 
     // ------------------------------------------------------------------------
@@ -8424,11 +8317,10 @@ public partial class MainWindow : Window
                     repairTag = target.Tag;
                     return true;
                 case Services.Repair.RepairTargetKind.ConfirmChange:
-                    var answer = MessageBox.Show(this,
-                        Strings.Format("DlgRepairVersionChangeBody", target.From ?? "?", target.To ?? "?"),
+                    if (!ThemedConfirmDialog.Ask(this,
                         Strings.Get("DlgRepairVersionChangeTitle"),
-                        MessageBoxButton.YesNo, MessageBoxImage.Question);
-                    if (answer != MessageBoxResult.Yes)
+                        Strings.Format("DlgRepairVersionChangeBody", target.From ?? "?", target.To ?? "?"),
+                        Strings.Get("DlgYes"), Strings.Get("DlgNo")))
                     {
                         SetStatus(Strings.Get("StatusRepairVersionChangeDeclined"));
                         return false;
@@ -8452,10 +8344,10 @@ public partial class MainWindow : Window
                 catch (InvalidDataException ex) when (attempt < MaxAttempts)
                 {
                     DiagnosticLog.Write($"Repair attempt {attempt}/{MaxAttempts} got a corrupted payload: {ex.Message}");
-                    bool again = MessageBox.Show(this,
-                        Strings.Format("DlgInstallRetryCorruptBody", attempt, MaxAttempts),
-                        Strings.Get("DlgInstallRetryCorruptTitle"),
-                        MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+                    bool again = ThemedConfirmDialog.Ask(this,
+     Strings.Get("DlgInstallRetryCorruptTitle"),
+     Strings.Format("DlgInstallRetryCorruptBody", attempt, MaxAttempts),
+     Strings.Get("DlgYes"), Strings.Get("DlgNo"), ConfirmTone.Caution);
                     if (!again) throw;
 
                     NativeInstallService.CleanupTempPayload();
@@ -9403,8 +9295,10 @@ public partial class MainWindow : Window
         var body = Strings.Format(
             "TranslationRevertedBody", notice.PackName, forVer, notice.NewModVersion ?? "?");
         SetStatus(body);
-        MessageBox.Show(this, body, Strings.Get("TranslationRevertedTitle"),
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        ThemedConfirmDialog.Notice(this,
+            Strings.Get("TranslationRevertedTitle"),
+            body,
+            ConfirmTone.Info);
     }
 
     /// <summary>
@@ -10339,14 +10233,14 @@ public partial class MainWindow : Window
             && GameLauncher.Find(_config, _updateService.InstallPath, _updateService.Profile) == null)
         {
             _warnedAboutBrokenInstall = true;
-            MessageBox.Show(this,
+            ThemedConfirmDialog.Notice(this,
+                Strings.Format(
+                    "DlgBrokenInstallTitle", _updateService.Profile.DisplayName),
                 Strings.Format(
                     "DlgBrokenInstallBody",
                     _updateService.InstallPath,
                     _updateService.Profile.DisplayName),
-                Strings.Format(
-                    "DlgBrokenInstallTitle", _updateService.Profile.DisplayName),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                ConfirmTone.Caution);
         }
 
         _pendingDownloads = result.PendingDownloads;
@@ -11068,10 +10962,10 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Share diagnostics failed: {ex.Message}");
-            MessageBox.Show(owner,
-                Strings.Format("ModPropShareDiagnosticsFailed", ex.Message),
+            ThemedConfirmDialog.Notice(owner,
                 Strings.Get("ModPropShareDiagnostics"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                Strings.Format("ModPropShareDiagnosticsFailed", ex.Message),
+                ConfirmTone.Caution);
         }
     }
 
@@ -11177,12 +11071,15 @@ public partial class MainWindow : Window
         var processes = Process.GetProcessesByName(GameProcessName());
         if (processes.Length == 0) return true;
 
-        var result = MessageBox.Show(this,
-            Strings.Get("DlgGameRunningBody"),
+        var result = ThemedConfirmDialog.AskThreeWay(this,
             Strings.Get("DlgGameRunningTitle"),
-            MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+            Strings.Get("DlgGameRunningBody"),
+            Strings.Get("DlgGameRunningClose"),
+            Strings.Get("BtnCancel"),
+            Strings.Get("DlgGameRunningKeep"),
+            ConfirmTone.Caution);
 
-        if (result == MessageBoxResult.Yes)
+        if (result == ConfirmAnswer.Confirm)
         {
             // The user consented to closing it, so the monitor's exit must not be reported
             // as the game having crashed on its own.
@@ -11208,7 +11105,7 @@ public partial class MainWindow : Window
         }
 
         foreach (var p in processes) p.Dispose();
-        return result != MessageBoxResult.Cancel;
+        return result != ConfirmAnswer.Cancel;
     }
 
     // ------------------------------------------------------------------------
@@ -11936,10 +11833,10 @@ public partial class MainWindow : Window
         {
             DiagnosticLog.Write(
                 $"Install refused: destination '{installFolder}' is inside the detected AoE3 at '{aoe3Conflict}'.");
-            MessageBox.Show(this,
-                Strings.Format("DlgInstallInsideAoe3Body", aoe3Conflict),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgInstallInsideAoe3Title"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                Strings.Format("DlgInstallInsideAoe3Body", aoe3Conflict),
+                ConfirmTone.Caution);
             return;
         }
 
@@ -11977,10 +11874,10 @@ public partial class MainWindow : Window
             bool already = modState.AllInstallPaths().Any(p => ModState.PathEquals(p, installFolder));
             if (already)
             {
-                MessageBox.Show(this,
-                    Strings.Format("DlgInstallCopyExistsBody", installFolder),
+                ThemedConfirmDialog.Notice(this,
                     Strings.Get("DlgInstallCopyExistsTitle"),
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                    Strings.Format("DlgInstallCopyExistsBody", installFolder),
+                    ConfirmTone.Info);
                 return;
             }
         }
@@ -12329,12 +12226,10 @@ public partial class MainWindow : Window
                         $"Install attempt {attempt}/{MaxInstallAttempts} failed with corrupted payload: {ex.Message}");
 
                     bool canRetry = attempt < MaxInstallAttempts;
-                    bool userAgreesToRetry = canRetry && MessageBox.Show(
-                        this,
-                        Strings.Format("DlgInstallRetryCorruptBody", attempt, MaxInstallAttempts),
-                        Strings.Get("DlgInstallRetryCorruptTitle"),
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Warning) == MessageBoxResult.Yes;
+                    bool userAgreesToRetry = canRetry && ThemedConfirmDialog.Ask(this,
+     Strings.Get("DlgInstallRetryCorruptTitle"),
+     Strings.Format("DlgInstallRetryCorruptBody", attempt, MaxInstallAttempts),
+     Strings.Get("DlgYes"), Strings.Get("DlgNo"), ConfirmTone.Caution);
 
                     if (!userAgreesToRetry)
                     {
@@ -13123,11 +13018,10 @@ public partial class MainWindow : Window
         {
             // game .exe not found — offer to browse instead of an error
             RefreshIdlePanel();
-            var result = MessageBox.Show(this,
-                Strings.Get("DlgInvalidAoE3FolderBody"),
+            if (ThemedConfirmDialog.Ask(this,
                 Strings.Get("DlgGameLaunchErrorTitle"),
-                MessageBoxButton.OKCancel, MessageBoxImage.Warning);
-            if (result == MessageBoxResult.OK)
+                Strings.Get("DlgInvalidAoE3FolderBody"),
+                Strings.Get("DlgChooseFolder"), Strings.Get("BtnCancel"), ConfirmTone.Caution))
                 BrowseAoE3Button_Click(sender, e);
         }
         catch (Services.GameLaunchCancelledException cancelled)
@@ -13149,9 +13043,10 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message,
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgGameLaunchErrorTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Error);
+                ex.Message,
+                ConfirmTone.Caution);
         }
     }
 
@@ -13899,8 +13794,8 @@ public partial class MainWindow : Window
             BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
             BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
-            Padding = new Thickness(10),
-            MinWidth = 220,
+            Padding = new Thickness(6),
+            MinWidth = 260,
             MaxWidth = 320,
         };
 
@@ -13944,7 +13839,6 @@ public partial class MainWindow : Window
         }
 
         content.Children.Add(BuildSettingsRow(
-            glyph: "",   // Contact
             label: Strings.Get("MpAccountMenuProfile"),
             click: () =>
             {
@@ -13952,11 +13846,27 @@ public partial class MainWindow : Window
                 MultiplayerView.OpenProfileWindow();
             }));
 
+        content.Children.Add(BuildSettingsRow(
+            label: Strings.Get("BrandMenuLauncherSettings"),
+            click: () =>
+            {
+                popup.IsOpen = false;
+                LauncherSettingsButton_Click(this, new RoutedEventArgs());
+            }));
+
+        content.Children.Add(BuildSettingsRow(
+            label: Strings.Get("MpTeamsButton"),
+            aux: MultiplayerView.TeamInviteCount > 0 ? MultiplayerView.TeamInviteCount.ToString() : null,
+            click: () =>
+            {
+                popup.IsOpen = false;
+                _ = MultiplayerView.OpenMyTeamsAsync();
+            }));
+
         // The rank guide, on the tab of the badge this block wears (53b rule 1). A ROW and not
         // a click on the 18-px badge itself: the block's click is this menu, and a second
         // target inside it would be too small to aim at and would split one control in two.
         content.Children.Add(BuildSettingsRow(
-            glyph: "\uEA18",   // Shield
             label: Strings.Get("MpGuideLink"),
             click: () =>
             {
@@ -13968,9 +13878,9 @@ public partial class MainWindow : Window
         // Last and apart, and it says what else it does: signing out leaves the room.
         content.Children.Add(BuildSettingsDivider());
         content.Children.Add(BuildSettingsRow(
-            glyph: "",   // Leave
             label: Strings.Get("MpAccountMenuSignOut"),
-            subtitle: MultiplayerView.CurrentRoomTitle is { } room
+            destructive: true,
+            tooltip: MultiplayerView.CurrentRoomTitle is { } room
                 ? Strings.Format("MpAccountSignOutRoom", room) : null,
             click: () =>
             {
@@ -14008,7 +13918,7 @@ public partial class MainWindow : Window
     /// </summary>
     private FrameworkElement BuildAccountMenuHeader()
     {
-        var grid = new System.Windows.Controls.Grid { Margin = new Thickness(8, 4, 8, 2) };
+        var grid = new System.Windows.Controls.Grid { Margin = new Thickness(10, 8, 10, 8) };
         grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
         {
             Width = GridLength.Auto,
@@ -14020,8 +13930,8 @@ public partial class MainWindow : Window
 
         var disc = new System.Windows.Controls.Grid
         {
-            Width = 28,
-            Height = 28,
+            Width = 32,
+            Height = 32,
             Margin = new Thickness(0, 0, 10, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -14038,7 +13948,7 @@ public partial class MainWindow : Window
                 Text = AccountAvatarInitial.Text,
                 Foreground = System.Windows.Media.Brushes.White,
                 FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
-                FontSize = 12,
+                FontSize = 13,
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -14054,9 +13964,9 @@ public partial class MainWindow : Window
         lines.Children.Add(new System.Windows.Controls.TextBlock
         {
             Text = AccountName.Text,
-            Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextStrong"),
+            Foreground = (System.Windows.Media.Brush)FindResource("UiTitleText"),
             FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
-            FontSize = (double)FindResource("FontSizeBody"),
+            FontSize = (double)FindResource("SetRowTitleSize"),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
@@ -14068,9 +13978,9 @@ public partial class MainWindow : Window
             lines.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = _accountEloLine,
-                Foreground = (System.Windows.Media.Brush)FindResource("MpAccountElo"),
+                Foreground = (System.Windows.Media.Brush)FindResource("WindowMuted"),
                 FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
-                FontSize = (double)FindResource("FontSizeCaption"),
+                FontSize = (double)FindResource("SetControlSize"),
                 Margin = new Thickness(0, 1, 0, 0),
                 TextTrimming = TextTrimming.CharacterEllipsis,
             });
@@ -14754,10 +14664,10 @@ public partial class MainWindow : Window
         var exePath = GameLauncher.FindAoe3Install(_config);
         if (string.IsNullOrEmpty(exePath))
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgOpenAoE3NotFoundBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgOpenFolderNotFoundTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                Strings.Get("DlgOpenAoE3NotFoundBody"),
+                ConfirmTone.Info);
             return;
         }
 
@@ -14775,10 +14685,10 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgOpenAoE3NotFoundBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgOpenFolderNotFoundTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                Strings.Get("DlgOpenAoE3NotFoundBody"),
+                ConfirmTone.Info);
             return;
         }
         OpenFolderInExplorer(folder);
@@ -15197,8 +15107,10 @@ public partial class MainWindow : Window
         {
             if (_config.CommunityTranslationsDisabled)
             {
-                MessageBox.Show(this, Strings.Get("TxSrcAddDisabled"), Strings.Get("DlgAddSourceTitle"),
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                ThemedConfirmDialog.Notice(this,
+                    Strings.Get("DlgAddSourceTitle"),
+                    Strings.Get("TxSrcAddDisabled"),
+                    ConfirmTone.Info);
                 return;
             }
 
@@ -15230,8 +15142,10 @@ public partial class MainWindow : Window
             }
             else
             {
-                MessageBox.Show(this, message, Strings.Get("DlgAddSourceTitle"), MessageBoxButton.OK,
-                    added ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                ThemedConfirmDialog.Notice(this,
+                    Strings.Get("DlgAddSourceTitle"),
+                    message,
+                    added ? ConfirmTone.Done : ConfirmTone.Caution);
             }
         }
         catch (Exception ex)
@@ -15746,11 +15660,11 @@ public partial class MainWindow : Window
         // this mod's files with another's). Legacy packs (no targetMod) are allowed.
         if (!Models.TranslationCompat.TargetModMatches(entry.TargetMod, _updateService.Profile.Id))
         {
-            MessageBox.Show(owner,
+            ThemedConfirmDialog.Notice(owner,
+                Strings.Get("TranslationWrongModTitle"),
                 Strings.Format("TranslationWrongModBody",
                     entry.Name, entry.TargetMod, _updateService.Profile.DisplayName),
-                Strings.Get("TranslationWrongModTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                ConfirmTone.Caution);
             return;
         }
 
@@ -15833,10 +15747,10 @@ public partial class MainWindow : Window
         else
         {
             // Owned by the window the player is looking at, or it opens behind Properties.
-            MessageBox.Show((System.Windows.Window?)_modPropertiesDialog ?? this,
-                Strings.Get("DlgLangRevertFailedBody"),
+            ThemedConfirmDialog.Notice((System.Windows.Window?)_modPropertiesDialog ?? this,
                 Strings.Get("DlgLangApplyFailedTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                Strings.Get("DlgLangRevertFailedBody"),
+                ConfirmTone.Caution);
         }
     }
 
@@ -15893,10 +15807,10 @@ public partial class MainWindow : Window
         var backups = UserDataService.ListBackups(userDataFolderName);
         if (backups.Count == 0)
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgRestoreNoBackupsBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgRestoreNoBackupsTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                Strings.Get("DlgRestoreNoBackupsBody"),
+                ConfirmTone.Info);
             return null;
         }
 
@@ -15976,10 +15890,10 @@ public partial class MainWindow : Window
 
         if (!UserDataService.HasExistingUserData(userDataFolderName))
         {
-            MessageBox.Show(this,
-                Strings.Format("DlgBackupNothingBody", _updateService.Profile.DisplayName),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgBackupNothingTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                Strings.Format("DlgBackupNothingBody", _updateService.Profile.DisplayName),
+                ConfirmTone.Info);
             return null;
         }
 
@@ -15993,10 +15907,10 @@ public partial class MainWindow : Window
         var path = UserDataService.BackupUserData(userDataFolderName);
         if (string.IsNullOrEmpty(path))
         {
-            MessageBox.Show(this,
-                Strings.Get("DlgUserDataAlertBackupFailedBody"),
+            ThemedConfirmDialog.Notice(this,
                 Strings.Get("DlgUserDataAlertBackupFailedTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+                Strings.Get("DlgUserDataAlertBackupFailedBody"),
+                ConfirmTone.Caution);
             return null;
         }
 

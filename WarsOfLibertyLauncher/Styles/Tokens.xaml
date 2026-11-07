@@ -69,8 +69,8 @@
     <!-- Two-tone "punched-out" popup rim — NOT part of the scale. Outer
          MUST stay inner+1 (the 1px near-black band over the 2px bright
          inner line). See the popup-rim gotcha in CLAUDE.md. -->
-    <CornerRadius x:Key="RadiusPopupInner">12</CornerRadius>
-    <CornerRadius x:Key="RadiusPopupOuter">12</CornerRadius>
+    <CornerRadius x:Key="RadiusPopupInner">10</CornerRadius>
+    <CornerRadius x:Key="RadiusPopupOuter">11</CornerRadius>
     <CornerRadius x:Key="RadiusPopupSubmenuInner">4</CornerRadius>
     <CornerRadius x:Key="RadiusPopupSubmenuOuter">5</CornerRadius>
 
@@ -580,12 +580,13 @@
          acts at arrange time on a width something else already decided. In an Auto column
          nothing decides one, so it never fires. Only a ceiling bounds a measure.
 
-         181 IS DERIVED, NOT ROUND: 206 of rail, minus the 1 px right border, minus the 12+12
-         margins of the footer Border. It is the rail's usable width at the reference text
-         size. If the rail legitimately grows past 206 - a longer translated nav label at a
+         192 IS DERIVED, NOT ROUND: 220 of rail, minus the 1 px right border, minus the 14+12
+         margins of the footer Border, minus 1 for what layout rounding adds at 175 %. It is the
+         rail's usable width at the reference text size. If the rail legitimately grows past
+         220 - a longer translated nav label at a
          larger text size, which is what MinWidth-not-Width exists for - the footer simply
          does not use the extra room. That is the price of it never pushing. -->
-    <sys:Double x:Key="SetModRailTextWidth">194</sys:Double>
+    <sys:Double x:Key="SetModRailTextWidth">192</sys:Double>
 
     <!-- Fixed action-column widths. The width must NOT follow the label, or the
          right edge of the column zigzags down the section. 88 = Open/Change/

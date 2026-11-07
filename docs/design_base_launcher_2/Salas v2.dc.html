@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t86" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t86" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">86</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Salas, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px">La pestaña Salas pasa a la base con fondo neutro, sin imagen de mod, porque la lista mezcla mods y el de cada sala se elige al crearla. Paneles de cristal y la tarjeta de partida rápida arriba de la lista, en lugar del botón provisional de la cabecera. Se mantiene lo acordado en 56-62: un solo margen M y una sola separación G (12 px por debajo de 1600 de ancho y 16 por encima), al menos 4 filas de salas a la vista, la actividad abajo (barra compacta, o tarjetas si sobra altura) y el chat de 280/320 px, plegable a 44. Cada fila dice qué puedes hacer con esa sala: Unirse, Ver sala si es la tuya, Ver partida si ya empezó, Instalar mod si no lo tienes, Revisar mi copia si es otra versión, o «Llena». La lista y el chat son globales, así que van en neutros; el color del mod solo está en la partida rápida, que juega con tu mod activo. La lista se ordena por lo que puedes hacer: primero las salas en las que puedes entrar, después las que están en partida y al final las que no están disponibles. 86c-86e son los estados de carga, error y sin conexión que ya existen en el código.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:44px 40px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="1">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:9px;max-width:1180px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <sc-if value="{{ f.interactive }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)">
+            <span>Simular:</span>
+            <sc-if value="{{ f.hasSim }}" hint-placeholder-val="{{ false }}"><span onClick="{{ f.sim }}" style-hover="background:#f4f2ee" style="cursor:pointer;padding:5px 10px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);color:#1a1a1a">Llega un rival a tu sala</span></sc-if>
+            <span onClick="{{ f.reset }}" style-hover="background:#f4f2ee" style="cursor:pointer;padding:5px 10px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);color:#1a1a1a">Volver al principio</span>
+            <span style="margin-left:4px;color:rgba(0,0,0,.55)">{{ f.log }}</span>
+          </div>
+        </sc-if>
+        <div style="width:{{ f.w }};height:{{ f.h }};container-type:inline-size;color-scheme:dark;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.3);background:#0f1c2e;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+          <div style="position:absolute;inset:0;background:radial-gradient(1400px 800px at 85% -15%, rgba(47,127,224,.13), transparent 70%),radial-gradient(1000px 700px at -5% 115%, rgba(85,172,238,.07), transparent 70%)"></div>
+          <div style="position:relative;height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:{{ f.barBg }};backdrop-filter:blur({{ f.barBlur }});box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);text-shadow:0 1px 6px rgba(0,0,0,.5)"><span style="flex:none;width:18px;height:18px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">AoE3 Mod Launcher</span><span style="height:20px;padding:0 6px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.25);display:flex;align-items:center;font:400 11px/1 Consolas,ui-monospace,monospace;color:#a8bcd2">v1.0.16e</span><div style="flex:1"></div><span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;display:flex;gap:26px"><span>—</span><span>❐</span><span>✕</span></span></div>
+          <div style="position:relative;height:56px;flex:none;display:flex;align-items:stretch;gap:30px;padding:0 24px 0 32px;background:rgba(10,19,33,.45);backdrop-filter:blur(12px);box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+            <span style="display:flex;align-items:center;font:600 14px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 -2px 0 #2f7fe0">MULTIJUGADOR</span>
+            <span style="display:flex;align-items:center;font:500 14px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">BIBLIOTECA</span>
+            <div style="flex:1"></div>
+            <div style="align-self:center;display:flex;align-items:center;gap:10px">
+              <sc-if value="{{ f.hasPill }}" hint-placeholder-val="{{ false }}"><span style="flex:none;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 4px 0 12px;border-radius:15px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><span onClick="{{ f.pillGo }}" title="Buscando rival 1v1 en Wars of Liberty. Haz clic para ver tu sala." style="cursor:pointer;display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:4px;background:{{ f.accT }}"></span>Buscando 1v1 · <span style="font:500 12.5px/1 Consolas,ui-monospace,monospace">{{ f.pillTime }}</span></span><span onClick="{{ f.pillX }}" title="Dejar de buscar" style-hover="background:rgba(255,255,255,.12)" style="cursor:pointer;width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">✕</span></span></sc-if>
+              <sc-if value="{{ f.online }}" hint-placeholder-val="{{ true }}"><span style="flex:none;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:7px;background:rgba(79,214,138,.12);box-shadow:inset 0 0 0 1px rgba(79,214,138,.35);font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#7fe0a8"><span style="width:7px;height:7px;border-radius:4px;background:#4fd68a"></span>Conectado<span style="font:400 10px/1 'Segoe UI',system-ui,sans-serif">▾</span></span></sc-if><sc-if value="{{ f.offline }}" hint-placeholder-val="{{ false }}"><span style="flex:none;white-space:nowrap;height:30px;box-sizing:border-box;padding:0 12px;border-radius:15px;display:flex;align-items:center;gap:7px;background:rgba(244,144,12,.12);box-shadow:inset 0 0 0 1px rgba(244,144,12,.4);font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#F5BD76"><span style="width:7px;height:7px;border-radius:4px;background:#F4900C"></span>Sin conexión<span style="font:400 10px/1 'Segoe UI',system-ui,sans-serif">▾</span></span></sc-if>
+              <span style="width:1px;height:20px;margin:0 6px;background:rgba(255,255,255,.14)"></span>
+              <span style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:26px;border-radius:13px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">G</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Gorgo</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">1383 ELO · 1v1</span></span></span>
+            </div>
+          </div>
+          <div style="position:relative;height:44px;flex:none;display:flex;align-items:stretch;gap:26px;padding:0 {{ f.m }};background:rgba(10,19,33,.32);backdrop-filter:blur(10px);box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)">
+            <span style="display:flex;align-items:center;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;box-shadow:inset 0 -2px 0 #2f7fe0">SALAS</span>
+            <span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">TORNEOS</span>
+            <span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">CLASIFICACIÓN</span>
+            <span style="display:flex;align-items:center;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">ESTADÍSTICAS</span>
+            <div style="flex:1"></div>
+            <div style="align-self:center;display:flex;align-items:center;gap:8px">
+              <span style="width:clamp(220px,18cqw,360px);height:34px;box-sizing:border-box;padding:0 12px;border-radius:8px;display:flex;align-items:center;gap:8px;background:rgba(5,10,18,.4);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:400 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap;overflow:hidden"><span style="flex:none;font:400 14px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">⌕</span><span title="Buscar sala, mod, jugador o pegar un código" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.45">Buscar sala, mod, jugador o pegar un código</span></span>
+              <span style-hover="filter:brightness(1.08)" style="opacity:{{ f.createOp }};cursor:pointer;height:34px;box-sizing:border-box;padding:0 14px;border-radius:8px;display:flex;align-items:center;background:#2f7fe0;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;white-space:nowrap">+ Crear sala</span>
+            </div>
+          </div>
+          <div style="position:relative;flex:1;min-height:0;display:grid;grid-template-columns:{{ f.cols }};gap:{{ f.m }};padding:{{ f.m }}">
+            <div style="min-width:0;min-height:0;display:flex;flex-direction:column;gap:{{ f.m }}">
+              <sc-if value="{{ f.showQm }}" hint-placeholder-val="{{ true }}"><div style="flex:none">
+                <dc-import name="PartidaRapidaTarjeta" compacta="{{ f.qmCompact }}" estado="{{ f.qmEstado }}" espera="{{ f.qmEspera }}" mod="Wars of Liberty" icono="url(mods/wol/icon.png) center/cover no-repeat, #1a2c48" version="1.6.2" reloj="{{ f.qmReloj }}" rival="{{ f.qmRival }}" anfitrion="Kaiser" minutos="4" pico="17:00 y 20:00" hospedas="{{ f.qmHost }}" acento="{{ f.acc }}" acento-texto="{{ f.accT }}" acento-sobre="#ffffff" sombra="{{ f.accSh }}" cristal="{{ f.gBg }}" difuminado="{{ f.gBlur }}" on-accion="{{ f.onQm }}" hint-size="100%,124px"></dc-import>
+              </div></sc-if>
+              <div style="flex:1 1 auto;min-height:340px;display:flex;flex-direction:column;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);overflow:hidden">
+                <div style="flex:none;display:flex;align-items:center;gap:10px;padding:14px 18px 8px"><span style="font:600 15px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Salas abiertas</span><sc-if value="{{ f.hasRooms }}" hint-placeholder-val="{{ true }}"><span style="height:22px;box-sizing:border-box;padding:0 8px;border-radius:11px;display:flex;align-items:center;background:rgba(255,255,255,.08);font:600 11.5px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ f.count }}</span></sc-if><div style="flex:1"></div><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ f.updated }}</span></div>
+                <sc-if value="{{ f.hasRooms }}" hint-placeholder-val="{{ true }}">
+                  <div style="flex:none;display:grid;grid-template-columns:36px minmax(0,1fr) minmax(130px,190px) 74px 64px 136px;gap:0 12px;padding:4px 22px 6px 22px;font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a"><span></span><span>SALA</span><span>ANFITRIÓN</span><span>JUGADORES</span><span>PING</span><span></span></div>
+                  <div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;display:flex;flex-direction:column;gap:6px;padding:0 10px 10px">
+                    <sc-for list="{{ f.rooms }}" as="r" hint-placeholder-count="4">
+                      <sc-if value="{{ r.isHead }}" hint-placeholder-val="{{ false }}"><span style="flex:none;padding:8px 4px 0;font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">{{ r.label }}</span></sc-if><sc-if value="{{ r.isRow }}" hint-placeholder-val="{{ true }}">
+                      <div style-hover="background:rgba(255,255,255,.07)" style="flex:none;display:grid;grid-template-columns:36px minmax(0,1fr) minmax(130px,190px) 74px 64px 136px;gap:0 12px;align-items:center;min-height:62px;box-sizing:border-box;padding:8px 12px;border-radius:10px;background:{{ r.bg }};box-shadow:{{ r.ring }}">
+                        <span style="width:36px;height:36px;border-radius:8px;background:{{ r.icon }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"></span>
+                        <div style="min-width:0;display:flex;flex-direction:column;gap:6px">
+                          <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 14px/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ r.name }}</span>
+                          <div style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden">
+                            <sc-for list="{{ r.chips }}" as="k" hint-placeholder-count="2"><span style="flex:none;height:22px;box-sizing:border-box;padding:0 9px;border-radius:11px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ k.c }};white-space:nowrap"><span style="width:6px;height:6px;border-radius:3px;background:{{ k.dot }}"></span>{{ k.t }}</span></sc-for>
+                          </div>
+                        </div>
+                        <div style="min-width:0;display:flex;flex-direction:column;gap:5px">
+                          <div style="display:flex;align-items:baseline;gap:6px;min-width:0"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 13px/1.4 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ r.host }}</span><span style="flex:none;font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ r.you }}</span></div>
+                          <sc-if value="{{ r.hasElo }}" hint-placeholder-val="{{ true }}"><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap"><span style="font-family:Consolas,ui-monospace,monospace;color:#c3d2e5">{{ r.elo }}</span> ELO</span></sc-if>
+                          <sc-if value="{{ r.hasPlace }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap">En posicionamiento <span style="font-family:Consolas,ui-monospace,monospace;color:#c3d2e5">{{ r.place }}</span></span></sc-if>
+                        </div>
+                        <span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ r.pl }}</span>
+                        <span style="font:500 12.5px/1 Consolas,ui-monospace,monospace;color:{{ r.pingC }}">{{ r.ping }}</span>
+                        <div style="display:flex;justify-content:flex-end">
+                          <sc-if value="{{ r.bPrim }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.go }}" style-hover="filter:brightness(1.1)" style="cursor:pointer;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff;white-space:nowrap">{{ r.bt }}</span></sc-if>
+                          <sc-if value="{{ r.bSec }}" hint-placeholder-val="{{ true }}"><span onClick="{{ r.go }}" style-hover="background:rgba(255,255,255,.14)" style="cursor:pointer;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">{{ r.bt }}</span></sc-if>
+                          <sc-if value="{{ r.bText }}" hint-placeholder-val="{{ false }}"><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;padding:0 6px">{{ r.bt }}</span></sc-if>
+                        </div>
+                      </div></sc-if>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ f.noRooms }}" hint-placeholder-val="{{ false }}">
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;text-align:center"><span style="font:700 clamp(18px,1.3cqw,24px)/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">No hay salas abiertas</span><span style="max-width:52ch;font:400 13.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">Te avisamos cuando alguien abra una sala de un mod que tengas instalado. Suele haber más gente entre 17:00 y 20:00, en tu hora.</span></div>
+                </sc-if>
+                <sc-if value="{{ f.loading }}" hint-placeholder-val="{{ false }}"><div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:6px;padding:4px 10px 10px"><sc-for list="{{ f.skel }}" as="k" hint-placeholder-count="4"><div style="flex:none;display:grid;grid-template-columns:36px minmax(0,1fr) minmax(130px,190px) 74px 64px 136px;gap:0 12px;align-items:center;height:62px;box-sizing:border-box;padding:0 12px;border-radius:10px;background:rgba(255,255,255,.04)"><span style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.07)"></span><div style="display:flex;flex-direction:column;gap:8px"><span style="width:{{ k.w }};height:12px;border-radius:6px;background:rgba(255,255,255,.1)"></span><span style="width:120px;height:10px;border-radius:5px;background:rgba(255,255,255,.06)"></span></div><span style="width:90px;height:12px;border-radius:6px;background:rgba(255,255,255,.07)"></span><span style="width:30px;height:12px;border-radius:6px;background:rgba(255,255,255,.07)"></span><span style="width:40px;height:12px;border-radius:6px;background:rgba(255,255,255,.07)"></span><span></span></div></sc-for></div></sc-if>
+                <sc-if value="{{ f.error }}" hint-placeholder-val="{{ false }}"><div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;text-align:center"><span style="font:600 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#F5BD76">No se pudieron cargar las salas</span><span style="max-width:56ch;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">El servidor no respondió. Comprueba tu conexión y vuelve a intentarlo.</span><span onClick="{{ f.retry }}" style-hover="background:rgba(255,255,255,.14)" style="cursor:pointer;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Reintentar</span></div></sc-if>
+                <sc-if value="{{ f.offline }}" hint-placeholder-val="{{ false }}"><div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;text-align:center"><span style="font:600 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Sin conexión con el servidor</span><span style="max-width:56ch;font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">Las salas, el chat y la partida rápida necesitan internet. Puedes seguir jugando contra la IA desde la Biblioteca.</span><span onClick="{{ f.retry }}" style-hover="background:rgba(255,255,255,.14)" style="cursor:pointer;height:32px;box-sizing:border-box;padding:0 14px;border-radius:7px;display:flex;align-items:center;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Reintentar</span></div></sc-if>
+              </div>
+              <div style="flex:none;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);padding:10px 16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;align-items:center;min-width:0;height:28px;overflow:hidden">
+                  <span style="flex:none;font:600 14px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;padding-right:14px">Actividad de la comunidad</span>
+                  <sc-for list="{{ f.facts }}" as="x" hint-placeholder-count="2"><div style="flex:none;display:flex;align-items:center;gap:7px;padding:0 12px;box-shadow:inset 1px 0 0 rgba(255,255,255,.12);white-space:nowrap"><span style="font:700 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.04em;color:#61779a">{{ x.k }}</span><span style="font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ x.v }}</span><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ x.n }}</span></div></sc-for>
+                  <div style="flex:1"></div>
+                  <span style="flex:none;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap">Ver septiembre</span>
+                </div>
+                <sc-if value="{{ f.showCards }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1.3fr);gap:12px">
+                    <div style="border-radius:10px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+                      <span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">HORAS CON MÁS GENTE</span>
+                      <div style="height:clamp(56px,4cqw,110px);display:flex;align-items:flex-end;gap:3px"><sc-for list="{{ f.peak }}" as="q" hint-placeholder-count="24"><span style="flex:1;height:{{ q.h }};min-height:2px;border-radius:1px;background:{{ q.c }}"></span></sc-for></div>
+                      <div style="display:flex;justify-content:space-between;font:400 11px/1 Consolas,ui-monospace,monospace;color:#61779a"><span>0 h</span><span>12 h</span><span>23 h</span></div>
+                      <span style="font:400 13px/1.35 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Más gente entre <b style="color:#ffffff">17:00 y 20:00</b></span>
+                      <span style="font:400 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">253 salas en 30 días · en tu hora</span>
+                    </div>
+                    <div style="border-radius:10px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);padding:12px 14px 6px;display:flex;flex-direction:column">
+                      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">PARTIDAS DE LA COMUNIDAD</span><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Ver todas</span></div>
+                      <sc-for list="{{ f.matches }}" as="m" hint-placeholder-count="3"><div style="display:flex;align-items:flex-start;gap:9px;padding:8px 0;box-shadow:inset 0 -1px 0 rgba(255,255,255,.06);min-width:0"><span style="flex:none;width:6px;height:6px;margin-top:6px;border-radius:3px;background:{{ m.dot }}"></span><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:400 13px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-weight:600;color:#f0f5fb">{{ m.a }}</b> {{ m.verb }} <span style="color:#dce7f5">{{ m.b }}</span></span><span style="font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-weight:600;color:#E6C06A">Competitiva 1v1</b> · {{ m.sub }}</span></div><span style="flex:none;font:400 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ m.ago }}</span></div></sc-for>
+                    </div>
+                    <div style="border-radius:10px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);padding:12px 14px;display:flex;flex-direction:column;gap:4px">
+                      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font:700 11px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#61779a">CLASIFICACIÓN</span><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Ver todo</span></div>
+                      <sc-for list="{{ f.top }}" as="t" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:9px;height:30px;padding:0 6px;border-radius:6px"><span style="flex:none;width:18px;font:600 12px/1 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ t.n }}</span><span style="flex:1;min-width:0;font:400 13px/1.4 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</span><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ t.elo }}</span></div></sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+            <sc-if value="{{ f.chatOpen }}" hint-placeholder-val="{{ true }}">
+              <div style="min-height:0;display:flex;flex-direction:column;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);overflow:hidden">
+                <div style="flex:none;display:flex;align-items:center;gap:4px;padding:10px"><span style="flex:1;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.1);font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">Chat · 5</span><span style="flex:1;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Jugadores · 5</span><span onClick="{{ f.toggleChat }}" title="Plegar el chat" style-hover="background:rgba(255,255,255,.12)" style="cursor:pointer;width:32px;height:32px;box-sizing:border-box;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">»</span></div>
+                <div style="flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(130,175,255,.28) transparent;display:flex;flex-direction:column;gap:11px;padding:6px 14px 14px">
+                  <sc-for list="{{ f.chat }}" as="c" hint-placeholder-count="4">
+                    <sc-if value="{{ c.sys }}" hint-placeholder-val="{{ false }}"><span style="font:400 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ c.t }}</span></sc-if>
+                    <sc-if value="{{ c.msg }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ c.who }}</span><span style="font:400 11px/1 Consolas,ui-monospace,monospace;color:#61779a">{{ c.at }}</span></div><span style="font:400 13.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ c.t }}</span></div></sc-if>
+                  </sc-for>
+                </div>
+                <div style="flex:none;display:flex;align-items:center;gap:8px;padding:10px 12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)"><div style="flex:1;min-width:0;height:34px;box-sizing:border-box;padding:0 12px;border-radius:8px;display:flex;align-items:center;background:rgba(5,10,18,.45);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ f.chatPh }}</div><span style="height:34px;box-sizing:border-box;padding:0 12px;border-radius:8px;display:flex;align-items:center;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Enviar</span></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ f.chatClosed }}" hint-placeholder-val="{{ false }}">
+              <div style="min-height:0;display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)"><span onClick="{{ f.toggleChat }}" title="Abrir el chat" style-hover="background:rgba(255,255,255,.12)" style="cursor:pointer;width:32px;height:32px;box-sizing:border-box;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">«</span><span style="writing-mode:vertical-rl;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Chat · 5</span><span title="Mensajes sin leer" style="height:20px;min-width:20px;box-sizing:border-box;padding:0 6px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(85,172,238,.18);box-shadow:inset 0 0 0 1px rgba(85,172,238,.5);font:600 11px/1 Consolas,ui-monospace,monospace;color:#9fd0f5">2</span></div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:34px;max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><b>Para Claude Code.</b> La tarjeta de partida rápida sustituye a QuickMatchButton en la cabecera de la lista (RoomsSectionHeader) y se dibuja con los estados de PartidaRapidaTarjeta.dc.html. Las filas salen de LobbySummary (title, mod, competitive, max_players, current_players, is_private, status, created_at y el host con su ELO, oculto si posiciona); «Otra versión» compara mod_combined_hash con la copia activa, como ya hace QuickMatchPlanner.OtherVersionCount. El ping es el que ya muestra la lista. Torneos v2 debería tomar el mismo margen M de la barra de subpestañas para que las dos pestañas queden alineadas.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;ventana&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;1366×768&quot;,&quot;1920×1080&quot;,&quot;2560×1392&quot;],&quot;default&quot;:&quot;1920×1080&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;salas&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Con salas&quot;,&quot;Sin salas&quot;],&quot;default&quot;:&quot;Con salas&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;estado&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Normal&quot;,&quot;Cargando&quot;,&quot;Error&quot;,&quot;Sin conexión&quot;],&quot;default&quot;:&quot;Normal&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { qm: 'listo', rival: 'Kaiser', host: false, t: 0, chat: true, log: '' };
+  componentDidMount() { this.iv = setInterval(() => { if (this.state.qm === 'esperando') this.setState({ t: this.state.t + 1 }); }, 1000); }
+  componentWillUnmount() { clearInterval(this.iv); clearTimeout(this.to); }
+  renderVals() {
+    const p = this.props, s = this.state, set = o => this.setState(o);
+    const NAVY = '#0f1c2e';
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const toHex = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+    const al = (h, a) => 'rgba(' + hex(h).join(',') + ',' + a + ')';
+    const lum = h => { const c = hex(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+    const con = (a, b) => { const A = lum(a) + .05, B = lum(b) + .05; return Math.max(A, B) / Math.min(A, B); };
+    const accText = a => { let t = .3, c = mix(a, '#ffffff', t); while (con(c, NAVY) < 5 && t < .9) { t += .08; c = mix(a, '#ffffff', t); } return c; };
+    const mmss = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
+    const lvl = p.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px', bar: 1 }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px', bar: .3 } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px', bar: .42 };
+    const withRooms = (p.salas ?? 'Con salas') === 'Con salas';
+    const [W, H] = ({ '1366×768': [1366, 768], '2560×1392': [2560, 1392] })[p.ventana] || [1920, 1080];
+    const acc = '#c04444', accT = accText(acc);
+    const ICON = { wol: 'mods/wol/icon.png', hd: 'mods/hundred-days/icon.png', im: 'mods/improvement-mod/icon.png' };
+
+    const onQm = k => {
+      if (k === 'buscar') {
+        set({ qm: 'buscando', log: '' }); clearTimeout(this.to);
+        this.to = setTimeout(() => this.setState(withRooms ? { qm: 'dentro', rival: 'Kaiser', host: false, log: 'Entraste en la sala de Kaiser: se abre la ventana de la sala.' } : { qm: 'esperando', t: 0, log: '' }), 1300);
+      } else if (k === 'cancelar' || k === 'dejar') { clearTimeout(this.to); set({ qm: 'listo', t: 0, log: k === 'dejar' ? 'Búsqueda detenida: tu sala se cerró.' : '' }); }
+      else if (k === 'verSala') set({ log: 'Se abre la ventana de la sala.' });
+    };
+    const say = t => () => set({ log: t });
+
+    const build = c => {
+      const m = c.w >= 1600 ? '16px' : '12px', chatW = c.w >= 1600 ? '320px' : '280px', st = c.st || 'normal', normal = st === 'normal';
+      const mine = c.qm === 'esperando' || (c.qm === 'dentro' && c.host);
+      const inKaiser = c.qm === 'dentro' && !c.host;
+      const chip = (t, dot, col) => ({ t, dot, c: col || '#dce7f5' });
+      const comp = chip('Competitiva · 1v1', '#E6C06A');
+      const rows = [];
+      if (mine && normal) rows.push({ mod: 'wol', name: 'Wars of Liberty · Quick match 1v1', chips: [comp, chip('Tu sala', '#55ACEE', '#9fd0f5')], host: 'Gorgo', you: 'tú', elo: '1383', pl: c.qm === 'dentro' ? '2/2' : '1/2', ping: '—', kind: 'prim', bt: 'Ver sala', go: say('Se abre la ventana de tu sala.') });
+      if (c.rooms && normal) {
+        rows.push(
+          { mod: 'wol', name: 'WoL 1v1 · mapas ESOC', chips: inKaiser ? [comp, chip('Estás dentro', '#55ACEE', '#9fd0f5')] : [comp], host: 'Kaiser', elo: '1630', pl: inKaiser ? '2/2' : '1/2', ping: '62 ms', kind: inKaiser ? 'prim' : 'sec', bt: inKaiser ? 'Ver sala' : 'Unirse', go: say(inKaiser ? 'Se abre la ventana de la sala.' : 'Entras en la sala de Kaiser.') },
+          { mod: 'wol', name: 'Práctica 3v3 de la casa', chips: [chip('Casual · 3v3', '#8C9CB1'), chip('Con contraseña', '#a8bcd2')], host: 'Rioplatense', elo: '1288', pl: '3/6', ping: '41 ms', kind: 'sec', bt: 'Unirse', go: say('Se pide la contraseña de la sala.') },
+          { mod: 'hd', name: 'Napoleónicas 2v2', chips: [chip('Casual · 2v2', '#8C9CB1')], host: 'Malinche', place: '3/10', pl: '2/4', ping: '88 ms', kind: 'sec', bt: 'Instalar mod', go: say('Se abre Hundred Days en la Biblioteca para instalarlo.') },
+          { mod: 'wol', name: 'Revancha', chips: [comp, chip('En partida · 14 min', '#4fd68a', '#7fe0a8')], host: 'Almirante', elo: '1402', pl: '2/2', ping: '54 ms', kind: 'sec', bt: 'Ver partida', go: say('Se abre «Viendo una partida».') },
+          { mod: 'wol', name: 'Mapas nuevos 1v1', chips: [comp, chip('Otra versión', '#F4900C', '#F5BD76')], host: 'Bicorne', elo: '1318', pl: '1/2', ping: '170 ms', kind: 'sec', bt: 'Revisar mi copia', go: say('Se abren los Ajustes de Wars of Liberty, en Archivos, para comprobar o actualizar tu copia.') },
+          { mod: 'wol', name: 'Exhibición 2v2', chips: [chip('Casual · 2v2', '#8C9CB1'), chip('Observadores 1/2', '#55ACEE', '#9fd0f5')], host: 'Aluclown', elo: '1541', pl: '4/4', ping: '47 ms', kind: 'sec', bt: 'Entrar a mirar', go: say('Entras como observador: ocupas un sitio del mapa sin jugar.') },
+          { mod: 'im', name: 'Todos contra todos', chips: [chip('Casual · 8 jugadores', '#8C9CB1')], host: 'Zanjón', elo: '1190', pl: '8/8', ping: '55 ms', kind: 'text', bt: 'Llena' }
+        );
+      }
+      const pingC = v => v === '—' ? '#61779a' : parseInt(v, 10) > 150 ? '#F5BD76' : parseInt(v, 10) < 100 ? '#7fe0a8' : '#dce7f5';
+      const grp = r => r.kind === 'prim' ? 0 : r.bt === 'Unirse' ? 1 : (r.bt === 'Instalar mod' || r.bt === 'Entrar a mirar') ? 2 : r.bt === 'Ver partida' ? 3 : 4;
+      const sorted = rows.map((r, i) => [r, i]).sort((a, b) => grp(a[0]) - grp(b[0]) || a[1] - b[1]).map(x => x[0]);
+      const R = sorted.map(r => ({ ...r, isRow: true, isHead: false, icon: 'url(' + ICON[r.mod] + ') center/cover no-repeat, #1a2c48', you: r.you || '', hasElo: !!r.elo, elo: r.elo || '', hasPlace: !!r.place, place: r.place || '', pingC: pingC(r.ping), bPrim: r.kind === 'prim', bSec: r.kind === 'sec', bText: r.kind === 'text', bg: r.kind === 'prim' ? 'rgba(85,172,238,.08)' : 'rgba(255,255,255,.04)', ring: r.kind === 'prim' ? 'inset 0 0 0 1px rgba(85,172,238,.35)' : 'none' }));
+      const facts = [{ k: 'MÁS PARTIDAS · OCT', v: 'UnstoppableStreletsy', n: '15' }, { k: 'MEJOR RACHA · OCT', v: 'Kaiser', n: '3' }, { k: 'PARTIDAS · 30 D', v: '', n: '137' }, { k: 'JUGADORES · 7 D', v: '', n: '20' }].slice(0, c.w >= 2200 ? 4 : c.w >= 1600 ? 3 : 2);
+      const PK = [2, 1, 1, 0, 0, 0, 1, 1, 2, 3, 3, 4, 5, 5, 6, 7, 8, 10, 12, 11, 9, 6, 4, 3];
+      return {
+        id: c.id, href: '#' + c.id, label: c.label, w: c.w + 'px', h: c.h + 'px', interactive: !!c.interactive,
+        hasSim: !!c.interactive && c.qm === 'esperando', sim: () => set({ qm: 'dentro', rival: 'Cuzco', host: true, log: 'Cuzco entró en tu sala: suena el aviso y, si la ventana no está al frente, sale «¡Rival encontrado!».' }),
+        reset: () => { clearTimeout(this.to); set({ qm: 'listo', rival: 'Kaiser', host: false, t: 0, log: '' }); }, log: c.interactive ? s.log : '',
+        barBg: 'rgba(11,20,34,' + G.bar + ')', barBlur: lvl === 'Sólida' ? '0px' : '10px', gBg: G.bg, gBlur: G.blur, m,
+        acc, accT, accSh: '0 6px 20px ' + al(acc, .35),
+        hasPill: normal && c.qm === 'esperando', pillTime: mmss(c.t || 0), pillX: () => onQm('dejar'), pillGo: say('Se abre la ventana de tu sala.'),
+        showQm: st !== 'offline', qmCompact: c.h < 900, qmEstado: st === 'offline' ? 'sinConexion' : c.qm, qmEspera: !normal ? 'desconocido' : c.rooms ? 'sala' : 'nadie', qmReloj: mmss(c.t || 0), qmRival: c.rival || 'Kaiser', qmHost: !!c.host, onQm: c.interactive ? onQm : undefined,
+        cols: 'minmax(0,1fr) ' + (c.chat ? chatW : '44px'), chatOpen: !!c.chat, chatClosed: !c.chat, toggleChat: c.interactive ? () => set({ chat: !s.chat }) : undefined,
+        hasRooms: R.length > 0, noRooms: normal && R.length === 0, count: String(R.length), rooms: (() => { const L = g => g <= 2 ? 'PUEDES ENTRAR' : g === 3 ? 'EN PARTIDA' : 'NO DISPONIBLES AHORA'; const out = []; let last = ''; R.forEach(r => { const l = L(grp(r)); if (l !== last) { out.push({ isHead: true, isRow: false, label: l }); last = l; } out.push(r); }); return out; })(),
+        loading: st === 'cargando', error: st === 'error', offline: st === 'offline', online: st !== 'offline',
+        updated: st === 'cargando' ? 'Cargando…' : st === 'error' ? 'Sin actualizar' : st === 'offline' ? 'Sin conexión' : 'Actualizado hace un momento',
+        retry: c.interactive ? say('Se vuelve a pedir la lista de salas.') : undefined, skel: ['48%', '62%', '40%', '55%'].map(w => ({ w })),
+        createOp: st === 'offline' ? '.45' : '1', chatPh: st === 'offline' ? 'Sin conexión' : 'Escribe un mensaje…',
+        facts, showCards: c.h >= 1000,
+        peak: PK.map((v, i) => ({ h: Math.round(v / 12 * 100) + '%', c: i >= 17 && i <= 20 ? '#55ACEE' : 'rgba(130,175,255,.3)' })),
+        matches: [{ dot: '#4fd68a', a: 'Kaiser', verb: 'ganó a', b: 'UnstoppableStreletsy', sub: 'Wars of Liberty · ESOC Florida · 24 min', ago: 'hace 1 d' }, { dot: '#4fd68a', a: 'Aluclown', verb: 'ganó a', b: 'El Taita', sub: 'Wars of Liberty · ESOC Yukon · 27 min', ago: 'hace 1 d' }, { dot: '#61779a', a: 'Kaiser', verb: 'contra', b: 'UnstoppableStreletsy', sub: 'sin resultado · Wars of Liberty · 8 min', ago: 'hace 2 d' }],
+        top: [['1', 'Kaiser', '1630'], ['2', 'UnstoppableStreletsy', '1588'], ['3', 'Aluclown', '1541'], ['4', 'Almirante', '1402'], ['5', 'Gorgo', '1383']].map(([n, name, elo]) => ({ n, name, elo })),
+        chat: [{ msg: true, sys: false, who: 'Kaiser', at: '20:31', t: '¿alguien para un 1v1 de WoL?' }, { msg: true, sys: false, who: 'Malinche', at: '20:33', t: 'en un rato abro una 2v2 de Hundred Days' }, { msg: false, sys: true, t: 'Rioplatense se conectó.' }, { msg: true, sys: false, who: 'Bicorne', at: '20:36', t: '¿ya salió la 1.6.2?' }]
+      };
+    };
+    const frames = [
+      build({ id: '86a', interactive: true, w: W, h: H, rooms: withRooms, st: ({ 'Cargando': 'cargando', 'Error': 'error', 'Sin conexión': 'offline' })[p.estado] || 'normal', qm: s.qm, t: s.t, rival: s.rival, host: s.host, chat: s.chat,
+        label: 'Interactivo. Pulsa «Buscar partida 1v1»: con salas entras en la de Kaiser; sin salas (en Tweaks) abres la tuya, que aparece arriba de la lista como «Tu sala» y en la píldora junto a «Conectado». El chat se pliega con «»». En Tweaks cambias también el tamaño y la transparencia.' }),
+      build({ id: '86b', w: 1366, h: 768, rooms: false, qm: 'listo', chat: false,
+        label: 'Portátil, 1366 × 768, sin salas y con el chat plegado a 44 px. La actividad se queda en la barra compacta: las tarjetas solo salen cuando sobra altura.' }),
+      build({ id: '86c', w: 1366, h: 768, rooms: true, qm: 'listo', chat: true, st: 'cargando',
+        label: 'Cargando: filas provisionales con la forma de las de verdad. La partida rápida no dice quién espera hasta saberlo.' }),
+      build({ id: '86d', w: 1366, h: 768, rooms: true, qm: 'listo', chat: true, st: 'error',
+        label: 'Error al cargar la lista (RoomsErrorBox y RoomsErrorRetry ya existen): qué pasó y «Reintentar».' }),
+      build({ id: '86e', w: 1366, h: 768, rooms: true, qm: 'listo', chat: true, st: 'offline',
+        label: 'Sin conexión: el chip «Sin conexión» sustituye a «Conectado», «Crear sala» y el chat se apagan, y la tarjeta de partida rápida no sale: el panel ya dice que necesita internet.' })
+    ];
+    return { frames };
+  }
+}
+</script>
+</body>
+</html>

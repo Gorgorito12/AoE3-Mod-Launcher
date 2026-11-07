@@ -1,6 +1,8 @@
 using System;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services;
 
@@ -25,7 +27,7 @@ namespace WarsOfLibertyLauncher;
 /// first, and a window you cannot dismiss in front of a launcher that has not opened yet is
 /// the worst possible first impression of a feature nobody asked for.</para>
 /// </summary>
-public partial class StartupUpdateWindow : Window
+public partial class StartupUpdateWindow : BaseDialog
 {
     private readonly SpeedTracker _speed = new();
     private bool _closingByOwner;
@@ -38,6 +40,12 @@ public partial class StartupUpdateWindow : Window
     /// </summary>
     public event Action? SkipRequested;
 
+    /// <summary>The download failed and the user asked to try it again (103g).</summary>
+    public event Action? RetryRequested;
+
+    internal TextBlock HeaderText => HeadlineText;
+    internal Button SkipButton => CancelAction;
+
     public StartupUpdateWindow(string latestVersion)
     {
         InitializeComponent();
@@ -45,12 +53,51 @@ public partial class StartupUpdateWindow : Window
         // Both: TitleBar mirrors its Title into the Window's only when the window set none,
         // and this window IS in the taskbar (it is the process's only one), so the taskbar
         // button would otherwise read as the class name.
-        Title = Strings.Get("StartupUpdateTitle");
-        Chrome.Title = Strings.Get("StartupUpdateTitle");
-        HeaderText.Text = Strings.Get("StartupUpdateTitle");
-        BodyText.Text = Strings.Format("StartupUpdateBody", latestVersion);
+        SetBarTitle(Strings.Get("StartupUpdateTitle"));
+        SetHeadline(Strings.Format("StartupUpdateHeadline", latestVersion));
+        SetLead(Strings.Format("StartupUpdateBody", latestVersion));
         ProgressLabelText.Text = Strings.Get("StartupUpdateProgressLabel");
         SkipButton.Content = Strings.Get("StartupUpdateBtnSkip");
+        SkipButton.MinWidth = 150;
+        // Not a modal: IsCancel would ask a window with no DialogResult for one.
+        SkipButton.IsCancel = false;
+        HidePrimary();
+    }
+
+    /// <summary>
+    /// The download failed: the amber tone, what failed, and a way to try again. The way out stays
+    /// the same button, so an update is still never what keeps somebody out of the launcher.
+    /// </summary>
+    public void ShowFailed(string detail)
+    {
+        Tone = DialogTone.Caution;
+        Width = 480;
+        SetHeadline(Strings.Get("StartupUpdateFailedTitle"));
+        SetLead(Strings.Get("StartupUpdateFailedBody"));
+        SetDetail(Strings.Get("DlgWhatFailed"), detail);
+        ProgressBlock.Visibility = Visibility.Collapsed;
+        Body = null;
+        PrimaryAction.Content = Strings.Get("StartupUpdateRetry");
+        PrimaryAction.Visibility = Visibility.Visible;
+        PrimaryAction.IsDefault = true;
+        SkipButton.IsEnabled = true;
+        Chrome.ShowClose = true;
+    }
+
+    /// <summary>Back to the progress bar for another attempt.</summary>
+    public void ShowRetrying(string latestVersion)
+    {
+        Tone = DialogTone.None;
+        Width = 460;
+        SetHeadline(Strings.Format("StartupUpdateHeadline", latestVersion));
+        SetLead(Strings.Format("StartupUpdateBody", latestVersion));
+        SetDetail(null, null);
+        ProgressBlock.Visibility = Visibility.Visible;
+        Body = ProgressBlock;
+        ProgressLabelText.Text = Strings.Get("StartupUpdateProgressLabel");
+        DownloadProgress.Value = 0;
+        HidePrimary();
+        _verifying = false;
     }
 
     /// <summary>Paint one download tick. Safe to call from the download's progress callback.</summary>
@@ -69,15 +116,11 @@ public partial class StartupUpdateWindow : Window
 
         _speed.Sample(p.BytesReceived);
         DownloadProgress.Value = p.Percentage;
-        ProgressPercentText.Text =
-            $"{p.Percentage:0.0}%  ({FormatBytes(p.BytesReceived)} / {FormatBytes(p.TotalBytes)})";
-        SpeedText.Text = _speed.BytesPerSecond > 0
-            ? Strings.Format("ProgressSpeed", FormatBytes((long)_speed.BytesPerSecond))
-            : "";
-        var eta = _speed.EstimateTimeRemaining(p.TotalBytes - p.BytesReceived);
-        EtaText.Text = eta.HasValue
-            ? Strings.Format("ProgressEta", FormatDuration(eta.Value))
-            : "";
+        ProgressPercentText.Text = $"{p.Percentage:0} %";
+        var amount = Strings.Format("StartupUpdateAmount", FormatBytes(p.BytesReceived), FormatBytes(p.TotalBytes));
+        ProgressLabelText.Text = _speed.BytesPerSecond > 0
+            ? $"{amount} · {FormatBytes((long)_speed.BytesPerSecond)}/s"
+            : amount;
     }
 
     /// <summary>
@@ -94,8 +137,6 @@ public partial class StartupUpdateWindow : Window
         DownloadProgress.Value = 100;
         ProgressLabelText.Text = Strings.Get(labelKey);
         ProgressPercentText.Text = "";
-        SpeedText.Text = "";
-        EtaText.Text = "";
         SkipButton.IsEnabled = false;
         Chrome.ShowClose = false;
     }
@@ -111,7 +152,12 @@ public partial class StartupUpdateWindow : Window
         Close();
     }
 
-    private void SkipButton_Click(object sender, RoutedEventArgs e) => CloseByOwner_Skip();
+    protected override void OnCancel()
+    {
+        if (SkipButton.IsEnabled) CloseByOwner_Skip();
+    }
+
+    protected override void OnPrimary() => RetryRequested?.Invoke();
 
     protected override void OnClosing(CancelEventArgs e)
     {
@@ -136,12 +182,5 @@ public partial class StartupUpdateWindow : Window
         int unit = 0;
         while (size >= 1024 && unit < units.Length - 1) { size /= 1024; unit++; }
         return $"{size:0.##} {units[unit]}";
-    }
-
-    private static string FormatDuration(TimeSpan ts)
-    {
-        if (ts.TotalSeconds < 60) return $"{(int)ts.TotalSeconds}s";
-        if (ts.TotalMinutes < 60) return $"{(int)ts.TotalMinutes}m {ts.Seconds:00}s";
-        return $"{(int)ts.TotalHours}h {ts.Minutes:00}m";
     }
 }

@@ -25,8 +25,14 @@ public static class GlassTheme
     public const string FooterKey = "GlassFooter";
     public const string TitleBarKey = "GlassTitleBar";
 
+    /// <summary>What every menu, popover, toast and floating panel is painted with. Denser than
+    /// the design's .95 / .74 / .6, whose numbers come with a blur of 18 to 32 px because these
+    /// surfaces sit over text. WPF cannot blur what is behind a popup, and at .74 without it the
+    /// text behind reads through the menu's own (seen on screen).</summary>
+    public static readonly string[] FloatingKeys = { "GlassMenu", "ChromePopupBg", "LibraryMenuBg" };
+
     /// <summary>Colours of one level. The title bar is #0b1422 at <paramref name="BarAlpha"/>.</summary>
-    public readonly record struct Spec(Color Panel, Color Tile, Color Menu, Color Footer, double BarAlpha);
+    public readonly record struct Spec(Color Panel, Color Tile, Color Menu, Color Footer, double BarAlpha, Color Floating);
 
     /// <summary>An unknown or missing value reads as the default, Media.</summary>
     public static string Normalize(string? level) => level switch
@@ -38,9 +44,9 @@ public static class GlassTheme
 
     public static Spec For(string? level) => Normalize(level) switch
     {
-        Solid => new Spec(Rgba(12, 22, 38, .86), Rgba(12, 22, 38, .8), Rgba(12, 22, 38, .95), Rgba(12, 22, 38, .94), 1),
-        Maximum => new Spec(Rgba(10, 19, 33, .28), Rgba(10, 19, 33, .28), Rgba(12, 22, 38, .6), Rgba(10, 19, 33, .42), .3),
-        _ => new Spec(Rgba(10, 19, 33, .5), Rgba(10, 19, 33, .28), Rgba(12, 22, 38, .74), Rgba(10, 19, 33, .62), .42),
+        Solid => new Spec(Rgba(12, 22, 38, .86), Rgba(12, 22, 38, .8), Rgba(12, 22, 38, .95), Rgba(12, 22, 38, .94), 1, Rgba(12, 22, 38, .97)),
+        Maximum => new Spec(Rgba(10, 19, 33, .28), Rgba(10, 19, 33, .28), Rgba(12, 22, 38, .6), Rgba(10, 19, 33, .42), .3, Rgba(12, 22, 38, .88)),
+        _ => new Spec(Rgba(10, 19, 33, .5), Rgba(10, 19, 33, .28), Rgba(12, 22, 38, .74), Rgba(10, 19, 33, .62), .42, Rgba(12, 22, 38, .93)),
     };
 
     /// <summary>The title bar of a window of one mod: its colour at 22 % in #0b1422 (BASE.md).</summary>
@@ -57,7 +63,7 @@ public static class GlassTheme
         var spec = For(level);
         Set(resources, PanelKey, spec.Panel);
         Set(resources, TileKey, spec.Tile);
-        Set(resources, MenuKey, spec.Menu);
+        foreach (var key in FloatingKeys) Set(resources, key, spec.Floating);
         Set(resources, FooterKey, spec.Footer);
         Set(resources, TitleBarKey, Rgba(11, 20, 34, spec.BarAlpha));
     }

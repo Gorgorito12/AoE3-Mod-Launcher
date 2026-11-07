@@ -1,36 +1,38 @@
-using System.Windows;
+using System.Windows.Controls;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
+using WarsOfLibertyLauncher.Models;
 
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Tiny modal that asks the host for a new room name. Mirrors
-/// <see cref="PasswordPromptDialog"/> (same chrome, same button row) with a
-/// plain TextBox instead of the password box.
+/// Asks the host for a new room name (design 103j). The counter sits inside the field.
 ///
-/// The 3-80 length rule is the SERVER's (it validates every rename the same way
-/// it validates creation); repeating it here is purely so the host gets instant
-/// feedback instead of a round-trip error.
+/// The 3-80 length rule is the SERVER's (it validates every rename the same way it validates
+/// creation); repeating it here is purely so the host gets instant feedback instead of a
+/// round-trip error. The prototype draws /40; the server's number is the true one.
 /// </summary>
-public partial class RenameRoomDialog : Window
+public partial class RenameRoomDialog : BaseDialog
 {
     /// <summary>Minimum room-name length — mirrors the backend's check.</summary>
     private const int MinNameLength = 3;
 
     public string EnteredName { get; private set; } = "";
 
-    public RenameRoomDialog(string currentName)
+    public RenameRoomDialog(string currentName, ModProfile? mod = null)
     {
         InitializeComponent();
 
-        Title = Strings.Get("MpRenameDialogTitle");
-        TitleBarControl.Title = Strings.Get("MpRenameDialogTitle");
+        SetBarTitle(Strings.Get("MpRenameDialogTitle"));
+        SetHeadline(Strings.Get("MpRenameHeadline"));
+        FieldLabel.Text = Strings.Get("MpTeamsCreateName");
         PromptText.Text = Strings.Get("MpRenameDialogPrompt");
-        CancelButton.Content = Strings.Get("BtnCancel");
-        OkButton.Content = Strings.Get("BtnSave");
+        CancelAction.Content = Strings.Get("BtnCancel");
+        PrimaryAction.Content = Strings.Get("BtnSave");
 
         NameEntry.Text = currentName ?? "";
-        RefreshOkState();
+        Refresh();
+        UseMod(mod);
 
         // Pre-select so typing replaces the old name outright — the common case
         // is "rename it to something else", not "append to it".
@@ -41,24 +43,19 @@ public partial class RenameRoomDialog : Window
         };
     }
 
-    private void NameEntry_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-        => RefreshOkState();
+    private void NameEntry_TextChanged(object sender, TextChangedEventArgs e) => Refresh();
 
-    private void RefreshOkState()
-        => OkButton.IsEnabled = (NameEntry.Text ?? "").Trim().Length >= MinNameLength;
-
-    private void OkButton_Click(object sender, RoutedEventArgs e)
+    private void Refresh()
     {
-        var name = (NameEntry.Text ?? "").Trim();
-        if (name.Length < MinNameLength) return;
-        EnteredName = name;
-        DialogResult = true;
-        Close();
+        CounterText.Text = $"{NameEntry.Text.Length}/{NameEntry.MaxLength}";
+        PrimaryAction.IsEnabled = NameEntry.Text.Trim().Length >= MinNameLength;
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    protected override void OnPrimary()
     {
-        DialogResult = false;
-        Close();
+        var name = NameEntry.Text.Trim();
+        if (name.Length < MinNameLength) return;
+        EnteredName = name;
+        Answer(true);
     }
 }

@@ -1,7 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Windows;
-using System.Windows.Threading;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services;
 
@@ -13,24 +11,18 @@ namespace WarsOfLibertyLauncher;
 /// other account's folders (see <see cref="RunningAccount"/> for the measured case that prompted
 /// this).
 ///
-/// <para><b>It shows the folders and copies them; it never opens them.</b> Launching
-/// <c>explorer.exe</c> from a process running as the other account opens the shell as that account
-/// too, which is more of exactly the thing this dialog is trying to explain. Copying the path lets
-/// the player paste it into their own Explorer, in their own session.</para>
+/// <para><b>It shows the folders; it never opens them.</b> Launching <c>explorer.exe</c> from a
+/// process running as the other account opens the shell as that account too, which is more of
+/// exactly the thing this dialog is trying to explain. The paths are selectable text, so the
+/// player can paste them into their own Explorer, in their own session.</para>
 ///
 /// <para><b>Informational only.</b> Nothing here moves a file, writes into another account's
 /// profile or registry, or changes which account anything runs as — the launcher cannot fix the
 /// split without launching the game under a borrowed token, and that is the pattern antivirus
 /// heuristics punish. The remedy is the player's, so the dialog's job is to make it obvious.</para>
 /// </summary>
-public partial class CrossUserAccountDialog : Window
+public partial class CrossUserAccountDialog : BaseDialog
 {
-    /// <summary>Long enough to notice, short enough not to hide the caption.</summary>
-    private static readonly TimeSpan CopiedFlash = TimeSpan.FromSeconds(1.4);
-
-    private readonly string _clipboardText;
-    private DispatcherTimer? _flashTimer;
-
     /// <summary>
     /// Internal rather than private so <c>DialogXamlTests</c> can build it without showing it: this
     /// window only ever opens on a misconfigured machine, so an unresolved <c>{StaticResource}</c>
@@ -41,12 +33,13 @@ public partial class CrossUserAccountDialog : Window
     {
         InitializeComponent();
 
-        Chrome.Title = Strings.Get("DlgCrossUserTitle");
-        BodyText.Text = Strings.Format("DlgCrossUserBody", info.ProcessUser, info.SessionUser);
+        SetBarTitle(Strings.Get("DlgCrossUserBar"));
+        SetHeadline(Strings.Get("DlgCrossUserTitle"));
+        SetLead(Strings.Format("DlgCrossUserBody", info.ProcessUser, info.SessionUser));
         AutoStartText.Text = Strings.Get("DlgCrossUserAutoStart");
         HowToText.Text = Strings.Get("DlgCrossUserHowTo");
-        CopyButton.Content = Strings.Get("DlgCrossUserCopyPaths");
-        CloseButton.Content = Strings.Get("DlgCrossUserClose");
+        PrimaryAction.Content = Strings.Get("DlgCrossUserClose");
+        HideCancel();
 
         CurrentLabel.Text = Strings.Format("DlgCrossUserWhereNow", info.ProcessUser);
         CurrentPathText.Text = currentFolder;
@@ -59,11 +52,6 @@ public partial class CrossUserAccountDialog : Window
         OtherLabel.Visibility = hasOther ? Visibility.Visible : Visibility.Collapsed;
         OtherPathText.Text = hasOther ? otherFolder : "";
         OtherPathText.Visibility = hasOther ? Visibility.Visible : Visibility.Collapsed;
-
-        var lines = new List<string>();
-        if (!string.IsNullOrWhiteSpace(currentFolder)) lines.Add(currentFolder);
-        if (hasOther) lines.Add(otherFolder!);
-        _clipboardText = string.Join(Environment.NewLine, lines);
     }
 
     /// <summary>
@@ -72,49 +60,5 @@ public partial class CrossUserAccountDialog : Window
     /// </summary>
     public static void ShowNotice(
         Window? owner, RunningAccount.AccountInfo info, string currentFolder, string? otherFolder)
-    {
-        var dlg = new CrossUserAccountDialog(info, currentFolder, otherFolder);
-        if (owner != null) dlg.Owner = owner;
-        dlg.ShowDialog();
-    }
-
-    private void CopyButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_clipboardText.Length == 0) return;
-
-        try
-        {
-            Clipboard.SetText(_clipboardText);
-        }
-        catch (Exception ex)
-        {
-            // Another process can hold the clipboard open; failing to copy must not kill the
-            // dialog, and the paths are selectable text right above.
-            DiagnosticLog.Write($"Cross-user dialog: could not copy paths: {ex.Message}");
-            return;
-        }
-
-        CopyButton.Content = Strings.Get("DlgCrossUserCopied");
-
-        _flashTimer?.Stop();
-        _flashTimer = new DispatcherTimer { Interval = CopiedFlash };
-        _flashTimer.Tick += (_, _) =>
-        {
-            _flashTimer?.Stop();
-            _flashTimer = null;
-            CopyButton.Content = Strings.Get("DlgCrossUserCopyPaths");
-        };
-        _flashTimer.Start();
-    }
-
-    private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
-
-    protected override void OnClosed(EventArgs e)
-    {
-        // A DispatcherTimer keeps a reference to its handler, which keeps this window alive after
-        // it closes.
-        _flashTimer?.Stop();
-        _flashTimer = null;
-        base.OnClosed(e);
-    }
+        => new CrossUserAccountDialog(info, currentFolder, otherFolder).ShowOver(owner);
 }

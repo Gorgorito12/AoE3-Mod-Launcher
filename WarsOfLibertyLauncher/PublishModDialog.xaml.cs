@@ -1250,10 +1250,11 @@ public partial class PublishModDialog : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this,
-                $"Could not open browser: {ex.Message}",
-                "Publish",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedConfirmDialog.Notice(this,
+                Strings.Get("PublishBrowserFailedTitle"),
+                Strings.Get("PublishBrowserFailedLead"),
+                ConfirmTone.Caution,
+                detail: ex.Message);
         }
     }
 

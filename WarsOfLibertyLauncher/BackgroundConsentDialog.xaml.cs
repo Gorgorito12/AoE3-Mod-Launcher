@@ -1,4 +1,5 @@
-using System.Windows;
+using System.Windows.Controls;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 
 namespace WarsOfLibertyLauncher;
@@ -17,32 +18,23 @@ namespace WarsOfLibertyLauncher;
 /// button, so a dismissal, an Escape or a closed window all fall through to the
 /// declining branch. Consent is never inferred from silence.</para>
 ///
-/// <para>Themed rather than a <see cref="MessageBox"/> for the same reason
-/// <see cref="SelfInstallPromptDialog"/> is: by the time it shows, the first-run
-/// language chooser has set the UI language, and it is one of the first things a new
-/// player sees.</para>
+/// <para><b>No "don't ask again" box</b>, though 103d draws one: both answers are final, so
+/// the question already never comes back, and a box that changes nothing is what the design
+/// base forbids.</para>
 /// </summary>
-public partial class BackgroundConsentDialog : Window
+public partial class BackgroundConsentDialog : BaseDialog
 {
+    internal Button YesButton => PrimaryAction;
+    internal Button NoButton => CancelAction;
+
     public BackgroundConsentDialog()
     {
         InitializeComponent();
-        Chrome.Title = Strings.Get("DlgBackgroundConsentTitle");
-        BodyText.Text = Strings.Get("DlgBackgroundConsentBody");
+        SetBarTitle(Strings.Get("DlgBackgroundConsentBar"));
+        SetHeadline(Strings.Get("DlgBackgroundConsentTitle"));
+        SetLead(Strings.Get("DlgBackgroundConsentBody"));
         DetailText.Text = Strings.Get("DlgBackgroundConsentDetail");
         YesButton.Content = Strings.Get("DlgBackgroundConsentYes");
         NoButton.Content = Strings.Get("DlgBackgroundConsentNo");
-    }
-
-    private void YesButton_Click(object sender, RoutedEventArgs e)
-    {
-        DialogResult = true;
-        Close();
-    }
-
-    private void NoButton_Click(object sender, RoutedEventArgs e)
-    {
-        DialogResult = false;
-        Close();
     }
 }
