@@ -71,6 +71,9 @@ internal interface ITournamentApi
 
     Task<MyTeamsResponse> GetMyTeamsAsync(CancellationToken ct = default);
 
+    /// <summary>One team and its members, public: what an invitation shows before it is accepted.</summary>
+    Task<TeamSummary> GetTeamAsync(string id, CancellationToken ct = default);
+
     Task<TeamSummary> CreateTeamAsync(object req, CancellationToken ct = default);
 
     Task<object> InviteToTeamAsync(string teamId, string userId, CancellationToken ct = default);
@@ -157,6 +160,9 @@ internal sealed class LiveTournamentApi : ITournamentApi
 
     public Task<MyTeamsResponse> GetMyTeamsAsync(CancellationToken ct = default)
         => Client.GetMyTeamsAsync(ct);
+
+    public Task<TeamSummary> GetTeamAsync(string id, CancellationToken ct = default)
+        => Client.GetTeamAsync(id, ct);
 
     public Task<TeamSummary> CreateTeamAsync(object req, CancellationToken ct = default)
         => Client.CreateTeamAsync(req, ct);
@@ -293,6 +299,9 @@ internal sealed class PreviewTournamentApi : ITournamentApi
 
     public Task<MyTeamsResponse> GetMyTeamsAsync(CancellationToken ct = default)
         => Answer(() => Simulator.MyTeams());
+
+    public Task<TeamSummary> GetTeamAsync(string id, CancellationToken ct = default)
+        => Answer(() => Simulator.GetTeam(id));
 
     public Task<TeamSummary> CreateTeamAsync(object req, CancellationToken ct = default)
         => Answer(() => Simulator.CreateTeam(JsonSerializer.SerializeToElement(req)));

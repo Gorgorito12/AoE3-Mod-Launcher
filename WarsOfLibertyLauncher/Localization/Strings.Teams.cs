@@ -90,64 +90,23 @@ public static partial class Strings
         },
         ["MpTeamsTitle"] = new() { [LangEn] = "My teams", [LangEs] = "Mis equipos" },
         ["MpTeamsNew"] = new() { [LangEn] = "+ New team", [LangEs] = "+ Nuevo equipo" },
-        ["MpTeamsClose"] = new() { [LangEn] = "Close", [LangEs] = "Cerrar" },
         ["MpTeamsUnavailable"] = new()
         {
             [LangEn] = "Teams are not available on this server yet.",
             [LangEs] = "Los equipos todavía no están disponibles en este servidor.",
         },
         ["MpTeamsLoading"] = new() { [LangEn] = "Loading…", [LangEs] = "Cargando…" },
-        ["MpTeamsLoadFailed"] = new()
-        {
-            [LangEn] = "Your teams could not be loaded. Try again in a moment.",
-            [LangEs] = "No se pudieron cargar tus equipos. Vuelve a intentarlo en un momento.",
-        },
-        ["MpTeamsInvitesHeading"] = new() { [LangEn] = "INVITATIONS", [LangEs] = "INVITACIONES" },
-        ["MpTeamsInviteFrom"] = new() { [LangEn] = "Invitation to join {0}", [LangEs] = "Invitación para unirte a {0}" },
-        ["MpTeamsAccept"] = new() { [LangEn] = "Accept", [LangEs] = "Aceptar" },
-        ["MpTeamsAccepted"] = new() { [LangEn] = "You joined the team.", [LangEs] = "Te uniste al equipo." },
-        ["MpTeamsDecline"] = new() { [LangEn] = "Decline", [LangEs] = "Rechazar" },
-        ["MpTeamsHeading"] = new() { [LangEn] = "TEAMS", [LangEs] = "EQUIPOS" },
-        ["MpTeamsEmpty"] = new()
-        {
-            [LangEn] = "You are not in any team yet. Create one and invite your players.",
-            [LangEs] = "Todavía no estás en ningún equipo. Crea uno e invita a tus jugadores.",
-        },
-        ["MpTeamsMemberCount"] = new() { [LangEn] = "{0}/{1} players", [LangEs] = "{0}/{1} jugadores" },
         ["MpTeamsCaptain"] = new() { [LangEn] = "captain", [LangEs] = "capitán" },
         ["MpTeamsYou"] = new() { [LangEn] = "you", [LangEs] = "tú" },
-        ["MpTeamsInvite"] = new() { [LangEn] = "Invite…", [LangEs] = "Invitar…" },
-        ["MpTeamsRemove"] = new() { [LangEn] = "Remove", [LangEs] = "Quitar" },
-        ["MpTeamsLeave"] = new() { [LangEn] = "Leave", [LangEs] = "Salir" },
-        ["MpTeamsDisband"] = new() { [LangEn] = "Disband", [LangEs] = "Disolver" },
-        ["MpTeamsDisbandTitle"] = new() { [LangEn] = "Disband the team?", [LangEs] = "¿Disolver el equipo?" },
-        ["MpTeamsDisbandBody"] = new()
-        {
-            [LangEn] = "{0} will be disbanded. Tournaments it already played keep its name, and line-ups already entered are not affected.",
-            [LangEs] = "{0} se va a disolver. Los torneos que ya jugó conservan su nombre, y las alineaciones ya inscritas no se ven afectadas.",
-        },
-        ["MpTeamsInviteTitle"] = new() { [LangEn] = "Invite a player", [LangEs] = "Invitar a un jugador" },
         ["MpTeamsInviteIntro"] = new()
         {
             [LangEn] = "Choose who to invite to {0}. They see the invitation in their launcher, even if they are offline now.",
             [LangEs] = "Elige a quién invitar a {0}. Verá la invitación en su launcher, aunque ahora no esté conectado.",
         },
-        ["MpTeamsInviteOk"] = new() { [LangEn] = "Invite", [LangEs] = "Invitar" },
-        ["MpTeamsInviteSent"] = new() { [LangEn] = "Invitation sent.", [LangEs] = "Invitación enviada." },
-        ["MpTeamsCreated"] = new() { [LangEn] = "Team created. Now invite your players.", [LangEs] = "Equipo creado. Ahora invita a tus jugadores." },
         ["MpTeamsInviteToastTitle"] = new() { [LangEn] = "Team invitation", [LangEs] = "Invitación a un equipo" },
         ["MpTeamsInviteToastBody"] = new() { [LangEn] = "You were invited to join {0}.", [LangEs] = "Te invitaron a unirte a {0}." },
-        ["MpTeamsInviteToastOpen"] = new() { [LangEn] = "See", [LangEs] = "Ver" },
 
         // ---------------------------------------------------------------- new team
-        ["MpTeamsCreateTitle"] = new() { [LangEn] = "New team", [LangEs] = "Nuevo equipo" },
         ["MpTeamsCreateName"] = new() { [LangEn] = "NAME", [LangEs] = "NOMBRE" },
-        ["MpTeamsCreateTag"] = new() { [LangEn] = "TAG (OPTIONAL, UP TO 8)", [LangEs] = "ETIQUETA (OPCIONAL, HASTA 8)" },
-        ["MpTeamsCreateHint"] = new()
-        {
-            [LangEn] = "You are its captain. A team holds up to 6 players, so it can carry reserves; you choose who plays when you enter a tournament.",
-            [LangEs] = "Tú eres el capitán. Un equipo admite hasta 6 jugadores, así que puede tener suplentes; eliges quién juega al inscribirte en un torneo.",
-        },
-        ["MpTeamsCreateButton"] = new() { [LangEn] = "Create team", [LangEs] = "Crear equipo" },
     };
 }

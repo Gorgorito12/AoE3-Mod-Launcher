@@ -64,6 +64,9 @@ public partial class MainWindow
             case "enroll":
                 PreviewEnroll(variant);
                 break;
+            case "teams":
+                PreviewMyTeams(variant);
+                break;
             case "matchwatch":
                 PreviewMatchWatch(variant);
                 break;
@@ -200,9 +203,6 @@ public partial class MainWindow
             case "j":
                 new RenameRoomDialog("Noche de 2v2, sin lag", mod).ShowOver(this);
                 break;
-            case "k":
-                new CreateTeamDialog().ShowOver(this);
-                break;
             case "l":
                 new PlayerPickerDialog("Invitar jugadores", Strings.Format("MpTeamsInviteIntro", "Los Andes"), Strings.Get("MpTeamsCreateName"),
                     new[]
@@ -260,6 +260,63 @@ public partial class MainWindow
         if (variant == "b") dialog.FillPreview("Hundred Days · Ranked 2v2", RoomFormat.TwoVTwo, 1, "guardia");
         if (variant == "c") dialog.FillPreview("WoL", RoomFormat.Casual, 0, "");
         if (variant == "a") dialog.SelectKind(RoomFormat.OneVOne);
+        dialog.ShowDialog();
+    }
+
+    /// <summary>Design 83, on made-up teams: its window talks to the simulator.</summary>
+    private void PreviewMyTeams(string variant)
+    {
+        if (variant == "l")
+        {
+            static AppToast.ToastAction Inert(string key, bool primary) => new(Strings.Get(key), primary, () => { });
+            const string sample = "Tercios de Flandes";
+            ShowAppToast(MultiplayerTab.TeamDeclinedToast(sample) with { AutoDismissMs = 120000 });
+            ShowAppToast(MultiplayerTab.TeamJoinedToast(sample, new[] { Inert("MtToastViewTeam", false) }) with { AutoDismissMs = 120000 });
+            ShowAppToast(MultiplayerTab.TeamInviteToast(sample, new[] { Inert("MtToastDecline", false), Inert("MtToastView", false), Inert("MtToastAccept", true) }) with { AutoDismissMs = 120000 });
+            return;
+        }
+        const string me = "gorgo";
+        static TeamMember P(string name) => new() { UserId = name.ToLowerInvariant(), DisplayName = name };
+        static TeamSummary Team(string id, string name, string? tag, string captain, params string[] members) => new()
+        {
+            Id = id, Name = name, Tag = tag, OwnerUserId = captain.ToLowerInvariant(), Members = members.Select(P).ToList(),
+        };
+        var ago = DateTimeOffset.UtcNow;
+        var teams = new List<TeamSummary>
+        {
+            Team("andes", "Los Andes", "LA", "Gorgo", "Gorgo", "Cuzco", "Malinche", "Bicorne", "Chasqui"),
+            Team("sur", "Hermandad del Sur", "SUR", "Rioplatense", "Rioplatense", "PatagonBravo", "Gorgo"),
+            Team("indias", "Compañía de Indias", null, "Gorgo", "Gorgo", "Corsario"),
+        };
+        var tercios = variant == "h"
+            ? Team("tf", "Tercios de Flandes", "TF", "TercioViejo", "TercioViejo", "Sombrerete", "Kaiser", "Vandalia", "Aluclown", "Filibustero")
+            : Team("tf", "Tercios de Flandes", "TF", "TercioViejo", "TercioViejo", "Sombrerete", "Kaiser");
+        var invites = new List<TeamInvite>
+        {
+            new() { Id = "tf", TeamId = "tf", TeamName = "Tercios de Flandes", TeamTag = "TF", InvitedBy = "tercioviejo", CreatedAt = ago.AddHours(-3).ToString("O") },
+        };
+        var sent = variant == "m"
+            ? new List<TeamSentInvite> { new() { Id = "s", TeamId = "andes", InvitedUserId = "mariscal", InvitedName = "Mariscal", CreatedAt = ago.AddDays(-2).ToString("O") } }
+            : null;
+        var data = new MyTeamsResponse { Teams = teams, Invites = invites, SentInvites = sent };
+        if (variant == "f") data = new MyTeamsResponse { Teams = new(), Invites = new() };
+
+        var online = new[] { "Gorgo", "Cuzco", "Malinche", "Chasqui", "Almirante", "Zanjón", "Filibustero", "Kaiser", "Rioplatense", "TercioViejo" };
+        var live = new HashSet<string>(online.Select(n => n.ToLowerInvariant()));
+        IReadOnlyList<PickCandidate> Online() => online.Select(n => new PickCandidate(n.ToLowerInvariant(), n)).ToList();
+        var dialog = new MyTeamsWindow(new PreviewTournamentApi(new TournamentSimulator(), () => null, null), me, Online, null, live.Contains) { Owner = this };
+        var select = variant switch
+        {
+            "b" => "sur",
+            "c" or "h" => "inv:tf",
+            "d" => "new",
+            "e" => "indias",
+            "a" or "i" or "m" => "andes",
+            _ => null,
+        };
+        var state = variant switch { "e" => "invite", "g" => "failed", "j" => "signedout", "k" => "offline", _ => "ready" };
+        var note = variant == "i" ? "No se pudo enviar la invitación a Zanjón: ya tiene una invitación pendiente de Los Andes." : null;
+        dialog.ShowPreview(data, new Dictionary<string, TeamSummary> { ["tf"] = tercios }, select, state, note);
         dialog.ShowDialog();
     }
 

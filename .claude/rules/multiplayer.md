@@ -7231,7 +7231,12 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   opened from a button under the list title, labelled with the invitations waiting) creates a
   team, invites (from who is online, or by name through `GET /users/search` — hidden when the
   server answers 404), answers invitations, removes, leaves and disbands; the `team_invite` push
-  raises a toast with "See".
+  raises a toast with Decline, View and Accept, the first and last answering without opening the
+  window. Design 83: creating and inviting live inside that window, and every call goes through
+  the swappable `ITournamentApi`, so a preview can never invite a real person. An invitation names
+  who sent it only through the team's roster (`GetTeamAsync`, public), because the server sends an
+  id; and a captain withdraws an invitation with the same `decline` route the invited player uses.
+  Sent invitations appear only when `/teams/mine` carries `sent_invites`.
 
 - **Every TEAM call goes through `TournamentApi` too**, not the session's client: in the preview a
   team invitation sent to the real server would invite a real person.

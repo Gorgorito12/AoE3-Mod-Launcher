@@ -591,7 +591,9 @@ rather than the reverse.
   `SizeToContent` dialog it is a floor (the glow's 580 px made 81a 85 px too tall). `SegmentRow.Raised`
   and `Controls/ModSearchPopup` are 81's; `--preview-dialog=newtournament:a|b|c|pick`, and
   `--preview-dialog=enroll:a..l` for 82, the enrol window (`EnrollDialog` + the pure
-  `Services/Multiplayer/EnrollView`). The room NAME stays
+  `Services/Multiplayer/EnrollView`), and `--preview-dialog=teams:a..m` for 83, My teams
+  (`MyTeamsWindow` + the pure `Services/Multiplayer/MyTeamsView`). `teams:l` is the toast: the
+  desktop card lands on the primary monitor, not the test one. The room NAME stays
   the English network value of `RoomTitleProposal`, against the prototype's Spanish samples.
 
 - **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the

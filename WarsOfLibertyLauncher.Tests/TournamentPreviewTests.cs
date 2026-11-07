@@ -372,7 +372,7 @@ public class TournamentPreviewTests
         // invite a real person, which is why the team calls are scanned too.
         var root = Path.GetDirectoryName(dir)!;
         var files = Directory.GetFiles(dir, "MultiplayerTab*.cs")
-            .Concat(new[] { "MyTeamsWindow.xaml.cs", "PlayerPickerDialog.xaml.cs", "CreateTeamDialog.xaml.cs" }
+            .Concat(new[] { "MyTeamsWindow.xaml.cs", "PlayerPickerDialog.xaml.cs" }
                 .Select(f => Path.Combine(root, f)))
             .ToArray();
         Assert.NotEmpty(files);

@@ -786,6 +786,16 @@ history is already loaded, and nothing is fetched for it; the mod's colour is no
 a tournament whose places are full says you go on the waiting list, which the prototype has no state
 for; a mod with a cover shows it.
 
+**Screen 83 (Mis equipos)**, compared with `Mis equipos v2.dc.html` in 83a to 83m, the minimum size,
+solid glass and English; 83l, the toast, by rendering the card from a test. What differs, on purpose:
+83m's "Editar…", "Hacer capitán" and "INSCRITO EN" are not drawn, because the server has no route for
+them; only the sent invitations are, and only with a server that sends `sent_invites`. Avatars use the
+launcher's own colours. The toast has no blur behind it: it is a window over the desktop, so the card
+is the solid level. Who invited comes from the team's roster, a second request, so an invitation whose
+team cannot be read says "You were invited". A refused create keeps the form with what was typed. The
+sheet's list shows its scrollbar where the prototype's headless render hides it.
+`CreateTeamDialog` is gone, and with it `--preview-dialog=small:k`.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup

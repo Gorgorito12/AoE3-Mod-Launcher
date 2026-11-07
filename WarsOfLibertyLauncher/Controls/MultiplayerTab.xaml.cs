@@ -14724,7 +14724,7 @@ public partial class MultiplayerTab : UserControl
     /// that asks for a rounded SQUARE, which the design handoff gives it so the one portrait
     /// that heads a page does not read as another roster face.
     /// </param>
-    private static FrameworkElement BuildAvatarDisc(
+    internal static FrameworkElement BuildAvatarDisc(
         string name, string? avatarUrl, double size, double? cornerRadius = null)
     {
         var radius = cornerRadius ?? size / 2;

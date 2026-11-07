@@ -3,50 +3,280 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="My teams"
-        Width="520"
-        SizeToContent="Height"
-        MaxHeight="680"
+        Width="880"
+        Height="640"
+        MinWidth="760"
+        MinHeight="520"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
-        ResizeMode="NoResize"
-        Background="{DynamicResource MpSurface}"
+        ResizeMode="CanResize"
         ShowInTaskbar="False">
-  <!-- The persistent teams a REGISTERED team tournament is entered with: the invitations
-       waiting for me, my teams and their members, and the captain's actions. The content is
-       built in code (MyTeamsWindow.xaml.cs) because it is a list of cards that changes with
-       every answer from the server. Every call goes through the tournament server the tab
-       hands in, so the preview never touches the real one. -->
-  <Grid>
-    <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="*"/>
-        <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-    <controls:TitleBar x:Name="TitleBarControl" Grid.Row="0" Title="My teams"
-                       ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
-    <ScrollViewer Grid.Row="1"
-                  VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled">
-        <StackPanel x:Name="ContentPanel" Margin="22,16,22,4"/>
-    </ScrollViewer>
-    <Grid Grid.Row="2" Margin="22,10,22,18">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-        </Grid.ColumnDefinitions>
-        <Button x:Name="NewTeamButton"
-                Grid.Column="0"
-                HorizontalAlignment="Left"
-                Click="NewTeamButton_Click"
-                Style="{StaticResource MpGhostButton}"
-                Content="+ New team"/>
-        <Button x:Name="CloseButton"
-                Grid.Column="1"
-                Click="CloseButton_Click"
-                IsCancel="True"
-                Style="{StaticResource MpPrimaryButton}"
-                MinWidth="110"
-                Content="Close"/>
+    <Window.Resources>
+        <SolidColorBrush x:Key="UiTitleText" Color="#F4F8FC"/>
+    </Window.Resources>
+    <Window.Background>
+        <DrawingBrush Stretch="None" AlignmentX="Left" AlignmentY="Top">
+            <DrawingBrush.Drawing>
+                <GeometryDrawing Brush="#0F1C2E">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="0,0,4000,3000"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+    </Window.Background>
+    <!-- Design 83: a window of the launcher rather than of a mod, so neutral with the action blue.
+         Invitations and teams on the left, the chosen one on the right. -->
+    <Grid x:Name="Root">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Rectangle Grid.RowSpan="2" IsHitTestVisible="False">
+            <Rectangle.Fill>
+                <RadialGradientBrush MappingMode="RelativeToBoundingBox" Center="1.02,-.12" GradientOrigin="1.02,-.12" RadiusX="1.02" RadiusY=".87">
+                    <GradientStop Color="#2E2F7FE0" Offset="0"/>
+                    <GradientStop Color="#002F7FE0" Offset=".65"/>
+                </RadialGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+        <Rectangle Grid.RowSpan="2" IsHitTestVisible="False">
+            <Rectangle.Fill>
+                <RadialGradientBrush MappingMode="RelativeToBoundingBox" Center="-.1,1.1" GradientOrigin="-.1,1.1" RadiusX=".8" RadiusY=".72">
+                    <GradientStop Color="#142F7FE0" Offset="0"/>
+                    <GradientStop Color="#002F7FE0" Offset=".7"/>
+                </RadialGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+
+        <controls:TitleBar Grid.Row="0" x:Name="TitleBarControl" TitleSize="14" TitleIcon="pack://application:,,,/Aoe3ModLauncher;component/AppIcon.png" Background="{DynamicResource GlassTitleBar}"
+                           ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
+
+        <Grid Grid.Row="1" Margin="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="RailColumn" Width="270"/>
+                <ColumnDefinition x:Name="RailGap" Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border x:Name="RailCard" CornerRadius="14" Padding="8" BorderThickness="1"
+                    Background="{DynamicResource GlassPanel}" BorderBrush="#1AFFFFFF">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0">
+                        <StackPanel x:Name="RailRows"/>
+                    </ScrollViewer>
+                    <Button x:Name="NewTeamButton" Grid.Row="1" Style="{DynamicResource WindowSecondaryButton}" Height="36"
+                            Margin="0,8,0,0" FontSize="{DynamicResource SetRowDescSize}" Click="NewTeamButton_Click"/>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Column="2" Margin="4,4,2,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid x:Name="HeadPanel" Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="52"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="HeadCrest" Width="52" Height="52" CornerRadius="12" BorderThickness="1">
+                        <TextBlock x:Name="HeadCrestText" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   FontWeight="Bold" FontSize="{DynamicResource FontSizeTitle}"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="HeadName" FontFamily="{DynamicResource DisplayFont}" FontWeight="Bold" MaxWidth="400"
+                                       FontSize="{DynamicResource FontSizeHeading}" Foreground="#FFFFFF" TextTrimming="CharacterEllipsis"/>
+                            <Border x:Name="HeadTag" Height="24" Padding="9,0" CornerRadius="12" BorderThickness="1" Margin="10,0,0,0"
+                                    Background="#0FFFFFFF" BorderBrush="#24FFFFFF" VerticalAlignment="Center">
+                                <TextBlock x:Name="HeadTagText" VerticalAlignment="Center" FontFamily="Consolas, Courier New, monospace"
+                                           FontWeight="SemiBold" FontSize="{DynamicResource SetDescSize}" Foreground="#DCE7F5"/>
+                            </Border>
+                        </StackPanel>
+                        <WrapPanel Margin="0,6,0,0">
+                            <TextBlock x:Name="HeadSub" Margin="0,0,8,0" VerticalAlignment="Center"
+                                       FontSize="{DynamicResource SetRowDescSize}" Foreground="#C3D2E5"/>
+                            <StackPanel x:Name="HeadChips" Orientation="Horizontal"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Grid>
+
+                <Border x:Name="NoteBox" Grid.Row="1" Margin="0,0,0,14" Padding="12,9" CornerRadius="8" BorderThickness="1" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="NoteGlyph" FontWeight="Bold" FontSize="{DynamicResource SetControlSize}" Margin="0,0,9,0"/>
+                        <TextBlock x:Name="NoteText" Grid.Column="1" TextWrapping="Wrap" Foreground="#DCE7F5"
+                                   FontSize="{DynamicResource SetRowDescSize}"/>
+                        <Button x:Name="NoteClose" Grid.Column="2" Style="{DynamicResource TeamNoteClose}" Content="&#x2715;"
+                                Margin="9,0,0,0" Click="NoteClose_Click"/>
+                    </Grid>
+                </Border>
+
+                <Grid x:Name="TeamView" Grid.Row="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                        <StackPanel x:Name="TeamBody"/>
+                    </ScrollViewer>
+                    <Border Grid.Row="1" Padding="0,12,0,0" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="DangerButton" Style="{DynamicResource WindowSecondaryButton}" MinWidth="0" Padding="14,0"
+                                    Foreground="#F0A6A6" FontSize="{DynamicResource SetRowDescSize}" Click="DangerButton_Click"/>
+                            <TextBlock x:Name="InviteBlock" Grid.Column="1" Margin="8,0,8,0" MinHeight="32" TextWrapping="Wrap" VerticalAlignment="Center"
+                                       Foreground="#F5BD76" FontSize="{DynamicResource SetRowDescSize}"/>
+                            <Button x:Name="DeclineButton" Grid.Column="2" Style="{DynamicResource WindowSecondaryButton}" MinWidth="112"
+                                    FontSize="{DynamicResource SetRowDescSize}" Click="DeclineButton_Click"/>
+                            <Button x:Name="AcceptButton" Grid.Column="3" Style="{DynamicResource WindowPrimaryButton}" MinWidth="150" Padding="16,0"
+                                    Margin="8,0,0,0" FontSize="{DynamicResource SetRowDescSize}" ToolTipService.ShowOnDisabled="True" Click="AcceptButton_Click"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid x:Name="NewView" Grid.Row="2" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Border MaxWidth="560" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource WindowCard}" Padding="16">
+                        <StackPanel Width="520">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="NameLabel" Style="{DynamicResource EnrollHead}"/>
+                                <TextBlock x:Name="NameCount" Grid.Column="1" Style="{DynamicResource EnrollCount}"
+                                           FontSize="{DynamicResource SetCaptionSize}" Foreground="#8C9CB1"/>
+                            </Grid>
+                            <Border Style="{DynamicResource GlassFieldBox}" Height="36" Margin="0,7,0,0">
+                                <Grid>
+                                    <TextBox x:Name="NameEntry" Style="{DynamicResource DialogBareText}" MaxLength="40"
+                                             FontSize="{DynamicResource FontSizeBody}" TextChanged="Form_TextChanged"/>
+                                    <TextBlock x:Name="NamePlaceholder" IsHitTestVisible="False" VerticalAlignment="Center"
+                                               FontSize="{DynamicResource FontSizeBody}" Foreground="{DynamicResource WindowFineText}"/>
+                                </Grid>
+                            </Border>
+                            <TextBlock x:Name="TagLabel" Style="{DynamicResource EnrollHead}" Margin="0,14,0,0"/>
+                            <Border Style="{DynamicResource GlassFieldBox}" Height="36" Width="160" HorizontalAlignment="Left" Margin="0,7,0,0">
+                                <Grid>
+                                    <TextBox x:Name="TagEntry" Style="{DynamicResource DialogBareText}" MaxLength="8"
+                                             FontFamily="Consolas, Courier New, monospace" FontSize="{DynamicResource DialogBodySize}" TextChanged="Form_TextChanged"/>
+                                    <TextBlock x:Name="TagPlaceholder" Text="LA" IsHitTestVisible="False" VerticalAlignment="Center"
+                                               FontFamily="Consolas, Courier New, monospace" FontSize="{DynamicResource DialogBodySize}" Foreground="{DynamicResource WindowFineText}"/>
+                                </Grid>
+                            </Border>
+                            <TextBlock x:Name="FormHint" Style="{DynamicResource GlassHint}" Margin="0,14,0,0" Foreground="#A8BCD2"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Row="1" Padding="0,12,0,0" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="NewBlock" Margin="0,0,8,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                                       Foreground="#F5BD76" FontSize="{DynamicResource SetRowDescSize}"/>
+                            <Button x:Name="NewCancelButton" Grid.Column="1" Style="{DynamicResource WindowSecondaryButton}" MinWidth="112"
+                                    FontSize="{DynamicResource SetRowDescSize}" Click="NewCancelButton_Click"/>
+                            <Button x:Name="CreateButton" Grid.Column="2" Style="{DynamicResource WindowPrimaryButton}" MinWidth="150" Padding="16,0"
+                                    Margin="8,0,0,0" FontSize="{DynamicResource SetRowDescSize}" ToolTipService.ShowOnDisabled="True" Click="CreateButton_Click"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Border x:Name="CenterCard" Grid.Row="2" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Style="{DynamicResource WindowCard}" Padding="24,26" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="CenterTitle" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                                   FontSize="{DynamicResource SetSubTitleSize}" FontWeight="SemiBold" Foreground="#F0F5FB"/>
+                        <TextBlock x:Name="CenterBody" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="380"
+                                   Margin="0,8,0,0" FontSize="{DynamicResource SetRowDescSize}" Foreground="#C3D2E5"/>
+                        <Button x:Name="CenterButton" HorizontalAlignment="Center" MinWidth="150" Margin="0,18,0,0" Padding="16,0"
+                                FontSize="{DynamicResource SetRowDescSize}" Click="CenterButton_Click"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- Inviting several at once, on top of the team it is for. -->
+        <Grid x:Name="SheetLayer" Grid.RowSpan="2" Background="#B8050A12" Visibility="Collapsed">
+            <Border Width="520" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20" CornerRadius="12"
+                    BorderThickness="1" Background="#12213A" BorderBrush="#2482AFFF">
+                <StackPanel>
+                    <TextBlock x:Name="SheetTitle" FontSize="{DynamicResource SetSubTitleSize}" FontWeight="SemiBold" Foreground="#F0F5FB"/>
+                    <TextBlock x:Name="SheetBody" Margin="0,6,0,0" TextWrapping="Wrap" Foreground="#C3D2E5"
+                               FontSize="{DynamicResource SetRowDescSize}"/>
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="SheetLabel" Style="{DynamicResource EnrollHead}"/>
+                        <TextBlock x:Name="SheetFree" Grid.Column="1" Style="{DynamicResource EnrollHeadHint}"/>
+                        <TextBlock x:Name="SheetCount" Grid.Column="2" Style="{DynamicResource EnrollCount}"/>
+                    </Grid>
+                    <WrapPanel x:Name="SheetChips" Margin="0,12,-6,-6"/>
+                    <Border Height="34" Padding="10,0" CornerRadius="7" BorderThickness="1" Margin="0,12,0,0"
+                            Background="{DynamicResource MpField}" BorderBrush="{DynamicResource WindowSecondaryRim}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="#8C9CB1" VerticalAlignment="Center"
+                                       RenderTransformOrigin=".5,.5">
+                                <TextBlock.RenderTransform>
+                                    <ScaleTransform ScaleX="-1"/>
+                                </TextBlock.RenderTransform>
+                            </TextBlock>
+                            <Grid Grid.Column="1" Margin="8,0,0,0">
+                                <TextBox x:Name="SearchEntry" Style="{DynamicResource DialogBareText}"
+                                         FontSize="{DynamicResource SetRowDescSize}" TextChanged="SearchEntry_TextChanged"/>
+                                <TextBlock x:Name="SearchPlaceholder" IsHitTestVisible="False" VerticalAlignment="Center"
+                                           FontSize="{DynamicResource SetRowDescSize}" Foreground="{DynamicResource WindowFineText}"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                    <ScrollViewer Height="220" Margin="0,12,0,0" Padding="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="SheetList"/>
+                    </ScrollViewer>
+                    <Grid Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="SheetBlock" Margin="0,0,8,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                                   Foreground="#F5BD76" FontSize="{DynamicResource SetRowDescSize}"/>
+                        <Button x:Name="SheetCancel" Grid.Column="1" Style="{DynamicResource WindowSecondaryButton}" MinWidth="112"
+                                FontSize="{DynamicResource SetRowDescSize}" Click="SheetCancel_Click"/>
+                        <Button x:Name="SheetOk" Grid.Column="2" Style="{DynamicResource WindowPrimaryButton}" MinWidth="150" Padding="16,0"
+                                Margin="8,0,0,0" FontSize="{DynamicResource SetRowDescSize}" Click="SheetOk_Click"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
-  </Grid>
 </Window>
