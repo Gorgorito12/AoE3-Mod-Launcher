@@ -110,7 +110,7 @@ public static class TextScale
         "SetMonoSize", "SetGroupLabelSize", "SetTinySize", "SetBadgeSize",
         // Share diagnostics (design handoff 50a): the step-2 title and the rail box's tag.
         "SetDiagTitleSize", "SetRailTagSize",
-        "DialogHeadlineSize", "DialogTitleSize", "DialogSubheadSize", "WzLabelSize", "DialogBodySize", "RoomClockSize", "RoomFigureSize", "RoomGroupSize", "RoomChatSize", "RoomChatSystemSize", "DialogCodeSize",
+        "DialogHeadlineSize", "DialogTitleSize", "DialogSubheadSize", "WzLabelSize", "DialogBodySize", "RoomClockSize", "RoomFigureSize", "TournamentFigureSize", "RoomGroupSize", "RoomChatSize", "RoomChatSystemSize", "DialogCodeSize",
         "SidebarNavTextSize", "NavTabTextSize",
         // The compact layout (design handoff turns 38-39): the nav row's tabs at 12 in a 42-px
         // row, and a room's one-line name.

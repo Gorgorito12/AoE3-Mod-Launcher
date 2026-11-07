@@ -585,7 +585,11 @@ rather than the reverse.
   the room before the click. `Controls/SegmentRow` is the segmented row of the creation dialogs.
   `ModDialogChrome.AttachPicked` is the chassis of a window whose mod is picked inside it: it can
   run again, and `FrostCards` shows a once-blurred copy of the image under the cards.
-  `TitleBar.PlainTitle` is the Segoe title of the room and tournament windows. The room NAME stays
+  `TitleBar.PlainTitle` is the Segoe title of the room window; **screen 81, the new-tournament window,
+  keeps the serif** and passes `topGlow: true` to `AttachPicked` (its image, fade and glow are not 88's).
+  A layer of that chassis may never carry a `Height` it does not need: it spans the window, so in a
+  `SizeToContent` dialog it is a floor (the glow's 580 px made 81a 85 px too tall). `SegmentRow.Raised`
+  and `Controls/ModSearchPopup` are 81's; `--preview-dialog=newtournament:a|b|c|pick`. The room NAME stays
   the English network value of `RoomTitleProposal`, against the prototype's Spanish samples.
 
 - **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the

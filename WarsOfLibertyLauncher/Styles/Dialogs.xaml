@@ -309,6 +309,7 @@
     </Style>
 
     <Style x:Key="GlassToggle" TargetType="ToggleButton">
+        <Setter Property="Foreground" Value="#FFFFFF"/>
         <Setter Property="Width" Value="38"/>
         <Setter Property="Height" Value="22"/>
         <Setter Property="Background" Value="#29FFFFFF"/>
@@ -319,7 +320,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border Background="{TemplateBinding Background}" CornerRadius="11">
-                        <Ellipse x:Name="Thumb" Width="16" Height="16" Fill="#FFFFFF"
+                        <Ellipse x:Name="Thumb" Width="16" Height="16" Fill="{TemplateBinding Foreground}"
                                  HorizontalAlignment="Left" Margin="3,0"/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -335,6 +336,57 @@
                 <Setter Property="Background" Value="{DynamicResource MpAction}"/>
             </Trigger>
         </Style.Triggers>
+    </Style>
+
+    <!-- A choice that needs a sentence: how a tournament's teams are formed (81). The fill and the
+         rim are painted by the window, in the colour of its mod. -->
+    <Style x:Key="GlassChoiceRow" TargetType="Button">
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="11,9"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="9"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <Border x:Name="Hover" Background="#FFFFFF" CornerRadius="9" Opacity="0" IsHitTestVisible="False"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Hover" Property="Opacity" Value=".06"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="TournamentMathCard" TargetType="Border">
+        <Setter Property="Padding" Value="11,9"/>
+        <Setter Property="CornerRadius" Value="9"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <Style x:Key="TournamentMathFigure" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="Consolas, Courier New, monospace"/>
+        <Setter Property="FontSize" Value="{DynamicResource TournamentFigureSize}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+
+    <Style x:Key="TournamentMathWord" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="Margin" Value="0,5,0,0"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+        <Setter Property="Foreground" Value="#C3D2E5"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
 
     <Style x:Key="GlassHint" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">

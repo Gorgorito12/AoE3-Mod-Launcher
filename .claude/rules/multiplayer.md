@@ -626,6 +626,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `ToastCause.Request`, `PreferDesktop`). A first round of 64 needs 32 rooms against
   `MAX_ACTIVE_GAMES` (16 by default): raise it before offering 32/64, or organisers read 409s.
 
+- **CREATING A TOURNAMENT IS TWO CALLS NOW, AND THE SECOND CAN FAIL ON ITS OWN (design 81).** "Open
+  registration when it's created" is on by default: `TournamentCreate_Click` posts the tournament and
+  then `OpenTournamentRegistrationAsync`. A refusal of the second leaves a real draft, so the notice
+  says so (`NtOpenFailed*`) and never reads as "not created". The places offered come from
+  `TournamentListResponse.MaxCapacity`, and a server that does not send it gets 16: an older one clips
+  anything above in silence. If the capacity that comes back differs from the one asked for, the player
+  is told (`NtCapacityChanged*`). The format starts on 16 places in 1v1 and 8 in teams, and changing
+  format goes back to that.
+
 - **THE ORGANISER'S ACTIONS ON A PERSON LIVE IN THE ROW'S `\u22ef` MENU, and that is a layout
   invariant, not a preference.** Disqualifying an entrant and making one a co-organiser are the two
   longest captions in the entrant table and the two that act on somebody else, so they sit behind a

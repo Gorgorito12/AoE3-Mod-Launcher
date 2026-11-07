@@ -2173,6 +2173,10 @@ public class TournamentSummary
 /// person who just created one could not find it again.</summary>
 public class TournamentListResponse
 {
+    /// <summary>The most entrants this server takes. Null against one that predates 32 and 64.</summary>
+    [JsonPropertyName("max_capacity")]
+    public int? MaxCapacity { get; set; }
+
     [JsonPropertyName("tournaments")]
     public List<TournamentSummary>? Tournaments { get; set; }
 

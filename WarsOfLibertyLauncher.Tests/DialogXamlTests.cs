@@ -1066,19 +1066,18 @@ public class DialogXamlTests
                 var dlg = new CreateTournamentDialog("Wars of Liberty", new[] { wol, soi }, wol);
 
                 Assert.Equal(Visibility.Visible, dlg.ModBlock.Visibility);
-                Assert.True(dlg.ModCombo.IsEnabled);
-                Assert.Equal(2, dlg.ModCombo.Items.Count);
+                Assert.True(dlg.ModPickButton.IsHitTestVisible);
                 Assert.Equal("wol", dlg.SelectedMod?.Id);
                 Assert.Contains("Wars of Liberty", dlg.NameEntry.Text);
 
                 // Pick the other one: the tournament's mod changes, and so does the proposal.
-                ((ComboBoxItem)dlg.ModCombo.Items[1]!).IsSelected = true;
+                dlg.PickMod(soi);
                 Assert.Equal("soi", dlg.SelectedMod?.Id);
                 Assert.Contains("Struggle of Indonesia", dlg.NameEntry.Text);
 
                 // A name of their own survives a change of mind about the mod.
                 dlg.NameEntry.Text = "Copa de septiembre";
-                ((ComboBoxItem)dlg.ModCombo.Items[0]!).IsSelected = true;
+                dlg.PickMod(wol);
                 Assert.Equal("wol", dlg.SelectedMod?.Id);
                 Assert.Equal("Copa de septiembre", dlg.NameEntry.Text);
             }
@@ -1102,7 +1101,8 @@ public class DialogXamlTests
             var one = new ModProfile { Id = "wol", DisplayName = "Wars of Liberty" };
             var dlg = new CreateTournamentDialog("Wars of Liberty", new[] { one }, one);
             Assert.Equal(Visibility.Visible, dlg.ModBlock.Visibility);
-            Assert.False(dlg.ModCombo.IsEnabled);
+            Assert.False(dlg.ModPickButton.IsHitTestVisible);
+            Assert.Equal(Visibility.Collapsed, dlg.ModChevron.Visibility);
             Assert.Equal("wol", dlg.SelectedMod?.Id);
 
             var none = new CreateTournamentDialog();
@@ -1163,24 +1163,100 @@ public class DialogXamlTests
                 Strings.SetLanguage("es");
                 var dlg = new CreateTournamentDialog();
 
-                // 1v1: eight places is eight players, and there are no teams to form.
+                // 1v1: sixteen places is sixteen players, and there are no teams to form.
                 Assert.Equal(Visibility.Collapsed, dlg.TeamSourceBlock.Visibility);
-                Assert.Contains("8", dlg.CapacityMath.Text);
-                string solo = dlg.CapacityMath.Text;
+                Assert.Equal("16", dlg.MathPlayers.Text);
+                Assert.Equal("4", dlg.MathRounds.Text);
+                Assert.Equal("8", dlg.MathRooms.Text);
 
-                dlg.Format3v3.RaiseEvent(
+                dlg.FormatRow.Buttons.Last().RaiseEvent(
                     new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 
-                // 3v3: the same eight places are twenty-four people, and the question of how
-                // a team is formed now exists.
+                // 3v3 starts on eight places, which are twenty-four people, and the question of
+                // how a team is formed now exists.
                 Assert.Equal(Visibility.Visible, dlg.TeamSourceBlock.Visibility);
-                Assert.NotEqual(solo, dlg.CapacityMath.Text);
-                Assert.Contains("24", dlg.CapacityMath.Text);
+                Assert.Equal("24", dlg.MathPlayers.Text);
+                Assert.Equal("3", dlg.MathRounds.Text);
+                Assert.Equal("4", dlg.MathRooms.Text);
+                Assert.Contains("8", dlg.MathPlayersWord.Text);
             }
             finally { Strings.SetLanguage(previous); }
         });
 
         Assert.Null(error);
+    }
+
+    [Theory]
+    [InlineData(null, 16)]
+    [InlineData(16, 16)]
+    [InlineData(32, 32)]
+    [InlineData(64, 64)]
+    public void CreateTournamentDialog_32And64OnlyWhenTheServerSaysSo(int? serverMax, int largest)
+    {
+        // An older server clips anything above sixteen without a word, so the launcher offers
+        // nothing it was not told about.
+        Assert.Equal(largest, CreateTournamentDialog.CapacitiesFor(serverMax).Max());
+    }
+
+    [Fact]
+    public void CreateTournamentDialog_ThePrimarySaysWhatHappensToRegistration()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var dlg = new CreateTournamentDialog("Wars of Liberty");
+                Assert.Equal(Strings.Get("NtCreateOpen"), dlg.OkButton.Content);
+                dlg.OpenToggle.IsChecked = false;
+                Assert.Equal(Strings.Get("NtCreateDraft"), dlg.OkButton.Content);
+                Assert.Equal(Strings.Get("NtOpenNo"), dlg.OpenWhy.Text);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void CreateTournamentDialog_ADisabledPrimarySaysWhatIsMissing()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new CreateTournamentDialog("Wars of Liberty");
+            Assert.Equal(Visibility.Collapsed, dlg.ErrorText.Visibility);
+            dlg.NameEntry.Text = "Co";
+            Assert.False(dlg.OkButton.IsEnabled);
+            Assert.Equal(Visibility.Visible, dlg.ErrorText.Visibility);
+            Assert.NotNull(dlg.OkButton.ToolTip);
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void ModSearch_SplitsInstalledFromTheRestAndFilters()
+    {
+        var wol = new ModProfile { Id = "wol", DisplayName = "Wars of Liberty" };
+        var im = new ModProfile { Id = "im", DisplayName = "Improvement Mod" };
+        var ne = new ModProfile { Id = "ne", DisplayName = "Napoleonic Era" };
+        var mods = new[] { wol, im, ne };
+        bool Here(ModProfile m) => m != ne;
+
+        var all = WarsOfLibertyLauncher.Controls.ModSearchPopup.Split(mods, Here, "  ");
+        Assert.Equal(new[] { wol, im }, all.Installed);
+        Assert.Equal(new[] { ne }, all.Other);
+
+        var some = WarsOfLibertyLauncher.Controls.ModSearchPopup.Split(mods, Here, "NAPO");
+        Assert.Empty(some.Installed);
+        Assert.Equal(new[] { ne }, some.Other);
+
+        var none = WarsOfLibertyLauncher.Controls.ModSearchPopup.Split(mods, Here, "zzz");
+        Assert.Empty(none.Installed);
+        Assert.Empty(none.Other);
     }
 
     [Fact]

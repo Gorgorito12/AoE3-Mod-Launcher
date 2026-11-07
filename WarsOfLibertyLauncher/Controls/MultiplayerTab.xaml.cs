@@ -9096,22 +9096,13 @@ public partial class MultiplayerTab : UserControl
         var profile = _getActiveProfile?.Invoke();
         if (profile == null) return;
 
-        // WHICH MOD, asked rather than assumed. This used to stamp the active mod on the
-        // tournament in silence — and it is the field that decides the most: every room the
-        // bracket opens is created with it, and a player whose active mod is not this one is
-        // turned away when they come to play their match. Same list the room dialog offers:
-        // the mods actually installed here, since a tournament nobody can play a match in is
-        // not a tournament.
-        var installed = new List<ModProfile>();
-        foreach (var p in ModRegistry.All)
-        {
-            if (!string.IsNullOrEmpty(GetInstallPath(p))) installed.Add(p);
-        }
-        // Nothing installed is not a reason to refuse: creating a tournament worked before
-        // this picker existed, and an organiser is not always a player.
-        if (installed.Count == 0) installed.Add(profile);
-
-        var dlg = new CreateTournamentDialog(profile.DisplayName, installed, profile);
+        // WHICH MOD, asked rather than assumed: every room the bracket opens is created with it,
+        // and a player whose active mod is not this one is turned away at their match. Every mod
+        // is offered, installed first, because an organiser is not always a player.
+        var mods = ModRegistry.All.ToList();
+        if (!mods.Contains(profile)) mods.Insert(0, profile);
+        var dlg = new CreateTournamentDialog(profile.DisplayName, mods, profile,
+            p => !string.IsNullOrEmpty(GetInstallPath(p)), _tournaments?.MaxCapacity);
         try { dlg.Owner = Window.GetWindow(this); } catch { /* off-tree */ }
         if (dlg.ShowDialog() != true) return;
 
@@ -9132,6 +9123,33 @@ public partial class MultiplayerTab : UserControl
             // It is born a draft, which the public list hides. Selecting it is what stops
             // the creator having to hunt for the thing they just made.
             _selectedTournamentId = created.Id;
+
+            // The server clips what it does not take; an older one says nothing about it.
+            if (created.Capacity is { } made && made != dlg.Capacity)
+            {
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("NtCapacityChangedTitle"),
+                    Strings.Format("NtCapacityChangedBody", dlg.Capacity, made),
+                    Strings.Get("MpAlertOk"));
+            }
+
+            // A second call: the tournament exists by now, so a refusal here must say that.
+            if (dlg.OpenRegistration)
+            {
+                try
+                {
+                    await api.OpenTournamentRegistrationAsync(created.Id);
+                }
+                catch (LobbyApiException ex)
+                {
+                    await MpAlertOverlay.NoticeAsync(
+                        TabRootGrid,
+                        Strings.Get("NtOpenFailedTitle"),
+                        Strings.Format("NtOpenFailedBody", TournamentErrorText(ex)),
+                        Strings.Get("MpAlertOk"));
+                }
+            }
         }
         catch (LobbyApiException ex)
         {

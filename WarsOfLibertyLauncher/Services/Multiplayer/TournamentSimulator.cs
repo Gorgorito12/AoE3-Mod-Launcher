@@ -126,6 +126,8 @@ internal sealed class TournamentSimulator
     private int _seq;
     private int _created;
 
+    private const int MaxCapacity = 64;
+
     internal TournamentSimulator() => Reset();
 
     /// <summary>Who is looking, or null for "whoever each sample was written for".</summary>
@@ -198,6 +200,7 @@ internal sealed class TournamentSimulator
         var viewer = ViewerOf(selectedId);
         return new TournamentListResponse
         {
+            MaxCapacity = MaxCapacity,
             Tournaments = _store.Where(t => t.Status != "draft").Select(Summary).ToList(),
             Drafts = _store
                 .Where(t => t.Status == "draft"
@@ -329,7 +332,7 @@ internal sealed class TournamentSimulator
         {
             capacity = (int)Math.Truncate(cap.GetDouble());
         }
-        capacity = Math.Clamp(capacity, 2, 16);
+        capacity = Math.Clamp(capacity, 2, MaxCapacity);
 
         var t = new TournamentDetail
         {

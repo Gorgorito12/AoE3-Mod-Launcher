@@ -57,6 +57,9 @@ public partial class MainWindow
             case "createroom":
                 PreviewCreateRoom(variant);
                 break;
+            case "newtournament":
+                PreviewNewTournament(variant);
+                break;
             case "matchwatch":
                 PreviewMatchWatch(variant);
                 break;
@@ -253,6 +256,20 @@ public partial class MainWindow
         if (variant == "b") dialog.FillPreview("Hundred Days · Ranked 2v2", RoomFormat.TwoVTwo, 1, "guardia");
         if (variant == "c") dialog.FillPreview("WoL", RoomFormat.Casual, 0, "");
         if (variant == "a") dialog.SelectKind(RoomFormat.OneVOne);
+        dialog.ShowDialog();
+    }
+
+    /// <summary>Design 81a-c, and <c>pick</c> with the mod list open.</summary>
+    private void PreviewNewTournament(string variant)
+    {
+        ModProfile Mod(string id) => ModRegistry.Find(id) ?? ModRegistry.Default;
+        var here = new[] { "wol", "aoe3-tad", "age-of-dynasties-remake", "hundred-days", "improvement-mod" };
+        var mod = Mod(variant switch { "b" => "hundred-days", "c" => "improvement-mod", _ => "wol" });
+        var mods = ModRegistry.All.OrderBy(m => !here.Contains(m.Id)).ToList();
+        var dialog = new CreateTournamentDialog(mod.DisplayName, mods, mod, m => here.Contains(m.Id), 64) { Owner = this };
+        if (variant == "b") dialog.PickFormat("3v3");
+        if (variant == "c") dialog.NameEntry.Text = "Co";
+        if (variant == "pick") dialog.Loaded += (_, _) => OpenPreviewPopup(dialog.OpenModList);
         dialog.ShowDialog();
     }
 
