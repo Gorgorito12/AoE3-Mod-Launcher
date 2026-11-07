@@ -645,25 +645,36 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   is told (`NtCapacityChanged*`). The format starts on 16 places in 1v1 and 8 in teams, and changing
   format goes back to that.
 
-- **THE ORGANISER'S ACTIONS ON A PERSON LIVE IN THE ROW'S `\u22ef` MENU, and that is a layout
-  invariant, not a preference.** Disqualifying an entrant and making one a co-organiser are the two
-  longest captions in the entrant table and the two that act on somebody else, so they sit behind a
-  deliberate second click. **What forced it:** the table's action column was a fixed 190 px holding
-  a horizontal `StackPanel`, which measures its children at INFINITE width; the strip's own
-  `DesiredSize` is then clamped back to 190, so the `Grid` is told it fits. Measured in Spanish with
-  all four actions it was **396 px** - and because the strip is right-aligned, it was arranged at
-  its real width BACKWARDS from the column's right edge, painting across the status and over the
-  name. Not a clipped button: a row drawing on top of itself.
-  The column is `Auto` now, so the deficit goes to the star column, which is the only one that can
-  give (the name is the one thing in the row with `TextTrimming`).
-  \u26a0 **Two independent `if`s is how this happened.** Accept/Reject are an `if`/`else if` chain,
-  and disqualify and appoint were each added as their own `if` on top - so the worst case went from
-  two buttons to four without anybody deciding it should.
-  `THE_ONE_THAT_MATTERS_AnEntrantRowStaysInsideItsCard` pins it, in **Spanish** (in English the row
-  fits and the test passes over a broken layout) and by ARRANGED positions rather than a measure,
-  because `DesiredSize` is clamped to the constraint and an overflow reports itself as a fit. It
-  also asserts the two actions are still REACHABLE, because the cheap way to pass a width test is
-  to delete the buttons.
+- **THE TOURNAMENTS PAGE IS DESIGN 80 (`Controls/MultiplayerTab.TournamentsPage.cs`, the pure rules in
+  `Services/Multiplayer/TournamentPage.cs`).** A list that folds to 72 px (groups PLAYING · ORGANISING
+  · OTHER, four filters), and a page with the mod's cover behind it (`MainWindow.TournamentBackdrop.cs`,
+  its own layer, never the Library's), five steps, one card saying what is yours to do with ONE primary
+  (`TournamentPage.Call`), and three tabs built together and toggled by visibility: Bracket,
+  Participants, Organise. Four rules carry weight:
+  (1) **The bracket is arithmetic, never a measure** (`TournamentPage.Sheet`): a card sits midway
+  between the two that feed it, so a 64 draw is 63 placements and the zoom (60-100 %) is one
+  `ScaleTransform` — `ZoomingRebuildsNoCard` and the 64-draw tests pin that it rebuilds nothing. The
+  column heads follow the zoom but their type does not, so at 60 % the count keeps its number alone
+  and trims short of the next head.
+  (2) **Going back to the tab rebuilds nothing when nothing changed** (`RenderTournamentsTab(onlyIfChanged)`,
+  keyed on the list and the detail serialized, the language, the viewer and the invitations). It
+  used to rebuild the whole bracket on every return: tab switches cost up to 100 ms and the frame
+  p95 of the `switches` scenario doubled (16 -> 31 ms); with the key, 5-10 ms. What the viewer
+  changes on the page itself — filter, tab, zoom, search — repaints its own part directly.
+  (3) **"Your turn" in the LIST needs `my_entries`** (`GET /tournaments`, signed-in callers only,
+  `alert` = `play` | `join`, from `store.listMyEntries`). The list itself is one anonymous memo
+  shared by everybody, so per-viewer state cannot live in it. A server without the field files every
+  tournament but the open one under OTHER (`WithoutMyEntriesOnlyTheOpenOneIsKnown`).
+  (4) **What an organiser does TO somebody is a deliberate extra click**: Disqualify sits in the
+  tile's `⋯` menu and asks first; a request's answer is Accept/Reject on the tile itself; the
+  co-organiser is added from Organise, picked among the captains already in. Cancelling the
+  tournament asks first (`CancellingATournamentAsksFirst`) — the rewrite had lost that confirmation
+  and only the dead-strings sweep found it. A tile never overflows its card, in Spanish, by arranged
+  positions (`THE_ONE_THAT_MATTERS_AnEntrantTileStaysInsideItsCard`).
+  Seeing it: `--demo-tournaments=big32` is a 32-place draw with a mod cover (the only sample with a
+  `ModId`); the other samples as before. Buttons whose content is a panel carry an AutomationId
+  (`TournamentFilter:*`, `TournamentTab:*`, `TournamentRound:*`, `TournamentZoomIn/Out`), which is
+  also how the testbed presses them.
 
 - **A LANGUAGE CHANGE REPAINTS ALL FOUR SUBTABS, AND THE RENDER MUST BE SEPARABLE FROM THE
   FETCH.** `ApplyStrings` assigns the fixed labels and then calls `RefreshActiveSubtabStrings`,

@@ -596,6 +596,14 @@ rather than the reverse.
   desktop card lands on the primary monitor, not the test one. The room NAME stays
   the English network value of `RoomTitleProposal`, against the prototype's Spanish samples.
 
+- **Screen 80 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the Tournaments
+  subtab** (the action bar, the entrant table with its `⋯` column, the tournament header). The page is
+  `MultiplayerTab.TournamentsPage.cs` over the pure `Services/Multiplayer/TournamentPage`, with the
+  mod's cover behind it (`MainWindow.TournamentBackdrop.cs`); the rules are in
+  `.claude/rules/multiplayer.md` (TOURNAMENTS). `--demo-tournaments=big32` is the 32-place draw.
+  `Controls/FlexLine` is a wrapping row whose `Spring` child takes what is left of its line (CSS
+  flex-wrap), and `AutoFillPanel` is `repeat(auto-fill, minmax())`.
+
 - **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the
   piece of the blurred cover under it plus the level's tint (`GlassTheme.Spec.Menu`), which supersedes
   the "denser than the design" note below while a cover is on screen; with none, `Spec.Floating`
@@ -6175,7 +6183,7 @@ rather than the reverse.
 
 - **Seeing a populated tournament bracket without running one: `MultiplayerTab.ShowDemoTournaments`**,
   reachable from Settings → Developer and from the **`--demo-tournaments`** launch argument,
-  which takes a scenario: `--demo-tournaments=teams`, `=myroom`, `=waiting`, `=registration`,
+  which takes a scenario: `--demo-tournaments=teams`, `=big32`, `=myroom`, `=waiting`, `=registration`,
   `=finished`, or `=dialog` for the new-tournament modal. Six samples and not four, because a
   person is one entrant in a tournament and an entrant has one live match: `Playable`,
   `JoinRoom`, `ReturnToRoom` and `WaitingOpponent` are four answers to one question and no

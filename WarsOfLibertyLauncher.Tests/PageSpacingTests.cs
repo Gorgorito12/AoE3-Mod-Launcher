@@ -141,9 +141,6 @@ public class PageSpacingTests
                 if (tab.RankingHistoryCard.Visibility == Visibility.Visible)
                     Assert.Equal(s, Math.Max(tab.RankingHistoryCard.Margin.Left, tab.RankingHistoryCard.Margin.Top));
                 Assert.Equal(new Thickness(s), tab.StatsPage.Margin);
-                Assert.Equal(new Thickness(s, s, 0, s), tab.TournamentsListPane.Margin);
-                Assert.Equal(s, tab.TournamentsGapColumn.ActualWidth > 0 ? tab.TournamentsGapColumn.ActualWidth : tab.TournamentsGapColumn.Width.Value);
-                Assert.Equal(new Thickness(0, s, s, s), tab.TournamentsDetailPane.Margin);
             }
         });
         Assert.Null(error);

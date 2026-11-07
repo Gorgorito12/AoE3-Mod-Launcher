@@ -2171,8 +2171,24 @@ public class TournamentSummary
 /// <summary>Answer to <c>GET /tournaments</c>. <c>Drafts</c> holds the caller's own
 /// unopened tournaments, which the public list deliberately hides — without them the
 /// person who just created one could not find it again.</summary>
+/// <summary>A tournament the signed-in player has an entry in, and what it wants from them.</summary>
+public class MyTournamentEntry
+{
+    [JsonPropertyName("tournament_id")]
+    public string TournamentId { get; set; } = "";
+
+    /// <summary>"play" (your match is ready), "join" (your rival opened the room), or null.</summary>
+    [JsonPropertyName("alert")]
+    public string? Alert { get; set; }
+}
+
 public class TournamentListResponse
 {
+    /// <summary>Null against a server that predates it: the list then knows only the tournament on
+    /// screen, and puts the rest under Other tournaments.</summary>
+    [JsonPropertyName("my_entries")]
+    public List<MyTournamentEntry>? MyEntries { get; set; }
+
     /// <summary>The most entrants this server takes. Null against one that predates 32 and 64.</summary>
     [JsonPropertyName("max_capacity")]
     public int? MaxCapacity { get; set; }

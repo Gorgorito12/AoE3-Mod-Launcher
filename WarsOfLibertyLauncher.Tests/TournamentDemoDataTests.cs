@@ -149,8 +149,10 @@ public class TournamentDemoDataTests
     public void NoScenarioCarriesAModIdSoNothingCanTryToOpenARoom()
     {
         // A second lock after the demo guard itself: OpenTournamentMatchAsync early-returns
-        // without a mod id, so even a missed guard cannot reach the network.
-        Assert.All(TournamentDemoData.All(), t => Assert.True(string.IsNullOrEmpty(t.ModId)));
+        // without a mod id, so even a missed guard cannot reach the network. The big draw is the
+        // one exception: it is the sample that shows a mod's image behind the page.
+        Assert.All(TournamentDemoData.All().Where(t => t.Id != TournamentDemoData.Big32Id),
+            t => Assert.True(string.IsNullOrEmpty(t.ModId)));
     }
 
     // ---------------------------------------------------------------- the big bracket
@@ -217,7 +219,9 @@ public class TournamentDemoDataTests
 
         foreach (var state in exclusive)
         {
+            // The big draw is there for its size and repeats the first of these.
             var carriers = TournamentDemoData.All()
+                .Where(t => t.Id != TournamentDemoData.Big32Id)
                 .Where(t => (t.Matches ?? new List<TournamentMatch>())
                     .Any(m => MatchCards.For(m, Me, t.Entrants) == state))
                 .ToList();

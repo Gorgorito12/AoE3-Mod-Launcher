@@ -796,6 +796,17 @@ team cannot be read says "You were invited". A refused create keeps the form wit
 sheet's list shows its scrollbar where the prototype's headless render hides it.
 `CreateTeamDialog` is gone, and with it `--preview-dialog=small:k`.
 
+**Screen 80 (Torneos)**, compared with `Torneos v2.dc.html` (80a) at its own 1600 x 960, then at
+1366 and 1920 in Media, 1920 in Solid and Maximum, 2560, reduced effects and English. What differs,
+on purpose: the subtab bar keeps the launcher's pills until screen 86 changes it for every subtab;
+the sample data carries an amber strip saying it is not real; Replay is offered only on a match not
+yet decided, because the server refuses it on a decided one (the prototype offers it on both); a tile
+keeps a `⋯` with Disqualify for the organiser; the list states a tournament's round and winner only
+for the one that is open, because the list payload does not carry them; "your turn" in the list needs
+the server's `my_entries`; a co-organiser is picked among the captains already entered; the accent is
+normalised like everywhere else; the cover is blurred once, never live; 32 and 64 places need the
+server to raise its limit. Under reduced effects the champion has no glow.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup

@@ -36,6 +36,7 @@ internal static class TournamentDemoData
     internal const string MyRoomId = "DEMOCUP5";
     internal const string WaitingId = "DEMOCUP6";
     internal const string OrganiserId = "DEMOCUP7";
+    internal const string Big32Id = "DEMOCUP8";
 
     /// <summary>
     /// Entrant names.
@@ -70,6 +71,7 @@ internal static class TournamentDemoData
     {
         Tournaments = new List<TournamentSummary>
         {
+            Summary(Big32()),
             Summary(Running()),
             Summary(Teams()),
             Summary(MyRoom()),
@@ -84,6 +86,7 @@ internal static class TournamentDemoData
     /// <summary>Find one by id, so clicking a card in the demo list works with no network.</summary>
     internal static TournamentDetail? ById(string? id) => id switch
     {
+        Big32Id => Big32(),
         RunningId => Running(),
         TeamsId => Teams(),
         MyRoomId => MyRoom(),
@@ -103,6 +106,7 @@ internal static class TournamentDemoData
     /// </summary>
     internal static string? NameKeyOf(string? id) => id switch
     {
+        Big32Id => "MpTournamentDemoBig32Name",
         RunningId => "MpTournamentDemoRunningName",
         TeamsId => "MpTournamentDemoTeamsName",
         RegistrationId => "MpTournamentDemoRegistrationName",
@@ -274,6 +278,98 @@ internal static class TournamentDemoData
         });
 
         string? SeedId(int seed) => seed <= 15 ? $"r{seed}" : null;
+    }
+
+    /// <summary>
+    /// A draw of thirty-two with twenty-nine entered, the size where the bracket has to scroll both
+    /// ways: three byes, a walkover and a disqualification in the first round, and in the second my
+    /// match, two being played and some still to come.
+    /// </summary>
+    internal static TournamentDetail Big32()
+    {
+        var names = new[]
+        {
+            "Mariscal", "Aluclown", "Rioplatense", "TercioViejo", "Vandalia", "ElNorte", "Sombrerete", "Cuzco",
+            "Malinche", "Gorgo", "Bicorne", "Zanjón", "PatagonBravo", "Almirante", "Chasqui", "Filibustero",
+            "Kaiser", "Geaf_Argento", "UnstoppableStreletsy", "El Taita", "NathanR06", "alexari2040", "Jenízaro",
+            "Granadero", "Corsario", "Lancero", "Mosquetero", "Húsar", "Coracero",
+        };
+        var entrants = names.Select((name, i) => new TournamentEntrant
+        {
+            Id = $"b{i + 1}", Kind = "solo", DisplayName = name, CaptainUserId = i == 9 ? MeUserId : $"b-u{i + 1}",
+            Seed = i + 1, Status = "confirmed",
+            MemberIds = new List<string> { i == 9 ? MeUserId : $"b-u{i + 1}" },
+        }).ToList();
+
+        static int[] Order(int n) => n == 1 ? new[] { 1 } : Order(n / 2).SelectMany(x => new[] { x, n + 1 - x }).ToArray();
+        static int WinnerOf(int a, int b) => (a * 7 + b * 3) % 5 == 0 ? Math.Max(a, b) : Math.Min(a, b);
+        const int entered = 29;
+
+        var order = Order(32);
+        var matches = new List<TournamentMatch>();
+        var winners = new int[16];
+        for (int p = 0; p < 16; p++)
+        {
+            int a = order[2 * p], b = order[2 * p + 1];
+            bool bye = a > entered || b > entered;
+            int win = bye ? Math.Min(a, b) : p is 3 or 6 ? Math.Min(a, b) : WinnerOf(a, b);
+            winners[p] = win;
+            matches.Add(new TournamentMatch
+            {
+                Id = $"b1m{p}", Round = 1, Position = p,
+                Entrant1Id = a <= entered ? $"b{a}" : null, Entrant2Id = b <= entered ? $"b{b}" : null,
+                Status = bye ? "bye" : "done",
+                Outcome = bye ? "bye" : p == 3 ? "walkover" : p == 6 ? "dq" : "played",
+                WinnerEntrantId = $"b{win}",
+            });
+        }
+
+        var second = new int[8];
+        for (int p = 0; p < 8; p++)
+        {
+            int a = winners[2 * p], b = winners[2 * p + 1];
+            bool done = p is 0 or 1 or 4;
+            second[p] = done ? WinnerOf(a, b) : 0;
+            matches.Add(new TournamentMatch
+            {
+                Id = $"b2m{p}", Round = 2, Position = p, Entrant1Id = $"b{a}", Entrant2Id = $"b{b}",
+                Status = done ? "done" : "pending",
+                Outcome = done ? "played" : null,
+                WinnerEntrantId = done ? $"b{second[p]}" : null,
+                Lobby = p is 2 or 6 ? new TournamentMatchLobby { Id = $"DEMOB{p}", HostUserId = $"b-u{a}", Status = "open" } : null,
+            });
+        }
+        for (int p = 0; p < 4; p++)
+        {
+            int a = second[2 * p], b = second[2 * p + 1];
+            matches.Add(new TournamentMatch
+            {
+                Id = $"b3m{p}", Round = 3, Position = p,
+                Entrant1Id = a > 0 ? $"b{a}" : null, Entrant2Id = b > 0 ? $"b{b}" : null, Status = "pending",
+            });
+        }
+        matches.Add(new TournamentMatch { Id = "b4m0", Round = 4, Position = 0, Status = "pending" });
+        matches.Add(new TournamentMatch { Id = "b4m1", Round = 4, Position = 1, Status = "pending" });
+        matches.Add(new TournamentMatch { Id = "b5m0", Round = 5, Position = 0, Status = "pending" });
+
+        return Linked(new TournamentDetail
+        {
+            Id = Big32Id,
+            Name = Strings.Get("MpTournamentDemoBig32Name"),
+            ModId = "wol",
+            OwnerUserId = "b-u17",
+            OwnerName = "Kaiser",
+            Format = "1v1",
+            TeamSource = "solo",
+            EntryMode = "open",
+            Status = "running",
+            Capacity = 32,
+            ConfirmedCount = entered,
+            BracketSize = 32,
+            RoundsTotal = 5,
+            Entrants = entrants,
+            Matches = matches,
+        });
     }
 
     /// <summary>
@@ -699,6 +795,7 @@ internal static class TournamentDemoData
 
         var byName = new (string Name, Func<TournamentDetail> Make)[]
         {
+            ("big32", Big32),
             ("running", Running),
             ("teams", Teams),
             ("myroom", MyRoom),
@@ -787,6 +884,6 @@ internal static class TournamentDemoData
     internal static IReadOnlyList<TournamentDetail> All() =>
         new[]
         {
-            Running(), Teams(), MyRoom(), Waiting(), Organiser(), Registration(), Finished(),
+            Big32(), Running(), Teams(), MyRoom(), Waiting(), Organiser(), Registration(), Finished(),
         }.ToList();
 }

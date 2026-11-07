@@ -359,8 +359,9 @@ public class RoomFooterStatesTests
     [InlineData(1, 5, "MpTournamentRoundSixteenth")]
     [InlineData(2, 5, "MpTournamentRoundEighth")]
     [InlineData(3, 5, "MpTournamentRoundQuarter")]
-    [InlineData(1, 6, "MpTournamentRoundN")]
-    public void TheEarlyRoundsHaveNamesUpToTheRoundOf32(int round, int total, string key)
+    [InlineData(1, 6, "MpTournamentRoundThirtySecond")]
+    [InlineData(1, 7, "MpTournamentRoundN")]
+    public void TheEarlyRoundsHaveNamesUpToTheRoundOf64(int round, int total, string key)
         => Assert.Equal(key, BracketLayout.RoundLabelKey(round, total));
 
     [Fact]

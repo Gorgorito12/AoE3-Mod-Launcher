@@ -532,6 +532,11 @@ public partial class MainWindow
         };
         PlayView.SizeChanged += (_, _) => ApplyLibraryLayout();
         LibraryBackdrop.SizeChanged += (_, _) => UpdateLibraryCover();
+        TournamentBackdrop.SizeChanged += (_, _) =>
+        {
+            UpdateTournamentCover();
+            QueueTournamentClip();
+        };
         MainNav.SizeChanged += (_, _) => UpdateLibraryBlurClip();
         LibraryRail.SizeChanged += (_, _) => UpdateLibraryBlurClip();
         LibraryRail.IsVisibleChanged += (_, _) => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(UpdateLibraryBlurClip));

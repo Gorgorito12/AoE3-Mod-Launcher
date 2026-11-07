@@ -32,7 +32,6 @@ public static partial class Strings
         // {0} the mod.
         ["DlgRemoveModHeadline"] = new() { [LangEn] = "Remove {0} from your collection?", [LangEs] = "¿Quitar {0} de tu colección?" },
         ["StartupUpdateAmount"] = new() { [LangEn] = "{0} of {1}", [LangEs] = "{0} de {1}" },
-        ["MpTeamsCreateTagHint"] = new() { [LangEn] = "The tag shows in the bracket when the name does not fit.", [LangEs] = "La etiqueta sale en el cuadro cuando no cabe el nombre." },
 
         // {0} the version.
         ["StartupUpdateHeadline"] = new() { [LangEn] = "Downloading version {0}", [LangEs] = "Descargando la versión {0}" },
@@ -55,8 +54,6 @@ public static partial class Strings
         ["MpJoinPasswordField"] = new() { [LangEn] = "PASSWORD", [LangEs] = "CONTRASEÑA" },
         ["MpJoinPasswordPlaceholder"] = new() { [LangEn] = "Type it here", [LangEs] = "Escríbela aquí" },
         ["MpRenameHeadline"] = new() { [LangEn] = "Room name", [LangEs] = "Nombre de la sala" },
-        ["MpTeamsCreateHeadline"] = new() { [LangEn] = "Name your team", [LangEs] = "Ponle nombre a tu equipo" },
-        ["MpTeamsCreateFieldLabel"] = new() { [LangEn] = "NAME · TAG (OPTIONAL, UP TO 8)", [LangEs] = "NOMBRE · ETIQUETA (OPCIONAL, HASTA 8)" },
         // {0} how many.
         ["MpPickInvite"] = new() { [LangEn] = "Invite {0}", [LangEs] = "Invitar a {0}" },
 
