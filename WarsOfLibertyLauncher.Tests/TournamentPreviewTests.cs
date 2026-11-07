@@ -172,14 +172,16 @@ public class TournamentPreviewTests
             sim.CloseRegistration(id);
             sim.ViewerChoice = TournamentPreviewViewer.Spectator;
 
+            EnrollDialog? dialog = null;
+            tab.EnrollHost = d =>
+            {
+                dialog = d;
+                d.SubmitAsync().GetAwaiter().GetResult();
+            };
             Click(enter);
-            var notice = Overlay(tab);
-            Assert.Equal(Strings.Get("MpTournamentActionFailed"), notice.Title);
-            Assert.Equal(Strings.Get("MpTournamentErrClosed"), notice.Body);
-            Assert.NotEqual(Strings.Get("MpTournamentDemoInertTitle"), notice.Title);
-
-            Click(notice.Buttons.Single());
-            AssertNoOverlay(tab);
+            Assert.NotNull(dialog);
+            Assert.Equal(Strings.Get("MpTournamentErrClosed"), dialog!.ErrorBody.Text);
+            Assert.False(dialog.Changed);
         }));
         Assert.Null(error);
     }

@@ -626,6 +626,16 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `ToastCause.Request`, `PreferDesktop`). A first round of 64 needs 32 rooms against
   `MAX_ACTIVE_GAMES` (16 by default): raise it before offering 32/64, or organisers read 409s.
 
+- **ENTERING A TOURNAMENT IS ONE WINDOW, AND IT IS ALSO "MY ENTRY" (design 82).** `OpenEnrollAsync`
+  opens `EnrollDialog` for both; `EnrollView.ModeOf` picks the shape from the tournament and the
+  player's teams. It replaced a chain of `PlayerPickerDialog`s, and Withdraw no longer fires from the
+  page without asking: it goes through this window and its confirmation. The window sends the entry
+  itself and stays open with the answer (`confirmed`, `pending`, `waitlist`). **A modal stops a test's
+  thread**, so tests set `MultiplayerTab.EnrollHost`. An `already_entered` on a built line-up reloads
+  the tournament to name who took the player, drops them from the chosen list and keeps the rest; only
+  a connection failure turns the primary into Retry, since a refusal would just be refused again.
+  The captain's row is locked: the server refuses a line-up that leaves its captain out.
+
 - **CREATING A TOURNAMENT IS TWO CALLS NOW, AND THE SECOND CAN FAIL ON ITS OWN (design 81).** "Open
   registration when it's created" is on by default: `TournamentCreate_Click` posts the tournament and
   then `OpenTournamentRegistrationAsync`. A refusal of the second leaves a real draft, so the notice

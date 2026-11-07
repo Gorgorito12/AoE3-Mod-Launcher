@@ -584,6 +584,7 @@ public partial class MainWindow : Window
             setAccountChip: SetAccountChip,
             // The update button on the multiplayer gate is the gold pill by another name.
             onUpdateRequested: () => LauncherUpdatePill_Click(this, new RoutedEventArgs()),
+            openModInLibrary: profile => ModsBrowserView_OpenInLibraryRequested(this, profile),
             // An invite's Join (and the quick match's "see room") can be pressed on the DESKTOP
             // card, with this window minimised or in the tray: show it first, on Multiplayer.
             bringMultiplayerToFront: () =>

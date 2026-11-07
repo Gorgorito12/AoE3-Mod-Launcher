@@ -1,3 +1,4 @@
+using WarsOfLibertyLauncher.Models.Multiplayer;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -59,6 +60,9 @@ public partial class MainWindow
                 break;
             case "newtournament":
                 PreviewNewTournament(variant);
+                break;
+            case "enroll":
+                PreviewEnroll(variant);
                 break;
             case "matchwatch":
                 PreviewMatchWatch(variant);
@@ -256,6 +260,86 @@ public partial class MainWindow
         if (variant == "b") dialog.FillPreview("Hundred Days · Ranked 2v2", RoomFormat.TwoVTwo, 1, "guardia");
         if (variant == "c") dialog.FillPreview("WoL", RoomFormat.Casual, 0, "");
         if (variant == "a") dialog.SelectKind(RoomFormat.OneVOne);
+        dialog.ShowDialog();
+    }
+
+    /// <summary>Design 82a-l, on a made-up tournament: nothing here reaches a server.</summary>
+    private void PreviewEnroll(string variant)
+    {
+        ModProfile Mod(string id) => ModRegistry.Find(id) ?? ModRegistry.Default;
+        const string me = "me";
+        static TournamentEntrant Team(string id, string name, string captain, string captainName, string other, string otherName) => new()
+        {
+            Id = id, Kind = "team", DisplayName = name, Status = "confirmed", CaptainUserId = captain,
+            MemberIds = new() { captain, other },
+            Members = new()
+            {
+                new() { UserId = captain, DisplayName = captainName },
+                new() { UserId = other, DisplayName = otherName },
+            },
+        };
+        var cup = variant is "a" or "e" or "f" or "h" or "l";
+        var build = variant is "c" or "g" or "i" or "j" or "k";
+        var tournament = new TournamentDetail
+        {
+            Id = "t",
+            Name = cup ? "Copa de Octubre" : build ? "Copa 2v2 de Improvement" : "Liga 3v3 de Otoño",
+            ModId = cup ? "wol" : build ? "improvement-mod" : "hundred-days",
+            Format = cup ? "1v1" : build ? "2v2" : "3v3",
+            TeamSource = cup ? "solo" : build ? "adhoc" : "registered",
+            EntryMode = build ? "approval" : "open",
+            Status = "registration",
+            Capacity = cup ? 32 : build ? 16 : 8,
+            ConfirmedCount = cup ? 29 : build ? 6 : 5,
+            RosterSize = cup ? 1 : build ? 2 : 3,
+            Entrants = new()
+            {
+                new() { Id = "x1", Kind = "solo", Status = "confirmed", DisplayName = "Bicorne", CaptainUserId = "bicorne", MemberIds = new() { "bicorne" } },
+                new() { Id = "x2", Kind = "solo", Status = "confirmed", DisplayName = "Kaiser", CaptainUserId = "kaiser", MemberIds = new() { "kaiser" } },
+            },
+        };
+        if (variant == "k") tournament.Entrants.Add(new() { Id = "x3", Kind = "team", Status = "confirmed", DisplayName = "Otros", CaptainUserId = "cuzco", MemberIds = new() { "cuzco" } });
+        if (variant == "h") tournament.Entrants.Add(new() { Id = "e", Kind = "solo", Status = "confirmed", DisplayName = "Gorgo", CaptainUserId = me, MemberIds = new() { me } });
+        if (variant == "i") tournament.Entrants.Add(Team("e", "Los Cóndores", me, "Gorgo", "cuzco", "Cuzco"));
+        if (variant == "j") tournament.Entrants.Add(Team("e", "Coraceros del Plata", "rio", "Rioplatense", me, "Gorgo"));
+
+        static TeamMember P(string id, string name) => new() { UserId = id, DisplayName = name };
+        var teams = new List<TeamSummary>
+        {
+            new() { Id = "andes", Name = "Los Andes", OwnerUserId = me, Members = new() { P(me, "Gorgo"), P("cuzco", "Cuzco"), P("malinche", "Malinche"), P("bicorne", "Bicorne"), P("chasqui", "Chasqui") } },
+            new() { Id = "sur", Name = "Hermandad del Sur", OwnerUserId = "rio", Members = new() { P("rio", "Rioplatense"), P("pat", "PatagonBravo"), P(me, "Gorgo") } },
+            new() { Id = "indias", Name = "Compañía de Indias", OwnerUserId = me, Members = new() { P(me, "Gorgo"), P("corsario", "Corsario") } },
+        };
+        if (variant == "d") teams.RemoveAt(0);
+
+        var recent = new[] { new EnrollPlayer("cuzco", "Cuzco", true, "2 d"), new EnrollPlayer("mariscal", "Mariscal", false, "5 d"), new EnrollPlayer("malinche", "Malinche", true, "9 d") };
+        var online = new[] { "Cuzco", "Malinche", "Bicorne", "Almirante", "Chasqui", "Zanjón", "Kaiser", "Filibustero" }
+            .Select(n => new EnrollPlayer(n.ToLowerInvariant(), n, true)).ToList();
+        var actions = new EnrollActions
+        {
+            Enter = _ => variant == "l"
+                ? throw new System.Net.Http.HttpRequestException("preview")
+                : Task.FromResult(new TournamentEntryResponse { Status = build ? "pending" : "confirmed" }),
+            Withdraw = _ => Task.CompletedTask,
+            Reload = () => Task.FromResult(tournament),
+            ErrorText = ex => ex.Message,
+            OpenMyTeams = () => { },
+            OpenModInLibrary = () => { },
+        };
+        var dialog = new EnrollDialog(tournament, me, Mod(tournament.ModId), variant != "e", teams, recent, online, actions) { Owner = this };
+        dialog.KnowName(me, "Gorgo");
+        if (variant == "f") dialog.ShowDone("confirmed");
+        if (variant == "g")
+        {
+            dialog.PreviewBuild("Los Cóndores", "cuzco");
+            dialog.ShowDone("pending");
+        }
+        if (variant == "k")
+        {
+            dialog.PreviewBuild("Los Cóndores", null);
+            dialog.ShowError(Strings.Get("EnErrSent"), Strings.Format("EnErrTaken", "Cuzco"));
+        }
+        if (variant == "l") dialog.Loaded += async (_, _) => await dialog.SubmitAsync();
         dialog.ShowDialog();
     }
 

@@ -1356,12 +1356,14 @@ public partial class MultiplayerTab : UserControl
         Action<string?, string?, string?, Services.Multiplayer.ShownBadge?>? setAccountChip = null,
         Action? onUpdateRequested = null,
         Action? bringMultiplayerToFront = null,
-        Action<string?, string?>? setQuickMatchPill = null)
+        Action<string?, string?>? setQuickMatchPill = null,
+        Action<ModProfile>? openModInLibrary = null)
     {
         _setConnectionChip = setConnectionChip;
         _setAccountChip = setAccountChip;
         _onUpdateRequested = onUpdateRequested;
         _bringMultiplayerToFront = bringMultiplayerToFront;
+        _openModInLibrary = openModInLibrary;
         _setQuickMatchPill = setQuickMatchPill;
         if (_session != null)
         {
@@ -6883,17 +6885,12 @@ public partial class MultiplayerTab : UserControl
         // ---- the secondary: taking part, or stepping out.
         if (TournamentPermissions.CanEnter(t, me))
         {
-            row.Children.Add(Make("MpTournamentEnter", "MpGhostButton",
-                () => EnterTournamentAsync(t)));
+            row.Children.Add(Make("MpTournamentEnter", "MpGhostButton", () => OpenEnrollAsync(t)));
         }
-        else if (TournamentPermissions.CanWithdraw(t, me))
+        else if (TournamentPermissions.MyEntrant(t, me) != null
+                 && t.Status is "registration" or "ready")
         {
-            var mine = TournamentPermissions.MyEntrant(t, me);
-            if (mine != null)
-            {
-                row.Children.Add(Make("MpTournamentWithdraw", "MpGhostButton",
-                    () => TournamentApi.WithdrawFromTournamentAsync(t.Id, mine.Id)));
-            }
+            row.Children.Add(Make("EnMyEntry", "MpGhostButton", () => OpenEnrollAsync(t)));
         }
 
         // ---- the rest, behind a menu. Re-seeding a drawn bracket and disqualifying
@@ -7056,8 +7053,6 @@ public partial class MultiplayerTab : UserControl
         box.Child = stack;
         return box;
     }
-
-    // EnterTournamentAsync — with the body each team mode needs — is in MultiplayerTab.Teams.cs.
 
     /// <summary>
     /// Run one tournament action, refresh, and turn a refusal into a sentence.
@@ -7594,8 +7589,7 @@ public partial class MultiplayerTab : UserControl
                  && !Services.Multiplayer.MatchCards.EntrantIsOut(e)
                  && string.Equals(e.CaptainUserId, me, StringComparison.Ordinal))
         {
-            Act("MpTournamentWithdraw", "MpGhostButton",
-                () => TournamentApi.WithdrawFromTournamentAsync(t.Id, e.Id));
+            Act("MpTournamentWithdraw", "MpGhostButton", () => OpenEnrollAsync(t));
         }
 
         // THE ORGANISER'S TWO POWERS LIVE IN A MENU, not as two more buttons.

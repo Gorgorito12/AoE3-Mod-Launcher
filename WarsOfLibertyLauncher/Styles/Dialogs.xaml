@@ -369,6 +369,35 @@
         </Setter>
     </Style>
 
+    <Style x:Key="EnrollHead" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource SetCaptionSize}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="#A8BCD2"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="EnrollHeadHint" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="Margin" Value="8,0,8,0"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+        <Setter Property="Foreground" Value="#8C9CB1"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="EnrollCount" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="Consolas, Courier New, monospace"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="EnrollInfoNote" TargetType="Border">
+        <Setter Property="Padding" Value="12,9"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Background" Value="#1A55ACEE"/>
+        <Setter Property="BorderBrush" Value="#6655ACEE"/>
+    </Style>
+
     <Style x:Key="TournamentMathCard" TargetType="Border">
         <Setter Property="Padding" Value="11,9"/>
         <Setter Property="CornerRadius" Value="9"/>

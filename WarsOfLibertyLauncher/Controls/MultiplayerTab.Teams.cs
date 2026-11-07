@@ -35,151 +35,62 @@ public partial class MultiplayerTab
 
     // ---------------------------------------------------------------- entering
 
+    /// <summary>Shows the enrol window. Tests swap it: a modal would stop their thread.</summary>
+    internal Action<EnrollDialog> EnrollHost = dialog => dialog.ShowDialog();
+
     /// <summary>
-    /// Enter the tournament with the body its mode needs: none for a 1v1 or a draft (the server
-    /// registers the caller alone), a saved team for a registered one, a line-up for an ad-hoc
-    /// one. Nothing is sent when the player backs out of a question.
+    /// The enrol window of a tournament: entering, or "my entry" for somebody already in. It sends
+    /// the entry itself and stays open to say what came of it; the page behind asks again after.
     /// </summary>
-    private async Task EnterTournamentAsync(TournamentDetail t)
+    internal async Task OpenEnrollAsync(TournamentDetail t)
     {
         var me = TournamentViewerId(t);
-        object? body = t.TeamSource switch
-        {
-            _ when string.Equals(t.Format, "1v1", StringComparison.Ordinal) => null,
-            "registered" => await ChooseRegisteredEntryAsync(t, me),
-            "adhoc" => await ChooseAdhocEntryAsync(t, me),
-            _ => null,
-        };
-        bool asked = t.TeamSource is "registered" or "adhoc"
-                     && !string.Equals(t.Format, "1v1", StringComparison.Ordinal);
-        if (asked && body == null) return;
-        await TournamentApi.EnterTournamentAsync(t.Id, body);
-    }
-
-    /// <summary>
-    /// A registered team: one of MY teams that has enough players, and — when it has more than
-    /// the format fields and the server can take the choice — who plays. Null when there is no
-    /// such team or the player backed out.
-    /// </summary>
-    private async Task<object?> ChooseRegisteredEntryAsync(TournamentDetail t, string? me)
-    {
-        int size = TournamentPermissions.RosterSizeOf(t);
-        var mine = await TournamentApi.GetMyTeamsAsync();
-        var eligible = (mine.Teams ?? new List<TeamSummary>())
-            .Where(x => x.Disbanded != true
-                        && string.Equals(x.OwnerUserId, me, StringComparison.Ordinal)
-                        && (x.Members?.Count ?? 0) >= size)
-            .ToList();
-
-        var owner = OwnerWindow();
-        if (eligible.Count == 0)
-        {
-            if (ThemedConfirmDialog.Ask(owner,
-                    Strings.Get("MpTournamentNeedTeamTitle"),
-                    Strings.Format("MpTournamentNeedTeamBody", size),
-                    Strings.Get("MpTournamentOpenMyTeams"),
-                    Strings.Get("BtnCancel")))
-            {
-                await OpenMyTeamsAsync();
-            }
-            return null;
-        }
-
-        var team = eligible[0];
-        if (eligible.Count > 1)
-        {
-            var pickTeam = new PlayerPickerDialog(
-                Strings.Get("MpTournamentPickTeamTitle"),
-                Strings.Format("MpTournamentPickTeamIntro", size),
-                Strings.Get("MpTournamentPickTeamList"),
-                eligible.Select(x => new PickCandidate(
-                    x.Id, TeamLabel(x.Name, x.Tag),
-                    string.Join(", ", (x.Members ?? new()).Select(m => m.DisplayName ?? m.UserId)))).ToList(),
-                required: 1,
-                okLabel: Strings.Get("MpTournamentPickTeamOk"));
-            if (!Show(pickTeam) || pickTeam.SelectedIds.Count != 1) return null;
-            team = eligible.First(x => x.Id == pickTeam.SelectedIds[0]);
-        }
-
-        List<string>? lineup = null;
-        var members = team.Members ?? new List<TeamMember>();
-        // The choice only when the server would honour it: an older one ignores `member_ids`
-        // and takes the first players, and asking would then be a lie.
-        if (members.Count > size && t.RosterSize != null)
-        {
-            var pickPlayers = new PlayerPickerDialog(
-                Strings.Get("MpTournamentLineupTitle"),
-                Strings.Format("MpTournamentLineupIntro", size, team.Name),
-                Strings.Get("MpPickPlayers"),
-                members.Select(m => new PickCandidate(
-                    m.UserId, m.DisplayName ?? m.UserId,
-                    Locked: string.Equals(m.UserId, me, StringComparison.Ordinal))).ToList(),
-                required: size,
-                okLabel: Strings.Get("MpTournamentEnter"));
-            if (!Show(pickPlayers)) return null;
-            lineup = pickPlayers.SelectedIds.ToList();
-        }
-
-        return new { team_id = team.Id, member_ids = lineup };
-    }
-
-    /// <summary>
-    /// An ad-hoc line-up: the captain (fixed) and the players he names, plus the team's name.
-    /// Players already in this tournament are listed but cannot be chosen, with the reason.
-    /// </summary>
-    private async Task<object?> ChooseAdhocEntryAsync(TournamentDetail t, string? me)
-    {
-        int size = TournamentPermissions.RosterSizeOf(t);
-        var taken = new HashSet<string>(
-            (t.Entrants ?? new List<TournamentEntrant>())
-                .Where(e => e.Status is "pending" or "confirmed" or "waitlist")
-                .SelectMany(e => e.MemberIds ?? new List<string>()),
-            StringComparer.Ordinal);
-
-        var candidates = new List<PickCandidate>();
-        void Add(string id, string label)
-        {
-            if (string.IsNullOrEmpty(id) || candidates.Any(c => c.Id == id)) return;
-            bool isMe = string.Equals(id, me, StringComparison.Ordinal);
-            candidates.Add(new PickCandidate(id, label,
-                Locked: isMe,
-                Disabled: !isMe && taken.Contains(id),
-                DisabledReason: Strings.Get("MpTournamentAlreadyIn")));
-        }
-
-        if (!string.IsNullOrEmpty(me)) Add(me!, MyDisplayName(me!));
-        // The people I already play with first, then whoever is online.
-        try
-        {
-            var mine = await TournamentApi.GetMyTeamsAsync();
-            foreach (var team in mine.Teams ?? new List<TeamSummary>())
-                foreach (var m in team.Members ?? new List<TeamMember>())
-                    Add(m.UserId, m.DisplayName ?? m.UserId);
-        }
-        catch
-        {
-            // Teams are a convenience here; the online list and the search still work.
-        }
-        foreach (var c in OnlinePlayerCandidates()) Add(c.Id, c.Label);
-
+        var saved = t.Format != "1v1" && t.TeamSource == "registered"
+                    && TournamentPermissions.MyEntrant(t, me) == null;
+        var teams = saved ? (await TournamentApi.GetMyTeamsAsync()).Teams : null;
+        var mod = string.IsNullOrEmpty(t.ModId) ? null : ModRegistry.Find(t.ModId);
         var search = PlayerSearch();
-        var dlg = new PlayerPickerDialog(
-            Strings.Get("MpTournamentAdhocTitle"),
-            Strings.Format("MpTournamentAdhocIntro", size),
-            Strings.Get("MpPickPlayers"),
-            candidates,
-            required: size,
-            okLabel: Strings.Get("MpTournamentEnter"),
-            nameLabel: Strings.Get("MpTournamentAdhocName"),
-            search: search == null
-                ? null
-                : async q => (await search(q)).Select(c => c with
+        var dialog = new EnrollDialog(t, me, mod, mod == null || !string.IsNullOrEmpty(GetInstallPath(mod)), teams,
+            RecentTeammates(me), OnlinePlayerCandidates().Select(c => new EnrollPlayer(c.Id, c.Label, true)).ToList(),
+            new EnrollActions
+            {
+                Enter = body => TournamentApi.EnterTournamentAsync(t.Id, body),
+                Withdraw = entrant => TournamentApi.WithdrawFromTournamentAsync(t.Id, entrant),
+                Reload = () => TournamentApi.GetTournamentAsync(t.Id),
+                ErrorText = TournamentErrorText,
+                OpenMyTeams = () => _ = OpenMyTeamsAsync(),
+                OpenModInLibrary = mod == null || _openModInLibrary == null ? null : () => _openModInLibrary(mod),
+                Search = search == null ? null : async q =>
                 {
-                    Disabled = taken.Contains(c.Id),
-                    DisabledReason = Strings.Get("MpTournamentAlreadyIn"),
-                }).ToList());
-        if (!Show(dlg)) return null;
-        return new { member_ids = dlg.SelectedIds.ToList(), display_name = dlg.EnteredName };
+                    var online = new HashSet<string>(_globalOnlineUsers.Select(u => u.UserId), StringComparer.Ordinal);
+                    return (await search(q)).Select(c => new EnrollPlayer(c.Id, c.Label, online.Contains(c.Id))).ToList();
+                },
+            });
+        var name = me == null ? null : MyDisplayName(me);
+        if (name != null) dialog.KnowName(me!, name);
+        try { dialog.Owner = OwnerWindow(); } catch { /* off-tree */ }
+        EnrollHost(dialog);
+    }
+
+    /// <summary>Who played with this player lately, from the history already loaded. Nothing is
+    /// fetched for it: without the history the group is simply not there.</summary>
+    private IReadOnlyList<EnrollPlayer> RecentTeammates(string? me)
+    {
+        if (_historyRows == null) return Array.Empty<EnrollPlayer>();
+        var online = new HashSet<string>(_globalOnlineUsers.Select(u => u.UserId), StringComparer.Ordinal);
+        var now = DateTimeOffset.UtcNow;
+        var players = new List<EnrollPlayer>();
+        foreach (var row in _historyRows.Take(20))
+        {
+            string? ago = DateTimeOffset.TryParse(row.EndedAt, out var ended) ? RoomAgeFormat.Coarse(now - ended) : null;
+            foreach (var other in row.Participants)
+            {
+                if (other.UserId == me || players.Any(p => p.Id == other.UserId)) continue;
+                var name = string.IsNullOrEmpty(other.DisplayName) ? other.DiscordUsername : other.DisplayName;
+                players.Add(new EnrollPlayer(other.UserId, name, online.Contains(other.UserId), ago));
+            }
+        }
+        return players.Take(5).ToList();
     }
 
     // ---------------------------------------------------------------- draft

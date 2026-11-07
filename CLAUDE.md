@@ -589,7 +589,9 @@ rather than the reverse.
   keeps the serif** and passes `topGlow: true` to `AttachPicked` (its image, fade and glow are not 88's).
   A layer of that chassis may never carry a `Height` it does not need: it spans the window, so in a
   `SizeToContent` dialog it is a floor (the glow's 580 px made 81a 85 px too tall). `SegmentRow.Raised`
-  and `Controls/ModSearchPopup` are 81's; `--preview-dialog=newtournament:a|b|c|pick`. The room NAME stays
+  and `Controls/ModSearchPopup` are 81's; `--preview-dialog=newtournament:a|b|c|pick`, and
+  `--preview-dialog=enroll:a..l` for 82, the enrol window (`EnrollDialog` + the pure
+  `Services/Multiplayer/EnrollView`). The room NAME stays
   the English network value of `RoomTitleProposal`, against the prototype's Spanish samples.
 
 - **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the
