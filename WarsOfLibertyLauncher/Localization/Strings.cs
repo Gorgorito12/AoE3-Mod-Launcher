@@ -4279,75 +4279,10 @@ public static partial class Strings
             [LangEn] = "New tournament",
             [LangEs] = "Nuevo torneo",
         },
-        ["MpTournamentDialogName"] = new()
-        {
-            [LangEn] = "Name",
-            [LangEs] = "Nombre",
-        },
-        ["MpTournamentDialogFormat"] = new()
-        {
-            [LangEn] = "Format",
-            [LangEs] = "Formato",
-        },
-        ["MpTournamentDialogTeamSource"] = new()
-        {
-            [LangEn] = "How teams are formed",
-            [LangEs] = "Cómo se forman los equipos",
-        },
-        ["MpTournamentSourceRegistered"] = new()
-        {
-            [LangEn] = "A captain enters a saved team",
-            [LangEs] = "Un capitán inscribe un equipo guardado",
-        },
-        ["MpTournamentSourceAdhoc"] = new()
-        {
-            [LangEn] = "A captain picks a line-up when entering",
-            [LangEs] = "El capitán arma la alineación al inscribirse",
-        },
-        ["MpTournamentSourceDraft"] = new()
-        {
-            [LangEn] = "Everyone enters alone and I make the teams",
-            [LangEs] = "Cada uno se apunta solo y yo hago los equipos",
-        },
-        ["MpTournamentDialogEntryMode"] = new()
-        {
-            [LangEn] = "Who gets in",
-            [LangEs] = "Quién entra",
-        },
-        ["MpTournamentEntryOpen"] = new()
-        {
-            [LangEn] = "First come, first served",
-            [LangEs] = "Por orden de llegada",
-        },
-        ["MpTournamentEntryApproval"] = new()
-        {
-            [LangEn] = "I accept each one",
-            [LangEs] = "Yo acepto uno por uno",
-        },
-        ["MpTournamentDialogCapacity"] = new()
-        {
-            [LangEn] = "Places",
-            [LangEs] = "Plazas",
-        },
-        ["MpTournamentDialogCapacityHint"] = new()
-        {
-            [LangEn] = "Sixteen is the ceiling: a first round that size already needs "
-                       + "half the rooms the server allows at once.",
-            [LangEs] = "Dieciséis es el tope: una primera ronda así ya necesita la "
-                       + "mitad de las salas que el servidor permite a la vez.",
-        },
         ["MpSubtabTournaments"] = new()
         {
             [LangEn] = "Tournaments",
             [LangEs] = "Torneos",
-        },
-        // The dialog's primary. NOT MpTournamentCreate, which is the list's "+ New
-        // tournament" and is the caption of the very window this button sits in - a button
-        // named after its own window says what the window is, not what pressing it does.
-        ["MpTournamentCreateAction"] = new()
-        {
-            [LangEn] = "Create tournament",
-            [LangEs] = "Crear torneo",
         },
         // ONE WORD, and the reason is measurable. It reads under a "Tournaments" heading in a
         // 300px column, so the heading supplies the noun and the button only has to supply the
@@ -5139,50 +5074,6 @@ public static partial class Strings
         {
             [LangEn] = "{0} tournament",
             [LangEs] = "Torneo de {0}",
-        },
-        ["MpTournamentDialogNameShort"] = new()
-        {
-            [LangEn] = "{0} more character(s): a name needs at least {1}.",
-            [LangEs] = "Faltan {0}: el nombre necesita al menos {1} caracteres.",
-        },
-        ["MpTournamentDialogNameCount"] = new()
-        {
-            [LangEn] = "{0}/{1}",
-            [LangEs] = "{0}/{1}",
-        },
-        ["MpTournamentWhyFormatSolo"] = new()
-        {
-            [LangEn] = "In a 1v1 everybody enters alone. Teams appear when you pick 2v2 "
-                       + "or 3v3.",
-            [LangEs] = "En 1v1 cada uno se apunta solo. Los equipos aparecen al elegir "
-                       + "2v2 o 3v3.",
-        },
-        ["MpTournamentWhyFormatTeam"] = new()
-        {
-            [LangEn] = "A bracket slot holds a whole team of {0}, and its line-up is "
-                       + "frozen when it enters.",
-            [LangEs] = "Un hueco del cuadro contiene un equipo entero de {0}, y su "
-                       + "alineación se congela al inscribirse.",
-        },
-        ["MpTournamentWhyEntryOpen"] = new()
-        {
-            [LangEn] = "Anybody past the last place goes on the waiting list.",
-            [LangEs] = "Los que lleguen de más quedan en espera.",
-        },
-        ["MpTournamentWhyEntryApproval"] = new()
-        {
-            [LangEn] = "Nobody takes a place until you accept them.",
-            [LangEs] = "Nadie ocupa plaza hasta que tú lo aceptes.",
-        },
-        // The multiplication, resolved. "Places" are counted in ENTRANTS, so eight places
-        // of 3v3 is twenty-four people and four simultaneous first-round rooms - which is
-        // the part worth knowing before choosing.
-        ["MpTournamentWhyCapacity"] = new()
-        {
-            [LangEn] = "{0} × {1} = {2} players in total · first round of {3} rooms at "
-                       + "once · {4} rounds to the final",
-            [LangEs] = "{0} × {1} = {2} jugadores en total · primera ronda de {3} salas a "
-                       + "la vez · {4} rondas hasta la final",
         },
 
         // ---------------------------------------------------------------

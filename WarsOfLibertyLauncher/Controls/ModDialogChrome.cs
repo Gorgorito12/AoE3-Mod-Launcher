@@ -74,7 +74,9 @@ internal static class ModDialogChrome
     /// numbers those two designs draw, for a mod picked INSIDE the window. So it can run again: it
     /// takes down what the previous mod put up.
     /// </summary>
-    internal static Color AttachPicked(Window window, TitleBar bar, Grid root, ModProfile mod, double width)
+    /// <param name="topGlow">The tournament window's look (81): the image from its top edge, a
+    /// shorter fade and the colour in the top corner, where the room window has it lower down.</param>
+    internal static Color AttachPicked(Window window, TitleBar bar, Grid root, ModProfile mod, double width, bool topGlow = false)
     {
         foreach (var old in root.Children.OfType<FrameworkElement>().Where(c => ReferenceEquals(c.Tag, PickedLayer)).ToList())
             root.Children.Remove(old);
@@ -98,7 +100,7 @@ internal static class ModDialogChrome
             var strip = image.Clone();
             strip.Stretch = Stretch.Fill;
             if (strip.ImageSource is System.Windows.Media.Imaging.BitmapSource { PixelWidth: > 0 } source)
-                strip.Viewbox = HeroCover.Viewbox(source.PixelWidth, source.PixelHeight, width, StripHeight, .3);
+                strip.Viewbox = HeroCover.Viewbox(source.PixelWidth, source.PixelHeight, width, StripHeight, topGlow ? 0 : .3);
             Add(new Border { Height = StripHeight, VerticalAlignment = VerticalAlignment.Top, Background = strip });
 
             // The frost of the cards, as the Library does it: the image blurred once and shown only
@@ -113,15 +115,25 @@ internal static class ModDialogChrome
             }
         }
         var fade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-        fade.GradientStops.Add(new GradientStop(Color.FromArgb(0x59, 0x0F, 0x1C, 0x2E), 0));
-        fade.GradientStops.Add(new GradientStop(Color.FromArgb(0xC7, 0x0F, 0x1C, 0x2E), .55));
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(topGlow ? 0x47 : 0x59), 0x0F, 0x1C, 0x2E), 0));
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(topGlow ? 0xCC : 0xC7), 0x0F, 0x1C, 0x2E), topGlow ? .6 : .55));
         fade.GradientStops.Add(new GradientStop(Color.FromRgb(0x0F, 0x1C, 0x2E), 1));
         Add(new Rectangle { Height = StripHeight + 2, VerticalAlignment = VerticalAlignment.Top, Fill = fade });
 
-        var glow = new RadialGradientBrush { Center = new Point(.8, 0), GradientOrigin = new Point(.8, 0), RadiusX = .6, RadiusY = .6 };
-        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x42, accent.R, accent.G, accent.B), 0));
-        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0, accent.R, accent.G, accent.B), .72));
-        Add(new Rectangle { Height = 360, Margin = new Thickness(0, 220, 0, 0), VerticalAlignment = VerticalAlignment.Top, Fill = glow });
+        // Mapped in pixels and given no height of its own: this layer spans the window, so a Height
+        // here would be a floor under a SizeToContent window (580 px, more than a 1v1 form needs).
+        var center = new Point((topGlow ? .88 : .8) * width, 0);
+        var glow = new RadialGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            Center = center,
+            GradientOrigin = center,
+            RadiusX = topGlow ? 520 : .6 * width,
+            RadiusY = topGlow ? 340 : 216,
+        };
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(topGlow ? 0x4D : 0x42), accent.R, accent.G, accent.B), 0));
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0, accent.R, accent.G, accent.B), topGlow ? .7 : .72));
+        Add(new Rectangle { Margin = new Thickness(0, topGlow ? 0 : 220, 0, 0), Fill = glow, IsHitTestVisible = false });
 
         if (Config is { } config) bar.Background = new SolidColorBrush(GlassTheme.ModBar(accent, config.GlassLevel));
         if (MainWindow.TryLoadTileImage(mod.ResolveIconSource()) is { } icon) bar.TitleIcon = icon.ImageSource;
@@ -230,6 +242,10 @@ internal static class ModDialogChrome
     }
 
     /// <summary>The primary button, its hover and its halo, which all follow the mod.</summary>
+    /// <summary>The colour a mod's window takes, or null with no settings to read it from.</summary>
+    internal static Color? AccentOf(ModProfile mod)
+        => Config is { } settings ? ModTheme.AccentOf(mod.AccentColor, settings.UseModColor) : null;
+
     private static void TintPrimary(Window window, Color accent)
     {
         window.Resources["MpAction"] = new SolidColorBrush(accent);

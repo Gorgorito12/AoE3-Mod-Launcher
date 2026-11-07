@@ -25,35 +25,6 @@ public static partial class Strings
             [LangEs] = "No hay nadie para elegir. Busca por nombre o pídeles que se conecten.",
         },
 
-        // ---------------------------------------------------------------- entering a team tournament
-        ["MpTournamentNeedTeamTitle"] = new() { [LangEn] = "You need a team", [LangEs] = "Necesitas un equipo" },
-        ["MpTournamentNeedTeamBody"] = new()
-        {
-            [LangEn] = "This tournament is entered with a saved team of at least {0} players, captained by you. Create one in My teams and invite your players; they accept the invitation from their own launcher.",
-            [LangEs] = "A este torneo se entra con un equipo guardado de al menos {0} jugadores, en el que tú seas el capitán. Crea uno en Mis equipos e invita a tus jugadores; ellos aceptan la invitación desde su launcher.",
-        },
-        ["MpTournamentOpenMyTeams"] = new() { [LangEn] = "Open My teams", [LangEs] = "Abrir Mis equipos" },
-        ["MpTournamentPickTeamTitle"] = new() { [LangEn] = "Enter with which team?", [LangEs] = "¿Con qué equipo te inscribes?" },
-        ["MpTournamentPickTeamIntro"] = new()
-        {
-            [LangEn] = "Your teams with at least {0} players.",
-            [LangEs] = "Tus equipos con al menos {0} jugadores.",
-        },
-        ["MpTournamentPickTeamList"] = new() { [LangEn] = "TEAMS", [LangEs] = "EQUIPOS" },
-        ["MpTournamentPickTeamOk"] = new() { [LangEn] = "Continue", [LangEs] = "Continuar" },
-        ["MpTournamentLineupTitle"] = new() { [LangEn] = "Who plays?", [LangEs] = "¿Quién juega?" },
-        ["MpTournamentLineupIntro"] = new()
-        {
-            [LangEn] = "Choose the {0} players of {1} who play this tournament. You play as captain; the line-up is fixed once you enter.",
-            [LangEs] = "Elige los {0} jugadores de {1} que juegan este torneo. Tú juegas como capitán; la alineación queda fija al inscribirte.",
-        },
-        ["MpTournamentAdhocTitle"] = new() { [LangEn] = "Your line-up", [LangEs] = "Tu alineación" },
-        ["MpTournamentAdhocIntro"] = new()
-        {
-            [LangEn] = "Choose the {0} players of your team, you included, and give it a name. The line-up is fixed once you enter.",
-            [LangEs] = "Elige los {0} jugadores de tu equipo, tú incluido, y ponle un nombre. La alineación queda fija al inscribirte.",
-        },
-        ["MpTournamentAdhocName"] = new() { [LangEn] = "TEAM NAME", [LangEs] = "NOMBRE DEL EQUIPO" },
         ["MpTournamentAlreadyIn"] = new() { [LangEn] = "Already in this tournament", [LangEs] = "Ya está en este torneo" },
 
         // ---------------------------------------------------------------- draft

@@ -27,6 +27,10 @@ internal sealed class SegmentRow : Grid
 
     public double SegmentHeight { get; set; } = 34;
 
+    /// <summary>The look of the new-tournament window (81): unselected segments stand out of the
+    /// card, and the selected one says so with its weight as well.</summary>
+    public bool Raised { get; set; }
+
     /// <summary>Raised when the player picks a segment, not when the code does.</summary>
     public event Action<object>? Picked;
 
@@ -105,23 +109,40 @@ internal sealed class SegmentRow : Grid
 
     private void Repaint()
     {
-        foreach (var (option, button) in _items) Paint(button, Equals(option.Key, _selected), option.Gold, _accent);
+        foreach (var (option, button) in _items) Paint(button, Equals(option.Key, _selected), option.Gold, _accent, Raised);
     }
 
     /// <summary>The look of one segment; a loose pill of the same family (a copy) borrows it.</summary>
-    internal static void Paint(Button button, bool on, bool gold, Color accent)
+    internal static void Paint(Button button, bool on, bool gold, Color accent, bool raised = false)
     {
         button.Tag = on ? "active" : null;
-        var look = Look(gold, on, accent);
+        var look = raised ? RaisedLook(on, accent) : Look(gold, on, accent);
+        if (raised)
+        {
+            button.FontWeight = on ? FontWeights.Bold : FontWeights.Normal;
+            button.BorderThickness = new Thickness(on ? 1.5 : 1);
+        }
         button.Background = look.Fill;
         button.BorderBrush = new SolidColorBrush(look.Rim);
         button.Foreground = new SolidColorBrush(look.Text);
         if (button.Content is StackPanel { Children.Count: 2 } stack)
         {
             ((TextBlock)stack.Children[0]).Foreground = button.Foreground;
+            if (raised)
+            {
+                ((TextBlock)stack.Children[0]).FontWeight = button.FontWeight;
+                ((TextBlock)stack.Children[1]).FontWeight = FontWeights.Normal;
+            }
             ((TextBlock)stack.Children[1]).Foreground = new SolidColorBrush(look.Sub);
         }
     }
+
+    private static (Brush Fill, Color Rim, Color Text, Color Sub) RaisedLook(bool on, Color accent)
+        => on
+            ? (new SolidColorBrush(ModAccent.SelectionFill(accent)), Color.FromArgb(0xF2, accent.R, accent.G, accent.B),
+               Colors.White, Color.FromRgb(0xDC, 0xE7, 0xF5))
+            : (new SolidColorBrush(Color.FromRgb(0x1A, 0x2C, 0x48)), Color.FromArgb(0x38, 0x82, 0xAF, 0xFF),
+               Color.FromRgb(0xDC, 0xE7, 0xF5), Color.FromRgb(0xA8, 0xBC, 0xD2));
 
     /// <summary>The four looks of the prototype's <c>seg()</c> and its gold variant.</summary>
     private static (Brush Fill, Color Rim, Color Text, Color Sub) Look(bool gold, bool on, Color accent)

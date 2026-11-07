@@ -1356,12 +1356,14 @@ public partial class MultiplayerTab : UserControl
         Action<string?, string?, string?, Services.Multiplayer.ShownBadge?>? setAccountChip = null,
         Action? onUpdateRequested = null,
         Action? bringMultiplayerToFront = null,
-        Action<string?, string?>? setQuickMatchPill = null)
+        Action<string?, string?>? setQuickMatchPill = null,
+        Action<ModProfile>? openModInLibrary = null)
     {
         _setConnectionChip = setConnectionChip;
         _setAccountChip = setAccountChip;
         _onUpdateRequested = onUpdateRequested;
         _bringMultiplayerToFront = bringMultiplayerToFront;
+        _openModInLibrary = openModInLibrary;
         _setQuickMatchPill = setQuickMatchPill;
         if (_session != null)
         {
@@ -6883,17 +6885,12 @@ public partial class MultiplayerTab : UserControl
         // ---- the secondary: taking part, or stepping out.
         if (TournamentPermissions.CanEnter(t, me))
         {
-            row.Children.Add(Make("MpTournamentEnter", "MpGhostButton",
-                () => EnterTournamentAsync(t)));
+            row.Children.Add(Make("MpTournamentEnter", "MpGhostButton", () => OpenEnrollAsync(t)));
         }
-        else if (TournamentPermissions.CanWithdraw(t, me))
+        else if (TournamentPermissions.MyEntrant(t, me) != null
+                 && t.Status is "registration" or "ready")
         {
-            var mine = TournamentPermissions.MyEntrant(t, me);
-            if (mine != null)
-            {
-                row.Children.Add(Make("MpTournamentWithdraw", "MpGhostButton",
-                    () => TournamentApi.WithdrawFromTournamentAsync(t.Id, mine.Id)));
-            }
+            row.Children.Add(Make("EnMyEntry", "MpGhostButton", () => OpenEnrollAsync(t)));
         }
 
         // ---- the rest, behind a menu. Re-seeding a drawn bracket and disqualifying
@@ -7056,8 +7053,6 @@ public partial class MultiplayerTab : UserControl
         box.Child = stack;
         return box;
     }
-
-    // EnterTournamentAsync — with the body each team mode needs — is in MultiplayerTab.Teams.cs.
 
     /// <summary>
     /// Run one tournament action, refresh, and turn a refusal into a sentence.
@@ -7594,8 +7589,7 @@ public partial class MultiplayerTab : UserControl
                  && !Services.Multiplayer.MatchCards.EntrantIsOut(e)
                  && string.Equals(e.CaptainUserId, me, StringComparison.Ordinal))
         {
-            Act("MpTournamentWithdraw", "MpGhostButton",
-                () => TournamentApi.WithdrawFromTournamentAsync(t.Id, e.Id));
+            Act("MpTournamentWithdraw", "MpGhostButton", () => OpenEnrollAsync(t));
         }
 
         // THE ORGANISER'S TWO POWERS LIVE IN A MENU, not as two more buttons.
@@ -9096,22 +9090,13 @@ public partial class MultiplayerTab : UserControl
         var profile = _getActiveProfile?.Invoke();
         if (profile == null) return;
 
-        // WHICH MOD, asked rather than assumed. This used to stamp the active mod on the
-        // tournament in silence — and it is the field that decides the most: every room the
-        // bracket opens is created with it, and a player whose active mod is not this one is
-        // turned away when they come to play their match. Same list the room dialog offers:
-        // the mods actually installed here, since a tournament nobody can play a match in is
-        // not a tournament.
-        var installed = new List<ModProfile>();
-        foreach (var p in ModRegistry.All)
-        {
-            if (!string.IsNullOrEmpty(GetInstallPath(p))) installed.Add(p);
-        }
-        // Nothing installed is not a reason to refuse: creating a tournament worked before
-        // this picker existed, and an organiser is not always a player.
-        if (installed.Count == 0) installed.Add(profile);
-
-        var dlg = new CreateTournamentDialog(profile.DisplayName, installed, profile);
+        // WHICH MOD, asked rather than assumed: every room the bracket opens is created with it,
+        // and a player whose active mod is not this one is turned away at their match. Every mod
+        // is offered, installed first, because an organiser is not always a player.
+        var mods = ModRegistry.All.ToList();
+        if (!mods.Contains(profile)) mods.Insert(0, profile);
+        var dlg = new CreateTournamentDialog(profile.DisplayName, mods, profile,
+            p => !string.IsNullOrEmpty(GetInstallPath(p)), _tournaments?.MaxCapacity);
         try { dlg.Owner = Window.GetWindow(this); } catch { /* off-tree */ }
         if (dlg.ShowDialog() != true) return;
 
@@ -9132,6 +9117,33 @@ public partial class MultiplayerTab : UserControl
             // It is born a draft, which the public list hides. Selecting it is what stops
             // the creator having to hunt for the thing they just made.
             _selectedTournamentId = created.Id;
+
+            // The server clips what it does not take; an older one says nothing about it.
+            if (created.Capacity is { } made && made != dlg.Capacity)
+            {
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("NtCapacityChangedTitle"),
+                    Strings.Format("NtCapacityChangedBody", dlg.Capacity, made),
+                    Strings.Get("MpAlertOk"));
+            }
+
+            // A second call: the tournament exists by now, so a refusal here must say that.
+            if (dlg.OpenRegistration)
+            {
+                try
+                {
+                    await api.OpenTournamentRegistrationAsync(created.Id);
+                }
+                catch (LobbyApiException ex)
+                {
+                    await MpAlertOverlay.NoticeAsync(
+                        TabRootGrid,
+                        Strings.Get("NtOpenFailedTitle"),
+                        Strings.Format("NtOpenFailedBody", TournamentErrorText(ex)),
+                        Strings.Get("MpAlertOk"));
+                }
+            }
         }
         catch (LobbyApiException ex)
         {

@@ -568,6 +568,8 @@
     <sys:Double x:Key="RoomChatSize">13.5</sys:Double>
     <sys:Double x:Key="RoomChatSystemSize">12.5</sys:Double>
     <sys:Double x:Key="RoomFigureSize">30</sys:Double>
+    <sys:Double x:Key="TournamentFigureSize">20</sys:Double>
+    <sys:Double x:Key="EnrollTitleSize">22</sys:Double>
     <sys:Double x:Key="DialogCodeSize">30</sys:Double>
     <sys:Double x:Key="SetRailWidth">216</sys:Double>         <!-- launcher settings sidebar -->
     <sys:Double x:Key="SetModRailWidth">220</sys:Double>      <!-- per-mod properties sidebar -->

@@ -42,6 +42,9 @@ public partial class MultiplayerTab
     /// <summary>MainWindow's: show the window, on Multiplayer. For a card pressed on the desktop.</summary>
     private Action? _bringMultiplayerToFront;
 
+    /// <summary>The Library on this mod: where installing happens.</summary>
+    private Action<Models.ModProfile>? _openModInLibrary;
+
     /// <summary>MainWindow's title-bar pill: its text and tooltip, or null to hide it.</summary>
     private Action<string?, string?>? _setQuickMatchPill;
 

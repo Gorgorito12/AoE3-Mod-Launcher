@@ -770,6 +770,22 @@ fuera del torneo" are generic, because a tournament's name gives no article ("la
 the stored-recording line of PARA QUE CUENTE became that panel's tooltip, for room; the version
 number comes from the installed mod, so a mod that is not installed shows its name alone.
 
+**Screen 81 (Nuevo torneo)**, compared with `Nuevo torneo v2.dc.html` in 81a to 81c, the mod list, the
+glass extremes and English. What differs, on purpose: the mod's colour goes through
+`ModAccent.Normalize` like every other window, so Wars of Liberty's red is softer than the prototype's
+raw `#c8102e`; a selected segment has no glow, since an `Effect` over its caption would cost ClearType;
+32 and 64 appear only when the server sends `max_capacity`; a mod with a cover shows it, where the
+prototype's 81c has none. Every mod is offered, installed first, because an organiser is not always
+a player.
+
+**Screen 82 (Inscribirse)**, compared with `Inscribirse v2.dc.html` in 82a to 82l, the glass extremes
+and English. What differs, on purpose: the captain's own row in the line-up cannot be unticked,
+because the server refuses a line-up without its captain; "you have version 1.1.9, update it" is not
+drawn, since a tournament records a mod and no version; "played with you" appears only when the match
+history is already loaded, and nothing is fetched for it; the mod's colour is normalised as everywhere;
+a tournament whose places are full says you go on the waiting list, which the prototype has no state
+for; a mod with a cover shows it.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup
