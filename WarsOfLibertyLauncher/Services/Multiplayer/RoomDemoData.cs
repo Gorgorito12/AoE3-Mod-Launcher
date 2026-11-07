@@ -46,7 +46,16 @@ public static class RoomDemoData
 
         /// <summary>The team picked in the room (1 or 2); null = no team yet.</summary>
         public int? Team { get; init; }
+
+        /// <summary>Watches instead of playing (design 87k).</summary>
+        public bool Observer { get; init; }
+
+        /// <summary>No Radmin address reported yet.</summary>
+        public bool NoVpn { get; init; }
     }
+
+    /// <summary>A line of the sample chat; no author means a system line.</summary>
+    public sealed record ChatSample(string? Who, string Text, DateTime? At = null);
 
     /// <summary>One room, as the window would draw it.</summary>
     public sealed class Sample
@@ -81,6 +90,35 @@ public static class RoomDemoData
 
         /// <summary>"My" standing for the sample — where "your record 9–2" comes from. Null: none.</summary>
         public EloSnapshot? ViewerStanding { get; init; }
+
+        /// <summary>The mod the window wears.</summary>
+        public string ModId { get; init; } = "wol";
+
+        /// <summary>The room has a password.</summary>
+        public bool Password { get; init; }
+
+        /// <summary>Observer seats.</summary>
+        public int SpectatorSlots { get; init; }
+
+        /// <summary>Paint this stage of a match; null = whatever the room is.</summary>
+        public RoomStage? Stage { get; init; }
+
+        /// <summary>The finished match, for 87f, 87g and 87j.</summary>
+        public MatchOutcomeView? Result { get; init; }
+
+        /// <summary>Who left and made the viewer the host (87i).</summary>
+        public string? HostLeft { get; init; }
+
+        /// <summary>The viewer's Radmin is not ready (87h).</summary>
+        public bool VpnMissing { get; init; }
+
+        /// <summary>The rival a rematch invited (87l).</summary>
+        public string? RematchRival { get; init; }
+
+        public double? RematchRivalRating { get; init; }
+
+        /// <summary>What the chat shows.</summary>
+        public IReadOnlyList<ChatSample> Chat { get; init; } = Array.Empty<ChatSample>();
 
         public int FreeSeats => Math.Max(0, Seats - Players.Count);
     }
@@ -205,7 +243,159 @@ public static class RoomDemoData
     {
         OneVOne(), TwoVTwo(), Full(), LongName(), QuickSearching("quick", false, "02:14"),
         QuickSearching("quick-radmin", true, "02:14"), QuickSearching("quick-long", false, "25:41"),
+        Design87("87a"), Design87("87b"), Design87("87c"), Design87("87d"), Design87("87e"), Design87("87f"),
+        Design87("87g"), Design87("87h"), Design87("87i"), Design87("87j"), Design87("87k"), Design87("87l"), Design87("87live"),
     };
+
+    private static Seat Gorgo(bool host = true, bool ready = false, double? rating = 1383, int? team = null, int? games = 40)
+        => new() { UserId = "demo-gorgo", Login = "Gorgo", IsHost = host, Ready = ready, Rating = rating, GamesPlayed = games, RatingTeam = rating, GamesPlayedTeam = 20, Team = team };
+
+    private static Seat Cuzco(bool ready = false, int? team = null, double? rating = null, int? games = 4)
+        => new() { UserId = "demo-cuzco", Login = "Cuzco", Ready = ready, Rating = rating, RatingTeam = rating, GamesPlayed = games, GamesPlayedTeam = games, Team = team };
+
+    private static Seat Malinche(bool ready = false, int? team = null)
+        => new() { UserId = "demo-malinche", Login = "Malinche", Ready = ready, Rating = 1188, RatingTeam = 1188, GamesPlayedTeam = 20, Team = team };
+
+    private static Seat Kaiser(bool host = false, bool ready = false, int? team = null, bool observer = false)
+        => new() { UserId = "demo-kaiser", Login = "Kaiser", IsHost = host, Ready = ready, Rating = 1630, RatingTeam = 1630, GamesPlayedTeam = 20, Team = team, Observer = observer };
+
+    private static DateTime Today(int hour, int minute) => DateTime.Today.AddHours(hour).AddMinutes(minute);
+
+    private static MatchOutcomeView Outcome(MatchVerdict verdict, double before, double after,
+        string? unrated = null, int? placementPlayed = null, int? streak = null, int? rank = null)
+        => new(verdict, "wol", "ESOC Baja California", verdict == MatchVerdict.Win ? 24 * 60 : 31 * 60, 2,
+            before, after, "Kaiser", unrated != null ? 1630 : verdict == MatchVerdict.Win ? 1611 : 1638, 12, 7, 60, UnratedReason: unrated,
+            RecordingPath: "Record Game 12.age3Yrec",
+            MyCiv: "Británicos", RivalCiv: "Franceses",
+            PlacementPlayed: placementPlayed, PlacementRequired: placementPlayed == null ? null : 10,
+            StreakCurrent: streak, EnteredRank: rank, LadderSize: rank == null ? null : 9,
+            FormatLabelKey: "MpFormat1v1");
+
+    /// <summary>
+    /// The states of design 87. Same people and the same words as the prototype, because each one
+    /// is held up against it.
+    /// </summary>
+    private static Sample Design87(string id)
+    {
+        const string night = "Partida de la noche";
+        const string ranked = "WoL 1v1 · mapas ESOC";
+        ChatSample[] Casual(int n)
+        {
+            var lines = new List<ChatSample> { new(null, "Abriste la sala.") };
+            if (n >= 2)
+            {
+                lines.Add(new(null, "Cuzco entró en la sala."));
+                lines.Add(new("Cuzco", "buenas, ¿mapas al azar?", Today(20, 44)));
+            }
+            if (n >= 3) lines.Add(new(null, "Malinche entró en la sala."));
+            return lines.ToArray();
+        }
+        ChatSample[] Finished(string last) => new ChatSample[]
+        {
+            new(null, "Entraste en la sala de Kaiser."),
+            new("Kaiser", "gl hf", Today(20, 51)),
+            new(null, "Partida terminada. Kaiser envió el resultado."),
+            new("Kaiser", last, Today(21, 17)),
+        };
+        Sample Room(string name, string room, int seats, bool comp, Seat[] players, string? viewer = "demo-gorgo") => new()
+        {
+            Name = name, Code = "7KQ2WX", RoomName = room, Seats = seats, Competitive = comp,
+            Players = players, ViewerId = viewer,
+        };
+        Sample Over(string name, MatchOutcomeView result, Seat me, string last) => new()
+        {
+            Name = name, Code = "7KQ2WX", RoomName = ranked, Seats = 2, Competitive = true,
+            Players = new[] { Kaiser(host: true, ready: true), me }, ViewerId = "demo-gorgo",
+            Result = result, Stage = MultiplayerStage(result), Chat = Finished(last),
+        };
+
+        return id switch
+        {
+            "87a" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = night, Seats = 4, Competitive = false, Password = true,
+                Players = new[] { Gorgo() }, ViewerId = "demo-gorgo", Chat = Casual(1),
+            },
+            "87b" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = ranked, Seats = 2, Competitive = true,
+                Players = new[] { Kaiser(host: true, ready: true), Gorgo(host: false) }, ViewerId = "demo-gorgo",
+                Chat = new ChatSample[] { new(null, "Entraste en la sala de Kaiser."), new("Kaiser", "gl hf", Today(20, 51)) },
+            },
+            "87c" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = night, Seats = 4, Competitive = false,
+                Players = new[] { Gorgo(), Cuzco(), Malinche() }, ViewerId = "demo-gorgo", Chat = Casual(3),
+            },
+            "87d" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = "Equipos 2v2 · sábado", Seats = 4, Competitive = true,
+                Players = new[]
+                {
+                    Gorgo(team: 1), Cuzco(ready: true, team: 1, rating: 1244, games: 20), Kaiser(ready: true, team: 2), Malinche(ready: true),
+                },
+                ViewerId = "demo-gorgo",
+                Chat = new ChatSample[]
+                {
+                    new(null, "Abriste la sala."), new(null, "Cuzco eligió el equipo 1."),
+                    new(null, "Kaiser eligió el equipo 2."), new("Kaiser", "Malinche, vente al 2", Today(21, 12)),
+                },
+            },
+            "87e" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = night, Seats = 4, Competitive = false,
+                Players = new[] { Gorgo(), Cuzco(ready: true), Malinche(ready: true) }, ViewerId = "demo-gorgo",
+                Stage = RoomStage.GameClosed,
+                Chat = Casual(3).Concat(new ChatSample[] { new(null, "Partida en marcha."), new(null, "AoE3 se cerró en tu PC. La partida sigue.") }).ToArray(),
+            },
+            "87live" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = night, Seats = 4, Competitive = false,
+                Players = new[] { Gorgo(), Cuzco(ready: true), Malinche(ready: true) }, ViewerId = "demo-gorgo",
+                Stage = RoomStage.InGame,
+                Chat = Casual(3).Concat(new ChatSample[] { new(null, "Partida en marcha.") }).ToArray(),
+            },
+            "87f" => Over(id, Outcome(MatchVerdict.Win, 1383, 1402, streak: 3, rank: 5), Gorgo(host: false), "gg, bien jugado"),
+            "87g" => Over(id, Outcome(MatchVerdict.Loss, 1400, 1388, placementPlayed: 5), Gorgo(host: false, rating: null, games: 5), "gg"),
+            "87h" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = night, Seats = 4, Competitive = false, VpnMissing = true,
+                Players = new[] { Gorgo(), Cuzco(ready: true), Malinche(ready: true) }, ViewerId = "demo-gorgo", Chat = Casual(3),
+            },
+            "87i" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = "Partida de Kaiser", Seats = 4, Competitive = false, HostLeft = "Kaiser",
+                Players = new[] { Gorgo(), Cuzco(), Malinche() }, ViewerId = "demo-gorgo",
+                Chat = new ChatSample[]
+                {
+                    new(null, "Entraste en la sala de Kaiser."), new(null, "Cuzco entró en la sala."),
+                    new(null, "Malinche entró en la sala."), new("Kaiser", "me tengo que ir, perdón", Today(20, 58)),
+                    new(null, "Kaiser salió de la sala. Ahora hospedas tú."),
+                },
+            },
+            "87j" => Over(id, Outcome(MatchVerdict.Win, 1383, 1383, unrated: "No cuenta para el ELO: fue una partida corta con una cuenta nueva."),
+                Gorgo(host: false), "gg, bien jugado"),
+            "87k" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = night, Seats = 4, Competitive = false, SpectatorSlots = 2,
+                Players = new[] { Gorgo(), Cuzco(), Malinche(), Kaiser(ready: true, observer: true) }, ViewerId = "demo-gorgo", Chat = Casual(3),
+            },
+            "87l" => new()
+            {
+                Name = id, Code = "7KQ2WX", RoomName = ranked + " (revancha)", Seats = 2, Competitive = true,
+                Players = new[] { Gorgo(rating: 1402) }, ViewerId = "demo-gorgo",
+                RematchRival = "Kaiser", RematchRivalRating = 1611,
+                Chat = new ChatSample[] { new(null, "Abriste la sala de la revancha."), new(null, "Invitaste a Kaiser.") },
+            },
+            _ => Room(id, night, 4, false, new[] { Gorgo() }),
+        };
+    }
+
+    private static RoomStage MultiplayerStage(MatchOutcomeView result)
+    {
+        if (result.InPlacement) return RoomStage.ResultPlacement;
+        return result.LooksUnrated ? RoomStage.ResultUnrated : RoomStage.ResultRated;
+    }
 
     /// <summary>The room a quick match waits in: a host alone, the code in the header.</summary>
     private static Sample QuickSearching(string name, bool radminMissing, string elapsed)

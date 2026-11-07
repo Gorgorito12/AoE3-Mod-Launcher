@@ -27,6 +27,7 @@ public static partial class Strings
         foreach (var kv in QuickMatchTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in LibraryTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in SmallDialogsTable) Table.Add(kv.Key, kv.Value);
+        foreach (var kv in RoomTable) Table.Add(kv.Key, kv.Value);
     }
 
     private static readonly Dictionary<string, Dictionary<string, string>> RatingTable = new()
@@ -169,7 +170,6 @@ public static partial class Strings
         ["MpAgoYears"] = new() { [LangEn] = "{0} years ago", [LangEs] = "hace {0} años" },
 
         // ---------------------------------------------------------------- 55g-55h rooms
-        ["MpRoomPlayers1v1"] = new() { [LangEn] = "PLAYERS · COMPETITIVE 1V1", [LangEs] = "JUGADORES · COMPETITIVA 1V1" },
         ["MpRoomPlayersTeams"] = new() { [LangEn] = "PLAYERS · COMPETITIVE {0} · {1} OF {2}", [LangEs] = "JUGADORES · COMPETITIVA {0} · {1} DE {2}" },
         ["MpRoomPlayersTeamsCasual"] = new() { [LangEn] = "PLAYERS · {0} · {1} OF {2}", [LangEs] = "JUGADORES · {0} · {1} DE {2}" },
         ["MpRoomRecord"] = new() { [LangEn] = "your record {0}–{1}", [LangEs] = "tu balance {0}–{1}" },
@@ -184,13 +184,7 @@ public static partial class Strings
         },
         ["MpWinProbLabel"] = new() { [LangEn] = "WIN CHANCE", [LangEs] = "PROBABILIDAD" },
         ["MpWinProbTeamsEmpty"] = new() { [LangEn] = "Shows once both teams have players.", [LangEs] = "Aparece cuando los dos equipos tengan jugadores." },
-        ["MpTeam1"] = new() { [LangEn] = "TEAM 1", [LangEs] = "EQUIPO 1" },
         ["MpTeam2"] = new() { [LangEn] = "TEAM 2", [LangEs] = "EQUIPO 2" },
-        ["MpNoTeam"] = new() { [LangEn] = "NO TEAM", [LangEs] = "SIN EQUIPO" },
-        ["MpTeamAvg"] = new() { [LangEn] = "Avg. ELO {0}", [LangEs] = "ELO medio {0}" },
-        ["MpTeamEmpty"] = new() { [LangEn] = "Nobody yet", [LangEs] = "Nadie todavía" },
-        ["MpTeamYouTag"] = new() { [LangEn] = "you", [LangEs] = "tú" },
-        ["MpTeamHostTag"] = new() { [LangEn] = "host", [LangEs] = "anfitrión" },
         ["MpTeamPickTip"] = new() { [LangEn] = "Team {0}", [LangEs] = "Equipo {0}" },
         ["MpTeamsMismatchWarn"] = new()
         {

@@ -1497,6 +1497,10 @@ public class LauncherConfig
     [JsonPropertyName("gameRecordingReminderMuted")]
     public bool GameRecordingReminderMuted { get; set; } = false;
 
+    /// <summary>"Don't show this again" on the Record Game reminder of a casual room (design 87).
+    /// A competitive room keeps its notice: there the recording is what the result is read from.</summary>
+    public bool RoomRecordNoticeHidden { get; set; } = false;
+
     /// <summary>
     /// Marks that the first-launch "Install a stable copy on this PC?" offer has
     /// already been shown, so it is offered exactly ONCE (never nagged on every

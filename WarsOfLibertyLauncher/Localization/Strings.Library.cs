@@ -1074,11 +1074,6 @@ public static partial class Strings
             [LangEn] = "Your matches couldn't be loaded. The server didn't answer.",
             [LangEs] = "No se pudieron cargar tus partidas. El servidor no respondió.",
         },
-        ["MpPreflightModsMatchAlone"] = new()
-        {
-            [LangEn] = "Identical mods across all players",
-            [LangEs] = "Mods idénticos en todos los jugadores",
-        },
         ["LibMenuPlay"] = new() { [LangEn] = "Play", [LangEs] = "Jugar" },
         ["LibMenuRetry"] = new() { [LangEn] = "Retry download", [LangEs] = "Reintentar descarga" },
         ["LibMenuPause"] = new() { [LangEn] = "Pause download", [LangEs] = "Pausar descarga" },

@@ -568,6 +568,13 @@ rather than the reverse.
   file. The Radmin assistant has THREE steps and installs Radmin itself. `--preview-dialog=` also
   takes `launcherupdate:*`, `installfolder:*`, `radmin:*`, `publish:<step>`, `updatepill:*`, `bar:*`.
 
+- **Screen 87 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the room window**
+  (the left-column Start doubling as Cancel, `InGameOverlay` in the left column, the sub-header strip
+  with its stats, `RoomInfoCard`, the "chat always reachable" layout still holds). The chassis is
+  `ModDialogChrome.AttachRoom`, the buttons are `RoomFooterState`, the rest of the rules are in
+  `.claude/rules/multiplayer.md`. `--demo-room=87a..87l` and `87live` open each state, and
+  `testbed.py check` with `--title` now resizes that window instead of the launcher behind it.
+
 - **Screen 88 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the create-room
   dialog** (`CompetitiveCheck`, the format row that is always visible, the 596 width, the eight
   seats it opened on, the summary line). The type is one row (`_kind`, Casual or a format, kept in

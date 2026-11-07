@@ -739,6 +739,17 @@ needs a presence field the server does not send. Windows Segoe UI has no Medium 
 prototype's 500 renders as Regular in WPF and looks lighter than the browser's.
 
 
+**Screen 87 (Sala)**, compared with `Sala v2.dc.html` in 87a to 87l, the three glass levels and
+English. What differs, on purpose: the rank badge stays in the rows (design 51) and so does the
+ping, as a tooltip; the host keeps the 1 | 2 picker on other players and Remove on observers,
+because neither has another door; WHAT'S AT STAKE has no +19 / -11, since no such figures exist
+(the anti-farm is not announced) and carries the odds when the server sends them; the recording
+and abandonment lines stay in the panels, because a guest reads them nowhere else; with AoE3 closed
+the host reads that the countdown starts again, since the prototype's "the match goes on" is true
+only for a guest; the rival's row has no rank, which the report does not send, and takes his
+previous ELO from the room; the chat keeps its emoji button. TRAFFIC, CONNECTION and RECORDING are
+not in the prototype and are not drawn.
+
 **Screen 88 (Crear sala)**, compared with `Crear sala v2.dc.html` in 88a to 88c, the mod list, the
 three glass levels and English. What differs, on purpose: the proposed name is `WoL · Ranked 1v1`
 and not «Wars of Liberty 1v1 competitiva», because a room title is an English network value

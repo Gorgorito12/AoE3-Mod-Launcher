@@ -529,6 +529,7 @@
     <SolidColorBrush x:Key="WindowSecondaryHover" Color="#213758"/>
     <SolidColorBrush x:Key="WindowSecondaryRim" Color="#3882AFFF"/>
     <SolidColorBrush x:Key="WindowPrimaryHover" Color="#4A93EC"/>
+    <SolidColorBrush x:Key="WindowPrimaryText" Color="#FFFFFF"/>
     <Color x:Key="WindowPrimaryHalo">#2F7FE0</Color>
     <SolidColorBrush x:Key="WindowPlaceholder" Color="#14FFFFFF"/>
     <SolidColorBrush x:Key="WindowPlaceholderFaint" Color="#0FFFFFFF"/>

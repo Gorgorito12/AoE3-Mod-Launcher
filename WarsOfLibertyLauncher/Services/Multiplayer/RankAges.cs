@@ -117,6 +117,22 @@ public static class RankAges
     public static RankAge? ForOptional(int? ladderPosition, int? ladderSize = null)
         => ladderPosition is { } p ? For(p, ladderSize) : null;
 
+    /// <summary>
+    /// How many players stand between a position and the next age up, and which age that is. Null
+    /// at the top, or off the ladder.
+    /// </summary>
+    public static (RankAge Age, int Places)? PlacesToNextAge(int ladderPosition, int? ladderSize = null)
+    {
+        if (ladderPosition <= 0) return null;
+        var bounds = BoundsFor(ladderSize);
+        for (var i = bounds.Length - 1; i >= 0; i--)
+        {
+            if (ladderPosition <= bounds[i]) continue;
+            return (For(bounds[i], ladderSize), ladderPosition - bounds[i]);
+        }
+        return null;
+    }
+
     /// <summary>The <c>Strings</c> key naming an age.</summary>
     public static string NameKey(RankAge age) => age switch
     {
