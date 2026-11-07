@@ -117,6 +117,12 @@ public static class RoomDemoData
 
         public double? RematchRivalRating { get; init; }
 
+        /// <summary>The bracket slot, for 85.</summary>
+        public TournamentRoomContext? Tournament { get; init; }
+
+        /// <summary>How long ago the room opened.</summary>
+        public int? WaitedSeconds { get; init; }
+
         /// <summary>What the chat shows.</summary>
         public IReadOnlyList<ChatSample> Chat { get; init; } = Array.Empty<ChatSample>();
 
@@ -245,6 +251,8 @@ public static class RoomDemoData
         QuickSearching("quick-radmin", true, "02:14"), QuickSearching("quick-long", false, "25:41"),
         Design87("87a"), Design87("87b"), Design87("87c"), Design87("87d"), Design87("87e"), Design87("87f"),
         Design87("87g"), Design87("87h"), Design87("87i"), Design87("87j"), Design87("87k"), Design87("87l"), Design87("87live"),
+        Design85("85a"), Design85("85b"), Design85("85c"), Design85("85d"), Design85("85e"), Design85("85f"),
+        Design85("85g"), Design85("85h"), Design85("85i"),
     };
 
     private static Seat Gorgo(bool host = true, bool ready = false, double? rating = 1383, int? team = null, int? games = 40)
@@ -388,6 +396,103 @@ public static class RoomDemoData
                 Chat = new ChatSample[] { new(null, "Abriste la sala de la revancha."), new(null, "Invitaste a Kaiser.") },
             },
             _ => Room(id, night, 4, false, new[] { Gorgo() }),
+        };
+    }
+
+    private static readonly string[] Copa = { "MpTournamentRoundSixteenth", "MpTournamentRoundEighth", "MpTournamentRoundQuarter", "MpTournamentRoundSemi", "MpTournamentRoundFinal" };
+
+    private static TournamentRoomContext OneVOneBracket(string? organizer = "Kaiser") => new(
+        "demo-copa", "Copa de Octubre", organizer, "1v1", false, Copa, 2,
+        new("e1", "Gorgo", 10, new[] { new TournamentRoomPlayer("demo-gorgo", "Gorgo", true) }),
+        new("e2", "Cuzco", 7, new[] { new TournamentRoomPlayer("demo-cuzco", "Cuzco", true) }),
+        new("RtRoundTheQuarter", null, "Mariscal", "Almirante"), null);
+
+    private static TournamentRoomContext ThreeVThreeBracket(string? report = null) => new(
+        "demo-liga", "Liga 3v3 de la Guardia", "Kaiser", "3v3", true,
+        new[] { "MpTournamentRoundQuarter", "MpTournamentRoundSemi", "MpTournamentRoundFinal" }, 3,
+        new("t1", "Los Andes", 1, new[]
+        {
+            new TournamentRoomPlayer("demo-gorgo", "Gorgo", true), new TournamentRoomPlayer("demo-cuzco", "Cuzco", false),
+            new TournamentRoomPlayer("demo-malinche", "Malinche", false),
+        }),
+        new("t2", "Guardia Vieja", 2, new[]
+        {
+            new TournamentRoomPlayer("demo-mariscal", "Mariscal", true), new TournamentRoomPlayer("demo-bicorne", "Bicorne", false),
+            new TournamentRoomPlayer("demo-almirante", "Almirante", false),
+        }),
+        null, report);
+
+    private static Seat Named(string id, string login, double rating, bool ready = false, bool host = false, bool noVpn = false)
+        => new() { UserId = id, Login = login, Rating = rating, GamesPlayed = 40, Ready = ready, IsHost = host, NoVpn = noVpn };
+
+    /// <summary>The states of design 85, with the prototype's people.</summary>
+    private static Sample Design85(string id)
+    {
+        Sample Duel(RoomStage? stage, Seat[] players, ChatSample[] chat, MatchOutcomeView? result = null, bool vpn = false, int? waited = null) => new()
+        {
+            Name = id, Code = "BRACKET1", RoomName = "Copa de Octubre", Seats = 2, Competitive = true,
+            Players = players, ViewerId = "demo-gorgo", Tournament = OneVOneBracket(), Stage = stage, Chat = chat,
+            Result = result, VpnMissing = vpn, WaitedSeconds = waited,
+        };
+        Sample League(RoomStage? stage, Seat[] players, ChatSample[] chat, string? report = null) => new()
+        {
+            Name = id, Code = "BRACKET2", RoomName = "Liga 3v3 de la Guardia", Seats = 6, Competitive = true, ModId = "hundred-days",
+            Players = players, ViewerId = "demo-gorgo", Tournament = ThreeVThreeBracket(report), Stage = stage, Chat = chat,
+        };
+        var opened = new ChatSample(null, "Abriste la sala del cruce. Cuzco la ve en Torneos, en su cruce.");
+        var cuzco = Cuzco(ready: false);
+        var both = new[] { Gorgo(), cuzco };
+        return id switch
+        {
+            "85a" => Duel(null, new[] { Gorgo() }, new[] { opened }, waited: 0),
+            "85b" => League(null, new[]
+            {
+                Named("demo-mariscal", "Mariscal", 1402, ready: true, host: true), Named("demo-bicorne", "Bicorne", 1318, ready: true),
+                Gorgo(host: false, rating: 1290), Cuzco(ready: true, rating: null, games: 6), Named("demo-malinche", "Malinche", 1188, noVpn: true),
+            }, new ChatSample[]
+            {
+                new(null, "Mariscal abrió la sala del cruce."), new(null, "Bicorne entró."), new(null, "Cuzco entró."),
+                new(null, "Malinche entró."), new(null, "Entraste en la sala."),
+                new("Mariscal", "cuando llegue Almirante arrancamos", Today(21, 2)), new("Malinche", "reinicio Radmin y vuelvo", Today(21, 3)),
+            }),
+            "85c" => Duel(RoomStage.InGame, new[] { Gorgo(ready: true), Cuzco(ready: true) }, new ChatSample[]
+            {
+                opened, new(null, "Cuzco entró en la sala."), new("Cuzco", "buenas! dame un minuto que abro Radmin", Today(20, 41)),
+                new(null, "Cuzco está listo."), new(null, "Los dos están listos. La partida empieza en 5 segundos."), new(null, "Partida en marcha."),
+            }),
+            "85d" => Duel(null, new[] { Gorgo(), Cuzco(ready: true) }, new ChatSample[]
+            {
+                opened, new(null, "Cuzco entró en la sala."), new("Cuzco", "buenas! dame un minuto que abro Radmin", Today(20, 41)), new(null, "Cuzco está listo."),
+            }),
+            "85e" => League(RoomStage.ResultUndecided, new[]
+            {
+                Named("demo-mariscal", "Mariscal", 1402, host: true), Named("demo-bicorne", "Bicorne", 1318), Named("demo-almirante", "Almirante", 1265),
+                Gorgo(host: false, rating: 1290), Cuzco(rating: null, games: 6), Named("demo-malinche", "Malinche", 1188),
+            }, new ChatSample[]
+            {
+                new(null, "Partida terminada."), new(null, "No se pudo leer un resultado de la grabación."),
+                new("Mariscal", "no marqué Record Game, perdón. ¿La repetimos?", Today(21, 44)),
+            }),
+            "85f" => Duel(null, new[] { Gorgo() }, new[] { opened }, waited: 880),
+            "85g" => Duel(null, new[] { Gorgo(), Cuzco(ready: true) }, new ChatSample[]
+            {
+                opened, new(null, "Cuzco entró en la sala."), new("Cuzco", "buenas! dame un minuto que abro Radmin", Today(20, 41)), new(null, "Cuzco está listo."),
+            }, vpn: true),
+            "85h" => Duel(RoomStage.ResultRated, new[] { Gorgo(ready: true), Cuzco(ready: true) }, new ChatSample[]
+            {
+                opened, new(null, "Partida en marcha."), new(null, "Perdiste. El cuadro avanzó: Cuzco juega los cuartos contra quien gane Mariscal – Almirante."),
+                new("Cuzco", "gg, estuvo cerrada", Today(21, 8)),
+            }, Outcome(MatchVerdict.Loss, 1383, 1371, rank: null) with { RivalLogin = "Cuzco", RecordingPath = null, MyCiv = null, RivalCiv = null, DurationSeconds = 0 }),
+            "85i" => League(RoomStage.ResultAwaiting, new[]
+            {
+                Gorgo(rating: 1290), Cuzco(rating: null, games: 6), Named("demo-malinche", "Malinche", 1188),
+                Named("demo-mariscal", "Mariscal", 1402), Named("demo-bicorne", "Bicorne", 1318), Named("demo-almirante", "Almirante", 1265),
+            }, new ChatSample[]
+            {
+                new(null, "Partida terminada."), new(null, "Tu launcher envió el resultado: ganó Los Andes."),
+                new(null, "Falta que un jugador de Guardia Vieja lo confirme en su launcher."), new("Bicorne", "gg, buena final", Today(22, 10)),
+            }, "awaiting_confirmation"),
+            _ => Duel(null, both, new[] { opened }),
         };
     }
 

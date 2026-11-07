@@ -207,6 +207,173 @@ public class RoomFooterStatesTests
         }
     }
 
+    private static RoomFacts Match(bool host = true) => new()
+    {
+        Tournament = true, Competitive = true, Players = 2, Seats = 2, MatchPlayers = 2, IsHost = host,
+        HostName = "Cuzco", RivalName = "Cuzco", Organizer = "Kaiser",
+    };
+
+    [Fact]
+    public void AloneInABracketRoomTheClockRunsAndTheFooterSaysWhoSettlesIt()
+    {
+        var view = RoomFooterState.Evaluate(Match() with { Players = 1, Absent = "Cuzco" });
+        Assert.Equal("RoomFtRivalWait", view.Title.Key);
+        Assert.Equal(RoomClock.Waiting, view.Clock);
+        Assert.Equal("RtFtSoloSub", view.Sub!.Key);
+        Assert.Equal(new object[] { "Cuzco", "Kaiser" }, view.Sub.Args);
+        Assert.Equal(RoomPrimary.Ready, view.Primary);
+    }
+
+    [Fact]
+    public void WithoutAnOrganizersNameTheSentenceDoesNotInventOne()
+    {
+        var view = RoomFooterState.Evaluate(Match() with { Players = 1, Absent = "Cuzco", Organizer = null });
+        Assert.Equal("RtFtSoloSubNoName", view.Sub!.Key);
+    }
+
+    [Fact]
+    public void ARoomOfABracketNamesWhoIsReadyAndWhoIsNot()
+    {
+        Assert.Equal("RtFtRivalJoined", RoomFooterState.Evaluate(Match()).Title.Key);
+        Assert.Equal("RtFtInRivalRoom", RoomFooterState.Evaluate(Match(host: false)).Title.Key);
+        Assert.Equal("RoomFtRivalReady", RoomFooterState.Evaluate(Match() with { RivalReady = true }).Title.Key);
+        Assert.Equal("RtFtReadyWaiting", RoomFooterState.Evaluate(Match() with { IAmReady = true }).Title.Key);
+    }
+
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_AGameThatDoesNotCountOffersTheBracketNotARepeat()
+    {
+        // The server closes every room after a report, whatever it says, so "I'm ready" here
+        // would be a button on a room that no longer exists.
+        var view = RoomFooterState.Evaluate(Match() with { Stage = RoomStage.ResultUndecided });
+        Assert.Equal("RtFtNotYet", view.Title.Key);
+        Assert.Equal(RoomPrimary.ViewBracket, view.Primary);
+    }
+
+    [Theory]
+    [InlineData(RoomStage.ResultRated)]
+    [InlineData(RoomStage.ResultAwaiting)]
+    public void AfterABracketMatchThereIsNoRematchAndNoSearch(RoomStage stage)
+    {
+        var view = RoomFooterState.Evaluate(Match() with { Stage = stage, OffersRematch = true, OffersFindAnother = true });
+        Assert.Equal(RoomPrimary.ViewBracket, view.Primary);
+        Assert.Equal(RoomSecondary.None, view.Secondary);
+    }
+
+    [Theory]
+    [InlineData(true, RoomDot.Green)]
+    [InlineData(false, RoomDot.Neutral)]
+    public void OnlyAWinEndsTheRoomInGreen(bool won, RoomDot dot)
+    {
+        var view = RoomFooterState.Evaluate(Match() with { Stage = RoomStage.ResultRated, ResultWon = won });
+        Assert.Equal(dot, view.Dot);
+        Assert.Equal("RtFtMoved", view.Title.Key);
+    }
+
+    [Fact]
+    public void WinningTheFinalIsStillAWin_ThoughNothingComesAfterIt()
+    {
+        var view = RoomFooterState.Evaluate(Match() with { Stage = RoomStage.ResultRated, ResultWon = true, AfterResult = null });
+        Assert.Equal(RoomDot.Green, view.Dot);
+        Assert.Equal("RtFtFollow", view.Sub!.Key);
+    }
+
+    [Theory]
+    [InlineData(true, "RtFtCountdownHost")]
+    [InlineData(false, "RtFtCountdownGuest")]
+    public void TheCountdownTellsEachSideWhatToDoInTheGame(bool host, string sub)
+    {
+        var view = RoomFooterState.Evaluate(Match(host) with { Stage = RoomStage.Countdown });
+        Assert.Equal(sub, view.Sub!.Key);
+        Assert.Equal(RoomClock.Countdown, view.Clock);
+        Assert.Equal(RoomLeave.None, view.Leave);
+    }
+
+    [Fact]
+    public void InAGameTheWayOutIsAbandoning()
+    {
+        var view = RoomFooterState.Evaluate(Match() with { Stage = RoomStage.InGame });
+        Assert.Equal(RoomLeave.Abandon, view.Leave);
+        Assert.Equal(RoomClock.Match, view.Clock);
+    }
+
+    private static Models.Multiplayer.TournamentDetail Bracket() => new()
+    {
+        Id = "t", Name = "Copa", Format = "1v1", OwnerName = "Kaiser", RoundsTotal = 3,
+        Entrants = new()
+        {
+            new() { Id = "a", DisplayName = "Gorgo", Seed = 1, MemberIds = new() { "u1" } },
+            new() { Id = "b", DisplayName = "Cuzco", Seed = 8, MemberIds = new() { "u2" } },
+            new() { Id = "c", DisplayName = "Mariscal", Seed = 4, MemberIds = new() { "u3" } },
+            new() { Id = "d", DisplayName = "Almirante", Seed = 5, MemberIds = new() { "u4" } },
+        },
+        Matches = new()
+        {
+            new() { Id = "m1", Round = 1, Position = 0, Entrant1Id = "a", Entrant2Id = "b", NextMatchId = "s1", NextSlot = 1 },
+            new() { Id = "m2", Round = 1, Position = 1, Entrant1Id = "c", Entrant2Id = "d", NextMatchId = "s1", NextSlot = 2 },
+            new() { Id = "s1", Round = 2, Position = 0, NextMatchId = "f", NextSlot = 1 },
+            new() { Id = "f", Round = 3, Position = 0 },
+        },
+    };
+
+    [Fact]
+    public void TheContextReadsTheSlotOutOfTheBracket()
+    {
+        var c = TournamentRoomContext.From(Bracket(), "m1")!;
+        Assert.Equal("Kaiser", c.OrganizerName);
+        Assert.Equal("Gorgo", c.Side1.Name);
+        Assert.Equal(1, c.SideOf("u1"));
+        Assert.Equal("Cuzco", c.RivalOf("u1").Name);
+        Assert.Equal("Mariscal", c.Next!.PairA);
+        Assert.Equal("RtRoundTheSemi", c.Next.RoundPhraseKey);
+    }
+
+    [Fact]
+    public void ARivalAlreadyThroughIsNamedInsteadOfThePair()
+    {
+        var t = Bracket();
+        t.Matches!.First(m => m.Id == "s1").Entrant2Id = "c";
+        Assert.Equal("Mariscal", TournamentRoomContext.From(t, "m1")!.Next!.Rival);
+    }
+
+    [Fact]
+    public void AnUnknownSlotGivesNoContextRatherThanAGuess()
+    {
+        Assert.Null(TournamentRoomContext.From(Bracket(), "nope"));
+        Assert.Null(TournamentRoomContext.From(Bracket(), "s1"));
+    }
+
+    [Fact]
+    public void TheFinalHasNoNextRound()
+    {
+        var t = Bracket();
+        var f = t.Matches!.First(m => m.Id == "f");
+        f.Entrant1Id = "a";
+        f.Entrant2Id = "c";
+        var c = TournamentRoomContext.From(t, "f")!;
+        Assert.True(c.IsFinal);
+        Assert.Equal("RtStakeFinal", c.StakeLines()[0].Text.Key);
+    }
+
+    [Theory]
+    [InlineData(1, 5, "MpTournamentRoundSixteenth")]
+    [InlineData(2, 5, "MpTournamentRoundEighth")]
+    [InlineData(3, 5, "MpTournamentRoundQuarter")]
+    [InlineData(1, 6, "MpTournamentRoundN")]
+    public void TheEarlyRoundsHaveNamesUpToTheRoundOf32(int round, int total, string key)
+        => Assert.Equal(key, BracketLayout.RoundLabelKey(round, total));
+
+    [Fact]
+    public void EveryDesign85SampleIsABracketRoom()
+    {
+        foreach (var id in "abcdefghi".Select(c => "85" + c))
+        {
+            var sample = RoomDemoData.ByName(id);
+            Assert.Equal(id, sample.Name);
+            Assert.NotNull(sample.Tournament);
+        }
+    }
+
     [Theory]
     [InlineData("WoL 1v1", "WoL 1v1 (rematch)")]
     [InlineData("WoL 1v1 (rematch)", "WoL 1v1 (rematch)")]

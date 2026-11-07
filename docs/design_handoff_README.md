@@ -758,6 +758,18 @@ password when the switch is on (an extra footer error, since an empty one makes 
 forfeit and recording promises went from the page to the type hint's tooltip; the mod's icon in the
 bar has no tile behind it (shared title bar). Text is one notch lighter than the browser's.
 
+**Screen 85 (Sala de torneo)**, compared with `Sala de torneo v2.dc.html` in 85a to 85i, two glass
+extremes, the smallest window and English. What differs, on purpose: a game that does not count
+offers View bracket instead of I'm ready, because the server closes the room after every report,
+whatever it says, so 85e's "repeat it in the same room" does not exist (replaying goes through the
+bracket); the abandon warning says what really happens per format (in a 1v1 the walkout can lose the
+match, decided by the rival's recording; a team game is never decided that way); a host with AoE3
+closed reads that the countdown starts again; a player who has not entered shows the seed and no
+rating, since an entrant carries none until they are in the room; "se lleva el torneo" and "Quedas
+fuera del torneo" are generic, because a tournament's name gives no article ("la liga", "la Copa");
+the stored-recording line of PARA QUE CUENTE became that panel's tooltip, for room; the version
+number comes from the installed mod, so a mod that is not installed shows its name alone.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup

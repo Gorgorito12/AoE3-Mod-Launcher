@@ -2860,6 +2860,7 @@ public partial class MultiplayerTab : UserControl
             Services.SoundService.PlayConnect();
         // A quick match waiting in this room has found its rival.
         OnQuickMatchRivalJoined(userId, login);
+        OnBracketRivalJoined(userId, login);
 
         // n2n discovery is supernode-mediated: edges find each other
         // by community, not by per-room signaling. The session's
@@ -3075,6 +3076,14 @@ public partial class MultiplayerTab : UserControl
 
         // A 2v2/3v3 room: the two teams side by side (design 55h). Its own builder, because
         // everything about the layout differs — the columns, NO TEAM, the pickers, the odds.
+        if (_roomTournament is { } bracket)
+        {
+            RenderTournamentRoster(bracket);
+            RefreshRoomPlayerCount();
+            RefreshReadyButton();
+            RenderStartButtonGate();
+            return;
+        }
         if (RoomShowsTeams())
         {
             RenderTeamPanel(_lobbyWindow!.RoomMembersPanel);
@@ -5796,6 +5805,9 @@ public partial class MultiplayerTab : UserControl
         _demoRoomCode = sample.Code;
         _demoRoomSample = sample;
         _roomResult = sample.Result;
+        _roomTournament = sample.Tournament;
+        _currentLobbyTournamentMatchId = sample.Tournament != null ? "demo-match" : null;
+        _currentLobbyCreatedUtc = sample.WaitedSeconds is { } waited ? DateTime.UtcNow.AddSeconds(-waited) : _currentLobbyCreatedUtc;
         _roomHostLeftName = sample.HostLeft;
         _roomRadminMissing = sample.VpnMissing;
         _rematchInvited = sample.RematchRival is { } rematch
@@ -5858,6 +5870,7 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.OnInvitePlayers = null;
         _lobbyWindow.OnFooterSecondary = null;
         _lobbyWindow.OnRematch = null;
+        _lobbyWindow.OnViewBracket = null;
         _lobbyWindow.OnMuteRecordReminder = null;
 
         ApplyLobbyStaticLabels();
@@ -8962,6 +8975,11 @@ public partial class MultiplayerTab : UserControl
 
             var resp = await TournamentApi.OpenTournamentMatchLobbyAsync(
                 t.Id, m.Id, new TournamentLobbyRequest { ModCombinedHash = hash! });
+            // The bracket is in hand, so the room needs no question to know where it stands, and
+            // no server field: this path works against one that predates tournament_id.
+            _pendingRoomTournamentId = t.Id;
+            _roomTournament = TournamentRoomContext.From(t, m.Id);
+            _roomTournamentAsked = _roomTournament != null;
 
             if (resp.Existing
                 && !string.Equals(resp.HostUserId, _session.CurrentUser?.Id, StringComparison.Ordinal))
@@ -12142,6 +12160,10 @@ public partial class MultiplayerTab : UserControl
         // Never a bracket slot: this path makes ordinary rooms, and a tournament room
         // is only ever minted by POST /tournaments/:id/matches/:mid/lobby.
         _currentLobbyTournamentMatchId = null;
+        _currentLobbyTournamentId = null;
+        _pendingRoomTournamentId = null;
+        _roomTournament = null;
+        _roomTournamentAsked = false;
         _roomTeamsLocked = false;
         // We just created it — the POST returns no created_at, so ~now is the
         // room's open time (good to the second). Drives the "open for X" counter.
@@ -16525,6 +16547,7 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyIsCompetitive = lobby.Competitive;
                 _currentLobbySpectatorSlots = lobby.SpectatorSlots;
                 _currentLobbyTournamentMatchId = lobby.TournamentMatchId;
+                _currentLobbyTournamentId = lobby.TournamentId ?? _pendingRoomTournamentId;
                 // We joined from the browser summary, which carries the real open time.
                 _currentLobbyCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
                 // Host vs joiner is decided by the WS room_state frame that
@@ -19216,7 +19239,8 @@ public partial class MultiplayerTab : UserControl
             OnClearChat = () => ClearChatButton_Click(this, new RoutedEventArgs()),
             OnCopyCodeChip = CopyRoomCodeFromChip,
             OnFooterSecondary = RoomSecondaryPressed,
-            OnRematch = () => _ = RematchAsync(),
+            OnRematch = RoomResultPrimaryPressed,
+            OnViewBracket = OpenRoomBracket,
             OnMuteRecordReminder = MuteRecordNotice,
             OnInvitePlayers = ShowInviteHint,
             OnRecordHelp = ShowRecordHelp,
@@ -19604,6 +19628,13 @@ public partial class MultiplayerTab : UserControl
         _demoRoomCode = null;
         _demoRoomSample = null;
         _roomChromeModId = null;
+        _roomTournament = null;
+        _roomTournamentAsked = false;
+        _currentLobbyTournamentId = null;
+        _pendingRoomTournamentId = null;
+        _roomPathDrawnFor = null;
+        _roomClock?.Stop();
+        _roomClock = null;
         _roomResult = null;
         _roomResultDrawnFor = null;
         _roomHostLeftName = null;
@@ -19689,13 +19720,14 @@ public partial class MultiplayerTab : UserControl
         if (_lobbyWindow == null) return;
 
         var starting = _matchPhase == MatchPhase.Starting || _previewCountdown;
+        var bracketRoom = _roomTournament != null;
         // A team room counts down on a card in the left column with the line-ups written out
         // (design 55i); everything else keeps the countdown line in the chat.
         var teamCountdown = starting && TeamCountdownSides() != null;
 
         // Overlays — Visibility set via the prefixed accessors (the
         // null-forgiving '!' is safe because of the guard above).
-        _lobbyWindow!.CountdownOverlay.Visibility = starting && !teamCountdown
+        _lobbyWindow!.CountdownOverlay.Visibility = starting && !teamCountdown && !bracketRoom
             ? Visibility.Visible : Visibility.Collapsed;
         _lobbyWindow!.TeamCountdownOverlay.Visibility = teamCountdown
             ? Visibility.Visible : Visibility.Collapsed;
@@ -21432,14 +21464,20 @@ public partial class MultiplayerTab : UserControl
         // Within the grace window → "abort for everyone" (any member); after it →
         // "leave" (just you). The server is the final authority on the window.
         bool canAbort = WithinAbortWindow;
+        // What leaving costs depends on the format: a 1v1 can be decided by the walkout, and only
+        // with the rival's recording; a team game is never decided that way (decideByAbandon).
+        var bracket = canAbort ? null : _roomTournament;
         bool confirmed = await MpAlertOverlay.ConfirmAsync(
             _lobbyWindow.LobbyRootGrid,
-            canAbort ? Strings.Get("MpConfirmAbortTitle") : Strings.Get("MpConfirmLeaveTitle"),
-            canAbort ? Strings.Get("MpConfirmAbortBody") : Strings.Get("MpConfirmLeaveBody"),
-            canAbort ? Strings.Get("MpConfirmAbortYes") : Strings.Get("MpConfirmLeaveYes"),
-            Strings.Get("MpAlertCancel"),
+            bracket != null ? Strings.Get("RtAbandonTitle")
+                : canAbort ? Strings.Get("MpConfirmAbortTitle") : Strings.Get("MpConfirmLeaveTitle"),
+            bracket != null ? Strings.Get(bracket.IsTeams ? "RtAbandonBodyTeams" : "RtAbandonBody1v1")
+                : canAbort ? Strings.Get("MpConfirmAbortBody") : Strings.Get("MpConfirmLeaveBody"),
+            bracket != null ? Strings.Get("RtAbandonGo")
+                : canAbort ? Strings.Get("MpConfirmAbortYes") : Strings.Get("MpConfirmLeaveYes"),
+            Strings.Get(bracket != null ? "RtAbandonStay" : "MpAlertCancel"),
             danger: true);
-        if (!confirmed) return;
+        if (!confirmed || _demoRoomSample != null) return;
 
         await EndMatchAsync(canAbort ? "aborted" : "left", sendCancel: canAbort);
     }

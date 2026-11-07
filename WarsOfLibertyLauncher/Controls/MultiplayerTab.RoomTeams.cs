@@ -39,7 +39,7 @@ public partial class MultiplayerTab
 
     /// <summary>Whether the roster is drawn by teams. Only a competitive room: there the sides decide
     /// the result, while a casual room of four is four people (design 87a).</summary>
-    internal bool RoomShowsTeams() => RoomHasTeams() && _currentLobbyIsCompetitive;
+    internal bool RoomShowsTeams() => RoomHasTeams() && _currentLobbyIsCompetitive && _roomTournament == null;
 
     /// <summary>The room's players, spectators left out — a spectator has no team and no seat.</summary>
     private IEnumerable<RoomMemberEntry> RoomPlayers()

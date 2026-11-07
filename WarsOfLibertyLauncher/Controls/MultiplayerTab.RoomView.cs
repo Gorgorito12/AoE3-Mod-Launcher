@@ -63,6 +63,11 @@ public partial class MultiplayerTab
     {
         if (_demoRoomSample?.Stage is { } demo) return demo;
         if (_previewCountdown) return RoomStage.Countdown;
+        if (_roomResult is { } settled && _roomTournament is { } bracket)
+        {
+            if (bracket.PendingReport is "awaiting_confirmation") return RoomStage.ResultAwaiting;
+            if (settled.Verdict == MatchVerdict.NoResult) return RoomStage.ResultUndecided;
+        }
         return _matchPhase switch
         {
             MatchPhase.Starting => RoomStage.Countdown,
@@ -146,11 +151,398 @@ public partial class MultiplayerTab
         w.RenameRoomButton.Visibility = RoomViewerIsHost() && result == null && !InTournamentRoom && !QuickSearchAlone
             ? Visibility.Visible : Visibility.Collapsed;
 
+        RefreshRoomTournamentHeader(result);
+
         w.InvitePlayersButton.Content = Strings.Get("MpRoomInvite");
         w.InvitePlayersButton.Visibility = result == null && !InTournamentRoom && !QuickSearchAlone
             ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshRoomEloCards(result);
+    }
+
+    /// <summary>
+    /// What a bracket match changes in the header (85): the tournament's name over who plays whom,
+    /// the rounds, and the bracket instead of the code. Nothing here applies to any other room.
+    /// </summary>
+    private void RefreshRoomTournamentHeader(MatchOutcomeView? result)
+    {
+        var w = _lobbyWindow!;
+        var bracket = _roomTournament;
+        w.TournamentMode = bracket != null;
+        w.RoomRoundsPath.Visibility = bracket != null ? Visibility.Visible : Visibility.Collapsed;
+        // Once the footer's own button is "View bracket", a second one above it says nothing.
+        var footerHasIt = CurrentRoomStage() is RoomStage.ResultUndecided or RoomStage.ResultAwaiting;
+        w.RoomViewBracketButton.Visibility = bracket != null && result == null && !footerHasIt
+            ? Visibility.Visible : Visibility.Collapsed;
+        if (bracket == null) return;
+
+        w.RoomKickerText.Text = bracket.Name.ToUpper(Strings.Culture);
+        if (result == null) w.RoomTitleText.Text = Strings.Format("RtTitleVs", bracket.Side1.Name, bracket.Side2.Name);
+        w.RoomModeText.Text = Strings.Format("RtChip", bracket.Format);
+        w.RoomModeDot.Fill = (Brush)w.FindResource("ModAccentText");
+        w.RoomViewBracketButton.Content = Strings.Get("RtViewBracket");
+        var title = Strings.Format("RtWindowTitle", bracket.Name);
+        w.Title = title;
+        w.TitleBarControl.Title = title;
+
+        var key = bracket.TournamentId + bracket.CurrentRound + Strings.Language;
+        if (key == _roomPathDrawnFor) return;
+        _roomPathDrawnFor = key;
+        w.RoomRoundsPath.Children.Clear();
+        for (var i = 0; i < bracket.RoundKeys.Count; i++)
+        {
+            var number = i + 1;
+            var word = new TextBlock
+            {
+                Text = bracket.RoundKeys[i] == "MpTournamentRoundSemi"
+                    ? Strings.Get("RtPathSemi")
+                    : RoundWord(Strings.Format(bracket.RoundKeys[i], number)),
+                FontSize = (double)Application.Current.FindResource("SetCaptionSize"),
+                FontWeight = number == bracket.CurrentRound ? FontWeights.SemiBold : FontWeights.Normal,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            if (number == bracket.CurrentRound) word.SetResourceReference(TextBlock.ForegroundProperty, "ModAccentText");
+            else word.Foreground = Solid(number < bracket.CurrentRound ? "#8C9CB1" : "#61779A");
+            w.RoomRoundsPath.Children.Add(word);
+            if (number == bracket.RoundKeys.Count) continue;
+            w.RoomRoundsPath.Children.Add(new TextBlock
+            {
+                Text = "\u203A",
+                Margin = new Thickness(6, 0, 6, 0),
+                FontSize = (double)Application.Current.FindResource("SetCaptionSize"),
+                Foreground = Solid("#61779A"),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+    }
+
+    /// <summary>The bracket's headers shout; a name in a line of them does not.</summary>
+    private static string RoundWord(string label)
+        => label.Length == 0 ? label : label[..1].ToUpper(Strings.Culture) + label[1..].ToLower(Strings.Culture);
+
+    private string? _roomPathDrawnFor;
+
+    /// <summary>The tournament of a room being opened from its card, until the join lands.</summary>
+    private string? _pendingRoomTournamentId;
+
+    /// <summary>The bracket slot of this room, once it is known.</summary>
+    private TournamentRoomContext? _roomTournament;
+
+    /// <summary>The tournament this room belongs to: from the lobby, or from the card that opened it.</summary>
+    private string? _currentLobbyTournamentId;
+
+    private bool _roomTournamentAsked;
+
+    /// <summary>Reads the bracket the room belongs to, once per room. Without the id the room keeps
+    /// the plain header: a server that predates <c>tournament_id</c>, reached by an invite link.</summary>
+    private async void EnsureRoomTournament()
+    {
+        if (_roomTournament != null || _roomTournamentAsked || !InTournamentRoom || _demoRoomSample != null) return;
+        var id = _currentLobbyTournamentId;
+        if (string.IsNullOrEmpty(id)) return;
+        _roomTournamentAsked = true;
+        await RefreshRoomTournamentAsync(id);
+    }
+
+    private async System.Threading.Tasks.Task RefreshRoomTournamentAsync(string id)
+    {
+        try
+        {
+            var detail = await TournamentApi.GetTournamentAsync(id);
+            if (_lobbyWindow == null || !InTournamentRoom) return;
+            _roomTournament = TournamentRoomContext.From(detail, _currentLobbyTournamentMatchId);
+            RenderRoomMembers();
+        }
+        catch (Exception ex) { DiagnosticLog.Write($"Room: the bracket could not be read - {ex.Message}"); }
+    }
+
+    private RoomFacts WithTournamentFacts(RoomFacts facts, MatchOutcomeView? result)
+    {
+        if (_roomTournament is not { } bracket) return facts;
+        var me = RoomViewerId;
+        var rivalSide = bracket.RivalOf(me);
+        var present = rivalSide.Players.Where(p => _roomMembers.ContainsKey(p.UserId)).ToList();
+        var absentAll = bracket.Side1.Players.Concat(bracket.Side2.Players)
+            .FirstOrDefault(p => !_roomMembers.ContainsKey(p.UserId));
+        var won = result?.Verdict == MatchVerdict.Win;
+        var rivalMember = bracket.IsTeams || present.Count == 0 ? null : _roomMembers[present[0].UserId];
+        return facts with
+        {
+            Tournament = true,
+            Competitive = true,
+            Absent = absentAll?.Name,
+            Organizer = bracket.OrganizerName,
+            MatchPlayers = bracket.PlayerCount,
+            RivalName = rivalSide.Players.Count == 1 ? rivalSide.Players[0].Name : rivalSide.Name,
+            RivalReady = rivalMember?.Ready ?? false,
+            AfterResult = won ? bracket.AfterWin() : null,
+            ResultWon = won,
+        };
+    }
+
+    private System.Windows.Threading.DispatcherTimer? _roomClock;
+
+    /// <summary>The figure beside the footer's title. The match clock has its own writer; the wait
+    /// and the countdown are drawn here, and the timer lives only while one of them is on screen.</summary>
+    private void RefreshRoomClock(RoomClock clock)
+    {
+        if (clock != RoomClock.Waiting)
+        {
+            _roomClock?.Stop();
+            _roomClock = null;
+        }
+        var w = _lobbyWindow!;
+        w.InGameMatchTimer.Foreground = clock == RoomClock.Countdown
+            ? (Brush)w.FindResource("ModAccentText")
+            : (Brush)Application.Current.FindResource(clock == RoomClock.Waiting ? "WindowMuted" : "UiHeadText");
+        if (clock == RoomClock.Countdown) w.InGameMatchTimer.Text = w.CountdownNumber.Text;
+        if (clock != RoomClock.Waiting) return;
+        PaintRoomWait();
+        if (_roomClock != null) return;
+        _roomClock = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _roomClock.Tick += (_, _) => PaintRoomWait();
+        _roomClock.Start();
+    }
+
+    private void PaintRoomWait()
+    {
+        if (_lobbyWindow == null) { _roomClock?.Stop(); _roomClock = null; return; }
+        var waited = _currentLobbyCreatedUtc is { } opened ? DateTime.UtcNow - opened : TimeSpan.Zero;
+        if (waited < TimeSpan.Zero) waited = TimeSpan.Zero;
+        _lobbyWindow.InGameMatchTimer.Text = $"{(int)waited.TotalMinutes:00}:{waited.Seconds:00}";
+    }
+
+    private string AccentTextHex()
+        => _lobbyWindow!.FindResource("ModAccentText") is SolidColorBrush { Color: var c }
+            ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : "#55ACEE";
+
+    private static string Say(RoomText text)
+        => Strings.Format(text.Key, text.Args.Select(a => a is RoomKey key ? Strings.Get(key.Key) : a).ToArray());
+
+    /// <summary>EL CRUCE: both sides of the bracket slot, in or out of the room.</summary>
+    private void RenderTournamentRoster(TournamentRoomContext bracket)
+    {
+        var w = _lobbyWindow!;
+        var host = w.RoomMembersPanel;
+        void Side(TournamentRoomSide side, int number)
+        {
+            if (bracket.IsTeams)
+            {
+                var head = BuildRosterGroupHead(side.Name, side.Seed is { } s ? "#" + s : null, Strings.Get("RtSeedTip"), new TextBlock
+                {
+                    Text = Strings.Format("RtSide", number),
+                    FontSize = (double)Application.Current.FindResource("SetCaptionSize"),
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Solid("#A8BCD2"),
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+                // No "join this team" button here, so nothing asks for the extra height.
+                head.MinHeight = 0;
+                if (side.Seed != null && head.Children.Count > 1 && head.Children[1] is TextBlock seedText)
+                    seedText.FontFamily = (FontFamily)Application.Current.FindResource("MonoFont");
+                host.Children.Add(head);
+            }
+            foreach (var player in side.Players) host.Children.Add(BuildBracketRow(player, side, bracket));
+        }
+        Side(bracket.Side1, 1);
+        Side(bracket.Side2, 2);
+        w.RoomMoreFreeText.Visibility = Visibility.Visible;
+        w.RoomMoreFreeText.Text = Strings.Get(bracket.IsTeams ? "RtNoteTeams" : "RtNote1v1");
+    }
+
+    /// <summary>The detail line with its figures in the mono face the bracket's numbers use.</summary>
+    private static void AddDetailRuns(TextBlock line, string detail)
+    {
+        var last = 0;
+        foreach (System.Text.RegularExpressions.Match figure in FigureInDetail.Matches(detail))
+        {
+            if (figure.Index > last) line.Inlines.Add(new System.Windows.Documents.Run(detail[last..figure.Index]));
+            line.Inlines.Add(new System.Windows.Documents.Run(figure.Value)
+            {
+                FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+                Foreground = Solid("#C3D2E5"),
+            });
+            last = figure.Index + figure.Length;
+        }
+        if (last < detail.Length) line.Inlines.Add(new System.Windows.Documents.Run(detail[last..]));
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex FigureInDetail = new(@"\d[\d/.,]*\d|\d");
+
+    private FrameworkElement BuildBracketRow(TournamentRoomPlayer player, TournamentRoomSide side, TournamentRoomContext bracket)
+    {
+        var inRoom = _roomMembers.TryGetValue(player.UserId, out var member);
+        var isMe = IsRoomViewer(player.UserId);
+        var isHost = string.Equals(player.UserId, _roomHostUserId, StringComparison.Ordinal);
+
+        var tags = new List<string>(3);
+        if (isMe) tags.Add(Strings.Get("MpTeamsYou"));
+        if (player.Captain && bracket.IsTeams) tags.Add(Strings.Get("MpTeamsCaptain"));
+        if (isHost) tags.Add(Strings.Get("RoomTagHost"));
+        var stack = RosterTwoLines(player.Name, "#F0F5FB", string.Join(" \u00B7 ", tags), "");
+
+        var line = new TextBlock
+        {
+            Margin = new Thickness(0, 3, 0, 0),
+            FontSize = (double)Application.Current.FindResource("SetControlSize"),
+            Foreground = Solid("#A8BCD2"),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        if (!bracket.IsTeams && side.Seed is { } seed)
+        {
+            var mark = new System.Windows.Documents.Run("#" + seed)
+            {
+                FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+                Foreground = Solid("#8C9CB1"),
+            };
+            line.Inlines.Add(mark);
+            line.ToolTip = Strings.Get("RtSeedTip");
+            if (member != null) line.Inlines.Add(new System.Windows.Documents.Run(" \u00B7 "));
+        }
+        var detail = member != null ? MemberDetailLine(member) : "";
+        if (detail.Length > 0) AddDetailRuns(line, detail);
+        if (line.Inlines.Count > 0) stack.Children.Add(line);
+
+        FrameworkElement avatar = inRoom ? BuildAvatarDisc(player.Name, member!.AvatarUrl, 32) : BuildEmptySeatDisc();
+        var state = inRoom
+            ? BracketState(member!, isMe, bracket, side, out var dim)
+            : RosterState(Strings.Get("RtStAbsent"), "#8C9CB1", "#61779A", ring: true);
+        var row = RosterRow(avatar, null, stack, state);
+        if (inRoom && BracketDim(member!, isMe)) row.Opacity = .6;
+        return row;
+    }
+
+    private bool BracketDim(RoomMemberEntry m, bool isMe)
+    {
+        MemberState(m, isMe, out var dim);
+        return dim && CurrentRoomStage() == RoomStage.Room;
+    }
+
+    private StackPanel BracketState(RoomMemberEntry m, bool isMe, TournamentRoomContext bracket, TournamentRoomSide side, out bool dim)
+    {
+        dim = false;
+        if (_roomResult is { } result && result.Verdict is MatchVerdict.Win or MatchVerdict.Loss)
+        {
+            var mine = bracket.SideOf(RoomViewerId) == (ReferenceEquals(side, bracket.Side1) ? 1 : 2);
+            return mine == (result.Verdict == MatchVerdict.Win)
+                ? RosterState(Strings.Get("RtStThrough"), "#7FE0A8", "#4FD68A")
+                : RosterState(Strings.Get("RtStOut"), "#A8BCD2", "#61779A");
+        }
+        return MemberState(m, isMe, out dim);
+    }
+
+    /// <summary>The panels a bracket match words differently.</summary>
+    private void RefreshRoomTournamentPanels()
+    {
+        var w = _lobbyWindow!;
+        var bracket = _roomTournament;
+        w.RoomStakeLines.Visibility = bracket != null ? Visibility.Visible : Visibility.Collapsed;
+        w.RoomStakeText.Visibility = bracket == null ? Visibility.Visible : Visibility.Collapsed;
+        w.RoomCountsPanel.ClearValue(Border.BorderBrushProperty);
+        w.RoomCountsPanel.ClearValue(FrameworkElement.ToolTipProperty);
+        if (bracket == null)
+        {
+            w.PlayersListHeader.Text = Strings.Get(RoomShowsTeams() ? "RoomPanelTeams" : "RoomPanelPlayers");
+            w.RoomStakeLabel.Text = Strings.Get("RoomStakeTitle");
+            w.RoomPlayersCount.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var result = _roomResult;
+        var decided = result?.Verdict is MatchVerdict.Win or MatchVerdict.Loss;
+        // The panel has no line for it here; that the recording is stored stays one hover away.
+        w.PreflightReplayText.Visibility = Visibility.Collapsed;
+        w.RoomCountsPanel.ToolTip = TooltipHelper.Wrap(Strings.Get("MpPreflightReplay"));
+        w.PlayersListHeader.Text = Strings.Get("RtPanelMatch");
+        w.RoomPlayersCount.Visibility = Visibility.Collapsed;
+        w.RoomResultPanel.Visibility = Visibility.Collapsed;
+        w.RoomStakeLabel.Text = Strings.Get(decided ? "RoomPanelResult" : "RtPanelStake");
+        w.RoomStakePanel.Visibility = Visibility.Visible;
+        w.RoomCountsPanel.Visibility = Visibility.Visible;
+        w.RoomStakeNote.Visibility = Visibility.Collapsed;
+        w.PreflightAbandonText.Visibility = Visibility.Collapsed;
+        if (CurrentRoomStage() == RoomStage.ResultUndecided) w.RoomCountsPanel.BorderBrush = Solid("#99F4900C");
+        SetCountsText(w, "RtCountsBody");
+
+        var lines = decided
+            ? bracket.ResultLines(result!.Verdict == MatchVerdict.Win, RoomViewerId)
+            : bracket.StakeLines();
+        w.RoomStakeLines.Children.Clear();
+        foreach (var line in lines)
+        {
+            var row = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var dot = new System.Windows.Shapes.Ellipse
+            {
+                Width = 7,
+                Height = 7,
+                Margin = new Thickness(0, 6, 10, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            if (line.Tone == TournamentStakeTone.Mod) dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "ModAccentText");
+            else dot.Fill = Solid(line.Tone switch
+            {
+                TournamentStakeTone.Green => "#4FD68A",
+                TournamentStakeTone.Elo => "#55ACEE",
+                _ => "#61779A",
+            });
+            row.Children.Add(dot);
+            var text = new TextBlock
+            {
+                Text = Say(line.Text),
+                FontSize = (double)Application.Current.FindResource("DialogBodySize"),
+                Foreground = (Brush)Application.Current.FindResource("UiSoftText"),
+                TextWrapping = TextWrapping.Wrap,
+            };
+            Grid.SetColumn(text, 1);
+            row.Children.Add(text);
+            w.RoomStakeLines.Children.Add(row);
+        }
+    }
+
+    /// <summary>
+    /// The rival came in while the player looked elsewhere (85j). The room can wait a long time for
+    /// them, so this is the moment that needs a card; with the window in front it would only repeat
+    /// what the roster just said.
+    /// </summary>
+    private void OnBracketRivalJoined(string userId, string login)
+    {
+        if (_roomTournament is not { } bracket || IsRoomViewer(userId) || _lobbyWindow is not { } w) return;
+        if (w.IsActive) return;
+        var round = Strings.Format(bracket.RoundKeys[Math.Clamp(bracket.CurrentRound - 1, 0, bracket.RoundKeys.Count - 1)], bracket.CurrentRound);
+        _showAppToast?.Invoke(new AppToast.ToastOptions(
+            "\u2694",
+            Strings.Format("RtToastJoined", login),
+            Strings.Format("RtToastBody", bracket.Name, RoundWord(round)),
+            new[]
+            {
+                new AppToast.ToastAction(Strings.Get("QmFoundView"), true, () =>
+                {
+                    _bringMultiplayerToFront?.Invoke();
+                    if (_lobbyWindow == null) return;
+                    if (_lobbyWindow.WindowState == WindowState.Minimized) _lobbyWindow.WindowState = WindowState.Normal;
+                    _lobbyWindow.Activate();
+                }),
+            },
+            PreferDesktop: true,
+            Cause: ToastCause.Request));
+    }
+
+    /// <summary>The way on after a result: the next game, or the bracket it fed.</summary>
+    private void RoomResultPrimaryPressed()
+    {
+        if (_roomFooter?.Primary == RoomPrimary.ViewBracket) OpenRoomBracket();
+        else _ = RematchAsync();
+    }
+
+    /// <summary>"View bracket": the Tournaments tab on this tournament, with the match in view.</summary>
+    private void OpenRoomBracket()
+    {
+        if (_roomTournament is not { } bracket || _demoRoomSample != null) return;
+        _bringMultiplayerToFront?.Invoke();
+        SubtabTournaments_Click(this, new RoutedEventArgs());
+        _ = SelectTournamentAsync(bracket.TournamentId);
     }
 
     private string ResultTitle(MatchOutcomeView model)
@@ -250,6 +642,7 @@ public partial class MultiplayerTab
         var hasResult = _roomResult != null;
         var live = stage is RoomStage.InGame or RoomStage.GameClosed;
         var competitive = _currentLobbyIsCompetitive;
+        EnsureRoomTournament();
         var alone = !competitive && RoomPlayerCount() == 1 && !live && !hasResult && !QuickSearchAlone;
 
         w.RoomResultPanel.Visibility = hasResult ? Visibility.Visible : Visibility.Collapsed;
@@ -278,6 +671,7 @@ public partial class MultiplayerTab
         w.PreflightReplayText.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
 
         if (hasResult) RenderRoomResultPanel(_roomResult!);
+        RefreshRoomTournamentPanels();
     }
 
     private string? _roomResultDrawnFor;
@@ -482,12 +876,12 @@ public partial class MultiplayerTab
             HostLeftName = _roomHostLeftName,
             VpnMissing = _roomRadminMissing,
             RematchWaitingFor = _rematchInvited?.Login,
-            OffersRematch = result != null && OffersRematch(result),
+            OffersRematch = result != null && OffersRematch(result) && !InTournamentRoom,
             OffersFindAnother = result != null && OffersFindAnother(result) && !InTournamentRoom,
             UnratedReason = result != null ? UnratedSentence(result) : null,
             OnTeams = players.Count(m => m.Team is 1 or 2),
         };
-        var view = RoomFooterState.Evaluate(facts);
+        var view = RoomFooterState.Evaluate(WithTournamentFacts(facts, result));
         _roomFooter = view;
 
         w.RoomFooterDot.Fill = Solid(view.Dot switch
@@ -495,14 +889,17 @@ public partial class MultiplayerTab
             RoomDot.Green => "#4FD68A",
             RoomDot.Orange => "#F4900C",
             RoomDot.Blue => "#55ACEE",
+            RoomDot.Accent => AccentTextHex(),
             _ => "#61779A",
         });
-        w.RoomFooterTitle.Text = Strings.Format(view.Title.Key, view.Title.Args);
+        w.RoomFooterTitle.Text = Say(view.Title);
         w.RoomFooterTitle.Foreground = view.WarmTitle
             ? Solid("#F5BD76") : (Brush)Application.Current.FindResource("UiHeadText");
-        w.RoomFooterSub.Text = view.Sub is { } sub ? Strings.Format(sub.Key, sub.Args) : "";
+        w.RoomFooterSub.Text = view.Sub is { } sub ? Say(sub) : "";
         w.RoomFooterSub.Visibility = view.Sub == null ? Visibility.Collapsed : Visibility.Visible;
-        w.InGameMatchTimer.Visibility = view.Title.Key == "RoomFtInGame" ? Visibility.Visible : Visibility.Collapsed;
+        w.InGameMatchTimer.Visibility = view.Clock != RoomClock.None || view.Title.Key == "RoomFtInGame"
+            ? Visibility.Visible : Visibility.Collapsed;
+        RefreshRoomClock(view.Clock);
 
         PaintFooterButtons(view, host);
 
@@ -514,22 +911,24 @@ public partial class MultiplayerTab
         var w = _lobbyWindow!;
         Visibility Show(bool on) => on ? Visibility.Visible : Visibility.Collapsed;
 
+        var inTournamentResult = view.Primary == RoomPrimary.ViewBracket;
         // The way out. During a match it is the red one, and which button carries it matters:
         // InGameCancelButton asks about the match, LeaveRoomButton about the room.
         var inGame = CurrentRoomStage() == RoomStage.InGame;
         w.InGameCancelButton.Visibility = Show(inGame);
-        w.LeaveRoomButton.Visibility = Show(!inGame);
+        w.LeaveRoomButton.Visibility = Show(!inGame && view.Leave != RoomLeave.None);
         // While AoE3 is open the words follow the abort window, because that is what the button
         // does. With it closed the room is what is left, and leaving it ends the host's match.
         var matchWord = Strings.Get((inGame ? WithinAbortWindow : host) ? "RoomBtnCancelMatch" : "RoomBtnLeaveMatch");
+        if (view.Leave == RoomLeave.Abandon) matchWord = Strings.Get("RtBtnAbandon");
         w.InGameCancelButton.Content = matchWord;
         w.LeaveRoomButton.Content = view.Leave switch
         {
-            RoomLeave.Match => matchWord,
+            RoomLeave.Match or RoomLeave.Abandon => matchWord,
             RoomLeave.Rooms => Strings.Get("RoomBtnBackToRooms"),
             _ => Strings.Get("RoomBtnLeave"),
         };
-        w.LeaveRoomButton.Tag = view.Leave == RoomLeave.Match ? "danger" : null;
+        w.LeaveRoomButton.Tag = view.Leave is RoomLeave.Match or RoomLeave.Abandon ? "danger" : null;
 
         var primaryStyle = (Style)Application.Current.FindResource("RoomFooterPrimary");
         var secondStyle = (Style)Application.Current.FindResource("RoomFooterButton");
@@ -567,8 +966,9 @@ public partial class MultiplayerTab
             w.RejoinGameButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomRejoinTooltip"));
         }
 
-        w.RematchButton.Visibility = Show(view.Primary == RoomPrimary.Rematch);
-        w.RematchButton.Content = Strings.Get("RoomBtnRematch");
+        // One button for the two ends of a match: the next game, or the bracket it fed.
+        w.RematchButton.Visibility = Show(view.Primary == RoomPrimary.Rematch || inTournamentResult);
+        w.RematchButton.Content = Strings.Get(inTournamentResult ? "RtViewBracket" : "RoomBtnRematch");
 
         var second = view.Secondary is RoomSecondary.Assistant or RoomSecondary.FindAnother;
         w.RoomSecondaryButton.Visibility = Show(second);
@@ -635,6 +1035,24 @@ public partial class MultiplayerTab
         return brush;
     }
 
+    /// <summary>PARA QUE CUENTE. The link sits at the end of the sentence, so it is an inline.</summary>
+    private void SetCountsText(LobbyWindow w, string key)
+    {
+        if (ReferenceEquals(w.RoomCountsText.Tag, key)) return;
+        w.RoomCountsText.Tag = key;
+        var where = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(Strings.Get("RoomRecordWhere")))
+        {
+            TextDecorations = null,
+            FontWeight = FontWeights.SemiBold,
+            Cursor = System.Windows.Input.Cursors.Hand,
+        };
+        where.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "ModAccentText");
+        where.Click += (_, _) => w.OnRecordHelp?.Invoke();
+        w.RoomCountsText.Inlines.Clear();
+        w.RoomCountsText.Inlines.Add(new System.Windows.Documents.Run(Strings.Get(key) + " "));
+        w.RoomCountsText.Inlines.Add(where);
+    }
+
     /// <summary>The static words of the panels; the rest of the window is in the view above.</summary>
     private void ApplyRoomViewLabels()
     {
@@ -649,18 +1067,7 @@ public partial class MultiplayerTab
         w.PreflightRecordHelp.Content = Strings.Get("RoomRecordWhere");
         w.RoomRecordMute.Content = Strings.Get("RoomRecordMute");
         w.RoomCountsLabel.Text = Strings.Get("RoomCountsTitle");
-        // The link sits at the end of the sentence, so it is an inline and not a button below.
-        var where = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(Strings.Get("RoomRecordWhere")))
-        {
-            TextDecorations = null,
-            FontWeight = FontWeights.SemiBold,
-            Cursor = System.Windows.Input.Cursors.Hand,
-        };
-        where.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "ModAccentText");
-        where.Click += (_, _) => w.OnRecordHelp?.Invoke();
-        w.RoomCountsText.Inlines.Clear();
-        w.RoomCountsText.Inlines.Add(new System.Windows.Documents.Run(Strings.Get("RoomCountsBody") + " "));
-        w.RoomCountsText.Inlines.Add(where);
+        SetCountsText(w, "RoomCountsBody");
         w.PreflightAbandonText.Text = Strings.Get("MpPreflightAbandon");
         w.PreflightReplayText.Text = Strings.Get("MpPreflightReplay");
         w.PreflightReplayText.ToolTip = TooltipHelper.Wrap(Strings.Get("MpPreflightReplayTip"));

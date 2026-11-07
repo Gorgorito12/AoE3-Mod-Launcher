@@ -14,19 +14,28 @@ public enum RoomStage
     ResultRated,
     ResultPlacement,
     ResultUnrated,
+
+    /// <summary>A tournament room: the game was played and the recording decided nothing.</summary>
+    ResultUndecided,
+
+    /// <summary>A tournament team match: sent, and the other side has yet to confirm it.</summary>
+    ResultAwaiting,
 }
 
 /// <summary>The dot beside the footer's title.</summary>
-public enum RoomDot { Neutral, Green, Orange, Blue }
+public enum RoomDot { Neutral, Green, Orange, Blue, Accent }
+
+/// <summary>The figure beside the footer's title.</summary>
+public enum RoomClock { None, Waiting, Match, Countdown }
 
 /// <summary>The footer's one primary button.</summary>
-public enum RoomPrimary { None, Start, Ready, Reopen, Rematch, CancelCountdown }
+public enum RoomPrimary { None, Start, Ready, Reopen, Rematch, CancelCountdown, ViewBracket }
 
 /// <summary>The button beside it, when the state has one.</summary>
 public enum RoomSecondary { None, Unready, Assistant, FindAnother }
 
 /// <summary>What the way out says, and whether it is the red one.</summary>
-public enum RoomLeave { Room, Match, Rooms }
+public enum RoomLeave { Room, Match, Rooms, Abandon, None }
 
 /// <summary>A string key and its arguments, formatted by the window.</summary>
 public sealed record RoomText(string Key, params object[] Args);
@@ -73,6 +82,24 @@ public sealed record RoomFacts
 
     /// <summary>The players on a team, for the footer's count.</summary>
     public int OnTeams { get; init; }
+
+    /// <summary>A bracket match (design 85).</summary>
+    public bool Tournament { get; init; }
+
+    /// <summary>The first of the other side, or everyone they wait for, still out of the room.</summary>
+    public string? Absent { get; init; }
+
+    /// <summary>Who runs the tournament; null when the server did not say.</summary>
+    public string? Organizer { get; init; }
+
+    /// <summary>Everybody who plays, across both sides.</summary>
+    public int MatchPlayers { get; init; }
+
+    /// <summary>The line under "the bracket has moved on".</summary>
+    public RoomText? AfterResult { get; init; }
+
+    /// <summary>The bracket match was won: the only ending the footer marks in green.</summary>
+    public bool ResultWon { get; init; }
 }
 
 /// <summary>What the footer shows for some facts.</summary>
@@ -85,7 +112,8 @@ public sealed record RoomFooterView(
     bool PrimaryEnabled,
     string? PrimaryTipKey,
     RoomSecondary Secondary,
-    RoomLeave Leave);
+    RoomLeave Leave,
+    RoomClock Clock = RoomClock.None);
 
 /// <summary>
 /// The footer of the room window: one line of state and one primary button (design 87).
@@ -103,6 +131,7 @@ public static class RoomFooterState
 {
     public static RoomFooterView Evaluate(RoomFacts f)
     {
+        if (f.Tournament) return Tournament(f);
         switch (f.Stage)
         {
             case RoomStage.Countdown:
@@ -157,6 +186,81 @@ public static class RoomFooterState
                 Title = new("RoomFtVpn"),
                 Sub = new("RoomFtVpnSub"),
                 Secondary = RoomSecondary.Assistant,
+            };
+        }
+        return view;
+    }
+
+    /// <summary>
+    /// A bracket match (85). What differs from an ordinary room is what comes next: nothing here
+    /// is rematched, and the way on after any result is the bracket. <b>An undecided game offers
+    /// the bracket too, against the prototype's "Estoy listo": the server closes every room after a
+    /// report, whatever it says, so the replay is a new room opened from Tournaments.</b>
+    /// </summary>
+    private static RoomFooterView Tournament(RoomFacts f)
+    {
+        var rival = f.RivalName ?? f.Absent ?? "";
+        RoomFooterView view;
+        switch (f.Stage)
+        {
+            case RoomStage.Countdown:
+                return View(RoomDot.Accent, new("RtFtCountdown"),
+                    f.IsHost ? new("RtFtCountdownHost") : new("RtFtCountdownGuest", f.HostName),
+                    RoomPrimary.CancelCountdown, leave: RoomLeave.None) with { Clock = RoomClock.Countdown };
+            case RoomStage.InGame:
+                return View(RoomDot.Green, new("RoomFtInGame"),
+                    f.IsHost ? new("RtFtGameHost") : new("RtFtGameGuest", f.HostName),
+                    leave: RoomLeave.Abandon) with { Clock = RoomClock.Match };
+            case RoomStage.GameClosed:
+                return View(RoomDot.Orange, new("RoomFtClosed"),
+                    new(f.IsHost ? "RoomFtClosedHostSub" : "RoomFtClosedSub"),
+                    RoomPrimary.Reopen, leave: RoomLeave.Abandon, warm: true);
+            case RoomStage.ResultWaiting:
+                return View(RoomDot.Neutral, new("RoomFtResultWait"), new("RoomFtResultWaitSub"),
+                    RoomPrimary.ViewBracket);
+            case RoomStage.ResultRated:
+            case RoomStage.ResultPlacement:
+            case RoomStage.ResultUnrated:
+                return View(f.ResultWon ? RoomDot.Green : RoomDot.Neutral, new("RtFtMoved"),
+                    f.AfterResult ?? new("RtFtFollow"), RoomPrimary.ViewBracket);
+            case RoomStage.ResultUndecided:
+                return View(RoomDot.Orange, new("RtFtNotYet"), new("MpTournamentReportUndecided"),
+                    RoomPrimary.ViewBracket, warm: true);
+            case RoomStage.ResultAwaiting:
+                return View(RoomDot.Blue, new("RtFtSentWaiting"), new("MpTournamentReportAwaiting"),
+                    RoomPrimary.ViewBracket);
+        }
+
+        if (f.Absent is { } absent)
+        {
+            var two = f.MatchPlayers <= 2;
+            view = Guest(f, RoomDot.Neutral,
+                f.IAmReady && two ? new("RtFtReadyNoRival", absent) : new("RoomFtRivalWait", absent),
+                !two ? new("RtFtAutoAll", new RoomKey("RtCount" + f.MatchPlayers))
+                    : f.Organizer is { } who ? new("RtFtSoloSub", absent, who) : new("RtFtSoloSubNoName", absent));
+            if (two) view = view with { Clock = RoomClock.Waiting };
+        }
+        else
+        {
+            var two = f.MatchPlayers <= 2;
+            RoomText title = !two ? new("RoomFtAllReady")
+                : f.IAmReady && !f.RivalReady ? new("RtFtReadyWaiting", rival)
+                : f.RivalReady && !f.IAmReady ? new("RoomFtRivalReady", rival)
+                : f.IsHost ? new("RtFtRivalJoined", rival) : new("RtFtInRivalRoom", rival);
+            view = Guest(f, f.IAmReady || f.RivalReady ? RoomDot.Green : RoomDot.Neutral, title,
+                two ? new("RtFtAutoTwo") : new("RtFtAutoAll", new RoomKey("RtCount" + f.MatchPlayers)));
+            if (f.IsHost && f.IAmReady && f.NotReady == 0) view = View(view.Dot, view.Title, view.Sub, RoomPrimary.Start);
+        }
+        if (f.VpnMissing)
+        {
+            view = view with
+            {
+                Dot = RoomDot.Orange,
+                WarmTitle = true,
+                Title = new("RoomFtVpn"),
+                Sub = new("RtFtVpnSub"),
+                Secondary = RoomSecondary.Assistant,
+                Clock = RoomClock.None,
             };
         }
         return view;
@@ -219,8 +323,8 @@ public static class RoomFooterState
                 default:
                     (dot, title) = (RoomDot.Green, new("RoomFtTeamsFull"));
                     sub = f.IsHost
-                        ? new("RoomFtTeamsAutoYou", seats)
-                        : new("RoomFtTeamsAutoGuest", seats, f.HostName);
+                        ? new("RoomFtTeamsAutoYou", new RoomKey("RtCount" + seats))
+                        : new("RoomFtTeamsAutoGuest", new RoomKey("RtCount" + seats), f.HostName);
                     break;
             }
         }

@@ -110,6 +110,9 @@ public partial class LobbyWindow : Window
     /// Radmin assistant).</summary>
     public Action? OnFooterSecondary { get; set; }
 
+    /// <summary>"View bracket", in the header of a tournament room.</summary>
+    public Action? OnViewBracket { get; set; }
+
     /// <summary>"Rematch", after a match.</summary>
     public Action? OnRematch { get; set; }
 
@@ -310,9 +313,38 @@ public partial class LobbyWindow : Window
         RoomTitleText.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         RoomEloValue.FontSize = RoomPlaceValue.FontSize = Clamp(28, w * .03, 38) * text;
         RoomEloValue.LineHeight = RoomPlaceValue.LineHeight = RoomEloValue.FontSize;
-        var column = Clamp(300, w * .34, 440);
+        var three = TournamentMode && w >= 1400;
+        var column = !TournamentMode ? Clamp(300, w * .34, 440)
+            : three ? Clamp(320, w * .26, 440)
+            : Clamp(300, w * .32, 420);
         if (Math.Abs(LobbyLeftColumnDef.Width.Value - column) > .5) LobbyLeftColumnDef.Width = new GridLength(column);
+        LobbyMiddleColumnDef.Width = new GridLength(three ? Clamp(280, w * .23, 400) : 0);
+        LobbyMiddleGapDef.Width = new GridLength(three ? 16 : 0);
+        LobbyMiddleColumn.Visibility = three ? Visibility.Visible : Visibility.Collapsed;
+
+        // From 1400 the two panels about the match get a column of their own (85).
+        var target = three ? LobbyMiddlePanels : LobbyPanels;
+        foreach (var panel in new FrameworkElement[] { RoomCountsPanel, RoomStakePanel })
+        {
+            if (ReferenceEquals(panel.Parent, target)) continue;
+            ((Panel)panel.Parent).Children.Remove(panel);
+            target.Children.Add(panel);
+        }
     }
+
+    /// <summary>The room is a bracket match: its columns are the ones of design 85.</summary>
+    internal bool TournamentMode
+    {
+        get => _tournamentMode;
+        set
+        {
+            if (_tournamentMode == value) return;
+            _tournamentMode = value;
+            ApplyRoomGeometry();
+        }
+    }
+
+    private bool _tournamentMode;
 
     private bool _frostQueued;
 
@@ -346,6 +378,17 @@ public partial class LobbyWindow : Window
                 if (!rect.IsEmpty) rects.Add(rect);
             }
         }
+        if (LobbyMiddleColumn.IsVisible)
+        {
+            var viewport = LobbyMiddleColumn.TransformToVisual(LobbyRootGrid).TransformBounds(new Rect(LobbyMiddleColumn.RenderSize));
+            foreach (FrameworkElement panel in LobbyMiddlePanels.Children)
+            {
+                if (!panel.IsVisible || panel.ActualHeight <= 0) continue;
+                var rect = panel.TransformToVisual(LobbyRootGrid).TransformBounds(new Rect(panel.RenderSize));
+                rect.Intersect(viewport);
+                if (!rect.IsEmpty) rects.Add(rect);
+            }
+        }
         Controls.ModDialogChrome.FrostRects(LobbyRootGrid, rects, 14);
     }
 
@@ -353,6 +396,7 @@ public partial class LobbyWindow : Window
         => OnCopyCodeChip?.Invoke();
 
     private void RoomSecondaryButton_Click(object sender, RoutedEventArgs e) => OnFooterSecondary?.Invoke();
+    private void RoomViewBracketButton_Click(object sender, RoutedEventArgs e) => OnViewBracket?.Invoke();
     private void RematchButton_Click(object sender, RoutedEventArgs e) => OnRematch?.Invoke();
     private void RoomRecordMute_Click(object sender, RoutedEventArgs e) => OnMuteRecordReminder?.Invoke();
 }

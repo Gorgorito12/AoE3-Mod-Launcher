@@ -607,6 +607,25 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   with "Not now" instead of Mute. Never run with two real accounts yet. Room notices go on
   `LobbyRootGrid`: on `TabRootGrid` they opened behind the room window.
 
+- **THE ROOM OF A BRACKET MATCH IS DESIGN 85, AND THREE THINGS IN THE DESIGN ARE NOT WHAT THE
+  SERVER DOES.** `Services/Multiplayer/TournamentRoomContext` reads the slot out of the tournament
+  detail into one record, so nothing in the window walks the bracket; a room carries
+  `tournament_match_id` and, on a server with it, `tournament_id` (without it the room opened from a
+  card knows the tournament, one reached by a link keeps the plain header). Hidden there: Invite,
+  the code, the password, free seats and the pencil. From 1400 wide the panels take three columns
+  (`ApplyRoomGeometry` re-parents `RoomCountsPanel` and `RoomStakePanel`).
+  **(1) A room never outlives a report.** `POST /matches` closes the lobby whatever the result, so a
+  game that did not count cannot be "repeated in the same room": the footer's primary is View
+  bracket. **(2) Walking out is not "you lose the match".** Abandonment decides only a 1v1, needs the
+  rival's recording and waits 90 s for the socket; a team game is never decided by it. The texts
+  are per format (`RtAbandonBody1v1`, `RtAbandonBodyTeams`): don't merge them. **(3) In a 3v3
+  nobody confirms by hand**: the other side's launcher sends its reading and the match leaves
+  `awaiting_confirmation` when it lands; "falta que un jugador lo confirme" means that launcher has
+  to report, not that somebody presses a button.
+  The rival arriving while the window is not in front raises the 85j toast (`OnBracketRivalJoined`,
+  `ToastCause.Request`, `PreferDesktop`). A first round of 64 needs 32 rooms against
+  `MAX_ACTIVE_GAMES` (16 by default): raise it before offering 32/64, or organisers read 409s.
+
 - **THE ORGANISER'S ACTIONS ON A PERSON LIVE IN THE ROW'S `\u22ef` MENU, and that is a layout
   invariant, not a preference.** Disqualifying an entrant and making one a co-organiser are the two
   longest captions in the entrant table and the two that act on somebody else, so they sit behind a

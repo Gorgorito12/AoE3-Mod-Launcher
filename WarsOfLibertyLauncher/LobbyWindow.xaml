@@ -99,6 +99,7 @@
                                 </Border>
                             </StackPanel>
                         </Button>
+                        <StackPanel x:Name="RoomRoundsPath" Orientation="Horizontal" Height="24" Margin="6,0,0,8" Visibility="Collapsed"/>
                     </WrapPanel>
                 </StackPanel>
 
@@ -140,6 +141,9 @@
                                        FontSize="{DynamicResource SetControlSize}" Foreground="{DynamicResource WindowFineText}"/>
                         </StackPanel>
                     </Border>
+                    <Button x:Name="RoomViewBracketButton" Click="RoomViewBracketButton_Click"
+                            Style="{DynamicResource WindowSecondaryButton}" FontSize="{DynamicResource DialogBodySize}"
+                            MinWidth="0" Visibility="Collapsed"/>
                     <Button x:Name="InvitePlayersButton" Click="InvitePlayersButton_Click"
                             Style="{DynamicResource WindowSecondaryButton}" FontSize="{DynamicResource DialogBodySize}"
                             MinWidth="0"/>
@@ -150,6 +154,8 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition x:Name="LobbyLeftColumnDef" Width="340"/>
                     <ColumnDefinition Width="16"/>
+                    <ColumnDefinition x:Name="LobbyMiddleColumnDef" Width="0"/>
+                    <ColumnDefinition x:Name="LobbyMiddleGapDef" Width="0"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
@@ -259,6 +265,7 @@
                             <StackPanel>
                                 <TextBlock x:Name="RoomStakeLabel" Style="{DynamicResource RoomPanelLabel}"/>
                                 <TextBlock x:Name="RoomStakeText" Style="{DynamicResource RoomPanelBody}" Margin="0,10,0,0"/>
+                                <StackPanel x:Name="RoomStakeLines" Visibility="Collapsed"/>
                                 <TextBlock x:Name="RoomStakeNote" Style="{DynamicResource GlassHint}" Margin="0,8,0,0" Visibility="Collapsed"/>
                                 <TextBlock x:Name="PreflightAbandonText" Style="{DynamicResource GlassHint}" Margin="0,8,0,0" Visibility="Collapsed"/>
                             </StackPanel>
@@ -266,7 +273,12 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <Border x:Name="RoomChatPanel" Grid.Column="2" Style="{DynamicResource RoomPanel}" Margin="0" Padding="0" ClipToBounds="True">
+                <ScrollViewer Grid.Column="2" x:Name="LobbyMiddleColumn" ClipToBounds="True" Visibility="Collapsed"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0">
+                    <StackPanel x:Name="LobbyMiddlePanels"/>
+                </ScrollViewer>
+
+                <Border x:Name="RoomChatPanel" Grid.Column="4" Style="{DynamicResource RoomPanel}" Margin="0" Padding="0" ClipToBounds="True">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="46"/>

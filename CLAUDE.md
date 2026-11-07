@@ -574,6 +574,9 @@ rather than the reverse.
   `ModDialogChrome.AttachRoom`, the buttons are `RoomFooterState`, the rest of the rules are in
   `.claude/rules/multiplayer.md`. `--demo-room=87a..87l` and `87live` open each state, and
   `testbed.py check` with `--title` now resizes that window instead of the launcher behind it.
+  **Screen 85 is that same window in tournament mode** (`LobbyWindow.TournamentMode`, set when the
+  room has a `TournamentRoomContext`): `--demo-room=85a..85i`. Sample rooms disconnect their
+  buttons, so pressing one there proves nothing.
 
 - **Screen 88 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the create-room
   dialog** (`CompetitiveCheck`, the format row that is always visible, the 596 width, the eight
