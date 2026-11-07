@@ -34,6 +34,14 @@ public class ScreenAndAvatarTests
         Assert.Null(ScreenTrace.Next("Play", ""));
     }
 
+    [Theory]
+    [InlineData("Play", "Multiplayer/Rooms", 142, true, "SWITCH  Play -> Multiplayer/Rooms  142 ms (first time)")]
+    [InlineData("Multiplayer/Rooms", "Play", 38, false, "SWITCH  Multiplayer/Rooms -> Play  38 ms (repeat)")]
+    [InlineData(null, "Play", 5, true, "SWITCH  (start) -> Play  5 ms (first time)")]
+    public void TheSwitchLineSaysWhereFromWhereToAndWhetherThePageWasNew(
+        string? from, string to, long ms, bool first, string expected)
+        => Assert.Equal(expected, ScreenTrace.SwitchLine(from, to, ms, first));
+
     /// <summary>
     /// THE ONE THAT MATTERS for the avatars: the same face at the same size is ONE decoded
     /// photo, decoded at the size it is shown rather than the size it was uploaded.

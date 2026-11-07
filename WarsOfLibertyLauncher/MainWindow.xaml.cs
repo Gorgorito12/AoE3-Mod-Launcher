@@ -5764,6 +5764,7 @@ public partial class MainWindow : Window
     {
         // The Workshop is inside the Library (design 68a).
         if (tab == TopTab.Mods) tab = TopTab.Play;
+        if (IsVisible) ScreenTrace.Clicked();
         _activeTopTab = tab;
         LibraryBackdrop.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
         PlayView.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;

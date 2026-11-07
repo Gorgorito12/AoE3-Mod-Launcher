@@ -457,7 +457,10 @@ def uncovered(window):
     x0, y0, x1, y1 = window["rect"]
     for fx, fy in ((.5, .5), (.1, .1), (.9, .1), (.1, .9), (.9, .9)):
         point = wt.POINT(int(x0 + (x1 - x0) * fx), int(y0 + (y1 - y0) * fy))
-        if user32.GetAncestor(user32.WindowFromPoint(point), 2) != window["hwnd"]:  # GA_ROOT
+        top = user32.GetAncestor(user32.WindowFromPoint(point), 2)  # GA_ROOT
+        owner = wt.DWORD()
+        user32.GetWindowThreadProcessId(top, ctypes.byref(owner))
+        if top != window["hwnd"] and owner.value != run_pid():  # its own popups count as the window
             return False
     return True
 
@@ -482,6 +485,15 @@ def popup_window(pid):
     return found[0] if found else None
 
 
+def raise_windows(pid):
+    """A screen copy needs the window on top. Without activating it: the player's own windows keep
+    the focus, and the launcher closes right after, so nothing stays always-on-top."""
+    above = [popup_window(pid)]  # untitled, so windows() leaves it out, and it has to end up on top
+    for window in [*reversed(windows(pid)), *filter(None, above)]:
+        user32.SetWindowPos(window["hwnd"], wt.HWND(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
+    time.sleep(0.5)
+
+
 def shot(args):
     if args.popup:
         window = popup_window(run_pid())
@@ -493,6 +505,9 @@ def shot(args):
         return
     window = pick_window(args.title)
     place(window)
+    if args.top:
+        raise_windows(run_pid())
+        args.screen = True
     window = pick_window(args.title)
     if args.screen and not uncovered(window):
         sys.exit("testbed: another window covers it, and a screen copy would show that one")
@@ -571,6 +586,52 @@ def sidebyside(args):
     print(f"{args.out}: {w}x{h}, {changed:.1%} of pixels differ visibly (a guide, not a verdict)")
 
 
+def sheet(reference, shot_, out):
+    """Prototype, launcher and difference at the launcher's 1.25, so small text can be read."""
+    from PIL import Image, ImageChops, ImageDraw
+    prototype = Image.open(reference).convert("RGB")
+    prototype = prototype.resize((round(prototype.width * 1.25), round(prototype.height * 1.25)), Image.LANCZOS)
+    launcher = Image.open(shot_).convert("RGB")
+    w, h = max(prototype.width, launcher.width), max(prototype.height, launcher.height)
+    a, b = Image.new("RGB", (w, h), (60, 60, 66)), Image.new("RGB", (w, h), (60, 60, 66))
+    a.paste(prototype)
+    b.paste(launcher)
+    difference = ImageChops.difference(a, b)
+    page = Image.new("RGB", (w * 3 + 40, h + 26), (60, 60, 66))
+    draw = ImageDraw.Draw(page)
+    for i, (label, image) in enumerate((("prototype", a), ("launcher", b), ("difference", difference))):
+        page.paste(image, (10 + i * (w + 10), 26))
+        draw.text((14 + i * (w + 10), 7), f"{label} {image.width}x{image.height}", fill=(255, 220, 120))
+    pathlib.Path(out).parent.mkdir(parents=True, exist_ok=True)
+    page.save(out)
+    print(f"{out}: prototype {prototype.size}, launcher {launcher.size}")
+
+
+def check(args):
+    """One step of the loop: open the launcher, capture it, set it beside the prototype."""
+    folder = OUT / "check"
+    folder.mkdir(parents=True, exist_ok=True)
+    ref, picture, out = folder / f"{args.name}-ref.png", folder / f"{args.name}-shot.png", folder / f"{args.name}.png"
+    command = ["node", str(HERE / "reference.mjs"), args.folder, args.ref, args.block, str(ref),
+               "--props", json.dumps({"transparencia": args.glass_name, **json.loads(args.props)}, ensure_ascii=False)]
+    for flag, value in (("--frame", args.frame), ("--click", args.click)):
+        if value is not None:
+            command += [flag, str(value)]
+    done = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    if done.returncode:
+        sys.exit(done.stdout + done.stderr)
+    if args.build:
+        subprocess.run([sys.executable, "-I", __file__, "build"], check=True)
+    launch(argparse.Namespace(keep=args.keep, size=args.size, max=False, lang=args.lang, glass=args.glass, software=False,
+                              rest=args.rest))
+    try:
+        time.sleep(args.wait)
+        shot(argparse.Namespace(popup=False, file=str(picture), title=args.title, screen=True, top=True))
+    finally:
+        close()
+    sheet(ref, picture, out)
+
+
 # --- performance -----------------------------------------------------------------------------------
 
 def parse_log(path=LOG):
@@ -585,6 +646,8 @@ def parse_log(path=LOG):
         "perf": perf,
         "stalls": [int(ms) for ms in re.findall(r"UI STALL  (\d+) ms", text)],
         "ops": [int(ms) for ms in re.findall(r"UI OP  (\d+) ms", text)],
+        "switches": [(to, int(ms), kind == "first time") for to, ms, kind in
+                     re.findall(r"SWITCH  .+? -> (.+?)  (\d+) ms \((first time|repeat)\)", text)],
         "storms": len(re.findall(r"LAYOUT STORM  ", text)),
         "effects_reduced": "EFFECTS REDUCED" in text,
     }
@@ -610,10 +673,15 @@ def perf_scenarios():
         "settings": {"runs": 1, "seconds": 15, "args": ["--open-settings=interface"]},
         "modsettings": {"runs": 1, "seconds": 15, "args": ["--open-mod-settings=general"]},
         "tabs": {"runs": 1, "seconds": 30, "args": [], "drive": "tabs"},
+        "switches": {"runs": 3, "seconds": 45, "args": ["--demo-tournaments=teams", "--demo-elo"], "drive": "switches"},
+        "switchesfirst": {"runs": 3, "seconds": 15, "args": ["--demo-stats"], "drive": "switches"},
         "scroll": {"runs": 1, "seconds": 20, "args": ["--open-tab=workshop"], "drive": "scroll"},
         "resize": {"runs": 1, "seconds": 20, "args": [], "drive": "resize"},
         "mods": {"runs": 1, "seconds": 30, "args": [], "drive": "mods"},
     }
+
+
+SWITCH_ROUTE = ("TopTabMultiplayer", "SubtabRooms", "SubtabTournaments", "SubtabRanking", "SubtabStats", "TopTabPlay")
 
 
 def drive(kind, pid, stop):
@@ -627,6 +695,9 @@ def drive(kind, pid, stop):
         if kind == "tabs":
             uia_call("invoke", "-Id", ("TopTabMultiplayer", "TopTabPlay")[step % 2])
             stop.wait(1.0)
+        elif kind == "switches":
+            uia_call("invoke", "-Id", SWITCH_ROUTE[step % len(SWITCH_ROUTE)])
+            stop.wait(0.8)
         elif kind == "mods":
             uia_call("invoke", "-Id", ("ModRow_improvement-mod", "ModRow_aoe3-tad", "ModRow_wol")[step % 3])
             stop.wait(1.0)
@@ -681,6 +752,20 @@ def perf(args):
         "layout_storms": sum(r["log"]["storms"] for r in results),
         "effects_reduced": any(r["log"]["effects_reduced"] for r in results),
     }
+    switches = [s for r in results for s in r["log"]["switches"]]
+    if switches:
+        first = [s for s in switches if s[2]]
+        repeat = [s for s in switches if not s[2]]
+        summary.update({
+            "switch_first_worst_ms": max((s[1] for s in first), default=0),
+            "switch_repeat_median_ms": statistics.median(s[1] for s in repeat) if repeat else 0,
+            "switch_repeat_worst_ms": max((s[1] for s in repeat), default=0),
+            "switch_by_page": {page: {
+                "first": max((s[1] for s in first if s[0] == page), default=None),
+                "repeat_median": statistics.median([s[1] for s in repeat if s[0] == page] or [0]),
+                "repeat_worst": max((s[1] for s in repeat if s[0] == page), default=None),
+            } for page in sorted({s[0] for s in switches})},
+        })
     name = f"{args.label}-{args.scenario}{'-sw' if args.software else ''}.json"
     (OUT / "perf" / name).write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
@@ -703,6 +788,12 @@ def compare(args):
         verdict = "ok" if now <= limit else "OVER"
         failed |= verdict != "ok"
         print(f"{key:<22} {base:>9} -> {now:>9}  limit {limit:.1f}  {verdict}")
+    for key, goal in (("switch_repeat_worst_ms", 100), ("switch_first_worst_ms", 250)):
+        if key in current:
+            allowed = goal * 3 if current.get("software") else goal
+            over = current[key] > allowed
+            failed |= over
+            print(f"{key:<22} {current[key]} (goal {allowed})  {'OVER' if over else 'ok'}")
     limit = 33 if current.get("software") else 16
     over = current.get("frame_ms_p95", 0) > limit
     failed |= over
@@ -800,6 +891,7 @@ def main():
     p.add_argument("file")
     p.add_argument("--title")
     p.add_argument("--screen", action="store_true")
+    p.add_argument("--top", action="store_true", help="raise it first, then copy the screen")
     p = sub.add_parser("record")
     p.add_argument("file")
     p.add_argument("--seconds", type=float, default=10)
@@ -813,6 +905,26 @@ def main():
     p.add_argument("reference")
     p.add_argument("shot")
     p.add_argument("out")
+    p = sub.add_parser("sheet")
+    p.add_argument("reference")
+    p.add_argument("shot")
+    p.add_argument("out")
+    p = sub.add_parser("check")
+    p.add_argument("name")
+    p.add_argument("--ref", required=True, help="the prototype file")
+    p.add_argument("--block", required=True)
+    p.add_argument("--folder", default="design_base_launcher_2")
+    p.add_argument("--props", default="{}")
+    p.add_argument("--frame")
+    p.add_argument("--click")
+    p.add_argument("--size", default="1366x768")
+    p.add_argument("--lang", default="es")
+    p.add_argument("--glass", default="mid", choices=("solid", "mid", "max"))
+    p.add_argument("--title", help="capture this window instead of the main one")
+    p.add_argument("--wait", type=float, default=5)
+    p.add_argument("--keep", action="store_true")
+    p.add_argument("--build", action="store_true")
+    p.add_argument("rest", nargs="*")
     p = sub.add_parser("log")
     p.add_argument("--grep")
     p.add_argument("--tail", type=int)
@@ -856,6 +968,11 @@ def main():
         frames(args)
     elif args.command == "sidebyside":
         sidebyside(args)
+    elif args.command == "sheet":
+        sheet(args.reference, args.shot, args.out)
+    elif args.command == "check":
+        args.glass_name = {"solid": "S\u00f3lida", "mid": "Media", "max": "M\u00e1xima"}[args.glass]
+        check(args)
     elif args.command == "log":
         lines = LOG.read_text(encoding="utf-8", errors="replace").splitlines() if LOG.exists() else []
         if args.grep:

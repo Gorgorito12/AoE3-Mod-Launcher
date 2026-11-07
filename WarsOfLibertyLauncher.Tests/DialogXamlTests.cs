@@ -520,37 +520,20 @@ public class DialogXamlTests
             // the constructor returned.
             Assert.NotNull(dlg.CreateButton);
 
-            // The format row is ALWAYS on screen now — it used to be revealed by the tick, which
-            // made one decision take two steps and jumped the dialog's height.
-            Assert.NotNull(dlg.CompetitiveFormatRow);
-            Assert.Equal(Visibility.Visible, dlg.CompetitiveFormatRow.Visibility);
-            Assert.Equal(3, dlg.FormatRow.Children.Count);   // 1v1 / 2v2 / 3v3
+            // The type goes first, on one row, and a new room is casual. A two-seat casual room
+            // is not a 1v1 (see RoomFormats), so no format is lit.
+            Assert.Equal(4, dlg.KindRow.Children.Count);
+            Assert.Equal(new[] { "active", null, null, null },
+                dlg.KindRow.Buttons.Select(b => b.Tag as string).ToArray());
 
-            // AND NOTHING IS LIT, which is the invariant that being visible put at risk. A
-            // casual room has declared no format, and showing 1v1 highlighted would both
-            // contradict the "Max players: 8" just above it and assert the one thing this model
-            // refuses to assert — that a two-seat casual room IS a 1v1 (see RoomFormats).
-            Assert.All(dlg.FormatRow.Children.OfType<Button>(),
-                b => Assert.Null(b.Tag as string));
-            Assert.NotNull(dlg.MaxPlayersRow);
-            Assert.True(dlg.MaxPlayersRow.Children.Count > 0);
-
-            // And the note under it says nothing until a format is chosen — it carries either
-            // the 1v1 forfeit clause or the team "does not rate yet" line, and neither applies
-            // to a casual room.
-            Assert.Equal(Visibility.Collapsed, dlg.CompetitiveSizeNote.Visibility);
-
-            // And a casual room still opens at the full eight seats. The format row picks a
-            // format at construction — so that ticking the box lands on something rather than on
-            // nothing — and that pick moves the size, so without the competitive guard on it
-            // every room would have quietly opened as a two-player one. Making the row visible
-            // did not touch that guard, and this is what proves it.
-            var active = dlg.MaxPlayersRow.Children.OfType<Button>()
+            // Four seats, as the design opens, every one of them on offer.
+            var active = dlg.MaxPlayersRow.Buttons
                 .Where(b => (b.Tag as string) == "active")
                 .Select(b => b.Content as string)
                 .ToList();
-            Assert.Equal(new[] { "8" }, active);
-            Assert.All(dlg.MaxPlayersRow.Children.OfType<Button>(), b => Assert.True(b.IsEnabled));
+            Assert.Equal(new[] { "4" }, active);
+            Assert.All(dlg.MaxPlayersRow.Buttons, b => Assert.True(b.IsEnabled));
+            Assert.Equal(Visibility.Visible, dlg.MaxPlayersBlock.Visibility);
 
             dlg.Close();
         });
@@ -559,17 +542,9 @@ public class DialogXamlTests
     }
 
     /// <summary>
-    /// PICKING A FORMAT DECLARES THE ROOM COMPETITIVE — the whole point of the row being on
-    /// screen for a casual room, and the half that compiles perfectly while doing nothing.
-    ///
-    /// <para>The format only means something for a competitive room, so a click that lit a
-    /// segment and left the box unticked would be a control that looks broken: you would pick
-    /// 2v2, watch nothing else move, and still have to go find the checkbox. One click has to
-    /// carry the whole decision — the box, the format, and the four seats that format IS.</para>
-    ///
-    /// <para>Asserted through the real Click event rather than by calling the handler, because
-    /// what is being pinned is the wiring: the handler could be perfect and simply not attached.
-    /// </para>
+    /// One click on a format carries the whole decision, and back again. Asserted through the real
+    /// Click event, because what is pinned is the wiring: the handler could be perfect and simply
+    /// not attached.
     /// </summary>
     [Fact]
     public void PickingAFormatMakesTheRoomCompetitive()
@@ -585,34 +560,18 @@ public class DialogXamlTests
                 _ => new ModCopyInfo(false, false, Array.Empty<ModCopyChoice>()),
                 _ => Task.CompletedTask);
 
-            // Starts casual and eight-seat, as the test above pins in detail.
-            Assert.NotEqual(true, dlg.CompetitiveCheck.IsChecked);
+            var threeVThree = dlg.KindRow.Buttons.ElementAt(3);
+            threeVThree.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 
-            // 1v1 / 2v2 / 3v3, in that order — so this is 2v2, chosen because its four seats
-            // differ from BOTH the eight the room opens on and the two a 1v1 would give: a
-            // handler that did nothing, and one that fell back to the default format, both fail.
-            var twoVTwo = dlg.FormatRow.Children.OfType<Button>().ElementAt(1);
-            twoVTwo.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Assert.Equal("active", threeVThree.Tag as string);
+            // The seats belong to the format now, and the summary is the format's.
+            Assert.Equal(Visibility.Collapsed, dlg.MaxPlayersBlock.Visibility);
+            Assert.Equal("6", dlg.SummaryPlayers.Text);
 
-            Assert.True(dlg.CompetitiveCheck.IsChecked);
-            Assert.Equal("active", twoVTwo.Tag as string);
-
-            var active = dlg.MaxPlayersRow.Children.OfType<Button>()
-                .Where(b => (b.Tag as string) == "active")
-                .Select(b => b.Content as string)
-                .ToList();
-            Assert.Equal(new[] { "4" }, active);
-
-            // The seat row belongs to the format now, and the note says what a team match needs.
-            Assert.All(dlg.MaxPlayersRow.Children.OfType<Button>(), b => Assert.False(b.IsEnabled));
-            Assert.Equal(Visibility.Visible, dlg.CompetitiveSizeNote.Visibility);
-
-            // Unticking gives the seats back and leaves NO format showing — the room stopped
-            // being one that has a format, so the row must stop claiming it has one.
-            dlg.CompetitiveCheck.IsChecked = false;
-            Assert.All(dlg.FormatRow.Children.OfType<Button>(), b => Assert.Null(b.Tag as string));
-            Assert.All(dlg.MaxPlayersRow.Children.OfType<Button>(), b => Assert.True(b.IsEnabled));
-            Assert.Equal(Visibility.Collapsed, dlg.CompetitiveSizeNote.Visibility);
+            // Casual gives the seats back as the host left them.
+            dlg.KindRow.Buttons.First().RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Assert.Equal(Visibility.Visible, dlg.MaxPlayersBlock.Visibility);
+            Assert.Equal("4", dlg.SummaryPlayers.Text);
 
             dlg.Close();
         });
@@ -651,11 +610,11 @@ public class DialogXamlTests
             var button = dlg.CreateButton;
             Assert.NotNull(button.Template);
 
-            // (1) Nothing in the shared template may paint a state by TargetName: that is
+            // (1) Nothing in the shared template may paint a COLOUR by TargetName: that is
             //     the setter shape a derived style is powerless against.
             foreach (var trigger in button.Template.Triggers.OfType<Trigger>())
                 foreach (var setter in trigger.Setters.OfType<Setter>())
-                    Assert.True(string.IsNullOrEmpty(setter.TargetName),
+                    Assert.True(string.IsNullOrEmpty(setter.TargetName) || setter.Property == UIElement.VisibilityProperty,
                         $"Template trigger on {trigger.Property?.Name} sets {setter.Property?.Name} " +
                         $"through TargetName='{setter.TargetName}' — a derived style cannot override it.");
 
@@ -675,7 +634,7 @@ public class DialogXamlTests
                                 hoverBackground = setter.Value;
 
             var key = (hoverBackground as DynamicResourceExtension)?.ResourceKey as string;
-            Assert.Equal("MpBlueHover", key);
+            Assert.Equal("WindowPrimaryHover", key);
 
             dlg.Close();
         });

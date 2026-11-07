@@ -528,6 +528,8 @@
     <SolidColorBrush x:Key="WindowSecondary"  Color="#1A2C48"/>
     <SolidColorBrush x:Key="WindowSecondaryHover" Color="#213758"/>
     <SolidColorBrush x:Key="WindowSecondaryRim" Color="#3882AFFF"/>
+    <SolidColorBrush x:Key="WindowPrimaryHover" Color="#4A93EC"/>
+    <Color x:Key="WindowPrimaryHalo">#2F7FE0</Color>
     <SolidColorBrush x:Key="WindowPlaceholder" Color="#14FFFFFF"/>
     <SolidColorBrush x:Key="WindowPlaceholderFaint" Color="#0FFFFFFF"/>
     <SolidColorBrush x:Key="WindowNoticeFill"  Color="#1AF4900C"/>
@@ -749,7 +751,7 @@
                         <Border x:Name="Halo" Background="{TemplateBinding Background}" CornerRadius="7">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="18" ShadowDepth="6" Direction="270"
-                                                  Opacity="0.35" Color="#2F7FE0"/>
+                                                  Opacity="0.35" Color="{DynamicResource WindowPrimaryHalo}"/>
                             </Border.Effect>
                         </Border>
                         <Border Background="{TemplateBinding Background}"
@@ -768,7 +770,7 @@
         </Setter>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#4A93EC"/>
+                <Setter Property="Background" Value="{DynamicResource WindowPrimaryHover}"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.45"/>

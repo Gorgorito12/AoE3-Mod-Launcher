@@ -188,6 +188,13 @@
                                     shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                         </Grid>
                     </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="PlainTitle" Value="True">
+                            <Setter TargetName="PART_Title" Property="FontFamily" Value="{DynamicResource BodyFont}"/>
+                            <Setter TargetName="PART_Title" Property="FontWeight" Value="Medium"/>
+                            <Setter TargetName="PART_Title" Property="Foreground" Value="{DynamicResource UiBodyText}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

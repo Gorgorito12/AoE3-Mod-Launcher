@@ -5694,6 +5694,7 @@ public partial class MultiplayerTab : UserControl
 
     private void SubtabRooms_Click(object sender, RoutedEventArgs e)
     {
+        Services.ScreenTrace.Clicked();
         _activeSubtab = Subtab.Rooms;
         SetNewRoomIndicator(false); // opening Rooms clears the "new room" dot
         RefreshFromSession();
@@ -5710,6 +5711,7 @@ public partial class MultiplayerTab : UserControl
     }
     private void SubtabStats_Click(object sender, RoutedEventArgs e)
     {
+        Services.ScreenTrace.Clicked();
         _activeSubtab = Subtab.Stats;
         RefreshFromSession();
         // Every fetch here is self-limiting: inside the server's own cache window each returns
@@ -6065,6 +6067,7 @@ public partial class MultiplayerTab : UserControl
 
     private void SubtabTournaments_Click(object sender, RoutedEventArgs e)
     {
+        Services.ScreenTrace.Clicked();
         _activeSubtab = Subtab.Tournaments;
         RefreshFromSession();
         _ = RefreshTournamentsAsync();
@@ -9178,6 +9181,7 @@ public partial class MultiplayerTab : UserControl
 
     private void SubtabRanking_Click(object sender, RoutedEventArgs e)
     {
+        Services.ScreenTrace.Clicked();
         _activeSubtab = Subtab.Ranking;
         RefreshFromSession();
         // Same self-limiting fetch the Rooms subtab uses: inside the server's own cache
@@ -12120,7 +12124,9 @@ public partial class MultiplayerTab : UserControl
             installId => _switchActiveCopy != null ? _switchActiveCopy(installId) : Task.CompletedTask,
             // Same answer the room rows ask for, from the same field, so the dialog cannot
             // offer to create a seat the list would refuse to fill.
-            developerMode: ObserversUnlocked)
+            developerMode: ObserversUnlocked,
+            config: _config,
+            openRadminHelp: OpenRadminAssistant)
         {
             Owner = Window.GetWindow(this),
         };

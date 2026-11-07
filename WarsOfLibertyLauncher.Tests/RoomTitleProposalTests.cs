@@ -228,14 +228,14 @@ public class RoomTitleProposalTests
 
                 Assert.Equal("WoL · Casual", dlg.RoomTitleBox.Text);
 
-                var twoVTwo = dlg.FormatRow.Children.OfType<Button>().ElementAt(1);
+                var twoVTwo = dlg.KindRow.Buttons.ElementAt(2);
                 twoVTwo.RaiseEvent(new System.Windows.RoutedEventArgs(
                     System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 
                 Assert.Equal("WoL · Ranked 2v2", dlg.RoomTitleBox.Text);
 
                 // And back off again, which is the half a one-way handler would fail.
-                dlg.CompetitiveCheck.IsChecked = false;
+                dlg.SelectKind(RoomFormat.Casual);
                 Assert.Equal("WoL · Casual", dlg.RoomTitleBox.Text);
             }
             finally { Strings.SetLanguage(previous); }
@@ -259,12 +259,12 @@ public class RoomTitleProposalTests
                 var dlg = NewDialog(out _);
                 dlg.RoomTitleBox.Text = "Vengan noobs";
 
-                dlg.FormatRow.Children.OfType<Button>().ElementAt(1).RaiseEvent(
+                dlg.KindRow.Buttons.ElementAt(2).RaiseEvent(
                     new System.Windows.RoutedEventArgs(
                         System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                 Assert.Equal("Vengan noobs", dlg.RoomTitleBox.Text);
 
-                dlg.CompetitiveCheck.IsChecked = false;
+                dlg.SelectKind(RoomFormat.Casual);
                 Assert.Equal("Vengan noobs", dlg.RoomTitleBox.Text);
             }
             finally { Strings.SetLanguage(previous); }

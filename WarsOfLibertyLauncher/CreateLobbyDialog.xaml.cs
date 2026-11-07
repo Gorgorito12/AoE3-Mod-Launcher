@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
@@ -14,93 +16,76 @@ using WarsOfLibertyLauncher.Services.Multiplayer;
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Modal dialog to create a new multiplayer room.
+/// Modal dialog to create a new multiplayer room (design 88), the twin of the new-tournament
+/// window: the window of the chosen mod, the room type first, and one primary button.
 ///
-/// Layout: the host picks the **mod** from a dropdown of installed
-/// profiles, then sets a room title, max players and optional password.
-/// The mod-combined-hash for the picked profile is computed on the fly
-/// by an async callback supplied by the caller (so the dialog stays
-/// dumb about how mods are hashed on disk).
-///
-/// The hash shown under the dropdown is what the join-side check
-/// compares against — if a peer's local files don't match this exact
+/// The mod-combined-hash for the picked profile is computed on the fly by an async callback
+/// supplied by the caller (so the dialog stays dumb about how mods are hashed on disk). The hash
+/// is what the join-side check compares against: if a peer's local files do not match this exact
 /// value, the join is rejected with <c>mod_mismatch</c>.
 /// </summary>
 public partial class CreateLobbyDialog : Window
 {
+    private enum FingerprintState { Ok, Loading, Failed }
+
+    /// <summary>The narrowest window the two columns fit in; below it they stack, at 560.</summary>
+    private const double TwoColumnWidth = 760, OneColumnWidth = 560;
+
+    /// <summary>Room-size bounds the seat row renders (the server caps within it).</summary>
+    private const int MinRoomPlayers = 2, MaxRoomPlayers = 8;
+
+    /// <summary>The seats a casual room opens with.</summary>
+    private const int DefaultSeats = 4;
+
+    /// <summary>The most seats a room may hand to watchers. Mirrors the server's own cap, which
+    /// is what actually enforces it: a caster and a co-caster.</summary>
+    private const int MaxObservers = 2;
+
+    /// <summary>The kinds of room, in the order the row renders them.</summary>
+    private static readonly RoomFormat[] Kinds =
+        { RoomFormat.Casual, RoomFormat.OneVOne, RoomFormat.TwoVTwo, RoomFormat.ThreeVThree };
+
     private readonly MultiplayerSession _session;
     private readonly Func<ModProfile, Task<string>> _computeHash;
     private readonly IReadOnlyList<ModProfile> _profiles;
+    private readonly LauncherConfig? _config;
+    private readonly Action? _openRadminHelp;
+
     /// <summary>
-    /// The server's per-room player cap. Nothing passes it today, so it is the default
-    /// 8 — which is also the backend's own <c>LOBBY_MAX_PLAYERS</c> default, so the
-    /// segmented row is right unless that deployment value is changed. The real figure
-    /// IS on the wire (<c>ServerConfig.LobbyMaxPlayers</c>, from the sign-in response)
-    /// but nothing in the launcher reads that object yet; wiring it is a separate change
-    /// from this redesign, and guessing a lower number here would hide rooms sizes the
-    /// server would have accepted.
+    /// The server's per-room player cap. Nothing passes it today, so it is the default 8, which
+    /// is also the backend's own <c>LOBBY_MAX_PLAYERS</c> default.
     /// </summary>
     private readonly int _lobbyMaxPlayers;
     private readonly Func<ModProfile, ModCopyInfo> _resolveCopyInfo;
     private readonly Func<string, Task> _switchActiveCopy;
-    // Guards the copy combo's SelectionChanged while we repopulate it, so a
-    // programmatic rebuild doesn't re-trigger an active-copy switch.
-    private bool _suppressCopyCombo;
-
-    private ModProfile? _selectedProfile;
-    private string _selectedHash = "";
-
-    /// <summary>Room-size bounds the segmented row renders (the server caps within it).</summary>
-    private const int MinRoomPlayers = 2;
-    private const int MaxRoomPlayers = 8;
 
     /// <summary>
-    /// The most seats a room may hand to watchers. Mirrors the server's own cap, which is
-    /// what actually enforces it — a caster and a co-caster.
-    /// </summary>
-    private const int MaxObservers = 2;
-
-    private readonly Dictionary<int, Button> _maxPlayerButtons = new();
-    private int _maxPlayers = MaxRoomPlayers;
-
-    private readonly Dictionary<int, Button> _observerButtons = new();
-
-    /// <summary>
-    /// Seats reserved for watching, taken OUT of <see cref="_maxPlayers"/> and not added to it.
-    ///
-    /// <para>AoE3 has no engine-level spectator: an observer occupies a real map slot the map
-    /// script leaves empty-handed. So a competitive room grows to fit them — a 2v2 with one
-    /// observer is five seats — and the server reads the format back off the difference.</para>
-    /// </summary>
-    private int _spectatorSlots;
-
-    /// <summary>
-    /// Whether the observer row is offered at all — developer mode, and nothing else.
+    /// Whether the observer row is offered at all: developer mode, and nothing else.
     ///
     /// <para><b>Shut on purpose.</b> An observer only starts with no town centre on a map whose
-    /// script seats them in the extra slot; on any other map they arrive as an ordinary player
-    /// and the match is uneven for everybody else, which nobody notices until it is over. The
-    /// in-game half is unverified, so the door is closed rather than guarded by a warning.</para>
-    ///
-    /// <para>Defaults to false at the constructor, so a caller that has not been taught about
-    /// this gets the dialog exactly as it was before observers existed.</para>
+    /// script seats them in the extra slot; on any other map they arrive as an ordinary player and
+    /// the match is uneven for everybody else, which nobody notices until it is over.</para>
     /// </summary>
     private readonly bool _observersUnlocked;
 
-    /// <summary>The three competitive formats, in the order the row renders them.</summary>
-    private static readonly RoomFormat[] Formats =
-        { RoomFormat.OneVOne, RoomFormat.TwoVTwo, RoomFormat.ThreeVThree };
+    private ModProfile? _selectedProfile;
+    private string _selectedHash = "";
+    private FingerprintState _fingerprint = FingerprintState.Loading;
+    private Color _accent = Color.FromRgb(0x2F, 0x7F, 0xE0);
+    private Popup? _modPopup;
+    private bool _busy;
 
-    private readonly Dictionary<RoomFormat, Button> _formatButtons = new();
+    /// <summary>The whole decision: casual, or one of the three competitive formats.</summary>
+    private RoomFormat _kind = RoomFormat.Casual;
 
-    /// <summary>
-    /// The format chosen while the competitive box is ticked.
-    ///
-    /// <para>Kept while unticked too, so re-ticking restores what the host picked rather than
-    /// snapping back to 1v1 — the room size follows this, and a reset would silently resize
-    /// their room under them.</para>
-    /// </summary>
-    private RoomFormat _format = RoomFormat.OneVOne;
+    /// <summary>A casual room's size. Kept while a format owns the size, so going back to Casual
+    /// finds the seats the host chose.</summary>
+    private int _casualSeats;
+
+    /// <summary>Seats for watching. A casual room takes them out of its seats; a competitive one
+    /// grows to fit them, since its format owns the seats that are played in, and the server reads
+    /// the format back off <c>max_players - spectator_slots</c>.</summary>
+    private int _spectatorSlots;
 
     /// <summary>True while the password is shown in clear, so the two controls stay in sync.</summary>
     private bool _passwordRevealed;
@@ -108,80 +93,43 @@ public partial class CreateLobbyDialog : Window
     /// <summary>Set when the dialog returns DialogResult=true.</summary>
     public CreateLobbyResponse? CreatedLobby { get; private set; }
 
-    /// <summary>
-    /// The mod profile that was selected when the dialog closed
-    /// with DialogResult=true. Exposed so the caller can stamp the
-    /// room's mod id (CreateLobbyResponse only carries the lobby
-    /// id + status, not the mod). Used by MultiplayerTab to make
-    /// sure the right AoE3 install launches when the game starts.
-    /// </summary>
+    /// <summary>The mod selected when the dialog closed with DialogResult=true: the response only
+    /// carries the lobby id + status, not the mod.</summary>
     public ModProfile? CreatedLobbyProfile { get; private set; }
 
-    /// <summary>
-    /// The room title + max-players the user chose, exposed because
-    /// <see cref="CreateLobbyResponse"/> only echoes id + status — the
-    /// caller needs these to populate the live room header (title) and
-    /// the players-list capacity / open-slot rows (max players).
-    /// </summary>
+    /// <summary>The room title + max-players chosen, which the response does not echo.</summary>
     public string? CreatedLobbyTitle { get; private set; }
     public int CreatedLobbyMaxPlayers { get; private set; }
 
-    /// <summary>
-    /// Whether the user ticked "private room". Exposed for the same reason as the two above —
-    /// the response does not echo it — and needed because GET /lobbies excludes your own room,
-    /// so a host has no other way to learn it. Without this the host of a private room was
-    /// shown "Password: none" in their own room.
-    /// </summary>
+    /// <summary>Whether the room has a password: the response does not echo it and GET /lobbies
+    /// excludes your own room, so a host has no other way to learn it.</summary>
     public bool CreatedLobbyIsPrivate { get; private set; }
 
     /// <summary>
-    /// Whether the room the server actually created is competitive.
-    ///
-    /// <para><b>Taken from the RESPONSE, never from the checkbox.</b> Every mod shares the ladder
-    /// by default, but the server can still refuse a competitive room (a size no format names, or
-    /// a mod its operator left off the ranked list) and create a casual one instead, and it is the
-    /// only side that knows those rules. Reading the tick box here would make the whole
-    /// launcher — the badge, the Record Game confirm, the hold on leaving — act on a promise the
-    /// server declined to keep.</para>
+    /// Whether the room the server actually created is competitive. <b>Taken from the RESPONSE,
+    /// never from the selection:</b> the server can still refuse a competitive room (a size no
+    /// format names, a mod its operator left off the ranked list) and create a casual one.
     /// </summary>
     public bool CreatedLobbyIsCompetitive { get; private set; }
 
-    /// <summary>
-    /// How many of the created room's seats went to watchers rather than players.
-    ///
-    /// <para>Read back from the server's 201 rather than from what was asked for, like
-    /// <see cref="CreatedLobbyIsCompetitive"/> and for the same reason: the server clamps it,
-    /// and the room the launcher then describes has to be the room that exists.</para>
-    /// </summary>
+    /// <summary>The seats the server gave to watchers. It clamps the request, so this is read back
+    /// rather than remembered.</summary>
     public int CreatedLobbySpectatorSlots { get; private set; }
 
-    /// <summary>
-    /// True when the host asked for a competitive room and the server made a casual one.
-    ///
-    /// <para>Silently downgrading would be the worst of both: the player believes their rating is
-    /// on the line, plays accordingly, and the match counts for nobody. The caller says so in the
-    /// room, which is where they will be looking.</para>
-    /// </summary>
+    /// <summary>True when the host asked for a competitive room and the server made a casual one.
+    /// The caller says so in the room, where they will be looking.</summary>
     public bool CreatedLobbyCompetitiveDowngraded { get; private set; }
 
-    /// <summary>
-    /// The format the room was created for, or <c>Casual</c> when it is not competitive.
-    ///
-    /// <para>Derived from what the SERVER actually made, for the same reason
-    /// <see cref="CreatedLobbyIsCompetitive"/> is: a request that got downgraded produced a
-    /// casual room whatever was ticked here. See <see cref="RoomFormats"/> for why the format
-    /// is read off the room's size rather than sent as a field of its own.</para>
-    /// </summary>
+    /// <summary>The format the room was created for, or <c>Casual</c> when it is not competitive,
+    /// derived from what the SERVER made (see <see cref="RoomFormats"/>).</summary>
     public RoomFormat CreatedLobbyFormat { get; private set; }
 
     /// <summary>
-    /// Build the dialog. <paramref name="profiles"/> populates the mod
-    /// dropdown; <paramref name="initiallySelected"/> is the entry that
-    /// starts highlighted (typically the active profile from the Play
-    /// tab). <paramref name="computeHash"/> is the async function the
-    /// dialog calls every time the user picks a different mod so the
-    /// fingerprint stays in sync with what's on disk.
+    /// Set when the server refused the room because this build is too old for multiplayer.
+    /// The dialog closes on that answer; the tab shows the notice and offers the update.
     /// </summary>
+    public LobbyApiException? RefusedAsTooOld { get; private set; }
+
     public CreateLobbyDialog(
         MultiplayerSession session,
         IReadOnlyList<ModProfile> profiles,
@@ -190,7 +138,9 @@ public partial class CreateLobbyDialog : Window
         Func<ModProfile, ModCopyInfo> resolveCopyInfo,
         Func<string, Task> switchActiveCopy,
         int lobbyMaxPlayers = 8,
-        bool developerMode = false)
+        bool developerMode = false,
+        LauncherConfig? config = null,
+        Action? openRadminHelp = null)
     {
         InitializeComponent();
         _session = session;
@@ -200,589 +150,461 @@ public partial class CreateLobbyDialog : Window
         _profiles = profiles;
         _lobbyMaxPlayers = lobbyMaxPlayers;
         _observersUnlocked = developerMode;
+        _config = config;
+        _openRadminHelp = openRadminHelp;
+        _casualSeats = Math.Min(DefaultSeats, Math.Min(lobbyMaxPlayers, MaxRoomPlayers));
 
+        ApplyStrings();
+        ModDialogChrome.SetTightLine(1, KindLabel, ModLabel, CopyLabel, TitleLabel, MaxPlayersLabel, ObserversLabel, TitleCounter);
+        ModDialogChrome.SetTightLine(1.45, KindHint, ObserversHint, PrivateHint, NetBody);
+        ModDialogChrome.SetTightLine(1.3, PrivateTitleText, NetTitle);
+        FitToScreen();
+        BuildRows();
+        ObserversBlock.Visibility = _observersUnlocked ? Visibility.Visible : Visibility.Collapsed;
+        ModChevron.Visibility = profiles.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        ModPickButton.IsHitTestVisible = profiles.Count > 1;
+
+        var last = RoomFormats.FromKindToken(config?.LastRoomKind);
+        _kind = RoomFormats.PlayersFor(last) <= lobbyMaxPlayers ? last : RoomFormat.Casual;
+        KindRow.Selected = _kind;
+
+        PaintNetwork();
+        var first = profiles.FirstOrDefault(p => string.Equals(p.Id, initiallySelected?.Id, StringComparison.OrdinalIgnoreCase))
+                    ?? profiles.FirstOrDefault();
+        if (first != null) PickMod(first);
+        Refresh();
+        RoomTitleBox.Focus();
+
+        FrameworkElement[] cards = { KindCard, ModCard, PasswordCard, SeatsCard, NetCard };
+        void Frost() => ModDialogChrome.FrostCards(Root, cards);
+        foreach (var card in cards) card.SizeChanged += (_, _) => Frost();
+        Scroller.ScrollChanged += (_, _) => Frost();
+        _refrost = Frost;
+    }
+
+    private Action? _refrost;
+
+    private void ApplyStrings()
+    {
         Title = Strings.Get("MpCreateDialogTitle");
-        TitleBarControl.Title = Strings.Get("MpCreateDialogTitle");
+        TitleBarControl.Title = Title;
+        KindLabel.Text = Strings.Get("MpCreateDialogKind");
         ModLabel.Text = Strings.Get("MpCreateDialogModLabel");
         CopyLabel.Text = Strings.Get("MpCreateDialogCopyLabel");
         TitleLabel.Text = Strings.Get("MpCreateDialogTitleLabel");
+        TitlePlaceholder.Text = Strings.Get("MpCreateDialogNamePlaceholder");
         MaxPlayersLabel.Text = Strings.Get("MpCreateDialogMaxPlayers");
         ObserversLabel.Text = Strings.Get("MpCreateDialogObservers");
         PrivateTitleText.Text = Strings.Get("MpCreateDialogPrivate");
         PrivateHint.Text = Strings.Get("MpCreateDialogPrivateBody");
-        PrivateRoomCheck.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogPrivateHint"));
-        CompetitiveTitleText.Text = Strings.Get("MpCreateDialogCompetitive");
-        CompetitiveHint.Text = Strings.Get("MpCreateDialogCompetitiveHint");
-        CompetitiveCheck.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogCompetitiveHint"));
-        CompetitiveFormatLabel.Text = Strings.Get("MpCreateDialogFormat");
-        CompetitiveReplayNote.Text = Strings.Get("MpCreateDialogCompetitiveReplay");
-        CompetitiveReplayNote.ToolTip = TooltipHelper.Wrap(Strings.Get("MpPreflightReplayTip"));
+        PasswordPlaceholder.Text = Strings.Get("MpCreateDialogPasswordPlaceholder");
         PasswordRevealButton.Content = Strings.Get("MpCreateDialogShowPassword");
-        Suggest1.Content = Strings.Get("MpCreateDialogSuggest1");
-        Suggest2.Content = Strings.Get("MpCreateDialogSuggest2");
+        SummaryPlayersWord.Text = Strings.Get("MpCreateDialogToPlay");
+        NetHelpButton.Content = Strings.Get("MpCreateDialogNetHelp");
         CancelButton.Content = Strings.Get("MpCreateDialogCancel");
         CreateButton.Content = Strings.Get("MpCreateDialogCreate");
-        BuildRecordWarning();
-
-        // Populate the mod dropdown. We show DisplayName, store the
-        // ModProfile in Tag so SelectionChanged can read it back.
-        foreach (var p in profiles)
-        {
-            var item = new ComboBoxItem
-            {
-                Content = p.DisplayName,
-                Tag = p,
-            };
-            ModCombo.Items.Add(item);
-            if (initiallySelected != null
-                && string.Equals(p.Id, initiallySelected.Id, StringComparison.OrdinalIgnoreCase))
-            {
-                item.IsSelected = true;
-            }
-        }
-        if (ModCombo.SelectedItem == null && ModCombo.Items.Count > 0)
-            ((ComboBoxItem)ModCombo.Items[0]!).IsSelected = true;
-
-        // One installed mod means there is nothing to pick: the card stays, the
-        // affordance goes. A chevron that opens a list of one is a promise of choice.
-        if (profiles.Count < 2)
-        {
-            ModChevron.Visibility = Visibility.Collapsed;
-            ModCombo.IsHitTestVisible = false;
-        }
-
-        BuildMaxPlayersRow();
-        // Built even when it will not be shown: this is what runs SelectSpectatorSlots(0) and
-        // leaves _spectatorSlots at zero, so every size calculation below is the one the
-        // dialog made before observers existed. Only the VISIBILITY is conditional.
-        BuildObserversRow();
-        if (!_observersUnlocked)
-        {
-            ObserversLabel.Visibility = Visibility.Collapsed;
-            ObserversRow.Visibility = Visibility.Collapsed;
-            ObserversHint.Visibility = Visibility.Collapsed;
-        }
-        BuildFormatRow();
-        // A format is chosen from the start even while the row is hidden, so ticking the box
-        // reveals a row with something already selected rather than three inert buttons.
-        SelectFormat(RoomFormat.OneVOne);
-        // Last, and once: the summary reads the whole form, so it cannot run until the
-        // whole form exists.
-        Refresh();
-        RoomTitleBox.Focus();
-
-        // Ceiling for SizeToContent="Height". This form only grows — the Record Game
-        // notice is permanent, and the Radmin warning, the password row, the copy row and
-        // the error line stack on top of it — and with no ceiling the window happily sizes
-        // itself taller than the screen, which puts the FOOTER (Cancel / Create) past the
-        // bottom edge where it reads as "the interface ate the buttons". The body row is a
-        // star with a ScrollViewer in it, so clamping here makes the form scroll instead.
-        // Read at construction rather than in XAML because it depends on the user's screen.
-        try
-        {
-            var work = SystemParameters.WorkArea.Height;
-            if (work > 200) MaxHeight = work - 40;   // leave the window some breathing room
-        }
-        catch (Exception ex)
-        {
-            // Best-effort: without a ceiling we are simply back to the old behaviour.
-            DiagnosticLog.Write($"CreateLobbyDialog: could not read the work area (non-fatal): {ex.Message}");
-        }
-
-        // INFORMATIONAL (not blocking, not discouraging) heads-up when Radmin isn't
-        // recognised as active. Creating the room and joining it are NEVER gated on
-        // Radmin (join is gated only by the mod fingerprint; Create is never disabled),
-        // and the game already auto-injects the 26.x IP via OverrideAddress — so the old
-        // "other players won't be able to join" copy was FALSE and scared testers off.
-        // The real requirement is only for actual in-game play. Two tones by whether we
-        // can read an injectable 26.x IP. Best-effort: a probe failure hides the note.
-        try
-        {
-            var status = RadminVpnService.GetStatus();
-            if (!status.IsServiceRunning)
-            {
-                var ip = RadminVpnService.TryGetAdapterIp();
-                RadminWarning.Text = string.IsNullOrEmpty(ip)
-                    ? Strings.Get("MpCreateDialogRadminWarning")
-                    : Strings.Format("MpCreateDialogRadminInfo", ip);
-                RadminWarning.Visibility = Visibility.Visible;
-            }
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"CreateLobbyDialog: Radmin status probe failed (non-fatal): {ex.Message}");
-        }
     }
 
     /// <summary>
-    /// The recording warning, built as two Runs so the in-game checkbox's own name can
-    /// be emphasised inside a localized sentence. That name stays English on purpose —
-    /// it is what AoE3 actually shows on its setup screen.
+    /// With SizeToContent the window has no ceiling of its own, and on a small screen it would put
+    /// the footer past the bottom edge. The body row is a star with a ScrollViewer in it, so
+    /// clamping here makes the form scroll instead. Read at construction because it depends on the
+    /// player's screen.
     /// </summary>
-    private void BuildRecordWarning()
+    private void FitToScreen()
     {
-        var name = Strings.Get("MpCreateDialogRecordWarnName");
-        var sentence = Strings.Format("MpCreateDialogRecordWarn", " ");
-        var parts = sentence.Split(' ');
-        RecordWarnText.Inlines.Clear();
-        RecordWarnText.Inlines.Add(new System.Windows.Documents.Run(parts[0]));
-        RecordWarnText.Inlines.Add(new System.Windows.Documents.Run(name)
-        {
-            Foreground = (System.Windows.Media.Brush)FindResource("MpCautionTextAlt"),
-            FontWeight = FontWeights.SemiBold,
-        });
-        if (parts.Length > 1)
-            RecordWarnText.Inlines.Add(new System.Windows.Documents.Run(parts[1]));
+        var work = SystemParameters.WorkArea;
+        if (work.Height > 200) MaxHeight = work.Height - 40;
+        if (work.Width >= TwoColumnWidth + 40) return;
+
+        Width = OneColumnWidth;
+        Grid.SetColumnSpan(LeftColumn, 3);
+        Grid.SetColumn(RightColumn, 0);
+        Grid.SetColumnSpan(RightColumn, 3);
+        Grid.SetRow(RightColumn, 1);
+        RightColumn.Margin = new Thickness(0, 14, 0, 0);
     }
 
-    /// <summary>
-    /// Repaint every derived thing at once.
-    ///
-    /// <para><b>One method, for the reason the tournament dialog gives:</b> "no two of these
-    /// can ever disagree with each other or with the selection". This dialog had no such
-    /// method — derived text was written from eight places — and it got away with it while
-    /// each of them owned one sentence. A box that summarises the WHOLE form cannot: hang it
-    /// off one of the eight and the other seven leave it stale, which is the same defect as
-    /// a fixed paragraph, only harder to see.</para>
-    ///
-    /// <para><see cref="SetFingerprintState"/> and <see cref="RefreshCopyRow"/> stay outside
-    /// it on purpose. They report on an async hash, not on a choice, and folding them in
-    /// would mean every keystroke asking the mod picker what it is doing.</para>
-    /// </summary>
+    private void BuildRows()
+    {
+        KindRow.SetOptions(Kinds.Select(kind => kind == RoomFormat.Casual
+            ? new SegmentOption(kind, Strings.Get("MpCreateDialogKindCasual"), Strings.Get("MpCreateDialogKindNoElo"))
+            : new SegmentOption(kind, Strings.Get(RoomFormats.LabelKey(kind)!), Strings.Get("MpCreateDialogKindRanked"), Gold: true))
+            .ToList());
+        // A format needing more seats than the server allows cannot be created, so it is shown
+        // disabled rather than hidden: the row then says what the ceiling is.
+        foreach (var button in KindRow.Buttons.Skip(1).Zip(Kinds.Skip(1)))
+            button.First.IsEnabled = RoomFormats.PlayersFor(button.Second) <= _lobbyMaxPlayers;
+        KindRow.Picked += key => SelectKind((RoomFormat)key);
+
+        MaxPlayersRow.SetOptions(Enumerable.Range(MinRoomPlayers, MaxRoomPlayers - MinRoomPlayers + 1)
+            .Select(n => new SegmentOption(n, n.ToString())).ToList());
+        foreach (var button in MaxPlayersRow.Buttons.Select((b, i) => (b, Seats: i + MinRoomPlayers)))
+            button.b.IsEnabled = button.Seats <= _lobbyMaxPlayers;
+        MaxPlayersRow.Selected = _casualSeats;
+        MaxPlayersRow.Picked += key => SelectSeats((int)key);
+
+        ObserversRow.Picked += key => SelectSpectatorSlots((int)key);
+    }
+
+    /// <summary>Pick the room type: <see cref="RoomFormat.Casual"/> or a competitive format.</summary>
+    internal void SelectKind(RoomFormat kind)
+    {
+        _kind = kind;
+        KindRow.Selected = kind;
+        // As in the prototype: observers are counted differently on each side of this choice, so
+        // what was picked on one does not carry a meaning across.
+        _spectatorSlots = 0;
+        Refresh();
+    }
+
+    internal void SelectSeats(int seats)
+    {
+        _casualSeats = seats;
+        _spectatorSlots = Math.Min(_spectatorSlots, Math.Max(0, seats - MinRoomPlayers));
+        MaxPlayersRow.Selected = seats;
+        Refresh();
+    }
+
+    internal void SelectSpectatorSlots(int slots)
+    {
+        _spectatorSlots = slots;
+        Refresh();
+    }
+
+    private bool Competitive => _kind != RoomFormat.Casual;
+
+    /// <summary>The seats the room asks the server for.</summary>
+    private int RoomSize => Competitive ? RoomFormats.PlayersFor(_kind) + _spectatorSlots : _casualSeats;
+
+    /// <summary>Repaint everything derived from the choices, so no two of them can disagree.
+    /// The fingerprint stays outside: it reports on an async hash, not on a choice.</summary>
     private void Refresh()
     {
-        RefreshCompetitiveUi();
+        RefreshKindHint();
+        RefreshObservers();
         RefreshSummary();
-        // Last, because it reads the format the two above have just settled.
         ProposeRoomTitle();
+        RefreshSuggestions();
+        RefreshFooter();
     }
 
-    /// <summary>
-    /// The counts, done. Same idea as the tournament's <c>CapacityMath</c>: everything that
-    /// was chosen, read back as one line, in the units the host cares about.
-    ///
-    /// <para>Composed from segments rather than one format string per case, because the
-    /// cases multiply — competitive or not, private or not, observers or not — and eight
-    /// whole sentences in two languages is where they start to drift.</para>
-    /// </summary>
+    private void RefreshKindHint()
+    {
+        KindDot.Visibility = Competitive ? Visibility.Visible : Visibility.Collapsed;
+        MaxPlayersBlock.Visibility = Competitive ? Visibility.Collapsed : Visibility.Visible;
+        KindHint.Text = Strings.Get(Competitive ? "MpCreateDialogKindHintRanked" : "MpCreateDialogKindHintCasual");
+
+        // The two promises a host accepts by choosing this, too long for the line under the row.
+        var fine = new List<string>();
+        if (RoomFormats.AbandonmentApplies(_kind)) fine.Add(Strings.Get("MpCreateDialogCompetitiveForfeit"));
+        if (Competitive) fine.Add(Strings.Get("MpCreateDialogCompetitiveReplay"));
+        KindHint.ToolTip = fine.Count == 0 ? null : TooltipHelper.Wrap(string.Join("\n\n", fine));
+    }
+
+    private void RefreshObservers()
+    {
+        if (!_observersUnlocked) return;
+
+        var seats = RoomFormats.PlayersFor(_kind);
+        var options = Enumerable.Range(0, MaxObservers + 1)
+            .Where(n => Competitive
+                ? seats + n <= _lobbyMaxPlayers && seats + n <= MaxRoomPlayers
+                : n == 0 || n < _casualSeats - 1)
+            .ToList();
+        if (ObserversRow.Children.Count != options.Count)
+            ObserversRow.SetOptions(options.Select(n => new SegmentOption(n, n.ToString())).ToList());
+        ObserversRow.Selected = _spectatorSlots;
+
+        var playing = Math.Max(0, RoomSize - _spectatorSlots);
+        ObserversHint.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogObserversMaps"));
+        ObserversHint.Text = _spectatorSlots == 0
+            ? Strings.Get("MpCreateDialogObserversHint")
+            : Competitive
+                ? Strings.Format("MpCreateDialogObserversSeats", seats)
+                : Strings.Format(_spectatorSlots == 1 ? "MpCreateDialogObserversLeaveOne" : "MpCreateDialogObserversLeave",
+                                 _spectatorSlots, playing);
+    }
+
     private void RefreshSummary()
     {
-        if (SummaryMath == null) return;
-
-        var competitive = CompetitiveCheck?.IsChecked == true;
-        var isPrivate = PrivateRoomCheck?.IsChecked == true;
-        var parts = new System.Collections.Generic.List<string>();
-
-        // The format leads, when there is one: it is the thing that decides all the rest.
-        var format = RoomFormats.Resolve(competitive, _maxPlayers, _spectatorSlots);
-        var labelKey = RoomFormats.LabelKey(format);
-        if (competitive && labelKey != null) parts.Add(Strings.Get(labelKey));
-
-        // Seats that will be PLAYED in. An observer occupies a slot but is not a player, so
-        // it is subtracted here rather than counted — the same arithmetic the room rows use.
-        var formatSeats = competitive ? RoomFormats.PlayersFor(_format) : 0;
-        parts.Add(formatSeats > 0
-            ? Strings.Format("MpCreateDialogSummarySeatsOf", formatSeats, _lobbyMaxPlayers)
-            : Strings.Format("MpCreateDialogSummarySeats",
-                             Math.Max(0, _maxPlayers - _spectatorSlots)));
-
-        if (_spectatorSlots > 0)
-            parts.Add(Strings.Format("MpCreateDialogSummaryObservers", _spectatorSlots));
-
-        parts.Add(Strings.Get(isPrivate
-            ? "MpCreateDialogSummaryPrivate"
-            : "MpCreateDialogSummaryPublic"));
-
-        // Whether it RATES, which is not the same question as whether it is competitive: a
-        // competitive team room is playable and still moves nobody's rating.
-        parts.Add(Strings.Get(competitive && RoomFormats.AbandonmentApplies(format)
-            ? "MpCreateDialogSummaryElo"
-            : "MpCreateDialogSummaryNoElo"));
-
-        // The promise a private room exists to make.
-        parts.Add(Strings.Get(isPrivate
-            ? "MpCreateDialogSummaryQuiet"
-            : "MpCreateDialogSummaryAnnounced"));
-
-        SummaryMath.Text = string.Join(" \u00b7 ", parts);
+        SummaryPlayers.Text = Math.Max(0, RoomSize - _spectatorSlots).ToString();
+        SummaryObservers.Text = _spectatorSlots.ToString();
+        SummaryObserversWord.Text = Strings.Get(_spectatorSlots == 1 ? "MpCreateDialogObserverOne" : "MpCreateDialogObserverMany");
+        SummaryObserversBlock.Visibility = _spectatorSlots > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
-    /// The 2..8 segmented row. Options above the server's cap are rendered but
-    /// disabled: they say what the ceiling IS, which a shorter row would not.
+    /// Offer a room title for the room as it stands, and refuse to touch one somebody wrote:
+    /// <see cref="RoomTitleProposal.IsOurs"/> owns that, and its remarks say why getting it wrong
+    /// is invisible. The proposal is not localized because a title is a network value.
     /// </summary>
-    private void BuildMaxPlayersRow()
+    private void ProposeRoomTitle()
     {
-        MaxPlayersRow.Children.Clear();
-        _maxPlayerButtons.Clear();
-        for (var n = MinRoomPlayers; n <= MaxRoomPlayers; n++)
+        if (_selectedProfile == null) return;
+        var current = RoomTitleBox.Text?.Trim() ?? "";
+        if (!RoomTitleProposal.IsOurs(current, _profiles.Select(p => p.DisplayName), RoomTitleBox.MaxLength))
+            return;
+        var proposed = RoomTitleProposal.Propose(_selectedProfile.DisplayName, Competitive, _kind, RoomTitleBox.MaxLength);
+        // Guarded: assigning Text moves the caret to the start, which would fight the host's typing.
+        if (proposed != RoomTitleBox.Text) RoomTitleBox.Text = proposed;
+    }
+
+    private void RefreshSuggestions()
+    {
+        var name = _selectedProfile?.DisplayName ?? "";
+        Suggest1.Content = RoomTitleProposal.Propose(name, false, RoomFormat.Casual, RoomTitleBox.MaxLength);
+        Suggest2.Content = Competitive
+            ? RoomTitleProposal.Propose(name, true, _kind, RoomTitleBox.MaxLength)
+            : Strings.Get("MpCreateDialogSuggestNight");
+    }
+
+    /// <summary>A suggestion IS the title, unlike the pills of the old dialog, which added to it.</summary>
+    private void Suggest_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Content: string suggestion }) return;
+        RoomTitleBox.Text = suggestion;
+        RoomTitleBox.CaretIndex = suggestion.Length;
+        RoomTitleBox.Focus();
+    }
+
+    /// <summary>What stops the room from being created, first thing first, so the footer says it
+    /// before the click rather than after.</summary>
+    private string? CurrentError()
+    {
+        if (_fingerprint == FingerprintState.Failed) return Strings.Get("MpCreateDialogNoFingerprint");
+        if ((RoomTitleBox.Text?.Trim().Length ?? 0) < 3) return Strings.Get("MpCreateDialogTitleTooShort");
+        if (PrivateRoomCheck.IsChecked == true && CurrentPassword().Length == 0)
+            return Strings.Get("MpCreateDialogNoPassword");
+        return null;
+    }
+
+    private void RefreshFooter()
+    {
+        var error = CurrentError();
+        ErrorText.Text = error ?? "";
+        ErrorText.Visibility = error == null ? Visibility.Collapsed : Visibility.Visible;
+        CreateButton.IsEnabled = error == null && _fingerprint == FingerprintState.Ok && !_busy;
+        CreateButton.ToolTip = error == null ? null : TooltipHelper.Wrap(error);
+
+        var tooShort = (RoomTitleBox.Text?.Trim().Length ?? 0) < 3;
+        if (tooShort) TitleField.BorderBrush = new SolidColorBrush(Color.FromArgb(0xCC, 0xF4, 0x90, 0x0C));
+        else TitleField.ClearValue(Border.BorderBrushProperty);
+    }
+
+    private void RoomTitleBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (TitleCounter == null) return;
+        var length = RoomTitleBox.Text?.Length ?? 0;
+        TitleCounter.Text = $"{length} / {RoomTitleBox.MaxLength}";
+        TitlePlaceholder.Visibility = length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (IsInitialized && ErrorText != null) RefreshFooter();
+    }
+
+    // ------------------------------------------------------------------- the mod
+
+    private void ModPickButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_profiles.Count < 2) return;
+        if (ChromePopups.ConsumeToggleOff(ModPickButton)) return;
+        if (_modPopup != null)
         {
-            var btn = new Button
-            {
-                Content = n.ToString(),
-                Style = (Style)FindResource("MpSegment"),
-                Tag = null,
-                IsEnabled = n <= _lobbyMaxPlayers,
-            };
-            var value = n;
-            btn.Click += (_, _) => SelectMaxPlayers(value);
-            _maxPlayerButtons[n] = btn;
-            MaxPlayersRow.Children.Add(btn);
-        }
-        SelectMaxPlayers(Math.Min(_lobbyMaxPlayers, MaxRoomPlayers));
-    }
-
-    private void SelectMaxPlayers(int value)
-    {
-        _maxPlayers = value;
-        foreach (var kv in _maxPlayerButtons)
-            kv.Value.Tag = kv.Key == value ? "active" : null;
-        RefreshCompetitiveSizeNote();
-        RefreshSummary();
-    }
-
-    /// <summary>
-    /// The 0 / 1 / 2 observer row.
-    ///
-    /// <para>Two is the server's cap (a caster and a co-caster) and it is enforced there; this
-    /// row only has to agree with it. An option that would not fit under the server's seat
-    /// ceiling is shown disabled rather than dropped, which is the same choice the player-count
-    /// row above makes — a shorter row hides where the ceiling is.</para>
-    /// </summary>
-    private void BuildObserversRow()
-    {
-        ObserversRow.Children.Clear();
-        _observerButtons.Clear();
-        for (var n = 0; n <= MaxObservers; n++)
-        {
-            var btn = new Button
-            {
-                Content = n.ToString(),
-                Style = (Style)FindResource("MpSegment"),
-                Tag = null,
-            };
-            var value = n;
-            btn.Click += (_, _) => SelectSpectatorSlots(value);
-            _observerButtons[n] = btn;
-            ObserversRow.Children.Add(btn);
-        }
-        SelectSpectatorSlots(0);
-    }
-
-    /// <summary>
-    /// Choose how many seats go to watchers, and resize a competitive room to fit them.
-    ///
-    /// <para><b>The resize is the point.</b> A competitive room's size is owned by its format,
-    /// so an observer has to widen the room rather than take a player's place — otherwise
-    /// ticking 2v2 and adding a caster would silently create a room where only three people can
-    /// play. The server reads the format off <c>max_players - spectator_slots</c> and will
-    /// agree with the arithmetic done here.</para>
-    /// </summary>
-    private void SelectSpectatorSlots(int value)
-    {
-        _spectatorSlots = value;
-        foreach (var kv in _observerButtons)
-            kv.Value.Tag = kv.Key == value ? "active" : null;
-
-        if (CompetitiveCheck?.IsChecked == true)
-            ApplyCompetitiveSize();
-
-        RefreshObserversUi();
-        RefreshCompetitiveSizeNote();
-    }
-
-    /// <summary>
-    /// Set the room size from the chosen format PLUS the chosen observers, when it fits.
-    ///
-    /// <para>One place, called from both the format side and the observer side, because they
-    /// are two inputs to one number. Two copies of this sum would be free to disagree, and the
-    /// disagreement is invisible until a match does not score.</para>
-    /// </summary>
-    private void ApplyCompetitiveSize()
-    {
-        var seats = RoomFormats.PlayersFor(_format);
-        if (seats <= 0) return;
-        var total = seats + _spectatorSlots;
-        if (total <= _lobbyMaxPlayers && total <= MaxRoomPlayers)
-            SelectMaxPlayers(total);
-    }
-
-    /// <summary>
-    /// Grey out the observer counts that will not fit, and say what the row costs.
-    ///
-    /// <para>For a competitive room the ceiling is the format's seats plus the observers; for a
-    /// casual one the size is the host's own and an observer simply eats one of its seats, so
-    /// the limit is leaving two people playing — the same rule the server clamps to.</para>
-    /// </summary>
-    private void RefreshObserversUi()
-    {
-        if (ObserversRow == null) return;
-        var competitive = CompetitiveCheck?.IsChecked == true;
-        var formatSeats = RoomFormats.PlayersFor(_format);
-
-        foreach (var kv in _observerButtons)
-        {
-            var fits = competitive && formatSeats > 0
-                ? formatSeats + kv.Key <= _lobbyMaxPlayers && formatSeats + kv.Key <= MaxRoomPlayers
-                : _maxPlayers - kv.Key >= MinRoomPlayers;
-            kv.Value.IsEnabled = fits || kv.Key == 0;
-        }
-
-        if (ObserversHint != null)
-        {
-            ObserversHint.Text = _spectatorSlots == 0
-                ? Strings.Get("MpCreateDialogObserversHint")
-                : Strings.Format("MpCreateDialogObserversCost",
-                                 _spectatorSlots, Math.Max(0, _maxPlayers - _spectatorSlots));
-        }
-    }
-
-    /// <summary>The 1v1 / 2v2 / 3v3 row, revealed only while the competitive box is ticked.</summary>
-    private void BuildFormatRow()
-    {
-        FormatRow.Children.Clear();
-        _formatButtons.Clear();
-        foreach (var format in Formats)
-        {
-            var btn = new Button
-            {
-                Content = Strings.Get(RoomFormats.LabelKey(format)!),
-                Style = (Style)FindResource("MpSegment"),
-                Tag = null,
-                // A format needing more seats than the server allows cannot be created at all,
-                // so it is shown disabled rather than hidden — the row then says what the
-                // ceiling IS, the same choice the player-count row makes one section up.
-                IsEnabled = RoomFormats.PlayersFor(format) <= _lobbyMaxPlayers,
-            };
-            var chosen = format;
-            btn.Click += (_, _) =>
-            {
-                // PICKING A FORMAT IS DECLARING THE ROOM COMPETITIVE. The format only means
-                // anything for a competitive room, so the alternative — a click that does
-                // nothing until you also find the checkbox — is a control that looks broken.
-                //
-                // Assigning IsChecked raises CompetitiveCheck_Changed SYNCHRONOUSLY, and that
-                // handler adopts whatever format matches the size currently chosen. So the state
-                // may pass through a different format before the line below. That is fine — the
-                // last call wins and the end state is the clicked one — but it is worth knowing
-                // before somebody reads the SelectFormat below as redundant and deletes it.
-                if (CompetitiveCheck != null && CompetitiveCheck.IsChecked != true)
-                    CompetitiveCheck.IsChecked = true;
-
-                SelectFormat(chosen);
-            };
-            _formatButtons[format] = btn;
-            FormatRow.Children.Add(btn);
-        }
-    }
-
-    /// <summary>
-    /// Pick a format, which also picks the room size — 1v1 is two seats, 2v2 four, 3v3 six.
-    ///
-    /// <para><b>The size is moved BEFORE the row is disabled, and that order is the whole
-    /// trap.</b> <c>IsEnabled = false</c> does not deselect: leaving it to the disabling pass
-    /// would keep the old segment tagged active and <c>_maxPlayers</c> holding the old number,
-    /// so the room would be created the wrong size with nothing on screen disagreeing.</para>
-    /// </summary>
-    private void SelectFormat(RoomFormat format)
-    {
-        _format = format;
-
-        // The highlight is NOT set here — RefreshCompetitiveUi at the bottom of this method owns
-        // it, so that a casual room can never end up showing a format it has not declared.
-
-        // The size follows the format ONLY while the room is competitive. Without that guard the
-        // constructor's own SelectFormat would drag a casual room down from eight seats to two
-        // before anybody had ticked anything.
-        if (CompetitiveCheck?.IsChecked == true)
-            ApplyCompetitiveSize();
-        Refresh();
-    }
-
-    private void CompetitiveCheck_Changed(object sender, RoutedEventArgs e)
-    {
-        // Ticking adopts the format that matches the size already chosen, when there is one.
-        // Snapping a host who deliberately set four players back to 1v1 would resize their room
-        // as a side effect of ticking a box.
-        if (CompetitiveCheck.IsChecked == true)
-        {
-            var fromSize = RoomFormats.Resolve(competitive: true, _maxPlayers, _spectatorSlots);
-            SelectFormat(fromSize == RoomFormat.Unknown ? _format : fromSize);
-        }
-        Refresh();
-    }
-
-    /// <summary>
-    /// Show or hide the format row, lock the player-count row while a format owns it, and say
-    /// what the chosen format means for the rating.
-    /// </summary>
-    private void RefreshCompetitiveUi()
-    {
-        if (CompetitiveCheck == null || CompetitiveFormatRow == null) return;
-        var competitive = CompetitiveCheck.IsChecked == true;
-
-        // ALWAYS VISIBLE. It used to appear only once the box was ticked, which made one
-        // decision take two steps and jumped the dialog's height at the moment of ticking.
-        // Picking a format is now itself the way to declare the room competitive.
-        CompetitiveFormatRow.Visibility = Visibility.Visible;
-
-        // THE SELECTION IS PAINTED HERE AND NOWHERE ELSE, and that is what keeps the row honest
-        // now that it is on screen for casual rooms too. SelectFormat used to tag the active
-        // button itself, unconditionally — harmless while the row was hidden, and a lie the
-        // moment it is not: a casual room would show 1v1 lit up, three centimetres under a
-        // "Max players: 8" it flatly contradicts. It would also be claiming the one thing this
-        // model refuses to claim, that a two-seat casual room IS a 1v1 (see RoomFormats).
-        //
-        // No format chosen yet, therefore nothing lit. MpSegment's own inactive state does the
-        // drawing — never an Opacity layer, which would take ClearType down with it.
-        foreach (var kv in _formatButtons)
-            kv.Value.Tag = competitive && kv.Key == _format ? "active" : null;
-
-        // The size belongs to the format while there is one, so the row is shown but inert —
-        // hiding it would leave the host unable to see how big their own room is.
-        foreach (var kv in _maxPlayerButtons)
-            kv.Value.IsEnabled = !competitive && kv.Key <= _lobbyMaxPlayers;
-
-        // The amber box only exists where it is true. It is about what the RECORDING decides,
-        // and on a room that does not score it decides nothing - so on a casual room it was
-        // warning about a rating that was never at stake.
-        if (RecordWarnBox != null)
-            RecordWarnBox.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
-
-        // Same rule for the recording notice: only a competitive room's recording is kept.
-        if (CompetitiveReplayNote != null)
-            CompetitiveReplayNote.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
-
-        RefreshObserversUi();
-        RefreshCompetitiveSizeNote();
-    }
-
-    /// <summary>
-    /// Warn — never forbid — when a competitive room is sized so that it can never score.
-    ///
-    /// <para>The server refuses anything but exactly two participants (<c>not_1v1</c>), because a
-    /// recording names one loser and that says nothing about who won a team game. So a
-    /// competitive room for three is playable and will simply never rate, and learning that after
-    /// the match is the bad outcome. Hooked to BOTH inputs it reads, or it goes stale the moment
-    /// the other one changes.</para>
-    /// </summary>
-    private void RefreshCompetitiveSizeNote()
-    {
-        if (CompetitiveSizeNote == null || CompetitiveCheck == null) return;
-
-        // Asked of the FORMAT, never of the seat count. "More than two players" also describes
-        // a casual room, which has no rating to miss out on — and the two things worth saying
-        // here are opposites, so one slot carries whichever applies.
-        var format = RoomFormats.Resolve(
-            CompetitiveCheck.IsChecked == true, _maxPlayers, _spectatorSlots);
-
-        // 1v1: the forfeit clause, which used to sit in the main hint and was shown to team
-        // rooms too. The server refuses to apply it past two players, so saying it there was a
-        // threat nothing carries out.
-        if (RoomFormats.AbandonmentApplies(format))
-        {
-            CompetitiveSizeNote.Text = Strings.Get("MpCreateDialogCompetitiveForfeit");
-            CompetitiveSizeNote.Visibility = Visibility.Visible;
+            _modPopup.IsOpen = false;
             return;
         }
 
-        // A team format: the rating is the thing that is NOT true for it yet.
-        if (RoomFormats.IsTeam(format))
-        {
-            CompetitiveSizeNote.Text = Strings.Format(
-                "MpCreateDialogCompetitiveTeamNote", Strings.Get(RoomFormats.LabelKey(format)!));
-            CompetitiveSizeNote.Visibility = Visibility.Visible;
-            return;
-        }
+        var rows = new StackPanel { Width = ModPickButton.ActualWidth - 14 };
+        var head = new TextBlock { Text = Strings.Get("MpCreateDialogModsTitle"), FontWeight = FontWeights.Bold, Margin = new Thickness(10, 8, 10, 4) };
+        head.SetResourceReference(TextBlock.FontSizeProperty, "SetGroupLabelSize");
+        head.SetResourceReference(TextBlock.ForegroundProperty, "WindowFineText");
+        rows.Children.Add(head);
+        foreach (var profile in _profiles) rows.Children.Add(BuildModRow(profile));
+        var foot = new TextBlock { Text = Strings.Get("MpCreateDialogModsFoot"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(10, 6, 10, 4) };
+        foot.SetResourceReference(TextBlock.FontSizeProperty, "SetControlSize");
+        foot.SetResourceReference(TextBlock.ForegroundProperty, "WindowFineText");
+        rows.Children.Add(foot);
 
-        CompetitiveSizeNote.Visibility = Visibility.Collapsed;
+        var card = new Border
+        {
+            Padding = new Thickness(6),
+            CornerRadius = new CornerRadius(12),
+            BorderThickness = new Thickness(1),
+            Child = rows,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 36, ShadowDepth = 14, Direction = 270, Opacity = .45, Color = Colors.Black },
+        };
+        card.SetResourceReference(Border.BackgroundProperty, "LibraryMenuBg");
+        card.SetResourceReference(Border.BorderBrushProperty, "GlassRim");
+        var popup = new Popup
+        {
+            Child = card,
+            PlacementTarget = ModPickButton,
+            Placement = PlacementMode.Bottom,
+            VerticalOffset = 6,
+            StaysOpen = false,
+            AllowsTransparency = true,
+        };
+        ChromePopups.Track(popup, ModPickButton);
+        popup.Closed += (_, _) => _modPopup = null;
+        _modPopup = popup;
+        popup.IsOpen = true;
     }
 
-    /// <summary>
-    /// User picked a different mod from the dropdown. Recompute the
-    /// fingerprint and update the title placeholder. Disable Create
-    /// while the hash is in flight so a fast-clicker can't submit
-    /// with a stale value.
-    /// </summary>
-    private async void ModCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private Button BuildModRow(ModProfile profile)
     {
-        if (ModCombo.SelectedItem is not ComboBoxItem item || item.Tag is not ModProfile profile)
-            return;
+        var icon = new Border
+        {
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(5),
+            Background = (Brush)FindResource("WindowSecondary"),
+            Child = new Border { CornerRadius = new CornerRadius(5), Background = IconOf(profile) },
+        };
+        var name = new TextBlock { Text = profile.DisplayName, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        name.SetResourceReference(TextBlock.FontSizeProperty, "DialogBodySize");
+        name.SetResourceReference(TextBlock.ForegroundProperty, "UiHeadText");
+        var line = new DockPanel();
+        DockPanel.SetDock(icon, Dock.Left);
+        line.Children.Add(icon);
+        line.Children.Add(name);
+        var row = new Button { Content = line, Height = 36 };
+        row.SetResourceReference(StyleProperty, "MenuRowButton");
+        if (ReferenceEquals(profile, _selectedProfile))
+            row.Background = new SolidColorBrush(ModAccent.SelectionFill(_accent));
+        row.Click += (_, _) =>
+        {
+            if (_modPopup != null) _modPopup.IsOpen = false;
+            PickMod(profile);
+        };
+        return row;
+    }
 
+    private static Brush? IconOf(ModProfile profile)
+        => MainWindow.TryLoadTileImage(profile.ResolveIconSource(), MainWindow.IconDecodeWidth);
+
+    /// <summary>Everything that follows the mod: its window, its copies and its fingerprint.
+    /// Create waits for the hash, so a fast click cannot submit a stale value.</summary>
+    private async void PickMod(ModProfile profile)
+    {
         _selectedProfile = profile;
         ModNameText.Text = profile.DisplayName;
-        UpdateModIcon(profile);
+        ModIconHost.Background = IconOf(profile);
+        _accent = ModDialogChrome.AttachPicked(this, TitleBarControl, Root, profile, Width);
+        _refrost?.Invoke();
+        KindRow.Accent = _accent;
+        MaxPlayersRow.Accent = _accent;
+        ObserversRow.Accent = _accent;
+        CreateButton.Foreground = new SolidColorBrush(ModAccent.OnAccent(_accent));
         RefreshCopyRow(profile);
-        // _selectedProfile is set above, which is what this reads.
-        ProposeRoomTitle();
-        SetFingerprintState(FingerprintState.Loading, null);
-        CreateButton.IsEnabled = false;
+        Refresh();
+        await ComputeHashAsync(profile);
+    }
 
+    private async Task ComputeHashAsync(ModProfile profile)
+    {
+        SetFingerprintState(FingerprintState.Loading, null);
         try
         {
-            _selectedHash = await _computeHash(profile);
-            SetFingerprintState(FingerprintState.Ok, _selectedHash);
-            CreateButton.IsEnabled = true;
+            var hash = await _computeHash(profile);
+            if (!ReferenceEquals(profile, _selectedProfile)) return;
+            _selectedHash = hash;
+            SetFingerprintState(FingerprintState.Ok, hash);
+        }
+        catch (Exception ex)
+        {
+            if (!ReferenceEquals(profile, _selectedProfile)) return;
+            _selectedHash = "";
+            SetFingerprintState(FingerprintState.Failed, null);
+            DiagnosticLog.Write($"CreateLobbyDialog: fingerprint failed: {ex.Message}");
+        }
+    }
+
+    private void SetFingerprintState(FingerprintState state, string? hash)
+    {
+        _fingerprint = state;
+        var (text, dot, line) = state switch
+        {
+            FingerprintState.Ok => ("WindowMuted", "UiOk", Strings.Format("MpCreateDialogFingerprintOk", ShortHash(hash))),
+            FingerprintState.Loading => ("WindowMuted", "UiInfo", Strings.Get("MpCreateDialogFingerprintLoading")),
+            _ => ("UiErrorText", "UiError", Strings.Get("MpCreateDialogFingerprintFailed")),
+        };
+        FingerprintText.Text = line;
+        FingerprintText.SetResourceReference(TextBlock.ForegroundProperty, text);
+        FingerprintDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, dot);
+        FingerprintText.ToolTip = string.IsNullOrEmpty(hash)
+            ? null
+            : TooltipHelper.Wrap(Strings.Get("MpCreateDialogHashLabel") + ": " + hash);
+        RefreshFooter();
+    }
+
+    /// <summary>Enough for two players to compare over voice, which is all anybody does with it.</summary>
+    internal static string ShortHash(string? hash)
+        => string.IsNullOrEmpty(hash) ? "" : hash!.Length <= 8 ? hash : hash[..4] + "…" + hash[^4..];
+
+    /// <summary>
+    /// The copy row, for a mod with 2+ copies. Multiplayer launches and fingerprints the ACTIVE
+    /// copy, so choosing one rotates the active copy, which only the dashboard's mod can do: for
+    /// any other mod the row only says which copy will be used.
+    /// </summary>
+    private void RefreshCopyRow(ModProfile profile)
+    {
+        var info = _resolveCopyInfo?.Invoke(profile);
+        if (info == null || !info.HasMultiple)
+        {
+            CopyRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        CopyPills.Children.Clear();
+        foreach (var copy in info.Copies)
+        {
+            var label = new TextBlock { Text = copy.Label, Margin = new Thickness(12, 0, 12, 0), FontWeight = FontWeights.SemiBold };
+            label.SetResourceReference(TextBlock.FontSizeProperty, "SetRowDescSize");
+            label.SetResourceReference(TextBlock.FontFamilyProperty, "BodyFont");
+            var pill = new Button { Content = label, Height = 34, Margin = new Thickness(0, 0, 6, 6) };
+            pill.SetResourceReference(StyleProperty, "SegmentButton");
+            SegmentRow.Paint(pill, copy.IsActive, false, _accent);
+            label.Foreground = pill.Foreground;
+            if (info.CanSwitch)
+            {
+                var id = copy.InstallId;
+                if (!copy.IsActive) pill.Click += async (_, _) => await SwitchCopyAsync(id);
+            }
+            else
+            {
+                pill.IsHitTestVisible = false;
+                pill.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogCopyHintReadonly"));
+            }
+            CopyPills.Children.Add(pill);
+        }
+        CopyRow.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Rotates the active copy (the single source of truth) and recomputes the
+    /// fingerprint, so the room's required hash matches what will actually launch.</summary>
+    private async Task SwitchCopyAsync(string installId)
+    {
+        if (_selectedProfile is not { } profile) return;
+        CopyPills.IsEnabled = false;
+        SetFingerprintState(FingerprintState.Loading, null);
+        try
+        {
+            await _switchActiveCopy(installId);
+            await ComputeHashAsync(profile);
         }
         catch (Exception ex)
         {
             _selectedHash = "";
             SetFingerprintState(FingerprintState.Failed, null);
-            DiagnosticLog.Write($"CreateLobbyDialog: fingerprint failed: {ex.Message}");
-            // Create stays disabled — the user can't submit without a valid hash.
-            // Switching mods triggers a fresh attempt. The message is NOT pushed to
-            // ErrorText: the card already says what is wrong, next to what it is
-            // wrong about, and the footer line is for the server's answer to Create.
+            DiagnosticLog.Write($"CreateLobbyDialog: copy switch failed: {ex.Message}");
         }
+        CopyPills.IsEnabled = true;
+        RefreshCopyRow(profile);
     }
 
-    private enum FingerprintState { Ok, Loading, Failed }
+    // ---------------------------------------------------------------- the password
 
-    /// <summary>
-    /// Paint the fingerprint line under the mod name. Only the first six characters of
-    /// the hash are shown — enough for two players to compare over voice, which is the
-    /// only thing anyone does with this value, and short enough to fit beside the name.
-    /// </summary>
-    private void SetFingerprintState(FingerprintState state, string? hash)
-    {
-        var (brushKey, dotKey, text) = state switch
-        {
-            FingerprintState.Ok => ("MpOkText", "MpOk",
-                Strings.Format("MpCreateDialogFingerprintOk", ShortHash(hash))),
-            FingerprintState.Loading => ("MpCautionText", "MpCaution",
-                Strings.Get("MpCreateDialogFingerprintLoading")),
-            _ => ("MpDestructiveText", "MpDestructiveText",
-                Strings.Get("MpCreateDialogFingerprintFailed")),
-        };
-        FingerprintText.Text = text;
-        FingerprintText.Foreground = (System.Windows.Media.Brush)FindResource(brushKey);
-        FingerprintDot.Fill = (System.Windows.Media.Brush)FindResource(dotKey);
-        FingerprintText.ToolTip = string.IsNullOrEmpty(hash)
-            ? null
-            : TooltipHelper.Wrap(Strings.Get("MpCreateDialogHashLabel") + ": " + hash);
-    }
-
-    private static string ShortHash(string? hash)
-        => string.IsNullOrEmpty(hash) ? "" : (hash!.Length <= 6 ? hash : hash[..6] + "…");
-
-    /// <summary>Append a suggestion to the room title instead of replacing it.</summary>
-    private void Suggest_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button b || b.Content is not string suggestion) return;
-        var current = RoomTitleBox.Text?.Trim() ?? "";
-        if (current.Contains(suggestion, StringComparison.OrdinalIgnoreCase)) return;
-        var joined = string.IsNullOrEmpty(current) ? suggestion : current + " · " + suggestion;
-        if (joined.Length > RoomTitleBox.MaxLength) joined = joined[..RoomTitleBox.MaxLength];
-        RoomTitleBox.Text = joined;
-        RoomTitleBox.CaretIndex = RoomTitleBox.Text.Length;
-        RoomTitleBox.Focus();
-    }
-
-    /// <summary>
-    /// Reveal or hide the password. A PasswordBox cannot show its own value, so the
-    /// reveal swaps in a plain TextBox; whichever is visible is copied back into the
-    /// PasswordBox, which stays the single source of truth for the request.
-    /// </summary>
+    /// <summary>A PasswordBox cannot show its own value, so the reveal swaps in a plain TextBox;
+    /// whichever is visible is copied back into the other.</summary>
     private void PasswordReveal_Click(object sender, RoutedEventArgs e)
     {
         _passwordRevealed = !_passwordRevealed;
@@ -807,172 +629,71 @@ public partial class CreateLobbyDialog : Window
     }
 
     /// <summary>The password as typed, from whichever of the two controls is showing.</summary>
-    private string CurrentPassword()
-        => _passwordRevealed ? PasswordPlainBox.Text : PasswordBox.Password;
+    private string CurrentPassword() => _passwordRevealed ? PasswordPlainBox.Text : PasswordBox.Password;
 
-    /// <summary>
-    /// Repaint the copy row for the picked mod. Hidden for single-install mods
-    /// (zero change for the common case). When the mod has 2+ copies it lists
-    /// them, marking the ACTIVE one; the combo is interactive only for the active
-    /// dashboard mod (choosing a copy rotates the active copy — the copy
-    /// multiplayer actually launches / fingerprints), display-only otherwise.
-    /// </summary>
-    private void RefreshCopyRow(ModProfile profile)
+    private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e) => PasswordChanged();
+
+    private void PasswordPlainBox_TextChanged(object sender, TextChangedEventArgs e) => PasswordChanged();
+
+    private void PasswordChanged()
     {
-        var info = _resolveCopyInfo?.Invoke(profile);
-        if (info == null || !info.HasMultiple)
-        {
-            CopyRow.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        _suppressCopyCombo = true;
-        CopyCombo.Items.Clear();
-        foreach (var c in info.Copies)
-        {
-            CopyCombo.Items.Add(new ComboBoxItem
-            {
-                Content = c.Label,
-                Tag = c.InstallId,
-                IsSelected = c.IsActive,
-            });
-        }
-        if (CopyCombo.SelectedItem == null && CopyCombo.Items.Count > 0)
-            ((ComboBoxItem)CopyCombo.Items[0]!).IsSelected = true;
-        _suppressCopyCombo = false;
-
-        CopyCombo.IsEnabled = info.CanSwitch;
-        CopyHint.Visibility = info.CanSwitch ? Visibility.Collapsed : Visibility.Visible;
-        if (!info.CanSwitch)
-            CopyHint.Text = Strings.Get("MpCreateDialogCopyHintReadonly");
-        CopyRow.Visibility = Visibility.Visible;
+        PasswordPlaceholder.Visibility = CurrentPassword().Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        RefreshFooter();
     }
 
-    /// <summary>
-    /// User picked a different install copy. Multiplayer always uses the ACTIVE
-    /// copy, so this rotates the active copy (single source of truth) and then
-    /// recomputes the fingerprint so the room's required hash matches what will
-    /// actually launch. A no-op when the picked copy is already active.
-    /// </summary>
-    private async void CopyCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    /// <summary>Unticking clears both boxes, so an old value cannot leak into the request or sit
+    /// in the plain box the next time the row appears.</summary>
+    private void PrivateRoomCheck_Changed(object sender, RoutedEventArgs e)
     {
-        if (_suppressCopyCombo || _selectedProfile == null) return;
-        if (CopyCombo.SelectedItem is not ComboBoxItem item || item.Tag is not string installId)
-            return;
+        var isPrivate = PrivateRoomCheck.IsChecked == true;
+        PasswordRow.Visibility = isPrivate ? Visibility.Visible : Visibility.Collapsed;
+        if (!isPrivate)
+        {
+            PasswordBox.Password = "";
+            PasswordPlainBox.Text = "";
+        }
+        else PasswordBox.Focus();
+        RefreshFooter();
+    }
 
-        CreateButton.IsEnabled = false;
-        CopyCombo.IsEnabled = false;
-        SetFingerprintState(FingerprintState.Loading, null);
+    // ----------------------------------------------------------------- the network
+
+    /// <summary>INFORMATIONAL, never a gate: creating and joining do not depend on Radmin, and the
+    /// launch injects the 26.x address by itself. It is what actually playing needs. Best-effort:
+    /// a probe failure reads as not ready, which costs a sentence.</summary>
+    private void PaintNetwork()
+    {
+        string? ip = null;
+        var ready = false;
         try
         {
-            await _switchActiveCopy(installId);
-            _selectedHash = await _computeHash(_selectedProfile);
-            SetFingerprintState(FingerprintState.Ok, _selectedHash);
-            CreateButton.IsEnabled = true;
+            var status = RadminVpnService.GetStatus();
+            ready = status.IsServiceRunning;
+            ip = RadminVpnService.TryGetAdapterIp();
         }
         catch (Exception ex)
         {
-            _selectedHash = "";
-            SetFingerprintState(FingerprintState.Failed, null);
-            DiagnosticLog.Write($"CreateLobbyDialog: copy switch failed: {ex.Message}");
+            DiagnosticLog.Write($"CreateLobbyDialog: Radmin status probe failed (non-fatal): {ex.Message}");
         }
-        // Re-render so the active marker + enabled state follow the switch
-        // (also restores CopyCombo.IsEnabled per CanSwitch).
-        RefreshCopyRow(_selectedProfile);
+        PaintNetwork(ready && !string.IsNullOrEmpty(ip), ip);
     }
 
-    /// <summary>
-    /// Offer a room title for the room as it currently stands.
-    ///
-    /// <para>It used to know about the MOD and nothing else, and it was called from one place -
-    /// the mod dropdown - so the title could only change when the mod did. A host who ticked
-    /// "Sala competitiva" got a name that said nothing about the one fact worth knowing before
-    /// joining, which is that the match is rated.</para>
-    ///
-    /// <para>Hung off <see cref="Refresh"/>, which is already the funnel the tick box and the
-    /// three format buttons both go through, so ticking, switching 1v1 to 2v2 and unticking all
-    /// update the box live and no handler has to remember to.</para>
-    ///
-    /// <para><b>And it still refuses to touch a title somebody wrote.</b> That test now has to
-    /// cover the competitive variants too - <see cref="RoomTitleProposal.IsOurs"/> owns it, and
-    /// its own remarks say why getting it wrong is invisible: the box would simply stop moving,
-    /// with nothing on screen to say why.</para>
-    /// </summary>
-    private void ProposeRoomTitle()
+    internal void PaintNetwork(bool ready, string? ip)
     {
-        // Reached from Refresh(), which runs while the constructor is still assembling the form.
-        if (RoomTitleBox == null || _selectedProfile == null) return;
-
-        var current = RoomTitleBox.Text?.Trim() ?? "";
-        if (!RoomTitleProposal.IsOurs(current, _profiles.Select(p => p.DisplayName),
-                                      RoomTitleBox.MaxLength))
-            return;
-
-        var proposed = RoomTitleProposal.Propose(
-            _selectedProfile.DisplayName,
-            CompetitiveCheck?.IsChecked == true,
-            _format,
-            RoomTitleBox.MaxLength);
-
-        // Guarded, because assigning Text raises TextChanged and moves the caret to the start -
-        // which would fight the host's typing on every keystroke that happened to land on one
-        // of our own titles.
-        if (proposed != RoomTitleBox.Text) RoomTitleBox.Text = proposed;
+        NetDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, ready ? "UiOk" : "UiError");
+        NetTitle.SetResourceReference(TextBlock.ForegroundProperty, ready ? "UiHeadText" : "UiErrorText");
+        NetTitle.Text = Strings.Get(ready ? "MpCreateDialogNetReady" : "MpCreateDialogNetBad");
+        NetBody.Text = ready
+            ? Strings.Format("MpCreateDialogNetReadyBody", ip ?? "")
+            : Strings.Get("MpCreateDialogNetBadBody");
+        NetHelpButton.Visibility = !ready && _openRadminHelp != null ? Visibility.Visible : Visibility.Collapsed;
+        if (ready) NetCard.ClearValue(Border.BorderBrushProperty);
+        else NetCard.BorderBrush = new SolidColorBrush(Color.FromArgb(0x73, 0xF4, 0x90, 0x0C));
     }
 
-    /// <summary>
-    /// Swap the room mod-card's placeholder 🎮 for the picked mod's real
-    /// icon (cached catalog icon.png or built-in packed icon) when one is
-    /// available; otherwise keep the emoji on the blue disc.
-    /// </summary>
-    private void UpdateModIcon(ModProfile profile)
-    {
-        var brush = LoadIconBrush(profile);
-        if (brush != null)
-        {
-            ModIconHost.Background = brush;
-            ModIconEmoji.Visibility = System.Windows.Visibility.Collapsed;
-        }
-        else
-        {
-            ModIconHost.Background = (System.Windows.Media.Brush)FindResource("MpBlueSubtle");
-            ModIconEmoji.Visibility = System.Windows.Visibility.Visible;
-        }
-    }
+    private void NetHelpButton_Click(object sender, RoutedEventArgs e) => _openRadminHelp?.Invoke();
 
-    /// <summary>
-    /// Resolve a mod's icon (cached catalog icon.png → live remote URL →
-    /// built-in packed icon, via <see cref="ModProfile.ResolveIconSource"/>)
-    /// to a UniformToFill brush. Shared with
-    /// <see cref="ModProfileIconBrushConverter"/> so the selected-mod card
-    /// disc and the dropdown items resolve icons identically. A remote icon
-    /// downloads async and can't be frozen mid-flight (unconditional Freeze
-    /// throws); unfrozen it repaints itself when the download completes.
-    /// </summary>
-    internal static System.Windows.Media.ImageBrush? LoadIconBrush(ModProfile profile)
-    {
-        string? uri = profile.ResolveIconSource();
-        if (string.IsNullOrEmpty(uri)) return null;
-        try
-        {
-            var bmp = new System.Windows.Media.Imaging.BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-            bmp.UriSource = new System.Uri(uri, System.UriKind.Absolute);
-            bmp.EndInit();
-            if (bmp.CanFreeze) bmp.Freeze();
-            var br = new System.Windows.Media.ImageBrush(bmp)
-            {
-                Stretch = System.Windows.Media.Stretch.UniformToFill,
-            };
-            if (br.CanFreeze) br.Freeze();
-            return br;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    // ------------------------------------------------------------------- the footer
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
@@ -982,41 +703,26 @@ public partial class CreateLobbyDialog : Window
 
     private async void CreateButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedProfile == null || string.IsNullOrEmpty(_selectedHash))
-        {
-            ShowError(Strings.Get("MpCreateDialogNoFingerprint"));
-            return;
-        }
+        if (_selectedProfile == null || string.IsNullOrEmpty(_selectedHash) || CurrentError() != null) return;
 
         var title = RoomTitleBox.Text.Trim();
-        if (title.Length < 3)
-        {
-            ShowError(Strings.Get("MpCreateDialogTitleTooShort"));
-            return;
-        }
+        var maxPlayers = Math.Min(_lobbyMaxPlayers, RoomSize);
 
-        var maxPlayers = Math.Min(_lobbyMaxPlayers, _maxPlayers);
-
-        CreateButton.IsEnabled = false;
+        _busy = true;
+        RefreshFooter();
         CancelButton.IsEnabled = false;
-        // The busy caption, not just the disabled state: going inert is what a button does
-        // when there is nothing to do, so on its own it says the opposite of what is happening.
+        // The busy caption, not just the disabled state: going inert is what a button does when
+        // there is nothing to do, so on its own it says the opposite of what is happening.
         CreateButton.Content = Strings.Get("MpCreateDialogCreating");
-        ErrorText.Visibility = Visibility.Collapsed;
+        CreateButton.Opacity = 1;
 
         try
         {
-            // Password is only honoured when "Private room" is on —
-            // matches the new UI grouping and prevents the user
-            // from typing a password that the server quietly drops
-            // because IsPrivate was never set.
-            var isPrivate = PrivateRoomCheck?.IsChecked == true;
-            var typed = CurrentPassword();
-            var password = isPrivate && !string.IsNullOrEmpty(typed) ? typed : null;
+            var password = PrivateRoomCheck.IsChecked == true ? CurrentPassword() : null;
             CreatedLobbyProfile = _selectedProfile;
             CreatedLobbyTitle = title;
             CreatedLobbyMaxPlayers = maxPlayers;
-            CreatedLobbyIsPrivate = isPrivate;
+            CreatedLobbyIsPrivate = !string.IsNullOrEmpty(password);
             CreatedLobby = await _session.Api.CreateLobbyAsync(new CreateLobbyRequest
             {
                 Title = title,
@@ -1025,123 +731,59 @@ public partial class CreateLobbyDialog : Window
                 MaxPlayers = maxPlayers,
                 SpectatorSlots = _spectatorSlots,
                 Password = password,
-                Competitive = CompetitiveCheck.IsChecked == true,
+                Competitive = Competitive,
             });
             // The server's answer, not ours. An older backend does not send the field at all,
-            // which deserialises to false — a casual room, which is exactly how such a backend
-            // will treat the match anyway.
+            // which deserialises to false: a casual room, which is how it will treat the match.
             CreatedLobbyIsCompetitive = CreatedLobby?.Competitive == true;
-            // The EFFECTIVE count, from the server's own answer. It clamps the request, so
-            // reading back what we asked for would describe a room that does not exist.
             CreatedLobbySpectatorSlots = CreatedLobby?.SpectatorSlots ?? 0;
-            CreatedLobbyCompetitiveDowngraded =
-                CompetitiveCheck.IsChecked == true && !CreatedLobbyIsCompetitive;
-            CreatedLobbyFormat = RoomFormats.Resolve(CreatedLobbyIsCompetitive, maxPlayers);
+            CreatedLobbyCompetitiveDowngraded = Competitive && !CreatedLobbyIsCompetitive;
+            CreatedLobbyFormat = RoomFormats.Resolve(CreatedLobbyIsCompetitive, maxPlayers, CreatedLobbySpectatorSlots);
+            if (_config != null)
+            {
+                _config.LastRoomKind = RoomFormats.KindToken(_kind);
+                _config.Save();
+            }
             DialogResult = true;
             Close();
         }
         catch (LobbyApiException ex) when (IsLauncherTooOld(ex))
         {
-            // Not an error strip: nothing typed into this dialog can fix an old build. The
-            // dialog closes and hands the refusal to the tab, which explains it and offers
-            // the update — the same path a refused JOIN already takes.
+            // Not an error strip: nothing typed into this dialog can fix an old build. The dialog
+            // closes and hands the refusal to the tab, which explains it and offers the update.
             DiagnosticLog.Write($"CreateLobbyDialog: refused, launcher too old ({ex.Message}).");
             RefusedAsTooOld = ex;
             DialogResult = false;
             Close();
         }
-        catch (LobbyApiException ex)
-        {
-            DiagnosticLog.Write($"CreateLobbyDialog: API error {ex.Code}: {ex.Message}");
-            ShowError(ex.Message);
-            CreateButton.Content = Strings.Get("MpCreateDialogCreate");
-            CreateButton.IsEnabled = true;
-            CancelButton.IsEnabled = true;
-        }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"CreateLobbyDialog: {ex.GetType().Name}: {ex.Message}");
-            ShowError(ex.Message);
+            _busy = false;
+            CreateButton.ClearValue(OpacityProperty);
             CreateButton.Content = Strings.Get("MpCreateDialogCreate");
-            CreateButton.IsEnabled = true;
             CancelButton.IsEnabled = true;
+            RefreshFooter();
+            ErrorText.Text = ex.Message;
+            ErrorText.Visibility = Visibility.Visible;
         }
     }
 
-    /// <summary>
-    /// Set when the server refused the room because this build is too old for multiplayer.
-    /// The dialog closes on that answer; the tab shows the notice and offers the update.
-    /// </summary>
-    public LobbyApiException? RefusedAsTooOld { get; private set; }
-
-    /// <summary>The server's "this launcher is too old" refusal, by its code — the message
-    /// is bilingual prose and the status is a 426 only on a backend new enough to send one.</summary>
+    /// <summary>The server's "this launcher is too old" refusal, by its code: the message is
+    /// bilingual prose and the status is a 426 only on a backend new enough to send one.</summary>
     internal static bool IsLauncherTooOld(LobbyApiException ex)
         => ex != null && string.Equals(ex.Code, "launcher_too_old", StringComparison.OrdinalIgnoreCase);
 
-    private void ShowError(string message)
+    /// <summary>A prototype state, for the harness: <c>--preview-dialog=createroom:b</c>.</summary>
+    internal void FillPreview(string title, RoomFormat kind, int observers, string password)
     {
-        ErrorText.Text = message;
-        ErrorText.Visibility = Visibility.Visible;
-    }
-
-    /// <summary>
-    /// Live "X / 64" counter under the Room title field. Cheap to
-    /// update; gives the user immediate feedback when they bump
-    /// up against the MaxLength.
-    /// </summary>
-    private void RoomTitleBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (TitleCounter == null) return;
-        var len = RoomTitleBox.Text?.Length ?? 0;
-        TitleCounter.Text = $"{len}/{RoomTitleBox.MaxLength}";
-    }
-
-    /// <summary>
-    /// Gate the PasswordBox on the Private room checkbox so users
-    /// can't accidentally set a password that isn't enforced. When
-    /// unchecked we also clear the field so an old value doesn't
-    /// leak into the request.
-    /// </summary>
-    private void PrivateRoomCheck_Changed(object sender, RoutedEventArgs e)
-    {
-        if (PasswordRow == null || PrivateRoomCheck == null) return;
-        var isPrivate = PrivateRoomCheck.IsChecked == true;
-        PasswordRow.Visibility = isPrivate ? Visibility.Visible : Visibility.Collapsed;
-        if (!isPrivate)
+        SelectKind(kind);
+        if (observers > 0) SelectSpectatorSlots(observers);
+        RoomTitleBox.Text = title;
+        if (password.Length > 0)
         {
-            // Clear BOTH, or a password typed, revealed and then un-privated would still
-            // be sitting in the plain box the next time the row appears.
-            PasswordBox.Password = "";
-            PasswordPlainBox.Text = "";
+            PrivateRoomCheck.IsChecked = true;
+            PasswordBox.Password = password;
         }
-        Refresh();
     }
-
-}
-
-/// <summary>
-/// Resolves a <see cref="ModProfile"/> — bound from a mod ComboBoxItem's Tag —
-/// to a circular icon brush for the create-room mod dropdown items. Returns the
-/// mod's real icon when available, else a neutral blue-subtle placeholder disc
-/// so an icon-less mod still shows a consistent avatar. The selected mod's icon
-/// is handled separately by the disc beside the combo (<c>UpdateModIcon</c>), so
-/// the combo's selection box keeps showing just the name string — only the
-/// dropdown items use this converter.
-/// </summary>
-public sealed class ModProfileIconBrushConverter : System.Windows.Data.IValueConverter
-{
-    public object? Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
-    {
-        if (value is ModProfile profile)
-        {
-            var brush = CreateLobbyDialog.LoadIconBrush(profile);
-            if (brush != null) return brush;
-        }
-        return Application.Current?.TryFindResource("MpBlueSubtle")
-            ?? (object)System.Windows.Media.Brushes.Transparent;
-    }
-
-    public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
-        => throw new NotSupportedException();
 }

@@ -7478,29 +7478,84 @@ public static partial class Strings
             [LangEn] = "Waiting for the host to send the result…",
             [LangEs] = "Esperando a que el anfitrión envíe el resultado…",
         },
-        ["MpCreateDialogTitle"] = new() { [LangEn] = "Create a room", [LangEs] = "Crear una sala" },
-        ["MpCreateDialogTitleLabel"] = new() { [LangEn] = "Room title", [LangEs] = "Título de la sala" },
-        ["MpCreateDialogMaxPlayers"] = new() { [LangEn] = "Max players", [LangEs] = "Jugadores máx." },
-        ["MpCreateDialogObservers"] = new() { [LangEn] = "Observers", [LangEs] = "Observadores" },
+        ["MpCreateDialogTitle"] = new() { [LangEn] = "Create room", [LangEs] = "Crear sala" },
+        ["MpCreateDialogTitleLabel"] = new() { [LangEn] = "NAME", [LangEs] = "NOMBRE" },
+        ["MpCreateDialogMaxPlayers"] = new() { [LangEn] = "SEATS", [LangEs] = "PLAZAS" },
+        ["MpCreateDialogObservers"] = new() { [LangEn] = "OBSERVERS", [LangEs] = "OBSERVADORES" },
+        ["MpCreateDialogKind"] = new() { [LangEn] = "ROOM TYPE", [LangEs] = "TIPO DE SALA" },
+        ["MpCreateDialogKindCasual"] = new() { [LangEn] = "Casual", [LangEs] = "Casual" },
+        ["MpCreateDialogKindNoElo"] = new() { [LangEn] = "no ELO", [LangEs] = "sin ELO" },
+        ["MpCreateDialogKindRanked"] = new() { [LangEn] = "competitive", [LangEs] = "competitiva" },
+        ["MpCreateDialogKindHintCasual"] = new()
+        {
+            [LangEn] = "No ELO. You choose how many seats the room has.",
+            [LangEs] = "Sin ELO. Eliges cuántas plazas tiene la sala.",
+        },
+        ["MpCreateDialogKindHintRanked"] = new()
+        {
+            [LangEn] = "Counts for everyone's ELO. Tick «Record Game» in AoE3: the result is read from the recording.",
+            [LangEs] = "Cuenta para el ELO de todos. Marca «Record Game» en AoE3: el resultado se lee de la grabación.",
+        },
+        ["MpCreateDialogToPlay"] = new() { [LangEn] = "to play", [LangEs] = "para jugar" },
+        ["MpCreateDialogObserverOne"] = new() { [LangEn] = "observer", [LangEs] = "observador" },
+        ["MpCreateDialogObserverMany"] = new() { [LangEn] = "observers", [LangEs] = "observadores" },
+        ["MpCreateDialogSuggestNight"] = new() { [LangEn] = "Evening match", [LangEs] = "Partida de la noche" },
+        ["MpCreateDialogModsTitle"] = new() { [LangEn] = "INSTALLED", [LangEs] = "INSTALADOS" },
+        ["MpCreateDialogModsFoot"] = new()
+        {
+            [LangEn] = "You can only create rooms for installed mods.",
+            [LangEs] = "Solo puedes crear salas de mods instalados.",
+        },
+        ["MpCreateDialogNamePlaceholder"] = new() { [LangEn] = "Give the room a name", [LangEs] = "Ponle un nombre a la sala" },
+        ["MpCreateDialogPasswordPlaceholder"] = new() { [LangEn] = "Password", [LangEs] = "Contraseña" },
+        ["MpCreateDialogNoPassword"] = new()
+        {
+            [LangEn] = "Type the password, or turn it off.",
+            [LangEs] = "Escribe la contraseña o desactívala.",
+        },
+        ["MpCreateDialogNetReady"] = new() { [LangEn] = "Radmin VPN ready", [LangEs] = "Radmin VPN listo" },
+        ["MpCreateDialogNetReadyBody"] = new()
+        {
+            [LangEn] = "Your IP on the AoE3 network is {0}. Others receive it when they join your room.",
+            [LangEs] = "Tu IP en la red de AoE3 es {0}. Los demás la reciben al entrar en tu sala.",
+        },
+        ["MpCreateDialogNetBad"] = new() { [LangEn] = "Radmin VPN isn't ready", [LangEs] = "Radmin VPN no está listo" },
+        ["MpCreateDialogNetBadBody"] = new()
+        {
+            [LangEn] = "You can create the room anyway, but you need it to play: others can't see you on the network until it is.",
+            [LangEs] = "Puedes crear la sala igual, pero lo necesitas para jugar: los demás no te ven en la red hasta que lo esté.",
+        },
+        ["MpCreateDialogNetHelp"] = new() { [LangEn] = "Open the assistant", [LangEs] = "Abrir el asistente" },
+        ["MpCreateDialogObserversLeaveOne"] = new()
+        {
+            [LangEn] = "{0} observer leaves {1} seats to play.",
+            [LangEs] = "{0} observador deja {1} plazas para jugar.",
+        },
+        ["MpCreateDialogObserversLeave"] = new()
+        {
+            [LangEn] = "{0} observers leave {1} seats to play.",
+            [LangEs] = "{0} observadores dejan {1} plazas para jugar.",
+        },
+        ["MpCreateDialogObserversSeats"] = new()
+        {
+            [LangEn] = "They are on top of the format's {0} seats, and each one takes a place on the map.",
+            [LangEs] = "Van aparte de las {0} plazas del formato y ocupan un sitio del mapa cada uno.",
+        },
         ["MpCreateDialogObserversHint"] = new()
         {
             // The whole point of the row, said before it is used rather than discovered after.
             // AoE3 has no spectator mode: an observer is a real player in a real slot, and it
             // is the MAP that leaves them with nothing. So it only works on a map built for it
             // — which is why the sentence names them instead of saying "supported maps".
-            [LangEn] = "An observer takes a seat and plays nothing — no town centre, no "
-                     + "settlers. Only on an observer map (OBS_ESOC…); on any other they "
-                     + "start as an ordinary player.",
-            [LangEs] = "Un observador ocupa una plaza y no juega: sin centro urbano ni "
-                     + "aldeanos. Solo en un mapa de observador (OBS_ESOC…); en cualquier "
-                     + "otro empieza como un jugador normal.",
+            [LangEn] = "An observer joins the match without playing. AoE3 has no spectator mode: "
+                     + "each observer takes a place on the map.",
+            [LangEs] = "Quien observa entra en la partida sin jugar. AoE3 no tiene modo espectador: "
+                     + "cada observador ocupa un sitio del mapa.",
         },
-        ["MpCreateDialogObserversCost"] = new()
+        ["MpCreateDialogObserversMaps"] = new()
         {
-            // {0} observers, {1} people actually playing. The second number is the one a host
-            // is about to get wrong, so it is stated rather than left to be subtracted.
-            [LangEn] = "{0} watching, {1} playing.",
-            [LangEs] = "{0} mirando, {1} jugando.",
+            [LangEn] = "Only on an observer map (OBS_ESOC…). On any other they start as an ordinary player.",
+            [LangEs] = "Solo en un mapa de observador (OBS_ESOC…). En cualquier otro empieza como un jugador normal.",
         },
         ["MpCreateDialogPassword"] = new()
         {
@@ -7511,17 +7566,8 @@ public static partial class Strings
         // implies the others are not.
         ["MpCreateDialogPrivate"] = new()
         {
-            [LangEn] = "Private room",
-            [LangEs] = "Sala privada",
-        },
-        // Heads-up shown next to the "Private room" toggle so the host chooses
-        // knowingly: a private room is deliberately NOT announced (backend skips
-        // it for Discord AND the in-app popup), it's only reachable by browsing
-        // + entering the password.
-        ["MpCreateDialogPrivateHint"] = new()
-        {
-            [LangEn] = "A private room isn't announced (on Discord or in-app) and needs the password to join.",
-            [LangEs] = "Una sala privada no se anuncia (ni en Discord ni como aviso) y se une con la contraseña.",
+            [LangEn] = "With a password",
+            [LangEs] = "Con contraseña",
         },
         // Competitive. The hint is long on purpose: everything it lists is a restriction the
         // host is agreeing to, and the one that surprises people is not being able to walk out
@@ -7532,23 +7578,6 @@ public static partial class Strings
         {
             [LangEn] = "Competitive room",
             [LangEs] = "Sala competitiva",
-        },
-        // THE FORFEIT CLAUSE LEFT THIS STRING, and it has to stay out. It used to end with
-        // "walking out after the first five minutes counts as a loss", which is a 1v1 rule:
-        // decideByAbandon refuses anything but two participants, so in a team room the launcher
-        // was threatening a penalty the server does not apply. It now lives in
-        // MpCreateDialogCompetitiveForfeit, shown only for 1v1. The two clauses that remain are
-        // true for every format — ConfirmRecordGameAsync and RoomMatchState.HoldLeave both key
-        // off the competitive flag alone.
-        ["MpCreateDialogCompetitiveHint"] = new()
-        {
-            // FOUR LINES BECAME ONE, and the rest did not vanish - it became the amber Record
-            // Game box, which now appears exactly when this is ticked. The two said the same
-            // thing in different words, fifteen pixels apart, and the box says it at the
-            // moment it becomes true. A checkbox caption can carry what the room IS; how the
-            // result gets decided needs its own space.
-            [LangEn] = "Matches in this room count towards the rating.",
-            [LangEs] = "Las partidas de esta sala cuentan para el ELO.",
         },
         // 1v1 only. See the note above the hint, and MpPreflightAbandon, which this mirrors
         // word for word — including what it deliberately does NOT name: closing the game is not a
@@ -7573,14 +7602,6 @@ public static partial class Strings
         ["MpFormat1v1"] = new() { [LangEn] = "1v1", [LangEs] = "1v1" },
         ["MpFormat2v2"] = new() { [LangEn] = "2v2", [LangEs] = "2v2" },
         ["MpFormat3v3"] = new() { [LangEn] = "3v3", [LangEs] = "3v3" },
-        // Sentence case, like every other section label in this dialog. It was the one
-        // heading in caps, which made it read as a different KIND of question from the
-        // identical ones outside the card.
-        ["MpCreateDialogFormat"] = new()
-        {
-            [LangEn] = "Format",
-            [LangEs] = "Formato",
-        },
         // Shown for a TEAM format only. It informs, it does not forbid — and it has to be said
         // here, because the hint above promises a rating and for these two that is not true yet.
         // Shown on the end-of-match card for a team game whose result is in but whose
@@ -7594,20 +7615,6 @@ public static partial class Strings
                      + "una lectura del otro bando. Cuenta en cuanto uno de ellos cierre el "
                      + "juego con el launcher abierto.",
         },
-        ["MpCreateDialogCompetitiveTeamNote"] = new()
-        {
-            // It used to say a team match moved nobody's rating. It does now — on its own
-            // ladder — so what this has to explain instead is the condition, because that
-            // is the part a player can do something about: somebody on the OTHER side has
-            // to still have the launcher open when the game closes.
-            [LangEn] = "A {0} scores on its own ladder — the team one, separate from 1v1. It "
-                     + "counts once a player from EACH side has read the recording: two "
-                     + "readings that agree, one per team, so no side decides its own result.",
-            [LangEs] = "Un {0} puntúa en una clasificación aparte, la de equipos, separada de "
-                     + "la de 1v1. Cuenta cuando un jugador de CADA bando lee la grabación: "
-                     + "dos lecturas que coincidan, una por equipo, para que ningún bando "
-                     + "decida su propio resultado.",
-        },
         // The server refused the competitive room and made a casual one. Saying nothing would
         // leave the host playing as if their rating were on the line when it is not.
         ["MpCreateDialogCompetitiveDowngraded"] = new()
@@ -7619,15 +7626,15 @@ public static partial class Strings
         },
         ["MpCreateDialogModLabel"] = new()
         {
-            [LangEn] = "Mod",
-            [LangEs] = "Mod",
+            [LangEn] = "MOD",
+            [LangEs] = "MOD",
         },
         // Label + read-only hint for the create-room copy picker (shown only
         // when the selected mod has 2+ installed copies).
         ["MpCreateDialogCopyLabel"] = new()
         {
-            [LangEn] = "Copy to use",
-            [LangEs] = "Copia a usar",
+            [LangEn] = "COPY",
+            [LangEs] = "COPIA",
         },
         ["MpCreateDialogCopyHintReadonly"] = new()
         {
@@ -7644,27 +7651,23 @@ public static partial class Strings
         // usual reason another player cannot join, so it belongs on screen.
         ["MpCreateDialogFingerprintOk"] = new()
         {
-            [LangEn] = "Fingerprint verified · {0}",
-            [LangEs] = "Huella verificada · {0}",
+            [LangEn] = "Mod fingerprint ready · {0}",
+            [LangEs] = "Huella del mod lista · {0}",
         },
         ["MpCreateDialogFingerprintLoading"] = new()
         {
-            [LangEn] = "Computing fingerprint…",
-            [LangEs] = "Calculando huella…",
+            [LangEn] = "Computing the mod fingerprint…",
+            [LangEs] = "Calculando la huella del mod…",
         },
         ["MpCreateDialogFingerprintFailed"] = new()
         {
-            [LangEn] = "Couldn't read the fingerprint — verify the install",
-            [LangEs] = "No se pudo leer la huella — verifica la instalación",
+            [LangEn] = "Couldn't compute the mod fingerprint",
+            [LangEs] = "No se pudo calcular la huella del mod",
         },
-        // Title suggestions. They are appended to the room title, so they read as
-        // things a host announces about the match, not as titles by themselves.
-        ["MpCreateDialogSuggest1"] = new() { [LangEn] = "Quick 1v1", [LangEs] = "1v1 rápido" },
-        ["MpCreateDialogSuggest2"] = new() { [LangEn] = "No rush 10 min", [LangEs] = "Sin rush 10 min" },
         ["MpCreateDialogPrivateBody"] = new()
         {
-            [LangEn] = "Not announced. Share the code or the password.",
-            [LangEs] = "No se anuncia. Comparte el código o la contraseña.",
+            [LangEn] = "The room shows in the list, but only those who know the password can join.",
+            [LangEs] = "La sala sale en la lista, pero solo entra quien sepa la contraseña.",
         },
         ["MpCreateDialogShowPassword"] = new() { [LangEn] = "Show", [LangEs] = "Mostrar" },
         ["MpCreateDialogHidePassword"] = new() { [LangEn] = "Hide", [LangEs] = "Ocultar" },
@@ -7679,77 +7682,15 @@ public static partial class Strings
                      + "Sin grabación nadie sabe quién ganó.",
         },
         ["MpCreateDialogRecordWarnName"] = new() { [LangEn] = "Record Game", [LangEs] = "Record Game" },
-        ["MpCreateDialogAnnounceNote"] = new()
-        {
-            [LangEn] = "It will be announced in the global chat and on Discord.",
-            [LangEs] = "Se anunciará en el chat global y en Discord.",
-        },
-        ["MpCreateDialogAnnounceNotePrivate"] = new()
-        {
-            [LangEn] = "A private room is not announced anywhere.",
-            [LangEs] = "Una sala privada no se anuncia en ningún sitio.",
-        },
-        // The counts box, assembled from these with " \u00b7 " between them. Lower case and
-        // no full stops: they are fragments of one line, not sentences.
-        ["MpCreateDialogSummarySeats"] = new()
-        {
-            [LangEn] = "{0} seats",
-            [LangEs] = "{0} plazas",
-        },
-        ["MpCreateDialogSummarySeatsOf"] = new()
-        {
-            // The format fixes how many PLAY; the second number is the room cap, which is
-            // what says the rest of the seats are not missing, they are unused.
-            [LangEn] = "{0} of {1} seats",
-            [LangEs] = "{0} de {1} plazas",
-        },
-        ["MpCreateDialogSummaryObservers"] = new()
-        {
-            [LangEn] = "{0} watching",
-            [LangEs] = "{0} mirando",
-        },
-        ["MpCreateDialogSummaryPublic"] = new()
-        {
-            [LangEn] = "public room",
-            [LangEs] = "sala p\u00fablica",
-        },
-        ["MpCreateDialogSummaryPrivate"] = new()
-        {
-            [LangEn] = "private room",
-            [LangEs] = "sala privada",
-        },
-        ["MpCreateDialogSummaryElo"] = new()
-        {
-            [LangEn] = "counts for ELO",
-            [LangEs] = "punt\u00faa para el ELO",
-        },
-        ["MpCreateDialogSummaryNoElo"] = new()
-        {
-            // Said of a team room as well, and that is the point: it is competitive, it is
-            // playable, and it still moves nobody's rating.
-            [LangEn] = "no ELO",
-            [LangEs] = "sin ELO",
-        },
-        ["MpCreateDialogSummaryAnnounced"] = new()
-        {
-            [LangEn] = "announced in chat and on Discord",
-            [LangEs] = "se anuncia en el chat y en Discord",
-        },
-        ["MpCreateDialogSummaryQuiet"] = new()
-        {
-            // The promise a private room is ticked for.
-            [LangEn] = "not announced",
-            [LangEs] = "no se anuncia",
-        },
         ["MpCreateDialogTitleTooShort"] = new()
         {
-            [LangEn] = "The title needs at least 3 characters.",
-            [LangEs] = "El título necesita al menos 3 caracteres.",
+            [LangEn] = "The name needs at least 3 characters.",
+            [LangEs] = "El nombre necesita al menos 3 caracteres.",
         },
         ["MpCreateDialogNoFingerprint"] = new()
         {
-            [LangEn] = "Pick a mod — the fingerprint is still being computed.",
-            [LangEs] = "Elige un mod — la huella todavía se está calculando.",
+            [LangEn] = "Couldn't compute the mod fingerprint. Check the copy in the mod's settings.",
+            [LangEs] = "No se pudo calcular la huella del mod. Comprueba la copia en Ajustes del mod.",
         },
         // KEPT FOR RECOGNITION ONLY - do not delete as unused. The proposed room title is a
         // network value now and no longer localized (see RoomTitleProposal), but titles this
@@ -7900,22 +7841,6 @@ public static partial class Strings
         // happened" at the exact moment the user needs to know it did.
         ["MpCreateDialogCreating"] = new() { [LangEn] = "Creating…", [LangEs] = "Creando…" },
         ["MpCreateDialogCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
-        ["MpCreateDialogRadminWarning"] = new()
-        {
-            [LangEn] = "ℹ Radmin VPN isn't active. You can still create the room and players can join it — "
-                     + "to actually play, install/enable Radmin and join the AoE3 network (every player needs it).",
-            [LangEs] = "ℹ Radmin VPN no está activo. Puedes crear la sala igual y los jugadores pueden unirse — "
-                     + "para jugar, instala/activa Radmin y únete a la red de AoE3 (todos los jugadores lo necesitan).",
-        },
-        ["MpCreateDialogRadminInfo"] = new()
-        {
-            [LangEn] = "ℹ Radmin VPN isn't active, but the room is created normally and your Radmin IP ({0}) "
-                     + "is injected automatically. To actually play, open Radmin and connect to the AoE3 network "
-                     + "(every player needs it).",
-            [LangEs] = "ℹ Radmin VPN no está activo, pero la sala se crea igual y tu IP de Radmin ({0}) se "
-                     + "inyecta automáticamente. Para jugar, abre Radmin y conéctate a la red de AoE3 (todos "
-                     + "los jugadores lo necesitan).",
-        },
         ["MpModNotInstalled"] = new()
         {
             [LangEn] = "Install the mod first to host or join a room for it.",

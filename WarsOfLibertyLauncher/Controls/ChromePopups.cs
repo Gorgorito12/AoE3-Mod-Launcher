@@ -28,6 +28,9 @@ internal static class ChromePopups
 {
     private static Popup? _open;
 
+    /// <summary>The room around a card for its shadow (blur 20, drop 4).</summary>
+    internal static readonly System.Windows.Thickness ShadowRoom = new(24, 20, 24, 28);
+
     // Toggle support: when a tracked popup closes we remember WHICH opener it
     // belonged to and WHEN. A StaysOpen=false popup auto-dismisses on the
     // mouse-down that re-clicks its own opener, so by the time the opener's
@@ -52,6 +55,12 @@ internal static class ChromePopups
     /// every open for toggle to work.</param>
     public static void Track(Popup popup, object? owner = null)
     {
+        PopupGlass.Watch(popup);
+        // A popup's window is exactly as big as its content, and a shadow is cut off at that edge:
+        // over the cover it read as a square band around a rounded card. Placement already leaves
+        // a child's margin out, so nothing moves.
+        if (popup.Child is System.Windows.FrameworkElement { Effect: not null } shadowed)
+            shadowed.Margin = ShadowRoom;
         popup.Opened += (_, _) =>
         {
             if (ReferenceEquals(_open, popup)) return;

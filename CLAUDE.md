@@ -568,6 +568,29 @@ rather than the reverse.
   file. The Radmin assistant has THREE steps and installs Radmin itself. `--preview-dialog=` also
   takes `launcherupdate:*`, `installfolder:*`, `radmin:*`, `publish:<step>`, `updatepill:*`, `bar:*`.
 
+- **Screen 88 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the create-room
+  dialog** (`CompetitiveCheck`, the format row that is always visible, the 596 width, the eight
+  seats it opened on, the summary line). The type is one row (`_kind`, Casual or a format, kept in
+  `LauncherConfig.LastRoomKind`), a suggestion REPLACES the name, and the footer names what stops
+  the room before the click. `Controls/SegmentRow` is the segmented row of the creation dialogs.
+  `ModDialogChrome.AttachPicked` is the chassis of a window whose mod is picked inside it: it can
+  run again, and `FrostCards` shows a once-blurred copy of the image under the cards.
+  `TitleBar.PlainTitle` is the Segoe title of the room and tournament windows. The room NAME stays
+  the English network value of `RoomTitleProposal`, against the prototype's Spanish samples.
+
+- **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the
+  piece of the blurred cover under it plus the level's tint (`GlassTheme.Spec.Menu`), which supersedes
+  the "denser than the design" note below while a cover is on screen; with none, `Spec.Floating`
+  stays. `ChromePopups.Track` also gives a shadowed popup room for its shadow: Placement already
+  leaves a child's Margin out, so nothing moves and no offset compensates it.
+
+- **Tab lag is measured: every click that changes the page writes `SWITCH  a -> b  N ms (first
+  time|repeat)`** (`ScreenTrace.Clicked` + a one-frame `CompositionTarget.Rendering`, click to the
+  frame handed over). `perf switches` and `perf switchesfirst` drive every tab; the goals are 100 ms
+  repeated and 250 ms the first time, and `compare` fails above them. `testbed.py check <name> --ref
+  <prototype> --block <id> [--title T] -- <launch args>` opens the launcher and leaves prototype,
+  launcher and difference side by side, at 1.25, in `out/check`.
+
 - **Screen 103 of `docs/design_base_launcher_2` SUPERSEDES what this file says about small dialogs,
   popups and menus.** Every small dialog derives from `Controls/BaseDialog` (bar of 40, a tone tile
   beside a serif headline, a footer with Cancel beside the one primary button), whose

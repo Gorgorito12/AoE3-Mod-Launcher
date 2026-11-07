@@ -65,7 +65,94 @@ internal static class ModDialogChrome
 
         // Whatever the dialog paints with the action blue takes the mod's colour here, and nowhere
         // else: a resource in the window wins over the application's.
+        TintPrimary(window, accent);
+    }
+
+    /// <summary>
+    /// The chassis of a creation window (88, 81): the same pieces as <see cref="Attach"/> with the
+    /// numbers those two designs draw, for a mod picked INSIDE the window. So it can run again: it
+    /// takes down what the previous mod put up.
+    /// </summary>
+    internal static Color AttachPicked(Window window, TitleBar bar, Grid root, ModProfile mod, double width)
+    {
+        foreach (var old in root.Children.OfType<FrameworkElement>().Where(c => ReferenceEquals(c.Tag, PickedLayer)).ToList())
+            root.Children.Remove(old);
+
+        var accent = Config is { } settings
+            ? ModTheme.AccentOf(mod.AccentColor, settings.UseModColor)
+            : Color.FromRgb(0x2F, 0x7F, 0xE0);
+        var rows = System.Math.Max(1, root.RowDefinitions.Count);
+        var at = 0;
+        void Add(FrameworkElement layer)
+        {
+            layer.Tag = PickedLayer;
+            root.Children.Insert(at++, Layer(layer, rows));
+        }
+
+        var image = Config?.ShowModImage == true
+            ? MainWindow.TryLoadTileImage(mod.ResolveHeroSources().FirstOrDefault(), MainWindow.StripDecodeWidth)
+            : null;
+        if (image != null)
+        {
+            var strip = image.Clone();
+            strip.Stretch = Stretch.Fill;
+            if (strip.ImageSource is System.Windows.Media.Imaging.BitmapSource { PixelWidth: > 0 } source)
+                strip.Viewbox = HeroCover.Viewbox(source.PixelWidth, source.PixelHeight, width, StripHeight, .3);
+            Add(new Border { Height = StripHeight, VerticalAlignment = VerticalAlignment.Top, Background = strip });
+
+            // The frost of the cards, as the Library does it: the image blurred once and shown only
+            // where a card lies (FrostCards). A live blur behind a dialog is what the base forbids.
+            if (GlassTheme.Normalize(Config?.GlassLevel) != GlassTheme.Solid
+                && MainWindow.BuildBlurredCover(image.ImageSource) is { } blurred)
+            {
+                blurred.Viewbox = strip.Viewbox;
+                var frost = new Border { Height = StripHeight, VerticalAlignment = VerticalAlignment.Top, Background = blurred, Clip = Geometry.Empty };
+                frost.Name = FrostName;
+                Add(frost);
+            }
+        }
+        var fade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(0x59, 0x0F, 0x1C, 0x2E), 0));
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(0xC7, 0x0F, 0x1C, 0x2E), .55));
+        fade.GradientStops.Add(new GradientStop(Color.FromRgb(0x0F, 0x1C, 0x2E), 1));
+        Add(new Rectangle { Height = StripHeight + 2, VerticalAlignment = VerticalAlignment.Top, Fill = fade });
+
+        var glow = new RadialGradientBrush { Center = new Point(.8, 0), GradientOrigin = new Point(.8, 0), RadiusX = .6, RadiusY = .6 };
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x42, accent.R, accent.G, accent.B), 0));
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0, accent.R, accent.G, accent.B), .72));
+        Add(new Rectangle { Height = 360, Margin = new Thickness(0, 220, 0, 0), VerticalAlignment = VerticalAlignment.Top, Fill = glow });
+
+        if (Config is { } config) bar.Background = new SolidColorBrush(GlassTheme.ModBar(accent, config.GlassLevel));
+        if (MainWindow.TryLoadTileImage(mod.ResolveIconSource()) is { } icon) bar.TitleIcon = icon.ImageSource;
+        TintPrimary(window, accent);
+        return accent;
+    }
+
+    /// <summary>The primary button, its hover and its halo, which all follow the mod.</summary>
+    private static void TintPrimary(Window window, Color accent)
+    {
         window.Resources["MpAction"] = new SolidColorBrush(accent);
+        window.Resources["WindowPrimaryHover"] = new SolidColorBrush(ModAccent.Mix(accent, Colors.White, .12));
+        window.Resources["WindowPrimaryHalo"] = accent;
+    }
+
+    private static readonly object PickedLayer = new();
+    private const string FrostName = "CardFrost";
+
+    /// <summary>Shows the blurred image under these cards and nowhere else. Cards and layer are
+    /// siblings' descendants, so the rectangles go through their common ancestor.</summary>
+    internal static void FrostCards(Grid root, FrameworkElement[] cards)
+    {
+        var frost = root.Children.OfType<Border>().FirstOrDefault(c => c.Name == FrostName);
+        if (frost == null) return;
+        var clip = new GeometryGroup();
+        foreach (var card in cards.Where(c => c.IsVisible && c.ActualHeight > 0))
+        {
+            var rect = card.TransformToVisual(root).TransformBounds(new Rect(card.RenderSize));
+            clip.Children.Add(new RectangleGeometry(rect, 12, 12));
+        }
+        clip.Freeze();
+        frost.Clip = clip;
     }
 
     /// <summary>A window of the whole launcher, not of one mod (designs 72, 77, 78): navy lit by
@@ -94,7 +181,7 @@ internal static class ModDialogChrome
         var accent = ModTheme.AccentOf(mod.AccentColor, config.UseModColor);
         bar.Background = new SolidColorBrush(GlassTheme.ModBar(accent, config.GlassLevel));
         if (MainWindow.TryLoadTileImage(mod.ResolveIconSource()) is { } icon) bar.TitleIcon = icon.ImageSource;
-        window.Resources["MpAction"] = new SolidColorBrush(accent);
+        TintPrimary(window, accent);
         return accent;
     }
 
@@ -102,6 +189,24 @@ internal static class ModDialogChrome
     public static void SetLineHeight(double factor, params TextBlock[] texts)
     {
         foreach (var text in texts) text.LineHeight = text.FontSize * factor;
+    }
+
+    /// <summary>The same for a line tighter than the font's own, as in <c>font: 11px/1</c>, which
+    /// the default stacking ignores. Applied once the text is in the tree: until then a size that
+    /// comes from a resource still reads as the default.</summary>
+    public static void SetTightLine(double factor, params TextBlock[] texts)
+    {
+        foreach (var text in texts)
+        {
+            text.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+            void Apply(object sender, RoutedEventArgs e)
+            {
+                text.Loaded -= Apply;
+                text.LineHeight = text.FontSize * factor;
+            }
+            if (text.IsLoaded) Apply(text, new RoutedEventArgs());
+            else text.Loaded += Apply;
+        }
     }
 
     /// <summary>The small green tick of a dialog's list of facts.</summary>

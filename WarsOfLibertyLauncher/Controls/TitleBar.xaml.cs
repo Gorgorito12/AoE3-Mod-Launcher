@@ -175,6 +175,17 @@ public class TitleBar : ContentControl
         set => SetValue(CloseGlyphSizeProperty, value);
     }
 
+    public static readonly DependencyProperty PlainTitleProperty =
+        DependencyProperty.Register(nameof(PlainTitle), typeof(bool), typeof(TitleBar), new PropertyMetadata(false));
+
+    /// <summary>The title in the body font rather than the serif, as the room and tournament
+    /// windows draw it (88, 81, 85, 87): there the room's own name is the headline.</summary>
+    public bool PlainTitle
+    {
+        get => (bool)GetValue(PlainTitleProperty);
+        set => SetValue(PlainTitleProperty, value);
+    }
+
     public static readonly DependencyProperty TitleSizeProperty =
         DependencyProperty.Register(nameof(TitleSize), typeof(double), typeof(TitleBar),
             new PropertyMetadata(16.0));
