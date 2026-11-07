@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Collections.Generic;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -102,6 +103,22 @@ public partial class LobbyWindow : Window
     /// <summary>"Clear chat" — wipes the local chat log only.</summary>
     public Action? OnClearChat { get; set; }
 
+    /// <summary>The header's code chip: copies the code and confirms it on the chip.</summary>
+    public Action? OnCopyCodeChip { get; set; }
+
+    /// <summary>The footer's second button, which depends on the state (Find another, the
+    /// Radmin assistant).</summary>
+    public Action? OnFooterSecondary { get; set; }
+
+    /// <summary>"View bracket", in the header of a tournament room.</summary>
+    public Action? OnViewBracket { get; set; }
+
+    /// <summary>"Rematch", after a match.</summary>
+    public Action? OnRematch { get; set; }
+
+    /// <summary>"Don't show again", on the Record Game reminder.</summary>
+    public Action? OnMuteRecordReminder { get; set; }
+
     /// <summary>
     /// "Don't show this again" on the Record Game band. The ONLY way that reminder is ever
     /// silenced — it is never inferred from a match that happened to record, because one
@@ -162,6 +179,13 @@ public partial class LobbyWindow : Window
         // content can't feed back into it); the title bar (Row 0) and the
         // MpAlertOverlay host (LobbyRootGrid) stay at base scale. ref 900x600 ≈
         // the default content footprint, so a default-sized window is 1.0.
+        // 1180x760 is the design; a 1366x768 laptop has less than that once the taskbar is counted,
+        // and the footer with every button in it is what would end up under it.
+        Width = Math.Min(Width, SystemParameters.WorkArea.Width);
+        Height = Math.Min(Height, SystemParameters.WorkArea.Height);
+        LobbyRootGrid.SizeChanged += (_, _) => { ApplyRoomGeometry(); QueueFrost(); };
+        LobbyLeftColumn.ScrollChanged += (_, _) => QueueFrost();
+        LobbyPanels.SizeChanged += (_, _) => QueueFrost();
         UiScale.Attach(LobbyContentRoot, LobbyRootGrid, 900, 600);
     }
 
@@ -276,6 +300,103 @@ public partial class LobbyWindow : Window
         revert.Start();
     }
 
+    /// <summary>The prototype's clamp()s: they follow the window, so WPF needs them in code.</summary>
+    private void ApplyRoomGeometry()
+    {
+        var w = LobbyRootGrid.ActualWidth;
+        if (w <= 0) return;
+        var text = Services.TextScale.CurrentFactor;
+        static double Clamp(double low, double value, double high) => Math.Min(high, Math.Max(low, value));
+        RoomHeaderStrip.Margin = new Thickness(28, Clamp(16, w * .022, 30), 28, 12);
+        RoomTitleText.FontSize = Clamp(26, w * .031, 40) * text;
+        RoomTitleText.LineHeight = RoomTitleText.FontSize * 1.12;
+        RoomTitleText.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        RoomEloValue.FontSize = RoomPlaceValue.FontSize = Clamp(28, w * .03, 38) * text;
+        RoomEloValue.LineHeight = RoomPlaceValue.LineHeight = RoomEloValue.FontSize;
+        var three = TournamentMode && w >= 1400;
+        var column = !TournamentMode ? Clamp(300, w * .34, 440)
+            : three ? Clamp(320, w * .26, 440)
+            : Clamp(300, w * .32, 420);
+        if (Math.Abs(LobbyLeftColumnDef.Width.Value - column) > .5) LobbyLeftColumnDef.Width = new GridLength(column);
+        LobbyMiddleColumnDef.Width = new GridLength(three ? Clamp(280, w * .23, 400) : 0);
+        LobbyMiddleGapDef.Width = new GridLength(three ? 16 : 0);
+        LobbyMiddleColumn.Visibility = three ? Visibility.Visible : Visibility.Collapsed;
+
+        // From 1400 the two panels about the match get a column of their own (85).
+        var target = three ? LobbyMiddlePanels : LobbyPanels;
+        foreach (var panel in new FrameworkElement[] { RoomCountsPanel, RoomStakePanel })
+        {
+            if (ReferenceEquals(panel.Parent, target)) continue;
+            ((Panel)panel.Parent).Children.Remove(panel);
+            target.Children.Add(panel);
+        }
+    }
+
+    /// <summary>The room is a bracket match: its columns are the ones of design 85.</summary>
+    internal bool TournamentMode
+    {
+        get => _tournamentMode;
+        set
+        {
+            if (_tournamentMode == value) return;
+            _tournamentMode = value;
+            ApplyRoomGeometry();
+        }
+    }
+
+    private bool _tournamentMode;
+
+    private bool _frostQueued;
+
+    /// <summary>The frosted image under the panels. Coalesced, because a scroll and a layout can
+    /// both ask for it in one frame, and it is a clip rather than a blur: nothing is drawn again.</summary>
+    internal void QueueFrost()
+    {
+        if (_frostQueued) return;
+        _frostQueued = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _frostQueued = false;
+            PaintFrost();
+        }), System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    private void PaintFrost()
+    {
+        var rects = new List<Rect>();
+        if (RoomChatPanel.IsVisible && RoomChatPanel.ActualHeight > 0)
+            rects.Add(RoomChatPanel.TransformToVisual(LobbyRootGrid).TransformBounds(new Rect(RoomChatPanel.RenderSize)));
+        if (LobbyLeftColumn.IsVisible)
+        {
+            // Only what the scroller shows: a panel scrolled away must not leave its frost behind.
+            var viewport = LobbyLeftColumn.TransformToVisual(LobbyRootGrid).TransformBounds(new Rect(LobbyLeftColumn.RenderSize));
+            foreach (FrameworkElement panel in LobbyPanels.Children)
+            {
+                if (!panel.IsVisible || panel.ActualHeight <= 0) continue;
+                var rect = panel.TransformToVisual(LobbyRootGrid).TransformBounds(new Rect(panel.RenderSize));
+                rect.Intersect(viewport);
+                if (!rect.IsEmpty) rects.Add(rect);
+            }
+        }
+        if (LobbyMiddleColumn.IsVisible)
+        {
+            var viewport = LobbyMiddleColumn.TransformToVisual(LobbyRootGrid).TransformBounds(new Rect(LobbyMiddleColumn.RenderSize));
+            foreach (FrameworkElement panel in LobbyMiddlePanels.Children)
+            {
+                if (!panel.IsVisible || panel.ActualHeight <= 0) continue;
+                var rect = panel.TransformToVisual(LobbyRootGrid).TransformBounds(new Rect(panel.RenderSize));
+                rect.Intersect(viewport);
+                if (!rect.IsEmpty) rects.Add(rect);
+            }
+        }
+        Controls.ModDialogChrome.FrostRects(LobbyRootGrid, rects, 14);
+    }
+
     private void CopyRoomIdButton_Click(object sender, RoutedEventArgs e)
-        => CopyRoomCode(CopyRoomIdButton, "⧉", "✓");
+        => OnCopyCodeChip?.Invoke();
+
+    private void RoomSecondaryButton_Click(object sender, RoutedEventArgs e) => OnFooterSecondary?.Invoke();
+    private void RoomViewBracketButton_Click(object sender, RoutedEventArgs e) => OnViewBracket?.Invoke();
+    private void RematchButton_Click(object sender, RoutedEventArgs e) => OnRematch?.Invoke();
+    private void RoomRecordMute_Click(object sender, RoutedEventArgs e) => OnMuteRecordReminder?.Invoke();
 }

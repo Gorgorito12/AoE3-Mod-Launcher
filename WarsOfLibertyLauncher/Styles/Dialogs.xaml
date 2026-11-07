@@ -370,6 +370,234 @@
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
+    <!-- The room window (87, 85). -->
+    <Style x:Key="RoomPanel" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource GlassPanel}"/>
+        <Setter Property="BorderBrush" Value="#1AFFFFFF"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Padding" Value="16,14"/>
+        <Setter Property="Margin" Value="0,0,0,12"/>
+    </Style>
+
+    <Style x:Key="RoomPanelLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource SetCaptionSize}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="#61779A"/>
+    </Style>
+
+    <Style x:Key="RoomPanelBody" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource DialogBodySize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiSoftText}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <Style x:Key="RoomChip" TargetType="Border">
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Margin" Value="0,0,8,8"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Background" Value="{DynamicResource GlassPanel}"/>
+        <Setter Property="BorderBrush" Value="#24FFFFFF"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <Style x:Key="RoomChipText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource SetCaptionSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiBodyText}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="RoomCodeChip" TargetType="Button">
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="Margin" Value="0,0,8,8"/>
+        <Setter Property="Background" Value="{DynamicResource GlassPanel}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="#24FFFFFF" BorderThickness="1"
+                            CornerRadius="12" Padding="10,0,4,0">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#1FFFFFFF"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="RoomFloatCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource GlassMenu}"/>
+        <Setter Property="BorderBrush" Value="#1FFFFFFF"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Padding" Value="16,12"/>
+    </Style>
+
+    <Style x:Key="RoomFloatLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource SetCaptionSize}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{DynamicResource WindowMuted}"/>
+    </Style>
+
+    <Style x:Key="RoomFloatFigure" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+        <Setter Property="FontFamily" Value="Consolas, Courier New, monospace"/>
+        <Setter Property="FontSize" Value="{DynamicResource RoomFigureSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiHeadText}"/>
+    </Style>
+
+    <Style x:Key="RoomSmallButton" TargetType="Button" BasedOn="{StaticResource WindowSecondaryButton}">
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Padding" Value="12,0"/>
+    </Style>
+
+    <Style x:Key="RoomSquareButton" TargetType="Button" BasedOn="{StaticResource WindowSecondaryButton}">
+        <Setter Property="Width" Value="32"/>
+        <Setter Property="MinWidth" Value="32"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyStrong}"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+    </Style>
+
+    <Style x:Key="RoomChatSend" TargetType="Button" BasedOn="{StaticResource WindowSecondaryButton}">
+        <Setter Property="Height" Value="34"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="FontSize" Value="{DynamicResource DialogBodySize}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="RoomTextLink" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource ModAccentText}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetRowDescSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <ContentPresenter/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="RoomKickLink" TargetType="Button">
+        <Setter Property="Foreground" Value="#8C9CB1"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <ContentPresenter/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="#F0A6A6"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="RoomFooterButton" TargetType="Button">
+        <Setter Property="Height" Value="52"/>
+        <Setter Property="Padding" Value="20,0"/>
+        <Setter Property="Background" Value="{DynamicResource WindowSecondary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource WindowSecondaryRim}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiBodyText}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyStrong}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource WindowSecondaryHover}"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="danger">
+                <Setter Property="BorderBrush" Value="#8CC84A4A"/>
+                <Setter Property="Foreground" Value="#F0A6A6"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.45"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="RoomFooterPrimary" TargetType="Button">
+        <Setter Property="Height" Value="52"/>
+        <Setter Property="Padding" Value="26,0"/>
+        <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+        <Setter Property="Foreground" Value="{DynamicResource WindowPrimaryText}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="Halo" Background="{TemplateBinding Background}" CornerRadius="10">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="20" ShadowDepth="6" Direction="270"
+                                                  Opacity="0.35" Color="{DynamicResource WindowPrimaryHalo}"/>
+                            </Border.Effect>
+                        </Border>
+                        <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Halo" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource WindowPrimaryHover}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.45"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- The row of a header popover: the same as a menu row, on a Button. -->
     <Style x:Key="MenuRowButton" TargetType="Button">
         <Setter Property="Height" Value="32"/>

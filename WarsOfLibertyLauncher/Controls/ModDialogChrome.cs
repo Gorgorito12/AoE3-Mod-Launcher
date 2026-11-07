@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -126,6 +127,106 @@ internal static class ModDialogChrome
         if (MainWindow.TryLoadTileImage(mod.ResolveIconSource()) is { } icon) bar.TitleIcon = icon.ImageSource;
         TintPrimary(window, accent);
         return accent;
+    }
+
+    /// <summary>The picture of a window that can be resized, per root, so it is taken down and redone.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Grid, SizeChangedEventHandler> RoomResize = new();
+
+    private const double RoomStripHeight = 340;
+
+    /// <summary>
+    /// The chassis of the room window (87, 85): the mod's image behind the bar, the fades that
+    /// sink it into the navy, the colour's glow. Unlike <see cref="AttachPicked"/> the window
+    /// resizes, so the crop is worked out again on each size: one brush property, nothing else.
+    /// </summary>
+    internal static Color AttachRoom(Window window, TitleBar bar, Grid root, ModProfile mod)
+    {
+        foreach (var old in root.Children.OfType<FrameworkElement>().Where(c => ReferenceEquals(c.Tag, PickedLayer)).ToList())
+            root.Children.Remove(old);
+        if (RoomResize.TryGetValue(root, out var previous))
+        {
+            root.SizeChanged -= previous;
+            RoomResize.Remove(root);
+        }
+
+        var accent = Config is { } settings
+            ? ModTheme.AccentOf(mod.AccentColor, settings.UseModColor)
+            : Color.FromRgb(0x2F, 0x7F, 0xE0);
+        var rows = System.Math.Max(1, root.RowDefinitions.Count);
+        var at = 0;
+        void Add(FrameworkElement layer)
+        {
+            layer.Tag = PickedLayer;
+            root.Children.Insert(at++, Layer(layer, rows));
+        }
+
+        var image = Config?.ShowModImage == true
+            ? MainWindow.TryLoadTileImage(mod.ResolveHeroSources().FirstOrDefault(), MainWindow.StripDecodeWidth)
+            : null;
+        // A picture still downloading is an unfrozen brush, which belongs to the thread that asked
+        // for it first. The launcher has one UI thread; a window on any other goes without.
+        if (image?.CheckAccess() == false) image = null;
+        if (image != null)
+        {
+            var strip = image.Clone();
+            strip.Stretch = Stretch.Fill;
+            ImageBrush? blurred = null;
+            Add(new Border { Height = RoomStripHeight, VerticalAlignment = VerticalAlignment.Top, Background = strip });
+            if (GlassTheme.Normalize(Config?.GlassLevel) != GlassTheme.Solid
+                && MainWindow.BuildBlurredCover(image.ImageSource) is { } soft)
+            {
+                blurred = soft;
+                var frost = new Border { Height = RoomStripHeight, VerticalAlignment = VerticalAlignment.Top, Background = soft, Clip = Geometry.Empty };
+                frost.Name = FrostName;
+                Add(frost);
+            }
+
+            void Crop(double width)
+            {
+                if (width <= 0 || strip.ImageSource is not System.Windows.Media.Imaging.BitmapSource { PixelWidth: > 0 } source) return;
+                strip.Viewbox = HeroCover.Viewbox(source.PixelWidth, source.PixelHeight, width, RoomStripHeight, .3);
+                if (blurred != null) blurred.Viewbox = strip.Viewbox;
+            }
+            Crop(root.ActualWidth > 0 ? root.ActualWidth : window.Width);
+            SizeChangedEventHandler resize = (_, e) => { if (e.WidthChanged) Crop(e.NewSize.Width); };
+            root.SizeChanged += resize;
+            RoomResize.Add(root, resize);
+        }
+
+        var navy = Color.FromRgb(0x0F, 0x1C, 0x2E);
+        Color Navy(double a) => Color.FromArgb((byte)(a * 255), navy.R, navy.G, navy.B);
+        var down = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        down.GradientStops.Add(new GradientStop(Navy(.2), 0));
+        down.GradientStops.Add(new GradientStop(Navy(.55), .55));
+        down.GradientStops.Add(new GradientStop(navy, 1));
+        Add(new Rectangle { Height = RoomStripHeight + 2, VerticalAlignment = VerticalAlignment.Top, Fill = down });
+        var across = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        across.GradientStops.Add(new GradientStop(Navy(.72), 0));
+        across.GradientStops.Add(new GradientStop(Navy(.25), .55));
+        across.GradientStops.Add(new GradientStop(Navy(0), 1));
+        Add(new Rectangle { Height = RoomStripHeight + 2, VerticalAlignment = VerticalAlignment.Top, Fill = across });
+
+        var glow = new RadialGradientBrush { Center = new Point(.28, 0), GradientOrigin = new Point(.28, 0), RadiusX = .7, RadiusY = .55 };
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x33, accent.R, accent.G, accent.B), 0));
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0, accent.R, accent.G, accent.B), .72));
+        Add(new Rectangle { Height = 460, Margin = new Thickness(0, 300, 0, 0), VerticalAlignment = VerticalAlignment.Top, Fill = glow });
+
+        if (Config is { } config) bar.Background = new SolidColorBrush(GlassTheme.ModBar(accent, config.GlassLevel));
+        if (MainWindow.TryLoadTileImage(mod.ResolveIconSource()) is { } icon && icon.CheckAccess()) bar.TitleIcon = icon.ImageSource;
+        TintPrimary(window, accent);
+        window.Resources["ModAccentText"] = new SolidColorBrush(ModAccent.TextOn(accent));
+        return accent;
+    }
+
+    /// <summary>The frost under these rectangles, which are already in the root's coordinates.</summary>
+    internal static void FrostRects(Grid root, IEnumerable<Rect> rects, double radius)
+    {
+        var frost = root.Children.OfType<Border>().FirstOrDefault(c => c.Name == FrostName);
+        if (frost == null) return;
+        var clip = new GeometryGroup();
+        foreach (var rect in rects) clip.Children.Add(new RectangleGeometry(rect, radius, radius));
+        clip.Freeze();
+        frost.Clip = clip;
     }
 
     /// <summary>The primary button, its hover and its halo, which all follow the mod.</summary>

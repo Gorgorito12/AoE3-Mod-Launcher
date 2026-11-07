@@ -707,24 +707,18 @@ public class DialogXamlTests
             root.Arrange(new Rect(0, 0, 980, 660));
             root.UpdateLayout();
 
-            var column = window.LobbyLeftColumn;
-            Assert.Equal(2, column.RowDefinitions.Count);
-            Assert.True(column.RowDefinitions[0].Height.IsStar,
-                "row 0 holds the scrolling cards and has to take the slack");
-            Assert.True(column.RowDefinitions[1].Height.IsAuto,
-                "row 1 is the actions and has to be paid in full");
-
-            // The three cards share ONE scroller...
-            var cardScroller = NearestScrollViewer(window.PreflightCard, stopAt: column);
-            Assert.NotNull(cardScroller);
-            Assert.Same(cardScroller, NearestScrollViewer(window.RoomInfoCard, stopAt: column));
+            // The left column IS the scroller (design 87): every panel shares it...
+            var column = window.LobbyContentRoot;
+            var cardScroller = NearestScrollViewer(window.RoomCountsPanel, stopAt: column);
+            Assert.Same(window.LobbyLeftColumn, cardScroller);
+            Assert.Same(cardScroller, NearestScrollViewer(window.RoomRecordPanel, stopAt: column));
 
             // ...and the roster's nearest scroller is that same one, which is the half that
             // matters: a scroller of its OWN inside the players card is what sliced a row
             // through the middle, and it would still satisfy every other assertion here.
             Assert.Same(cardScroller, NearestScrollViewer(window.RoomMembersPanel, stopAt: column));
 
-            // The buttons are outside it, so a short window can never scroll them away.
+            // The buttons are in the footer, so a short window can never scroll them away.
             Assert.Null(NearestScrollViewer(window.StartButton, stopAt: column));
             Assert.Null(NearestScrollViewer(window.ReadyButton, stopAt: column));
             Assert.Null(NearestScrollViewer(window.LeaveRoomButton, stopAt: column));
@@ -811,9 +805,8 @@ public class DialogXamlTests
             // dialog that spells it out is seen by the host alone. It starts Collapsed
             // and RefreshPreflightChecklist shows it for a competitive room, so a rename
             // here would leave every guest reading nothing, silently.
-            Assert.NotNull(window.PreflightAbandonRow);
             Assert.NotNull(window.PreflightAbandonText);
-            Assert.Equal(Visibility.Collapsed, window.PreflightAbandonRow.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.PreflightAbandonText.Visibility);
 
             window.Close();
         });

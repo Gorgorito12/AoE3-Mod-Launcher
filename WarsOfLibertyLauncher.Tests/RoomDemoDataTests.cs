@@ -38,7 +38,9 @@ public class RoomDemoDataTests
         // that the other cannot is the name that does not fit, so the key has to carry it.
         var shapes = all
             .Select(s => (s.Seats, s.Players.Count, Longest: s.Players.Max(p => p.Login.Length),
-                s.QuickSearch, s.QuickRadminMissing, s.QuickElapsed))
+                s.QuickSearch, s.QuickRadminMissing, s.QuickElapsed,
+                Stage: (s.Stage, s.Result?.Verdict, s.VpnMissing, s.HostLeft, s.RematchRival, s.SpectatorSlots, s.Password),
+                Bracket: (s.Tournament?.Name, s.Tournament?.PendingReport, s.WaitedSeconds)))
             .ToList();
         Assert.Equal(shapes.Count, shapes.Distinct().Count());
 

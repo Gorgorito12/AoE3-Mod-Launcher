@@ -223,6 +223,11 @@ public class LobbySummary
     [JsonPropertyName("tournament_match_id")]
     public string? TournamentMatchId { get; set; }
 
+    /// <summary>The tournament that slot belongs to. Null against a server that predates it: the
+    /// room window then keeps its plain header unless it was opened from the bracket.</summary>
+    [JsonPropertyName("tournament_id")]
+    public string? TournamentId { get; set; }
+
     [JsonPropertyName("spectators_present")]
     public int SpectatorsPresent { get; set; }
 
@@ -270,6 +275,7 @@ public class LobbySummary
         IsPrivate = detail.IsPrivate,
         Competitive = detail.Competitive,
         TournamentMatchId = detail.TournamentMatchId,
+        TournamentId = detail.TournamentId,
         Status = detail.Status,
     };
 }
@@ -360,6 +366,9 @@ public class LobbyDetail
     /// </summary>
     [JsonPropertyName("tournament_match_id")]
     public string? TournamentMatchId { get; set; }
+
+    [JsonPropertyName("tournament_id")]
+    public string? TournamentId { get; set; }
 
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
@@ -2090,6 +2099,14 @@ public class TournamentSummary
 
     [JsonPropertyName("mod_id")]
     public string? ModId { get; set; }
+
+    /// <summary>Who runs it, by name. Null against a server that predates the field.</summary>
+    [JsonPropertyName("owner_name")]
+    public string? OwnerName { get; set; }
+
+    /// <summary>The most entrants this server takes. Null against one that predates 32 and 64.</summary>
+    [JsonPropertyName("max_capacity")]
+    public int? MaxCapacity { get; set; }
 
     /// <summary>Who created it. The client compares this with its own id to decide whether
     /// to show the owner controls — the server sends the IDENTITY and the client derives

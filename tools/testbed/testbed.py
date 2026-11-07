@@ -219,7 +219,7 @@ def place(window):
     return True
 
 
-def fit(pid, width, height):
+def fit(pid, width, height, title=None):
     """The window opens on the primary monitor, at that monitor's scale, and when it does not fit the
     test monitor as such Windows moves it there without rescaling: asking for 1920 left it wider
     than the screen. So the size asked for is set again, in the test monitor's own pixels."""
@@ -228,7 +228,8 @@ def fit(pid, width, height):
     found = windows(pid)
     if not found:
         return
-    main = max(found, key=lambda w: (w["rect"][2] - w["rect"][0]) * (w["rect"][3] - w["rect"][1]))
+    named = [w for w in found if title and title in w["title"]]
+    main = max(named or found, key=lambda w: (w["rect"][2] - w["rect"][0]) * (w["rect"][3] - w["rect"][1]))
     w, h = round(width * monitor["scale"]), round(height * monitor["scale"])
     x, y = left + max(0, (right - left - w) // 2), top + max(0, (bottom - top - h) // 2)
     user32.SetWindowPos(main["hwnd"], None, x, y, w, h, 0x0004 | 0x0010)  # SWP_NOZORDER | SWP_NOACTIVATE
@@ -626,6 +627,9 @@ def check(args):
                               rest=args.rest))
     try:
         time.sleep(args.wait)
+        if args.size and args.title:
+            fit(run_pid(), *map(int, args.size.lower().split("x")), title=args.title)
+            time.sleep(1)
         shot(argparse.Namespace(popup=False, file=str(picture), title=args.title, screen=True, top=True))
     finally:
         close()

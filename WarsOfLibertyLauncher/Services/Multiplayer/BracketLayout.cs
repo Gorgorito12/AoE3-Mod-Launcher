@@ -79,8 +79,21 @@ internal static class BracketLayout
         if (round == total) return "MpTournamentRoundFinal";
         if (round == total - 1) return "MpTournamentRoundSemi";
         if (round == total - 2) return "MpTournamentRoundQuarter";
+        if (round == total - 3) return "MpTournamentRoundEighth";
+        if (round == total - 4) return "MpTournamentRoundSixteenth";
         return "MpTournamentRoundN";
     }
+
+    /// <summary>The same round with its article, for a sentence: "juega los cuartos".</summary>
+    internal static string RoundPhraseKey(int round, int? roundsTotal) => RoundLabelKey(round, roundsTotal) switch
+    {
+        "MpTournamentRoundFinal" => "RtRoundTheFinal",
+        "MpTournamentRoundSemi" => "RtRoundTheSemi",
+        "MpTournamentRoundQuarter" => "RtRoundTheQuarter",
+        "MpTournamentRoundEighth" => "RtRoundTheEighth",
+        "MpTournamentRoundSixteenth" => "RtRoundTheSixteenth",
+        _ => "RtRoundTheNext",
+    };
 
     /// <summary>
     /// What became of one side of a match.

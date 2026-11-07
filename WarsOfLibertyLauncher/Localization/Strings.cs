@@ -6317,8 +6317,6 @@ public static partial class Strings
             [LangEn] = "Type a message…",
             [LangEs] = "Escribe un mensaje…",
         },
-        ["MpRoomChatHeader"] = new() { [LangEn] = "CHAT & ACTIVITY", [LangEs] = "CHAT Y ACTIVIDAD" },
-        ["MpRoomChatClear"] = new() { [LangEn] = "Clear chat", [LangEs] = "Limpiar chat" },
         ["MpRoomChatSend"] = new() { [LangEn] = "Send", [LangEs] = "Enviar" },
         ["MpRoomChatEmoji"] = new()
         {
@@ -6453,17 +6451,7 @@ public static partial class Strings
         },
         // Cancel / Leave button in the in-game overlay — caption differs
         // for host vs joiner (set in ApplyMatchPhaseUi).
-        ["MpInGameLeave"] = new()
-        {
-            [LangEn] = "↩  Leave game",
-            [LangEs] = "↩  Salir de la partida",
-        },
         // Abort-for-everyone button (shown instead of Leave during the grace window).
-        ["MpInGameAbort"] = new()
-        {
-            [LangEn] = "✕  Abort match",
-            [LangEs] = "✕  Abortar partida",
-        },
         // Kick a player from the room (host-only).
         ["MpConfirmKickTitle"] = new()
         {
@@ -7045,30 +7033,13 @@ public static partial class Strings
             [LangEs] = "JUGADORES \u00B7 {0} DE {1}",
         },
         ["MpRoomMemberElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
-        ["MpRoomMemberReady"] = new() { [LangEn] = "ready", [LangEs] = "listo" },
-        ["MpRoomMemberWaiting"] = new() { [LangEn] = "waiting", [LangEs] = "esperando" },
         // An empty seat. It named the remedy ("share the code") without carrying it, so
         // the reader had to go looking for the code at the other end of the window; the
         // row holds the code and the button that copies it now. Two wordings because "an
         // opponent" is wrong in a 2v2 - keyed off the seat count, not off the competitive
         // flag, since a casual 1v1 is still an opponent.
-        ["MpRoomSlotWaitingOpponent"] = new()
-        {
-            [LangEn] = "Waiting for an opponent",
-            [LangEs] = "Esperando un rival",
-        },
-        ["MpRoomSlotWaitingPlayer"] = new()
-        {
-            [LangEn] = "Waiting for a player",
-            [LangEs] = "Esperando un jugador",
-        },
         // {0} is the room code, rendered monospaced inside the sentence. ONE key, split on
         // a sentinel at the call site - two half-sentence keys cannot be translated.
-        ["MpRoomSlotShareCode"] = new()
-        {
-            [LangEn] = "share the code {0}",
-            [LangEs] = "comparte el c\u00F3digo {0}",
-        },
         // Shown instead of the room's status line while the preview is up. A populated
         // room is indistinguishable from a real one in a screenshot, which is how a preview
         // becomes a bug report about production.
@@ -7080,21 +7051,8 @@ public static partial class Strings
         // The chip on the ranking page while any preview owns its data. Same reason as the room
         // banner above.
         ["MpPreviewSampleChip"] = new() { [LangEn] = "Sample data", [LangEs] = "Datos de ejemplo" },
-        ["MpRoomSlotCopy"] = new() { [LangEn] = "Copy", [LangEs] = "Copiar" },
-        ["MpRoomSlotCopied"] = new() { [LangEn] = "Copied", [LangEs] = "Copiado" },
         // The two-item checklist that replaced the amber reminder band.
         ["MpPreflightHeader"] = new() { [LangEn] = "BEFORE YOU START", [LangEs] = "ANTES DE EMPEZAR" },
-        ["MpPreflightModsMatch"] = new()
-        {
-            [LangEn] = "Identical mods across all {0} players",
-            [LangEs] = "Mods id\u00E9nticos en los {0} jugadores",
-        },
-        ["MpPreflightRecordGame"] = new()
-        {
-            [LangEn] = "Tick {0} in AoE3 so the match counts towards ELO",
-            [LangEs] = "Marcar {0} en AoE3 para que cuente el ELO",
-        },
-        ["MpPreflightSeeHow"] = new() { [LangEn] = "See how", [LangEs] = "Ver c\u00F3mo" },
         ["MpPreflightHelpTitle"] = new()
         {
             [LangEn] = "Where the Record Game box is",
@@ -7159,7 +7117,6 @@ public static partial class Strings
             [LangEs] = "El launcher del anfitrión sube la grabación después de reportar la partida, salvo que lo haya desactivado en Configuración. Muestra el nombre en el juego, la civilización y las órdenes de cada jugador. Las grabaciones se guardan un año.",
         },
         ["MpRoomStateInLobby"] = new() { [LangEn] = "In the lobby", [LangEs] = "En el lobby" },
-        ["MpRoomReadyShort"] = new() { [LangEn] = "Mark me ready", [LangEs] = "Marcarme listo" },
         ["MpRoomLeaveShort"] = new() { [LangEn] = "Leave the room", [LangEs] = "Salir de la sala" },
         // In-match panel (design handoff 1f). The recording cell states what the LAUNCHER
         // asked for; what the GAME will do is decided by a per-match checkbox nothing here
@@ -7176,18 +7133,6 @@ public static partial class Strings
             [LangEs] = "Es el ajuste del propio launcher. Que la partida se grabe de verdad depende "
                      + "de la casilla \u201CRecord Game\u201D de la pantalla de configuraci\u00F3n de "
                      + "AoE3, que aparece desmarcada en cada partida y no se puede leer desde aqu\u00ED.",
-        },
-        ["MpInGameSoloTitle"] = new()
-        {
-            [LangEn] = "You are the only player in the room",
-            [LangEs] = "Eres el \u00FAnico jugador en la sala",
-        },
-        ["MpInGameSoloBody"] = new()
-        {
-            [LangEn] = "The P2P network is ready, but another launcher has to join this room "
-                     + "before any game traffic can flow.",
-            [LangEs] = "La red P2P est\u00E1 lista, pero hace falta que otro launcher entre en esta "
-                     + "sala para que circule tr\u00E1fico de juego.",
         },
         ["MpInGameSoloCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar c\u00F3digo" },
         ["MpRoomCopied"] = new() { [LangEn] = "Copied \u2713", [LangEs] = "Copiado \u2713" },
@@ -7681,7 +7626,6 @@ public static partial class Strings
             [LangEs] = "Para que la partida cuente en el ELO, marca {0} en la pantalla de configuración de AoE3. "
                      + "Sin grabación nadie sabe quién ganó.",
         },
-        ["MpCreateDialogRecordWarnName"] = new() { [LangEn] = "Record Game", [LangEs] = "Record Game" },
         ["MpCreateDialogTitleTooShort"] = new()
         {
             [LangEn] = "The name needs at least 3 characters.",

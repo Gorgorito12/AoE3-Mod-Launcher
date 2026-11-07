@@ -432,6 +432,83 @@ public partial class MultiplayerTab
     /// The result card's "Find another": out of the finished room first — one active room per
     /// player, so searching before the leave lands would be refused — then a new search.
     /// </summary>
+    /// <summary>
+    /// "Rematch" (87l): out of the finished room first, because the server allows one active lobby
+    /// per player, then the same room again, then the invitation. Nothing here can leave the player
+    /// in neither room with no word about it: each refusal says so and ends on the rooms list.
+    /// </summary>
+    private async Task RematchAsync()
+    {
+        if (_demoRoomSample != null || _session?.Api == null || _roomResult is not { } result) return;
+        var rival = _roomMembers.Values.FirstOrDefault(
+            m => string.Equals(m.Login, result.RivalLogin, StringComparison.Ordinal));
+        var modId = _currentLobbyModId;
+        var title = _roomTitle;
+        var seats = RoomPlayingSeats();
+        var competitive = _currentLobbyIsCompetitive;
+        var rating = _roomResult.RivalRatingShown;
+        if (rival == null || string.IsNullOrEmpty(modId) || ModRegistry.Find(modId) is not { } profile
+            || _computeModFingerprint == null)
+        {
+            DiagnosticLog.Write("Rematch: nothing to rematch with - no rival or no mod.");
+            return;
+        }
+        var rivalId = rival.UserId;
+        var rivalLogin = rival.Login;
+        var rivalAvatar = rival.AvatarUrl;
+
+        ExitResultPhase();
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (_session != null && _session.Lobby != MultiplayerSession.LobbyStatus.Idle && DateTime.UtcNow < deadline)
+            await Task.Delay(200);
+        _bringMultiplayerToFront?.Invoke();
+        ShowRooms();
+        if (_session?.Lobby != MultiplayerSession.LobbyStatus.Idle)
+        {
+            DiagnosticLog.Write("Rematch: gave up - the finished room was not left in 5 s.");
+            ShowRematchFailed();
+            return;
+        }
+        if (!await EnsureSessionOutlastsMatchAsync()) return;
+
+        var newTitle = RematchPlan.Title(title, QuickMatchTitleMax);
+        try
+        {
+            var hash = await _computeModFingerprint(profile);
+            var created = await _session.Api.CreateLobbyAsync(new CreateLobbyRequest
+            {
+                Title = newTitle,
+                ModId = modId,
+                ModCombinedHash = hash,
+                MaxPlayers = seats,
+                SpectatorSlots = 0,
+                Password = null,
+                Competitive = competitive,
+            });
+            await EnterCreatedRoomAsync(created, modId, newTitle, seats, isPrivate: false,
+                isCompetitive: created.Competitive, spectatorSlots: created.SpectatorSlots,
+                competitiveDowngraded: false);
+        }
+        catch (Exception ex)
+        {
+            _createdLobbyId = null;
+            DiagnosticLog.Write($"Rematch: the room could not be created - {ex.Message}");
+            ShowRematchFailed();
+            return;
+        }
+
+        // In the room, whatever the invitation does: if it is refused the room is an ordinary open
+        // room on the list, and the footer goes back to saying so.
+        _rematchInvited = new RematchInvite(rivalId, rivalLogin, rating, rivalAvatar);
+        RenderRoomMembers();
+        AppendChatSystem(Strings.Format("RoomChatInvited", rivalLogin));
+        SendInvite(rivalId, rivalLogin);
+    }
+
+    private void ShowRematchFailed() => _showAppToast?.Invoke(new AppToast.ToastOptions(
+        "\u26A0", Strings.Get("RoomRematchFailed"), null, Array.Empty<AppToast.ToastAction>(),
+        AutoDismissMs: 6000, Cause: ToastCause.Answer));
+
     private async Task FindAnotherAfterResultAsync()
     {
         ExitResultPhase();
@@ -617,7 +694,7 @@ public partial class MultiplayerTab
         var shown = alone ? Visibility.Visible : Visibility.Collapsed;
         w.QuickSearchCard.Visibility = shown;
         w.QuickSearchFooter.Visibility = shown;
-        w.LobbyActions.Visibility = alone ? Visibility.Collapsed : Visibility.Visible;
+        w.RoomFooter.Visibility = alone ? Visibility.Collapsed : Visibility.Visible;
         if (alone != _qmRoomWasAlone)
         {
             _qmRoomWasAlone = alone;

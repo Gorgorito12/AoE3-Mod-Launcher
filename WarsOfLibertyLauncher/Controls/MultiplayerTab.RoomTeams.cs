@@ -25,20 +25,10 @@ namespace WarsOfLibertyLauncher.Controls;
 /// </summary>
 public partial class MultiplayerTab
 {
-    /// <summary>The room window's left column in a 2v2/3v3 room. 55h draws the two teams side by
-    /// side, which cannot fit the 352 px a 1v1 room uses: 580 leaves each row room for
-    /// "1534? · you · host" beside the 1 | 2 picker, and the chat keeps the rest (~360 px in the
-    /// window's default 980).</summary>
-    internal const double TeamRoomLeftColumnWidth = 580;
-
-    /// <summary>The left column everywhere else — the value in LobbyWindow.xaml.</summary>
-    internal const double SoloRoomLeftColumnWidth = 352;
-
     /// <summary>The <c>Tag</c>s of the team panel's parts, so the tests find them.</summary>
     internal const string TeamColumnTag = "RoomTeamColumn";
     internal const string NoTeamBoxTag = "RoomNoTeamBox";
     internal const string TeamOddsTag = "RoomTeamOdds";
-    internal const string StartReasonTag = "RoomStartReason";
     internal const string SidesLockedTag = "RoomSidesLocked";
 
     /// <summary>The playing seats, or 0 when the capacity is not known yet.</summary>
@@ -46,6 +36,10 @@ public partial class MultiplayerTab
 
     /// <summary>Whether this room has teams: 4 or 6 seats, casual or competitive.</summary>
     internal bool RoomHasTeams() => StartGate.HasTeams(RoomPlayingSeats());
+
+    /// <summary>Whether the roster is drawn by teams. Only a competitive room: there the sides decide
+    /// the result, while a casual room of four is four people (design 87a).</summary>
+    internal bool RoomShowsTeams() => RoomHasTeams() && _currentLobbyIsCompetitive && _roomTournament == null;
 
     /// <summary>The room's players, spectators left out — a spectator has no team and no seat.</summary>
     private IEnumerable<RoomMemberEntry> RoomPlayers()
@@ -86,14 +80,6 @@ public partial class MultiplayerTab
         };
     }
 
-    /// <summary>The room window's left column: wide in a team room, as in the XAML otherwise.</summary>
-    private void ApplyRoomColumnWidth()
-    {
-        if (_lobbyWindow?.LobbyLeftColumnDef is not { } column) return;
-        var want = RoomHasTeams() ? TeamRoomLeftColumnWidth : SoloRoomLeftColumnWidth;
-        if (Math.Abs(column.Width.Value - want) > 0.5) column.Width = new GridLength(want);
-    }
-
     // ------------------------------------------------------------------ the panel
 
     /// <summary>
@@ -104,19 +90,14 @@ public partial class MultiplayerTab
     private void RenderTeamPanel(Panel host)
     {
         var players = RoomPlayers().ToList();
-        var columns = new Grid();
-        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var one = BuildTeamColumn(1, players.Where(p => p.Team == 1).ToList());
-        var two = BuildTeamColumn(2, players.Where(p => p.Team == 2).ToList());
-        Grid.SetColumn(two, 2);
-        columns.Children.Add(one);
-        columns.Children.Add(two);
-        host.Children.Add(columns);
+        var seats = StartGate.TeamSize(RoomPlayingSeats());
+        host.Children.Add(BuildTeamColumn(1, players.Where(p => p.Team == 1).ToList(), seats));
+        host.Children.Add(BuildTeamColumn(2, players.Where(p => p.Team == 2).ToList(), seats));
 
         var without = players.Where(p => p.Team is not (1 or 2)).ToList();
         if (without.Count > 0) host.Children.Add(BuildNoTeamBox(without));
+
+        AddObserverGroup(host);
 
         // A tournament room: each team IS an entrant of the bracket, seated by the server.
         if (_roomTeamsLocked)
@@ -132,167 +113,99 @@ public partial class MultiplayerTab
             });
         }
 
-        if (_currentLobbyIsCompetitive)
+        // Once both sides are whole: before that there is no match to give odds on.
+        if (_currentLobbyIsCompetitive && players.Count(p => p.Team is 1 or 2) >= seats * 2)
         {
             host.Children.Add(BuildTeamOddsCard());
             host.Children.Add(BuildTeamsMismatchWarning());
         }
-
-        if (StartGateText(CurrentStartGate()) is { } reason)
-        {
-            var blocked = !CurrentStartGate().CanStart;
-            host.Children.Add(new TextBlock
-            {
-                Text = reason,
-                Tag = StartReasonTag,
-                Margin = new Thickness(0, 10, 0, 0),
-                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-                Foreground = (Brush)Application.Current.FindResource(blocked ? "MpCautionTextAlt" : "MpRankMutedText"),
-                TextWrapping = TextWrapping.Wrap,
-            });
-        }
-
-        foreach (var spectator in _roomMembers.Values.Where(m => string.Equals(m.Role, "spectator", StringComparison.Ordinal)))
-            host.Children.Add(BuildMemberRow(spectator));
     }
 
-    /// <summary>One team's column: the coloured edge, "TEAM 1" and its average ELO, the players.</summary>
-    private FrameworkElement BuildTeamColumn(int team, IReadOnlyList<RoomMemberEntry> members)
+    /// <summary>One team: its name and average ELO, "your team" or the way in, the players, and a
+    /// row for each seat still free.</summary>
+    private FrameworkElement BuildTeamColumn(int team, IReadOnlyList<RoomMemberEntry> members, int seats)
     {
         var stack = new StackPanel();
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        head.Children.Add(new TextBlock
-        {
-            Text = Strings.Get(team == 1 ? "MpTeam1" : "MpTeam2"),
-            FontSize = (double)Application.Current.FindResource("MpRankSmallSize"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.FindResource(team == 1 ? "MpActionText" : "MpTeam2Text"),
-            VerticalAlignment = VerticalAlignment.Center,
-        });
         var average = TeamAverage(members);
         // No average while a teammate's rating is withheld from this viewer: beside his partner's
         // visible number, the average gives the hidden one straight back.
         var averageHidden = members.Any(TeamRatingHiddenFromViewer);
-        var avg = new TextBlock
-        {
-            Text = !averageHidden && average is int a ? Strings.Format("MpTeamAvg", a) : Strings.Get("MpDash"),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            FontSize = (double)Application.Current.FindResource("MpRankSmallSize"),
-            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-            Tag = averageHidden ? HiddenPlacementTag : null,
-            ToolTip = averageHidden ? TooltipHelper.Wrap(Strings.Get("MpTeamAvgHiddenPlacementTip")) : null,
-        };
-        Grid.SetColumn(avg, 1);
-        head.Children.Add(avg);
-        stack.Children.Add(head);
+        var figure = !averageHidden && average is int a ? Strings.Format("RoomTeamAvg", a) : null;
 
-        if (members.Count == 0)
+        FrameworkElement? right = null;
+        var mine = members.Any(m => IsRoomViewer(m.UserId));
+        var phaseOpen = _matchPhase == MatchPhase.Lobby && !_roomTeamsLocked;
+        if (mine)
         {
-            stack.Children.Add(new TextBlock
+            right = new TextBlock
             {
-                Text = Strings.Get("MpTeamEmpty"),
-                Margin = new Thickness(0, 14, 0, 6),
-                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-                Foreground = (Brush)Application.Current.FindResource("MpTextFade"),
-            });
+                Text = Strings.Get("RoomTeamMine"),
+                FontSize = (double)Application.Current.FindResource("SetControlSize"),
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Solid("#9FD0F5"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
         }
-        foreach (var m in members) stack.Children.Add(BuildTeamRow(m, inline: false));
-
-        return new Border
+        else if (phaseOpen && RoomViewerId is { } viewer && _roomMembers.ContainsKey(viewer) && members.Count < Math.Max(1, seats))
         {
-            Child = stack,
-            Tag = TeamColumnTag,
-            Padding = new Thickness(12, 10, 12, 12),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusPanel"),
-            Background = (Brush)Application.Current.FindResource("MpRowHighlight"),
-            BorderBrush = (Brush)Application.Current.FindResource(team == 1 ? "MpAction" : "MpTeam2"),
-            BorderThickness = new Thickness(3, 0, 0, 0),
-        };
+            var join = new Button
+            {
+                Content = Strings.Get("RoomTeamJoin"),
+                Style = (Style)Application.Current.FindResource("RoomSmallButton"),
+                Height = 28,
+                FontSize = (double)Application.Current.FindResource("SetControlSize"),
+                ToolTip = TooltipHelper.Wrap(Strings.Format("RoomTeamJoinTip", team)),
+            };
+            join.Click += (_, _) => _ = PickTeamAsync(viewer, team);
+            right = join;
+        }
+        stack.Children.Add(BuildRosterGroupHead(Strings.Format("RoomTeamName", team), figure,
+            averageHidden ? Strings.Get("MpTeamAvgHiddenPlacementTip") : null, right));
+
+        foreach (var m in members) stack.Children.Add(BuildTeamRow(m, inline: false));
+        for (var free = members.Count; free < seats; free++)
+            stack.Children.Add(RosterRow(BuildEmptySeatDisc(), null,
+                RosterTwoLines(Strings.Get("RoomFreeSeat"), "#A8BCD2", "", Strings.Get("RoomFreeTeam")),
+                _roomTeamsLocked ? null : BuildCopyCodeButton()));
+
+        return new Border { Child = stack, Tag = TeamColumnTag };
     }
 
-    /// <summary>The players who have not picked a team (55h), with the same 1 | 2 pickers.</summary>
+    /// <summary>The players who have not picked a team (55h).</summary>
     private FrameworkElement BuildNoTeamBox(IReadOnlyList<RoomMemberEntry> members)
     {
         var stack = new StackPanel();
-        stack.Children.Add(new TextBlock
-        {
-            Text = Strings.Get("MpNoTeam"),
-            FontSize = (double)Application.Current.FindResource("MpPillSize"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-        });
+        stack.Children.Add(BuildRosterGroupHead(Strings.Get("RoomTeamNone"), null, null, null));
         foreach (var m in members) stack.Children.Add(BuildTeamRow(m, inline: true));
-        return new Border
-        {
-            Child = stack,
-            Tag = NoTeamBoxTag,
-            Margin = new Thickness(0, 10, 0, 0),
-            Padding = new Thickness(12, 9, 12, 9),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusPanel"),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimStrong"),
-            BorderThickness = new Thickness(1),
-        };
+        return new Border { Child = stack, Tag = NoTeamBoxTag };
     }
 
     /// <summary>
-    /// One player in a team room: the face, the name and "1534? · you · host" under it (beside it
-    /// in the NO TEAM box), and the 1 | 2 picker — usable on your own row, and on every row when
-    /// you are the host.
+    /// One player in a team room: the row of the roster with the team rating under the name. Your
+    /// own team is chosen from the head of the group; the host keeps the 1 | 2 picker on the others,
+    /// because moving somebody has no other door.
     /// </summary>
     private FrameworkElement BuildTeamRow(RoomMemberEntry m, bool inline)
     {
-        var grid = new Grid { MinHeight = 30, Margin = new Thickness(0, inline ? 7 : 8, 0, 0), Tag = m.UserId };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
         var name = MemberName(m);
-        var avatar = BuildAvatarDisc(name, m.AvatarUrl, 24);
-        grid.Children.Add(avatar);
+        var isMe = IsRoomViewer(m.UserId);
+        var isHost = string.Equals(m.UserId, _roomHostUserId, StringComparison.Ordinal);
+        var stack = RosterTwoLines(name, "#F0F5FB", MemberTags(isMe, isHost), "");
+        stack.Children.Add(TeamRowDetail(m));
 
-        var nameText = new TextBlock
+        var tail = new StackPanel { Orientation = Orientation.Horizontal };
+        tail.Children.Add(MemberState(m, isMe, out var dim));
+        if (IsRoomViewerHost() && !isMe && !_roomTeamsLocked && _matchPhase == MatchPhase.Lobby)
         {
-            Text = name,
-            FontSize = (double)Application.Current.FindResource("MpProfileH2HSize"),
-            FontWeight = FontWeights.Medium,
-            Foreground = (Brush)Application.Current.FindResource("ChromeTextBright"),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        var detail = TeamRowDetail(m);
-        FrameworkElement who;
-        if (inline)
-        {
-            detail.Margin = new Thickness(8, 0, 0, 0);
-            var line = new Grid();
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            nameText.TextTrimming = TextTrimming.None;
-            line.Children.Add(nameText);
-            Grid.SetColumn(detail, 1);
-            line.Children.Add(detail);
-            who = line;
+            var picker = BuildTeamPicker(m);
+            picker.Margin = new Thickness(10, 0, 0, 0);
+            tail.Children.Add(picker);
         }
-        else
-        {
-            var stack = new StackPanel();
-            stack.Children.Add(nameText);
-            stack.Children.Add(detail);
-            who = stack;
-        }
-        who.Margin = new Thickness(8, 0, 8, 0);
-        who.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(who, 1);
-        grid.Children.Add(who);
+        if (BuildKickButton(m, isMe, isHost) is { } kick) tail.Children.Add(kick);
 
-        var picker = BuildTeamPicker(m);
-        Grid.SetColumn(picker, 2);
-        grid.Children.Add(picker);
-        return grid;
+        var row = RosterRow(BuildAvatarDisc(name, m.AvatarUrl, 32), null, stack, tail, tag: m.UserId);
+        if (dim) row.Opacity = .6;
+        return row;
     }
 
     /// <summary>"1534? · you · host" in monospace: the team rating with its placement "?", then
@@ -302,16 +215,13 @@ public partial class MultiplayerTab
     {
         var tb = new TextBlock
         {
-            FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            FontSize = (double)Application.Current.FindResource("MpRankSmallSize"),
-            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            FontSize = (double)Application.Current.FindResource("SetControlSize"),
+            Foreground = Solid("#A8BCD2"),
+            TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 3, 0, 0),
         };
         var (rating, look, games, required) = TeamRatingOf(m);
-        var tags = new List<string>();
-        if (IsRoomViewer(m.UserId)) tags.Add(Strings.Get("MpTeamYouTag"));
-        if (string.Equals(m.UserId, _roomHostUserId, StringComparison.Ordinal)) tags.Add(Strings.Get("MpTeamHostTag"));
         var lead = false;
         if (look == RatingDisplay.Look.HiddenPlacement)
         {
@@ -322,22 +232,16 @@ public partial class MultiplayerTab
         }
         else if (rating is double r)
         {
-            tb.Inlines.Add(new Run(PlacementView.RatingText(r)));
+            tb.Inlines.Add(new Run(PlacementView.RatingText(r))
+            {
+                FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+                Foreground = Solid("#C3D2E5"),
+            });
             if (look == RatingDisplay.Look.Provisional)
                 tb.Inlines.Add(new Run("?") { Foreground = (Brush)Application.Current.FindResource("MpCaution") });
             lead = true;
         }
-        if (tags.Count > 0)
-            tb.Inlines.Add(new Run((lead ? " · " : "") + string.Join(" · ", tags)));
-        // Who is ready, in green: 55h does not draw it, but the room starts on its own once
-        // everybody is, and the picker took the place where a 1v1 row says it.
-        if (m.Ready)
-        {
-            tb.Inlines.Add(new Run((tb.Inlines.Count > 0 ? " · " : "") + Strings.Get("MpRoomMemberReady"))
-            {
-                Foreground = (Brush)Application.Current.FindResource("MpOkText"),
-            });
-        }
+        if (lead && tb.Tag == null) tb.Inlines.Add(new Run(" ELO"));
         return tb;
     }
 
@@ -526,9 +430,7 @@ public partial class MultiplayerTab
     private void RenderStartButtonGate()
     {
         if (_lobbyWindow == null || _matchPhase != MatchPhase.Lobby) return;
-        _lobbyWindow.StartButton.IsEnabled = _isHostInCurrentRoom
-                                             && (_session?.IsInLobby ?? false)
-                                             && StartGateAllows();
+        RefreshRoomView();
     }
 
     // ------------------------------------------------------------------ the countdown (55i)
@@ -674,11 +576,11 @@ public partial class MultiplayerTab
         {
             Child = stack,
             Tag = TeamOddsTag,
-            Margin = new Thickness(0, 10, 0, 0),
-            Padding = new Thickness(14, 12, 14, 12),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusPanel"),
-            Background = (Brush)Application.Current.FindResource("MpPanel"),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimMedium"),
+            Margin = new Thickness(0, 12, 0, 0),
+            Padding = new Thickness(12, 10, 12, 10),
+            CornerRadius = new CornerRadius(10),
+            Background = Solid("#0DFFFFFF"),
+            BorderBrush = Solid("#14FFFFFF"),
             BorderThickness = new Thickness(1),
         };
     }

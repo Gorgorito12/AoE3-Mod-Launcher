@@ -362,7 +362,7 @@ public class EloPreviewTests
                 var w = tab.LobbyWindowForTests;
                 Assert.NotNull(w);
 
-                Assert.Equal("JUGADORES \u00B7 COMPETITIVA 1V1", w!.PlayersListHeader.Text);
+                Assert.Equal("JUGADORES", w!.PlayersListHeader.Text);
 
                 var odds = w.RoomMembersPanel.Children.OfType<Border>().Single(b => Equals(b.Tag, "RoomOdds1v1"));
                 Assert.Contains(AllText(odds), t => t == "Tienes un 62 % de probabilidad de ganar");
@@ -398,8 +398,8 @@ public class EloPreviewTests
                 tab.ShowDemoElo("roomteams");
                 var w = tab.LobbyWindowForTests;
                 Assert.NotNull(w);
-                Assert.Equal("JUGADORES \u00B7 COMPETITIVA 2V2 \u00B7 4 DE 4", w!.PlayersListHeader.Text);
-                Assert.Equal(MultiplayerTab.TeamRoomLeftColumnWidth, w.LobbyLeftColumnDef.Width.Value);
+                Assert.Equal("EQUIPOS", w!.PlayersListHeader.Text);
+                Assert.Equal("3 / 4", w.RoomPlayersCount.Text);
 
                 var panel = w.RoomMembersPanel;
                 var columns = Walk(panel).OfType<Border>().Where(b => Equals(b.Tag, MultiplayerTab.TeamColumnTag)).ToList();
@@ -416,13 +416,19 @@ public class EloPreviewTests
                     RatingDisplay.PlacementLabel(bai.PlacementPlayed, StatsDemoData.PlacementTeam, shortForm: false)));
                 Assert.DoesNotContain(AllText(none), t => t.Contains(PlacementView.RatingText(bai.Rating!.Value)));
 
+                // Why Start is locked is the footer's, and it names who has to pick.
+                Assert.Equal("No se puede empezar: Bai Yu Feng todav\u00eda no eligi\u00f3 equipo.", w.RoomFooterSub.Text);
+
+                // No odds while a side is incomplete: there is no match to give them on.
+                Assert.DoesNotContain(Walk(panel).OfType<Border>(), b => Equals(b.Tag, MultiplayerTab.TeamOddsTag));
+
+                tab.PickTeamAsync("demo-Bai Yu Feng", 2).GetAwaiter().GetResult();
+                panel = w.RoomMembersPanel;
+
                 // Withheld while anybody in the room is placing (the viewer and Bai both are).
                 var odds = Walk(panel).OfType<Border>().Single(b => Equals(b.Tag, MultiplayerTab.TeamOddsTag));
                 Assert.DoesNotContain(AllText(odds), t => t.Contains("57 %"));
                 Assert.Contains(AllText(odds), t => t == Strings.Get("MpOddsHiddenPlacement"));
-
-                var reason = Walk(panel).OfType<TextBlock>().Single(t => Equals(t.Tag, MultiplayerTab.StartReasonTag));
-                Assert.Equal("No puedes empezar todav\u00eda: falta que Bai Yu Feng elija equipo.", reason.Text);
 
                 // The host may move everybody: every picker is live.
                 Assert.All(Walk(panel).OfType<Button>().Where(b => b.Content is "1" or "2"), b => Assert.True(b.IsEnabled));
@@ -452,17 +458,16 @@ public class EloPreviewTests
                 Assert.True(tab.CurrentStartGate().CanStart);
                 var w = tab.LobbyWindowForTests!;
                 Assert.DoesNotContain(Walk(w.RoomMembersPanel).OfType<Border>(), b => Equals(b.Tag, MultiplayerTab.NoTeamBoxTag));
-                var reason = Walk(w.RoomMembersPanel).OfType<TextBlock>().Single(t => Equals(t.Tag, MultiplayerTab.StartReasonTag));
-                Assert.Equal(Strings.Get("MpStartReady"), reason.Text);
+                Assert.Equal(Strings.Get("RoomFtTeamsFull"), w.RoomFooterTitle.Text);
             }
             finally { Strings.SetLanguage(previous); }
         });
         Assert.Null(error);
     }
 
-    /// <summary>A casual team room: the two columns, but no odds, no warning, nothing locked.</summary>
+    /// <summary>A casual room of four is four people (87a): one list, no sides, nothing locked.</summary>
     [Fact]
-    public void ACasualTeamRoomHasColumnsButNoOddsOrWarning()
+    public void ACasualRoomOfFourIsOneListWithNoSides()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -476,7 +481,7 @@ public class EloPreviewTests
             };
             tab.ShowSampleRoom(casual);
             var panel = tab.LobbyWindowForTests!.RoomMembersPanel;
-            Assert.Equal(2, Walk(panel).OfType<Border>().Count(b => Equals(b.Tag, MultiplayerTab.TeamColumnTag)));
+            Assert.DoesNotContain(Walk(panel).OfType<Border>(), b => Equals(b.Tag, MultiplayerTab.TeamColumnTag));
             Assert.DoesNotContain(Walk(panel).OfType<Border>(), b => Equals(b.Tag, MultiplayerTab.TeamOddsTag));
             Assert.DoesNotContain(Walk(panel).OfType<Border>(), b => Equals(b.Tag, "RoomTeamsWarning"));
             Assert.True(tab.CurrentStartGate().CanStart);
