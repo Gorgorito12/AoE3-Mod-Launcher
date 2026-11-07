@@ -2494,6 +2494,11 @@ public class MyTeamsResponse
     /// normal case, and an invitation that evaporated would not be one.</summary>
     [JsonPropertyName("invites")]
     public List<TeamInvite>? Invites { get; set; }
+
+    /// <summary>Pending invitations this player sent. Null against a server that predates it,
+    /// and then the block is simply not drawn.</summary>
+    [JsonPropertyName("sent_invites")]
+    public List<TeamSentInvite>? SentInvites { get; set; }
 }
 
 /// <summary>Pushed on the GLOBAL socket when something in a tournament moves.
@@ -2501,6 +2506,25 @@ public class MyTeamsResponse
 /// <para>It rides that socket and not the room's for the same reason
 /// <see cref="MatchRatedNotice"/> does: by the time a bracket advances the room has been
 /// closed for minutes, so there is nowhere else for it to land.</para></summary>
+/// <summary>An invitation this player sent and nobody answered yet.</summary>
+public class TeamSentInvite
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("team_id")]
+    public string? TeamId { get; set; }
+
+    [JsonPropertyName("invited_user_id")]
+    public string? InvitedUserId { get; set; }
+
+    [JsonPropertyName("invited_name")]
+    public string? InvitedName { get; set; }
+
+    [JsonPropertyName("created_at")]
+    public string? CreatedAt { get; set; }
+}
+
 public class TournamentUpdateNotice
 {
     /// <summary>match_ready / room_opened / match_done / entry_accepted / entry_promoted.</summary>

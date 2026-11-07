@@ -135,8 +135,8 @@ public class SmallDialogTests
     {
         Run(() =>
         {
-            var dialog = new CreateTeamDialog();
-            Assert.Same(dialog.NameLabel.Parent, ((StackPanel)dialog.Body!));
+            var dialog = new RenameRoomDialog("x", null);
+            Assert.Same(dialog.FieldLabel.Parent, ((StackPanel)dialog.Body!));
             Assert.IsType<Grid>(dialog.Content);
             Assert.NotNull(dialog.Chrome);
         });

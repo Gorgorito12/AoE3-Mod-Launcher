@@ -369,6 +369,23 @@
         </Setter>
     </Style>
 
+    <!-- The close of a note in My teams: a glyph with a place to click. -->
+    <Style x:Key="TeamNoteClose" TargetType="Button">
+        <Setter Property="Foreground" Value="#8C9CB1"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="Transparent">
+                        <ContentPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="EnrollHead" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
         <Setter Property="FontSize" Value="{DynamicResource SetCaptionSize}"/>
         <Setter Property="FontWeight" Value="Bold"/>

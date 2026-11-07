@@ -171,11 +171,13 @@ public partial class MultiplayerTab
 
     private async void TournamentsMyTeams_Click(object sender, RoutedEventArgs e) => await OpenMyTeamsAsync();
 
-    /// <summary>Open "My teams" on the tournament server in use.</summary>
-    internal async Task OpenMyTeamsAsync()
+    /// <summary>Open "My teams" on the tournament server in use, on an invitation if one is named.</summary>
+    internal async Task OpenMyTeamsAsync(string? invite = null)
     {
         if (TournamentApiOrNull is not { } api) return;
-        var window = new MyTeamsWindow(api, TournamentViewerId(null), OnlinePlayerCandidates, PlayerSearch());
+        var online = new HashSet<string>(_globalOnlineUsers.Select(u => u.UserId), StringComparer.Ordinal);
+        var window = new MyTeamsWindow(api, TournamentViewerId(null), OnlinePlayerCandidates, PlayerSearch(),
+            online.Contains, () => _ = RunSignInDialogAsync(), invite);
         try { window.Owner = OwnerWindow(); } catch { /* off-tree */ }
         _ = window.LoadAsync();
         window.ShowDialog();
@@ -232,17 +234,87 @@ public partial class MultiplayerTab
         catch { return; }
         if (n == null) return;
 
-        _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "\U0001F465",
-            Strings.Get("MpTeamsInviteToastTitle"),
-            Strings.Format("MpTeamsInviteToastBody", n.TeamName ?? ""),
-            new[]
+        var invite = n.InviteId;
+        var acts = new List<AppToast.ToastAction>
+        {
+            new(Strings.Get("MtToastView"), IsPrimary: false, OnClick: () =>
             {
-                new AppToast.ToastAction(Strings.Get("MpTeamsInviteToastOpen"), IsPrimary: true,
-                    OnClick: () => { _ = OpenMyTeamsAsync(); }),
-            },
-            PreferDesktop: true));
+                _bringMultiplayerToFront?.Invoke();
+                _ = OpenMyTeamsAsync(invite);
+            }),
+        };
+        if (!string.IsNullOrEmpty(invite))
+        {
+            acts.Insert(0, new AppToast.ToastAction(Strings.Get("MtToastDecline"), IsPrimary: false,
+                OnClick: () => _ = AnswerTeamInviteAsync(invite, n.TeamName ?? "", accept: false)));
+            acts.Add(new AppToast.ToastAction(Strings.Get("MtToastAccept"), IsPrimary: true,
+                OnClick: () => _ = AnswerTeamInviteAsync(invite, n.TeamName ?? "", accept: true)));
+        }
+        _showAppToast?.Invoke(TeamInviteToast(n.TeamName ?? "", acts));
         _ = RefreshTeamInvitesAsync();
+    }
+
+    /// <summary>Design 83l. News on purpose: unlike a room invitation it does not expire, it waits
+    /// in My teams, so "Do not disturb" silences the card and loses nothing.</summary>
+    internal static AppToast.ToastOptions TeamInviteToast(string team, IReadOnlyList<AppToast.ToastAction> actions) => new(
+        "\U0001F465",
+        Strings.Get("MpTeamsInviteToastTitle"),
+        Strings.Format("MpTeamsInviteToastBody", team),
+        actions,
+        AutoDismissMs: 20000,
+        PreferDesktop: true,
+        Crest: new AppToast.ToastCrest(EnrollView.CrestOf(team), "#4F6A8A", "#4F6A8A", "#FFFFFF"));
+
+    internal static AppToast.ToastOptions TeamJoinedToast(string team, IReadOnlyList<AppToast.ToastAction> actions) => new(
+        "\u2713",
+        Strings.Format("MtToastJoinedTitle", team),
+        Strings.Get("MtToastJoinedBody"),
+        actions,
+        PreferDesktop: true,
+        Cause: ToastCause.Answer,
+        Crest: new AppToast.ToastCrest("\u2713", "#244FD68A", "#804FD68A", "#4FD68A"));
+
+    internal static AppToast.ToastOptions TeamDeclinedToast(string team) => new(
+        "\U0001F465",
+        Strings.Get("MtToastDeclinedTitle"),
+        Strings.Format("MtToastDeclinedBody", team),
+        Array.Empty<AppToast.ToastAction>(),
+        PreferDesktop: true,
+        Cause: ToastCause.Answer,
+        Crest: new AppToast.ToastCrest(EnrollView.CrestOf(team), null, "#7382AFFF", "#A8BCD2"));
+
+    /// <summary>The invitation answered from its card, without opening the window.</summary>
+    private async Task AnswerTeamInviteAsync(string invite, string team, bool accept)
+    {
+        if (TournamentApiOrNull is not { } api) return;
+        try
+        {
+            if (accept) await api.AcceptTeamInviteAsync(invite);
+            else await api.DeclineTeamInviteAsync(invite);
+        }
+        catch (LobbyApiException ex)
+        {
+            _showAppToast?.Invoke(new AppToast.ToastOptions("\u26A0", Strings.Get("MpTournamentActionFailed"), TournamentErrorText(ex), Array.Empty<AppToast.ToastAction>(),
+                PreferDesktop: true, Cause: ToastCause.Answer));
+            return;
+        }
+        catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException)
+        {
+            _showAppToast?.Invoke(new AppToast.ToastOptions("\u26A0", Strings.Get("MpTournamentActionFailed"), Strings.Get("MtOfflineTitle"), Array.Empty<AppToast.ToastAction>(),
+                PreferDesktop: true, Cause: ToastCause.Answer));
+            return;
+        }
+        _showAppToast?.Invoke(accept
+            ? TeamJoinedToast(team, new[]
+            {
+                new AppToast.ToastAction(Strings.Get("MtToastViewTeam"), IsPrimary: false, OnClick: () =>
+                {
+                    _bringMultiplayerToFront?.Invoke();
+                    _ = OpenMyTeamsAsync();
+                }),
+            })
+            : TeamDeclinedToast(team));
+        await RefreshTeamInvitesAsync();
     }
 
     // ---------------------------------------------------------------- players to choose from

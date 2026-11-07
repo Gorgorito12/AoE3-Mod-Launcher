@@ -563,8 +563,17 @@ internal sealed class TournamentSimulator
                 .Select(CloneTeam)
                 .ToList(),
             Invites = _invites.Where(i => i.To == me).Select(i => i.Invite).ToList(),
+            SentInvites = _invites.Where(i => i.Invite.InvitedBy == me).Select(i => new TeamSentInvite
+            {
+                Id = i.Invite.Id, TeamId = i.Invite.TeamId, InvitedUserId = i.To,
+                InvitedName = TeamMemberOf(i.To, "player").DisplayName, CreatedAt = i.Invite.CreatedAt,
+            }).ToList(),
         };
     }
+
+    /// <summary><c>GET /teams/:id</c>.</summary>
+    internal TeamSummary GetTeam(string id)
+        => CloneTeam(_teams.FirstOrDefault(x => x.Id == id) ?? throw NotFound("Team"));
 
     /// <summary><c>POST /teams</c>.</summary>
     internal TeamSummary CreateTeam(JsonElement body)
@@ -610,7 +619,7 @@ internal sealed class TournamentSimulator
             _invites.Add((new TeamInvite
             {
                 Id = $"sim-newinvite-{++_seq}", TeamId = teamId, TeamName = team.Name, TeamTag = team.Tag,
-                InvitedBy = TournamentDemoData.MeUserId, CreatedAt = "",
+                InvitedBy = TournamentDemoData.MeUserId, CreatedAt = DateTimeOffset.UtcNow.ToString("O"),
             }, userId));
         }
         return PreviewOutcome.Nothing;

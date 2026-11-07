@@ -30,6 +30,7 @@ public static partial class Strings
         foreach (var kv in RoomTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in NewTournamentTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in EnrollTable) Table.Add(kv.Key, kv.Value);
+        foreach (var kv in MyTeamsTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in TournamentRoomTable) Table.Add(kv.Key, kv.Value);
     }
 

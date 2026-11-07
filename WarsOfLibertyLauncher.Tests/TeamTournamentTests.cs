@@ -380,22 +380,6 @@ public class TeamTournamentTests
     }
 
     [Fact]
-    public void TheNewTeamDialogLoads_AndWantsANameOfTwo()
-    {
-        var error = DialogXamlTests.RunOnStaThread(() =>
-        {
-            var dlg = new CreateTeamDialog();
-            Assert.False(dlg.CanConfirm);
-            dlg.NameEntry.Text = "A";
-            Assert.False(dlg.CanConfirm);
-            dlg.NameEntry.Text = "AB";
-            Assert.True(dlg.CanConfirm);
-            dlg.Close();
-        });
-        Assert.Null(error);
-    }
-
-    [Fact]
     public void MyTeamsShowsTheInvitationAndMyTeam_InBothLanguages()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
@@ -410,10 +394,9 @@ public class TeamTournamentTests
                     var w = new MyTeamsWindow(api, Me, () => Array.Empty<PickCandidate>(), null);
                     w.LoadAsync().GetAwaiter().GetResult();
                     Assert.NotNull(w.Data);
-                    var texts = Logical(w.ContentPanel).OfType<TextBlock>().Select(t => t.Text).ToList();
-                    Assert.Contains(Strings.Get("MpTeamsInvitesHeading"), texts);
-                    Assert.Contains(texts, t => t.StartsWith("Los Libertadores", StringComparison.Ordinal));
-                    Assert.Single(Logical(w.ContentPanel).OfType<FrameworkElement>(), e => Equals(e.Tag, "TeamCard"));
+                    var rail = Logical(w.RailRows).OfType<TextBlock>().Select(t => t.Text).ToList();
+                    Assert.Contains(rail, t => t.StartsWith("Los Libertadores", StringComparison.Ordinal));
+                    Assert.Single(Logical(w.TeamBody).OfType<FrameworkElement>(), e => Equals(e.Tag, "TeamCard"));
                     w.Close();
                 }
                 finally { Strings.SetLanguage(previous); }

@@ -72,7 +72,12 @@ public static class AppToast
         bool PreferDesktop = false,
         ToastTone? Tone = null,
         string? Subtitle = null,
-        Services.ToastCause Cause = Services.ToastCause.News);
+        Services.ToastCause Cause = Services.ToastCause.News,
+        ToastCrest? Crest = null);
+
+    /// <summary>The square that opens a card about a team (design 83l): its initials, or a mark.</summary>
+    /// <param name="Fill">Null draws only the rim.</param>
+    public sealed record ToastCrest(string Text, string? Fill, string Rim, string Ink);
 
     /// <summary>The coloured circle of a <see cref="ToastOptions.Tone"/> card.</summary>
     public enum ToastTone { Ok, Info, Error }
@@ -97,9 +102,9 @@ public static class AppToast
             while (host.Children.Count >= MaxVisible)
                 host.Children.RemoveAt(host.Children.Count - 1);
 
-            if (opts.Tone is ToastTone tone)
+            if (opts.Crest != null || opts.Tone != null)
             {
-                ShowToned(host, opts, tone);
+                ShowToned(host, opts, opts.Tone ?? ToastTone.Info);
                 return;
             }
 
@@ -440,6 +445,95 @@ public static class AppToast
         return shell;
     }
 
+    /// <summary>The card of a team invitation (design 83l): a square with the team's initials,
+    /// and the answers along the bottom. Same shadow layer as <see cref="BuildToned"/>, so nothing
+    /// over the text carries an Effect.</summary>
+    internal static Grid BuildCrested(ToastOptions opts, ToastCrest crest, Action close)
+    {
+        static Brush Hex(string hex) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+        double F(string key) => (double)Application.Current.FindResource(key);
+
+        var shell = new Grid { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, Width = 420 };
+        shell.Children.Add(new Border
+        {
+            Background = Brushes.Black,
+            CornerRadius = new CornerRadius(12),
+            IsHitTestVisible = false,
+            CacheMode = new BitmapCache(),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, ShadowDepth = 14, Direction = 270, BlurRadius = 36, Opacity = 0.5 },
+        });
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+        grid.Children.Add(new Border
+        {
+            Width = 36,
+            Height = 36,
+            CornerRadius = new CornerRadius(9),
+            BorderThickness = new Thickness(1),
+            Background = crest.Fill == null ? Brushes.Transparent : Hex(crest.Fill),
+            BorderBrush = Hex(crest.Rim),
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = new TextBlock { Text = crest.Text, FontWeight = FontWeights.Bold, FontSize = F("SetRowDescSize"), Foreground = Hex(crest.Ink), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        });
+        var words = new StackPanel { Margin = new Thickness(12, 0, 12, 0) };
+        Grid.SetColumn(words, 1);
+        words.Children.Add(new TextBlock { Text = opts.Title, FontWeight = FontWeights.SemiBold, FontSize = F("SetRowTitleSize"), Foreground = Hex("#F4F8FC"), TextTrimming = TextTrimming.CharacterEllipsis });
+        if (!string.IsNullOrWhiteSpace(opts.Body))
+            words.Children.Add(new TextBlock { Text = opts.Body, Margin = new Thickness(0, 3, 0, 0), FontSize = F("SetControlSize"), Foreground = Hex("#B9C9DE"), TextWrapping = TextWrapping.Wrap });
+        grid.Children.Add(words);
+
+        var closeBtn = new Button
+        {
+            Content = "\u2715",
+            FontSize = F("SetControlSize"),
+            Foreground = Hex("#8C9CB1"),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Top,
+            Padding = new Thickness(0),
+            Width = 20,
+            Height = 20,
+            Tag = ToastCloseTag,
+        };
+        closeBtn.Click += (_, _) => close();
+        Grid.SetColumn(closeBtn, 2);
+        grid.Children.Add(closeBtn);
+
+        var stack = new StackPanel();
+        stack.Children.Add(grid);
+        if (opts.Actions is { Count: > 0 })
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+            foreach (var action in opts.Actions)
+            {
+                var button = new Button { Content = action.Label, MinWidth = 96, Height = 32, Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(14, 0, 14, 0), FontSize = F("SetControlSize") };
+                button.SetResourceReference(FrameworkElement.StyleProperty, action.IsPrimary ? "WindowPrimaryButton" : "WindowSecondaryButton");
+                var act = action.OnClick;
+                button.Click += (_, _) =>
+                {
+                    close();
+                    try { act?.Invoke(); } catch (Exception ex) { DiagnosticLog.Write($"AppToast action failed: {ex.Message}"); }
+                };
+                row.Children.Add(button);
+            }
+            stack.Children.Add(row);
+        }
+        shell.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0xF2, 12, 22, 38)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(13, 13, 13, 11),
+            Child = stack,
+        });
+        return shell;
+    }
+
     private static void ShowToned(Panel host, ToastOptions opts, ToastTone tone)
     {
         DispatcherTimer? timer = null;
@@ -456,7 +550,7 @@ public static class AppToast
                 new DoubleAnimation(28, TimeSpan.FromMilliseconds(160)));
         }
 
-        shell = BuildToned(opts, tone, Close);
+        shell = opts.Crest is { } crest ? BuildCrested(opts, crest, Close) : BuildToned(opts, tone, Close);
         shell.Opacity = 0;
         shell.RenderTransform = new TranslateTransform(28, 0);
         host.Children.Insert(0, shell);
