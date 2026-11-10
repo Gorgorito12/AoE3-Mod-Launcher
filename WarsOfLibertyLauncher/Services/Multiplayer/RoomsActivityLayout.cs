@@ -149,11 +149,14 @@ public static class RoomsActivityLayout
     /// <param name="gap">The space between the rooms and the block.</param>
     public static RoomsSpacePlan Plan(
         double columnHeight, double roomsMinHeight, bool roomsEmpty,
-        bool hasActivity, bool? choice, ActivitySizes? sizes = null, double gap = Gap)
+        bool hasActivity, bool? choice, ActivitySizes? sizes = null, double gap = Gap, bool windowTall = true)
     {
         var s = Sane(sizes ?? ActivitySizes.Reference);
         if (!hasActivity) return new RoomsSpacePlan(RoomsActivityMode.None, 0);
         if (choice == false) return new RoomsSpacePlan(RoomsActivityMode.Folded, 0);
+        // Design 86: below a 1000-px window the activity stays the compact bar unless the player
+        // opened it — "the cards only come out when height is left over" — even over an empty list.
+        if (!windowTall && choice != true) return new RoomsSpacePlan(RoomsActivityMode.Folded, 0);
         // Not laid out yet: draw the block at its height and let the first real pass decide.
         if (!(columnHeight > 0)) return new RoomsSpacePlan(RoomsActivityMode.Fixed, s.MinCards);
 
@@ -170,6 +173,9 @@ public static class RoomsActivityLayout
     /// rim (1 + 1) and the 16 px it keeps off the list's bottom edge — inside the Rooms panel's
     /// own padding.
     /// </summary>
+    /// <summary>The window height from which the activity cards may open by themselves (design 86).</summary>
+    public const double CardsWindowHeight = 1000;
+
     public const double OverlayChrome = 2 * PageSpacing.PanelPadding + 2 + PageSpacing.PanelPadding;
 
     /// <summary>

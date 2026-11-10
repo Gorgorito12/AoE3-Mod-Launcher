@@ -604,6 +604,17 @@ rather than the reverse.
   `Controls/FlexLine` is a wrapping row whose `Spring` child takes what is left of its line (CSS
   flex-wrap), and `AutoFillPanel` is `repeat(auto-fill, minmax())`.
 
+- **Screen 86 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the Rooms page**
+  (the rooms table with its sort arrows and capacity bars, the rank badge in the host cell, design 66's
+  green/blue/amber action buttons, the refresh icon, the "Find a 1v1 match" button in the list header,
+  the 58/54-px rows). One row per room (`Controls/MultiplayerTab.RoomRows.cs`): icon, name over chips,
+  host over "1630 ELO" or "En posicionamiento 3/10", players, ping, and ONE action decided by the pure
+  `Services/Multiplayer/RoomActionRule`, which also groups the list under PUEDES ENTRAR / EN PARTIDA /
+  NO DISPONIBLES AHORA. The quick match is a card above the list (`MultiplayerTab.QuickCard.cs` over
+  `Services/Multiplayer/QuickCardView`). The rules are in `.claude/rules/multiplayer.md` (ROOMS PAGE).
+  `--demo-rooms=86a..86e` (and a Settings → Developer row) paints it with sample rooms; buttons there
+  say what they would do instead of doing it.
+
 - **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the
   piece of the blurred cover under it plus the level's tint (`GlassTheme.Spec.Menu`), which supersedes
   the "denser than the design" note below while a cover is on screen; with none, `Spec.Floating`
@@ -2100,7 +2111,9 @@ rather than the reverse.
   halo), so the blur is worked out once instead of every frame — **never on anything holding crisp
   text**, which would lose ClearType exactly like an Effect. (3) **`Services/EffectsGovernor`**
   turns every light off for the session (`RankBadge.SetReducedEffects`, which the update pill
-  follows) after three watched seconds in a row spending ≥ 400 ms drawing at ≥ 60 ms a frame, or
+  follows; the Settings choice "Effects and animations: Reduced" turns them off too, through the
+  separate `SetUserReducedEffects`, so switching it back never re-lights a PC the governor found
+  slow) after three watched seconds in a row spending ≥ 400 ms drawing at ≥ 60 ms a frame, or
   at start on a rendering tier below 2, and logs one `EFFECTS REDUCED` line. Both halves of that
   rule are needed: a fast PC dragging the window's edge also spends most of a second drawing, in
   many cheap frames, and must keep its lights. `AOE3ML_SOFTWARE_RENDER=1` forces software
@@ -2154,8 +2167,8 @@ rather than the reverse.
   `TargetName` into each Style's own triggers, on the control's `Background`, which reaches
   the template through the `TemplateBinding`. Triggers merge base-first down the `BasedOn`
   chain and the last setter wins, so the derived style's state is the one that lands. A
-  style that supplies its OWN `Template` is exempt — that is why `MpRoomActionGhost` and
-  `MpRowJoinButton` legitimately keep a `TargetName` trigger. The implicit global `Button`
+  style that supplies its OWN `Template` is exempt — that is why `MpRowJoinButton` and
+  `QcButtonPrimary` legitimately keep a `TargetName` trigger. The implicit global `Button`
   style solves it a third way, by animating an overlay's `Opacity` rather than a colour.
   Pinned by `DialogXamlTests.NoDerivedStyleDeclaresAStateItsInheritedTemplateStomps`, which
   walks every style in `Styles/*.xaml` and asserts it examined a non-zero number of them.

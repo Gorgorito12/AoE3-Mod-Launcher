@@ -63,18 +63,17 @@ public static class RoomsTableLayout
     /// </summary>
     public static readonly IReadOnlyList<RoomColumnSpec> All = new[]
     {
-        new RoomColumnSpec(RoomColumn.Room,    null, 210),
-        // 208 rather than the reference's 152 because this cell now carries the host's
-        // RATING as well as their name: 20+8 disc + 120 name + 6 + ~30 number + ~23 for the
-        // "ELO" beside it, which is what makes the number legible as a rating at all.
-        // The rating had a column of its own for one revision; it read as a number stranded
-        // ~100px from the name it belongs to, and comparing ratings BETWEEN rooms — the only
-        // thing a column buys — is not what this table is for. Even so this is 2px CHEAPER
-        // than that version, which cost 152 + 58.
-        new RoomColumnSpec(RoomColumn.Host,    208,  208),
-        new RoomColumnSpec(RoomColumn.Players,  88,   88),
-        new RoomColumnSpec(RoomColumn.Ping,     66,   66),
-        new RoomColumnSpec(RoomColumn.Action,   96,   96),
+        // Design 86: `36px minmax(0,1fr) minmax(130px,190px) 74px 64px 136px` with a 12-px gap.
+        // The 36-px icon lives INSIDE the Room cell (with its gap, 48 px) because it has no
+        // heading; every fixed width below carries the 12-px gap that opens its column, which
+        // the row builder applies as a left margin. Room's comfort is the icon plus a name.
+        new RoomColumnSpec(RoomColumn.Room,    null, 230),
+        // The host's NAME over his rating: the reference's 190 + its gap.
+        new RoomColumnSpec(RoomColumn.Host,    202,  202),
+        new RoomColumnSpec(RoomColumn.Players,  86,   86),
+        new RoomColumnSpec(RoomColumn.Ping,     76,   76),
+        // Wide enough for "Revisar mi copia" / "Entrar a mirar" at 12.5 semibold.
+        new RoomColumnSpec(RoomColumn.Action,  148,  148),
     };
 
     /// <summary>

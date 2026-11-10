@@ -60,34 +60,28 @@ public class RoomsPageRefreshTests
 
     /// <summary>
     /// A ping cell is updated IN PLACE: the same TextBlock across every 3-s tick, with the text and
-    /// colour of the latest reading. It was cleared and rebuilt for every room on every tick.
+    /// colour of the latest reading (design 86's bands). It was cleared and rebuilt for every room
+    /// on every tick.
     /// </summary>
     [Fact]
     public void APingCellKeepsItsTextBlockAcrossTicks()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var tab = new MultiplayerTab();
-            var fill = typeof(MultiplayerTab).GetMethod("FillPingCell", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            var cell = new StackPanel();
+            var fill = typeof(MultiplayerTab).GetMethod("FillRoomPing", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var cell = new TextBlock();
 
-            fill.Invoke(tab, new object?[] { cell, null });
-            var first = Assert.IsType<TextBlock>(Assert.Single(cell.Children));
-            Assert.Equal("—", first.Text);
+            fill.Invoke(null, new object?[] { cell, null });
+            Assert.Equal("—", cell.Text);
+            Assert.Same(System.Windows.Application.Current.FindResource("RmPingUnknown"), cell.Foreground);
 
-            fill.Invoke(tab, new object?[] { cell, 42.0 });
-            Assert.Same(first, Assert.Single(cell.Children));
-            Assert.Equal("42 ms", first.Text);
-            var good = first.Foreground;
+            fill.Invoke(null, new object?[] { cell, 42.0 });
+            Assert.Equal("42 ms", cell.Text);
+            Assert.Same(System.Windows.Application.Current.FindResource("RmPingGood"), cell.Foreground);
 
-            fill.Invoke(tab, new object?[] { cell, 250.0 });
-            Assert.Same(first, Assert.Single(cell.Children));
-            Assert.Equal("250 ms", first.Text);
-            Assert.NotSame(good, first.Foreground);
-
-            fill.Invoke(tab, new object?[] { cell, null });
-            Assert.Same(first, Assert.Single(cell.Children));
-            Assert.Equal("—", first.Text);
+            fill.Invoke(null, new object?[] { cell, 250.0 });
+            Assert.Equal("250 ms", cell.Text);
+            Assert.Same(System.Windows.Application.Current.FindResource("RmPingSlow"), cell.Foreground);
         });
         Assert.Null(error);
     }

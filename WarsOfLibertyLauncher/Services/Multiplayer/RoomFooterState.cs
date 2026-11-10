@@ -100,6 +100,9 @@ public sealed record RoomFacts
 
     /// <summary>The bracket match was won: the only ending the footer marks in green.</summary>
     public bool ResultWon { get; init; }
+
+    /// <summary>The viewer sits in an observer's seat: he neither plays nor marks ready.</summary>
+    public bool Watching { get; init; }
 }
 
 /// <summary>What the footer shows for some facts.</summary>
@@ -136,7 +139,7 @@ public static class RoomFooterState
         {
             case RoomStage.Countdown:
                 return View(RoomDot.Green, new("RoomFtStarting"), new("RoomFtStartingSub"),
-                    RoomPrimary.CancelCountdown);
+                    f.Watching ? RoomPrimary.None : RoomPrimary.CancelCountdown);
             case RoomStage.InGame:
                 return View(RoomDot.Green, new("RoomFtInGame"), new("RoomFtInGameSub"), leave: RoomLeave.Match);
             case RoomStage.GameClosed:
@@ -156,6 +159,17 @@ public static class RoomFooterState
         }
 
         var view = f.Competitive ? Competitive(f) : Casual(f);
+        // An observer reads the same state of the room and never marks ready: the server starts on
+        // the players alone. He can still be the HOST (the server hands the room on by join order),
+        // and only the host may start, so a watching host keeps Start for when the players are ready.
+        if (f.Watching)
+        {
+            var canStart = f.Players >= 2 && f.NotReady == 0 && (!f.Competitive || (f.Gate?.CanStart ?? true));
+            view = f.IsHost
+                ? View(view.Dot, view.Title, new("RoomFtWatchingHostSub"), RoomPrimary.Start, enabled: canStart,
+                    tip: canStart ? null : f.Players < 2 ? "RoomTipNeedsPlayer" : "RoomTipNeedsReady")
+                : View(view.Dot, view.Title, new("RoomFtWatchingSub", f.HostName));
+        }
         if (f.RematchWaitingFor is { } rival)
         {
             view = view with

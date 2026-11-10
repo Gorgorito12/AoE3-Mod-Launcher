@@ -61,9 +61,9 @@ public class RankBadgeMotionTests
     }
 
     /// <summary>
-    /// THE ONE THAT MATTERS. Every list draws its badges still — the players panel, the rooms and
-    /// the room's roster are built through the real tab, at first place, where a light would be
-    /// brightest.
+    /// THE ONE THAT MATTERS. Every list draws its badges still — the players panel and the room's
+    /// roster are built through the real tab, at first place, where a light would be brightest.
+    /// (The rooms list wears no badge since design 86.)
     /// </summary>
     [Fact]
     public void THE_ONE_THAT_MATTERS_ListsDrawStillBadges()
@@ -81,17 +81,6 @@ public class RankBadgeMotionTests
                 typeof(MultiplayerTab).GetMethod("RenderPlayersPanel", Private)!.Invoke(tab, null);
                 var playersBadges = Badges(tab.PlayersPanel);
 
-                var room = (FrameworkElement)typeof(MultiplayerTab).GetMethod("BuildRoomCard", Private)!
-                    .Invoke(tab, new object[]
-                    {
-                        new LobbySummary
-                        {
-                            Id = "abc123", Title = "Sala", ModId = "wol", MaxPlayers = 2, Status = "open",
-                            Host = new LobbyHost { Id = "u1", DiscordUsername = "first", LadderRank = 1 },
-                        },
-                        0,
-                    })!;
-
                 var memberType = typeof(MultiplayerTab).GetNestedType("RoomMemberEntry", BindingFlags.NonPublic)!;
                 var member = Activator.CreateInstance(memberType, nonPublic: true)!;
                 memberType.GetProperty("UserId")!.SetValue(member, "u2");
@@ -105,7 +94,6 @@ public class RankBadgeMotionTests
                 foreach (var (where, badges) in new[]
                          {
                              ("players panel", playersBadges),
-                             ("rooms row", Badges(room)),
                              ("room roster", Badges(roster)),
                          })
                 {

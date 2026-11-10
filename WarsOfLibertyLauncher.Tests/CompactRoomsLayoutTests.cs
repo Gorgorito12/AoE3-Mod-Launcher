@@ -70,24 +70,25 @@ public class CompactRoomsLayoutTests
                 Assert.Same(tab.RoomsListScroll, Ancestors(tab.RoomsListPanel).OfType<ScrollViewer>().Single());
                 Assert.Empty(Ancestors(tab.RoomsHeaderStrip).OfType<ScrollViewer>());
                 Assert.Empty(Ancestors(tab.ActivityStrip).OfType<ScrollViewer>());
-                // Two rows (61): the rooms, then the ONE community block — its header line, with the
-                // facts on it, and its cards. No highlights row, no folded bar, no strip of facts.
-                Assert.Equal(2, tab.RoomsLeftColumn.RowDefinitions.Count);
+                // Three rows: the quick match card (design 86), the rooms, then the ONE community
+                // block — its header line, with the facts on it, and its cards.
+                Assert.Equal(3, tab.RoomsLeftColumn.RowDefinitions.Count);
                 Assert.Same(tab.ActivityHost, LogicalTreeHelper.GetParent(tab.ActivityBlock));
                 Assert.Same(tab.ActivityBlockGrid, LogicalTreeHelper.GetParent(tab.ActivityStrip));
                 Assert.Same(tab.ActivityHeader, LogicalTreeHelper.GetParent(tab.ActivityFacts));
                 Assert.Same(tab.ActivityHeader, LogicalTreeHelper.GetParent(tab.ActivityFactsMonthLink));
-                Assert.Equal(1, Grid.GetRow(tab.ActivityHost));
-                Assert.Equal(0, Grid.GetRow(tab.RoomsBlock));
+                Assert.Equal(2, Grid.GetRow(tab.ActivityHost));
+                Assert.Equal(1, Grid.GetRow(tab.RoomsBlock));
+                Assert.Equal(0, Grid.GetRow(tab.QuickCardHost));
             }
 
-            // The handoff's compact geometry: a 44-px sub-bar and the column header inset exactly
-            // over the rows' content (the row's 1 of border + 12). The chat column is 280 px on a
+            // The compact geometry: a 44-px sub-bar and the column header inset exactly over the
+            // rows' content (the row's 1 of border + 11). The chat column is 280 px on a
             // page that has not been measured (and under 1600 px).
             Assert.Equal(280, tab.RoomsSideColumn.Width.Value);
             Assert.True(tab.RoomsSideColumn.Width.IsAbsolute);
             Assert.Equal(44, tab.SubBar.Height);
-            Assert.Equal(tab.RoomsListPanel.Margin.Left + 13, tab.RoomsHeaderStrip.Margin.Left);
+            Assert.Equal(tab.RoomsListPanel.Margin.Left + 12, tab.RoomsHeaderStrip.Margin.Left);
 
             tab.SetCompactLayout(false);
             // The list is a card in both layouts (57a) and the rows sit on its 16-px padding, so
@@ -96,7 +97,7 @@ public class CompactRoomsLayoutTests
             Assert.Equal(0, tab.RoomsListPanel.Margin.Left);
             Assert.Equal(new Thickness(16), tab.RoomsBlock.Padding);
             Assert.Equal(280, tab.RoomsSideColumn.Width.Value);
-            Assert.Equal(48, tab.SubBar.Height);
+            Assert.Equal(44, tab.SubBar.Height);
         });
         Assert.Null(error);
     }
@@ -1163,40 +1164,48 @@ public class CompactRoomsLayoutTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// Design 86: every room names its kind in a chip — a casual room by its size — and the
+    /// capacity bars are gone ("1/2" says it, and the maintainer chose the prototype's row).
+    /// </summary>
     [Fact]
-    public void ACasualRoomSaysSoAndDrawsOneBarPerSeat()
+    public void ACasualRoomSaysSoAndThereAreNoCapacityBars()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
 
             var casual = BuildCard(tab, Room("CASUAL01", competitive: false, max: 6, current: 4));
-            Assert.Contains(Descendants(casual).OfType<TextBlock>(), t => t.Text == Strings.Get("MpRoomCasualBadge"));
-            var bars = Descendants(casual).OfType<StackPanel>().Single(p => Equals(p.Tag, "capacity"));
-            Assert.Equal(6, bars.Children.Count);
+            Assert.Contains(Descendants(casual).OfType<TextBlock>(), t => t.Text == Strings.Format("RmChipCasual", "3v3"));
+            Assert.DoesNotContain(Descendants(casual).OfType<FrameworkElement>(), e => Equals(e.Tag, "capacity"));
+            Assert.Contains(Descendants(casual).OfType<TextBlock>(), t => t.Text == "4/6");
 
             var ranked = BuildCard(tab, Room("RANKED01", competitive: true, max: 2, current: 1));
-            Assert.DoesNotContain(Descendants(ranked).OfType<TextBlock>(), t => t.Text == Strings.Get("MpRoomCasualBadge"));
-            Assert.Equal(2, Descendants(ranked).OfType<StackPanel>().Single(p => Equals(p.Tag, "capacity")).Children.Count);
+            Assert.DoesNotContain(Descendants(ranked).OfType<TextBlock>(), t => t.Text.StartsWith("Casual", StringComparison.Ordinal));
+            Assert.Contains(Descendants(ranked).OfType<TextBlock>(), t => t.Text == Strings.Format("RmChipRanked", Strings.Get("MpFormat1v1")));
         });
         Assert.Null(error);
     }
 
+    /// <summary>One row in both layouts (design 86): the 62-px card, the name on one line.</summary>
     [Fact]
-    public void ACompactRowIsTheShortStyleWithAOneLineName()
+    public void TheRowIsTheSameCardInBothLayoutsWithAOneLineName()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
-            tab.SetCompactLayout(true);
-            var card = BuildCard(tab, Room("COMPACT1", competitive: false, max: 4, current: 2,
-                title: "A room name long enough that it would have wrapped to a second line"));
+            foreach (var compact in new[] { true, false })
+            {
+                tab.SetCompactLayout(compact);
+                var card = BuildCard(tab, Room("COMPACT1", competitive: false, max: 4, current: 2,
+                    title: "A room name long enough that it would have wrapped to a second line"));
 
-            Assert.Same(tab.FindResource("MpRoomCardCompact"), card.Style);
-            var title = Descendants(card).OfType<TextBlock>()
-                .First(t => t.Text.StartsWith("A room name", StringComparison.Ordinal));
-            Assert.Equal(TextWrapping.NoWrap, title.TextWrapping);
-            Assert.Equal(TextTrimming.CharacterEllipsis, title.TextTrimming);
+                Assert.Same(tab.FindResource("RmRowCard"), card.Style);
+                var title = Descendants(card).OfType<TextBlock>()
+                    .First(t => t.Text.StartsWith("A room name", StringComparison.Ordinal));
+                Assert.Equal(TextWrapping.NoWrap, title.TextWrapping);
+                Assert.Equal(TextTrimming.CharacterEllipsis, title.TextTrimming);
+            }
         });
         Assert.Null(error);
     }

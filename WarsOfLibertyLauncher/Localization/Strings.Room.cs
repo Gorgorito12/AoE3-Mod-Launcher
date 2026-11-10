@@ -125,6 +125,8 @@ public static partial class Strings
         ["RoomFtAllReady"] = new() { [LangEn] = "Everyone is ready", [LangEs] = "Todos listos" },
         ["RoomFtYouHost"] = new() { [LangEn] = "You're hosting: when it starts, create the game in AoE3 → Multiplayer → LAN.", [LangEs] = "Hospedas tú: al empezar, crea la partida en AoE3 → Multijugador → LAN." },
         ["RoomFtGuestHost"] = new() { [LangEn] = "{0} is hosting and starts when everyone is ready.", [LangEs] = "Hospeda {0} y empieza cuando todos estén listos." },
+        ["RoomFtWatchingSub"] = new() { [LangEn] = "You're watching: you don't play or mark ready. {0} starts the match.", [LangEs] = "Observas: no juegas ni te marcas listo. {0} empieza la partida." },
+        ["RoomFtWatchingHostSub"] = new() { [LangEn] = "You're watching and hosting: you start the match when the players are ready.", [LangEs] = "Observas y hospedas: empiezas tú la partida cuando los jugadores estén listos." },
         ["RoomFtNowHost"] = new() { [LangEn] = "You're hosting now", [LangEs] = "Ahora hospedas tú" },
         ["RoomFtNowHostSub"] = new() { [LangEn] = "{0} left the room. When it starts, you create the game in AoE3 → Multiplayer → LAN.", [LangEs] = "{0} salió de la sala. Al empezar, creas tú la partida en AoE3 → Multijugador → LAN." },
         ["RoomFtVpn"] = new() { [LangEn] = "Your Radmin VPN isn't ready", [LangEs] = "Tu Radmin VPN no está listo" },

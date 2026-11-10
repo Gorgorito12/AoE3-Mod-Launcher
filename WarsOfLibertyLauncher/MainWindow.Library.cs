@@ -550,6 +550,9 @@ public partial class MainWindow
     private void ApplyLibraryAppearance()
     {
         GlassTheme.Apply(_config.GlassLevel);
+        // "Reduced" turns the multiplayer lights off too (rank badges, the update pill, the quick
+        // match card's marks), not only the Library's.
+        Controls.RankBadge.SetUserReducedEffects(_config.EffectsMode == "low");
         ApplyLibraryShade();
         ApplyDashboardHero(_updateService.Profile);
         _libraryRailKey = "";

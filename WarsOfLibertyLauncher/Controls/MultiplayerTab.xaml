@@ -16,6 +16,7 @@
         <Thickness x:Key="MpPageGutterRightPane">0,12,12,12</Thickness>
         <GridLength x:Key="MpPanelGap">12</GridLength>
         <Thickness x:Key="MpPanelGapTop">0,12,0,0</Thickness>
+        <Thickness x:Key="MpPanelGapBottom">0,0,0,12</Thickness>
         <!-- The padding inside each panel (Rooms, Community activity, Chat): 16 on all four sides. -->
         <Thickness x:Key="MpPanelPadding">16</Thickness>
         <!-- The gold focus ring belongs to the launcher's other surfaces. Here every
@@ -112,6 +113,39 @@
                                  to the Tag as part of this change. -->
                             <Trigger Property="Tag" Value="active">
                                 <Setter TargetName="border" Property="Background" Value="{DynamicResource MpPillActiveBg}"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The four subtabs (design 86): capitals, 13 px, 26 px apart, the active one white and
+             semibold over a 2-px blue line at the bar's bottom edge. The line is always there
+             (transparent at rest) so the active tab never moves. SubTab above keeps dressing the
+             profile window's pills. -->
+        <Style x:Key="SubTabLine" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource RmTextLabel}"/>
+            <Setter Property="FontSize" Value="{DynamicResource RmHostSize}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,26,0"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Border x:Name="line" Height="2" VerticalAlignment="Bottom" Background="Transparent"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="#E6EEF8"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="active">
+                                <Setter TargetName="line" Property="Background" Value="{DynamicResource MpAction}"/>
                                 <Setter Property="Foreground" Value="#FFFFFF"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
@@ -340,36 +374,26 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="MpRoomCard" TargetType="Border">
-            <!-- Design 57a: a row in the list's card is one step lighter than the card itself;
-                 on the card's own fill it would show only as its rim. -->
-            <Setter Property="Background" Value="{DynamicResource MpRoomRowBgInCard}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MpRimFaint}"/>
+        <!-- Design 86's room row: 62 high, radius 10, a faint white fill that lifts on hover. The
+             1-px border is always there (transparent unless the row is mine) so the ring never
+             moves the content; padding 11,7 + 1 is the design's 12,8. -->
+        <Style x:Key="RmRowCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource RmRowBg}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="{StaticResource RadiusRow}"/>
+            <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="MinHeight" Value="{StaticResource MpRoomRowHeight}"/>
+            <Setter Property="Padding" Value="11,7"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
-            <!-- Vertical padding is what makes the minimum work. With 12,0 the content
-                 floated inside a height fixed by decree; a two-line name measures 59,
-                 which still fits under the 64 minimum, so the row would not grow and the
-                 text would sit flush against both edges. 10 top and bottom leaves the
-                 one-line row at exactly 64 and lets the two-line one grow to 79 with the
-                 same breathing room it has today. -->
-            <Setter Property="Padding" Value="12,10"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource MpRoomRowHover}"/>
+                    <Setter Property="Background" Value="{DynamicResource RmRowHover}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
-
-        <!-- The COMPACT layout's room row (design handoff turns 38-39): 54 instead of 58, the name
-             on ONE line. Still a MinHeight rather than a Height, for the reason MpRoomCard gives:
-             at 125 % text the content measures more, and a fixed height would clip it in silence.
-             Only plain setters, so the base hover trigger is inherited untouched. -->
-        <Style x:Key="MpRoomCardCompact" TargetType="Border" BasedOn="{StaticResource MpRoomCard}">
-            <Setter Property="MinHeight" Value="{StaticResource MpRoomRowHeightCompact}"/>
-            <Setter Property="Padding" Value="12,4"/>
+        <Style x:Key="RmRowCardMine" TargetType="Border" BasedOn="{StaticResource RmRowCard}">
+            <Setter Property="Background" Value="{DynamicResource RmRowMineBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource RmRowMineRim}"/>
         </Style>
 
         <!-- Quick-reply pill above the chat composer (design handoff 1a). Clicking one
@@ -627,8 +651,8 @@
         <Border Grid.Row="0"
                 x:Name="SubBar"
                 Height="{StaticResource MpSubBarHeight}"
-                Background="{DynamicResource MpPanel}"
-                BorderBrush="{DynamicResource MpRimSoft}"
+                Background="{DynamicResource RmSubBarBg}"
+                BorderBrush="{DynamicResource RmSubBarRim}"
                 BorderThickness="0,0,0,1"
                 Padding="{DynamicResource MpPageGutterSides}">
             <Grid>
@@ -636,9 +660,10 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Stretch, not Center: the active tab's line sits on the bar's bottom edge. -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Stretch">
                     <Grid>
-                        <Button x:Name="SubtabRooms" Click="SubtabRooms_Click" Style="{StaticResource SubTab}"/>
+                        <Button x:Name="SubtabRooms" Click="SubtabRooms_Click" Style="{StaticResource SubTabLine}"/>
                         <!-- "New room created" dot: shown via SetNewRoomIndicator(true)
                              from MainWindow's poll, cleared when this subtab opens. -->
                         <Ellipse x:Name="RoomsSubtabDot"
@@ -666,9 +691,9 @@
                     <!-- TORNEOS. It sits where AMIGOS used to, and unlike AMIGOS it has an
                          endpoint, a DTO, a websocket frame and a bracket behind it — which is
                          the bar the comment above sets for a pill existing at all. -->
-                    <Button x:Name="SubtabTournaments" Click="SubtabTournaments_Click" Style="{StaticResource SubTab}"/>
-                    <Button x:Name="SubtabRanking" Click="SubtabRanking_Click" Style="{StaticResource SubTab}"/>
-                    <Button x:Name="SubtabStats" Click="SubtabStats_Click" Style="{StaticResource SubTab}"/>
+                    <Button x:Name="SubtabTournaments" Click="SubtabTournaments_Click" Style="{StaticResource SubTabLine}"/>
+                    <Button x:Name="SubtabRanking" Click="SubtabRanking_Click" Style="{StaticResource SubTabLine}"/>
+                    <Button x:Name="SubtabStats" Click="SubtabStats_Click" Style="{StaticResource SubTabLine}"/>
                     <!-- No "Your profile" door here. One shipped briefly and was removed at the
                          maintainer's request: the profile opens from the account menu (your
                          name, top right), which is where every other client puts it. -->
@@ -692,13 +717,13 @@
                          value: the placeholder now also says a code can be pasted, and the
                          width the old code field and the Radmin button used is free. -->
                     <Border x:Name="RoomSearchField"
-                            Height="32"
-                            Width="300"
-                            Margin="0,0,10,0"
+                            Height="34"
+                            Width="340"
+                            Margin="0,0,8,0"
                             Padding="11,0"
-                            CornerRadius="{StaticResource RadiusControl}"
-                            Background="{DynamicResource MpField}"
-                            BorderBrush="{DynamicResource MpRimField}"
+                            CornerRadius="8"
+                            Background="{DynamicResource RmSearchBg}"
+                            BorderBrush="{DynamicResource RmChipRim}"
                             BorderThickness="1">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -735,29 +760,13 @@
                             </Grid>
                         </Grid>
                     </Border>
-                    <!-- FontSize is set LOCALLY on both, and it is a FIX rather than a
-                         preference: MpSecondaryButton and MpPrimaryButton set FontSizeBody (14),
-                         the app-wide reading size, while everything else in this bar runs on the
-                         multiplayer scale. See TheRoomsTopBarFitsAtTheNarrowestWindow.
-
-                         Refresh is an ICON now (handoff turn 36), 32x32, with its caption on the
-                         tooltip — the same shape the chat composer's send button already uses.
-                         Its content is set in ApplyStrings so the element stays named. -->
-                    <Button x:Name="RefreshButton"
-                            Click="RefreshButton_Click"
-                            Style="{StaticResource MpSecondaryButton}"
-                            FontSize="{DynamicResource MpBodySize}"
-                            Width="32"
-                            Height="32"
-                            Padding="0"
-                            HorizontalContentAlignment="Center"
-                            Margin="0,0,10,0"/>
+                    <!-- Design 86: 34 high, radius 8, 13 semibold. Refresh is gone: the list polls
+                         every 5 s, and a failed load carries its own Retry. -->
                     <Button x:Name="CreateRoomButton"
                             Click="CreateRoomButton_Click"
-                            Style="{StaticResource MpPrimaryButton}"
-                            FontSize="{DynamicResource MpLabelSize}"
-                            Height="32"
-                            Padding="15,0"/>
+                            Style="{StaticResource RmCreateButton}"
+                            Height="34"
+                            Padding="14,0"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -943,10 +952,21 @@
                          takes no width from the rows, so they stay under their headers. -->
                     <Grid x:Name="RoomsLeftColumn" Grid.Column="0">
                     <Grid.RowDefinitions>
+                        <RowDefinition x:Name="QuickCardRow" Height="Auto"/>
                         <RowDefinition x:Name="RoomsRow" Height="*"/>
                         <RowDefinition x:Name="ActivityRow" Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <Border x:Name="RoomsBlock" Grid.Row="0"
+                    <!-- The quick match card (design 86, PartidaRapidaTarjeta), built in code by
+                         MultiplayerTab.QuickCard.cs. Collapsed offline and signed out. Its height is
+                         taken off the column before the rooms/activity split (ApplyActivityLayout). -->
+                    <Border x:Name="QuickCardHost" Grid.Row="0"
+                            Visibility="Collapsed"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="1"
+                            CornerRadius="14"
+                            Margin="{DynamicResource MpPanelGapBottom}"/>
+                    <Border x:Name="RoomsBlock" Grid.Row="1"
                             Background="{DynamicResource MpPanel}"
                             BorderBrush="{DynamicResource MpRimFaint}"
                             BorderThickness="1"
@@ -1005,17 +1025,6 @@
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource MpTextMuted}"
                                            FontSize="{DynamicResource MpLabelSize}"/>
-                                <!-- Joins a competitive 1v1 room of the active mod waiting for a
-                                     rival, or opens one and waits; while searching it reads
-                                     "Searching… 02:13 · Cancel" and a click stops it
-                                     (MultiplayerTab.QuickMatch.cs). -->
-                                <Button x:Name="QuickMatchButton"
-                                        Grid.Column="2"
-                                        Style="{StaticResource MpSecondaryButton}"
-                                        FontSize="{DynamicResource MpLabelSize}"
-                                        Padding="10,3"
-                                        VerticalAlignment="Center"
-                                        Click="QuickMatchButton_Click"/>
                             </Grid>
 
                             <!-- Column headers for the room list. The header and the rows
@@ -1043,14 +1052,12 @@
                                  absorbs the slack. -->
                             <Border Grid.Row="1"
                                     x:Name="RoomsHeaderBand"
-                                    Background="Transparent"
-                                    BorderBrush="{DynamicResource MpRimFaint}"
-                                    BorderThickness="0,0,0,1">
+                                    Background="Transparent">
                             <!-- ClipToBounds: a Grid cell does NOT clip, so without this a
                                  header that outgrows its share draws straight over the next
                                  column instead of being cut. Belt and braces behind the
                                  bounded layouts below. -->
-                            <Grid x:Name="RoomsHeaderStrip" Margin="13,0,13,8" ClipToBounds="True">
+                            <Grid x:Name="RoomsHeaderStrip" Margin="12,4,12,6" ClipToBounds="True">
                                 <!-- Design-time placeholder ONLY — ApplyRoomColumns rebuilds
                                      these from Services/RoomsTableLayout at the first layout
                                      pass, and re-indexes the labels below with them.
@@ -1064,51 +1071,30 @@
                                      matches reality cannot cause that again. -->
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="208"/>
-                                    <ColumnDefinition Width="88"/>
-                                    <ColumnDefinition Width="66"/>
-                                    <ColumnDefinition Width="96"/>
+                                    <ColumnDefinition Width="202"/>
+                                    <ColumnDefinition Width="86"/>
+                                    <ColumnDefinition Width="76"/>
+                                    <ColumnDefinition Width="148"/>
                                 </Grid.ColumnDefinitions>
-                                <!-- Label in the * column, sort arrow in Auto. These used to be
-                                     a horizontal StackPanel, which measures its children with
-                                     INFINITE width — so the CharacterEllipsis below never fired
-                                     and a long label (Spanish JUGADORES, ANFITRIÓN) overflowed
-                                     onto the next column instead of being trimmed. -->
-                                <Button x:Name="ColButtonRoom" Grid.Column="0" Style="{StaticResource MpColHeaderButton}" Tag="Room" Click="RoomHeader_Click">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowRoom" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Button>
-                                <!-- ANFITRIÓN is a plain label, not a sort button: the reference
-                                     keeps ordering on SALA, JUGADORES and PING only, and says the
-                                     decorative double arrows on columns nobody sorts go away. A
-                                     header that offers an order the list does not need is one more
-                                     thing to try before realising it changed nothing. -->
-                                <TextBlock Grid.Column="1" x:Name="ColHeaderHost"
-                                           Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{DynamicResource MpPillSize}" FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                                           Margin="0,0,4,0"/>
-                                <Button x:Name="ColButtonPlayers" Grid.Column="2" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Button>
-                                <Button x:Name="ColButtonPing" Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPing" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Button>
-                                <TextBlock Grid.Column="4" x:Name="ColHeaderAction"
-                                           Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{DynamicResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <!-- Design 86: plain headings, 11 bold, no sorting. The list is
+                                     ordered by what the viewer can do (RoomActionRule.Rank), so a
+                                     sort arrow would offer an order the groups then overrule.
+                                     ROOM is pushed right by the icon's 36 + 12, which has no
+                                     heading; the others carry the 12-px gap that opens each
+                                     column, like their cells (PlaceRoomCell). -->
+                                <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Margin="48,0,0,0"
+                                           Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" x:Name="ColHeaderHost" Margin="12,0,0,0"
+                                           Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" x:Name="ColHeaderPlayers" Margin="12,0,0,0"
+                                           Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="3" x:Name="ColHeaderPing" Margin="12,0,0,0"
+                                           Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="4" x:Name="ColHeaderAction"/>
                             </Grid>
                             </Border>
 
@@ -1135,27 +1121,6 @@
                 <Grid MinHeight="72">
                     <StackPanel x:Name="RoomsListPanel" Margin="0,8,0,0"/>
 
-                    <!-- Error state (design handoff 1a): "una línea ámbar con reintentar",
-                         not the red bordered box this used to be. A failed refresh is a
-                         transient network hiccup, and the red box read like the room list
-                         itself had broken; amber says try again, and now there is something
-                         to press that does. -->
-                    <StackPanel x:Name="RoomsErrorBox"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Top"
-                                Margin="13,14,13,0"
-                                Visibility="Collapsed">
-                        <TextBlock x:Name="RoomsErrorText"
-                                   Foreground="{DynamicResource MpCautionText}"
-                                   FontSize="{DynamicResource MpLabelSize}"
-                                   TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center"/>
-                        <Button x:Name="RoomsErrorRetry"
-                                Style="{StaticResource MpLinkButton}"
-                                Margin="9,0,0,0"
-                                VerticalAlignment="Center"
-                                Click="RoomsErrorRetry_Click"/>
-                    </StackPanel>
                 </Grid>
                 </ScrollViewer>
 
@@ -1165,6 +1130,37 @@
                      of a list that shrank to it, which left a huge gap under the block on a big
                      screen. Outside the scroller on purpose: a ScrollViewer measures its content
                      with infinite height, so nothing inside it can be centred. -->
+                <!-- A list that could not be loaded, or no connection (design 86d / 86e): centred in the
+                     card like the empty notice, a title, one sentence and Retry. It replaces the
+                     amber line that sat at the top of the list (design handoff 1a). Filled by
+                     ShowRoomsProblem. -->
+                <StackPanel x:Name="RoomsErrorBox"
+                            Grid.Row="1" Grid.RowSpan="2"
+                            Visibility="Collapsed"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Margin="20">
+                    <TextBlock x:Name="RoomsErrorTitle"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               FontSize="{DynamicResource RmListTitleSize}"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="RoomsErrorText"
+                               Margin="0,8,0,0"
+                               MaxWidth="390"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               Foreground="{DynamicResource RmTextLabel}"
+                               FontSize="{DynamicResource RmHostSize}"
+                               TextWrapping="Wrap"/>
+                    <Button x:Name="RoomsErrorRetry"
+                            Style="{StaticResource RmRowButton}"
+                            HorizontalAlignment="Center"
+                            Margin="0,14,0,0"
+                            Click="RoomsErrorRetry_Click"/>
+                </StackPanel>
+
                 <StackPanel x:Name="RoomsEmptyState"
                             Grid.Row="1" Grid.RowSpan="2"
                             Visibility="Collapsed"
@@ -1174,18 +1170,24 @@
                     <TextBlock x:Name="EmptyTitleText"
                                HorizontalAlignment="Center"
                                TextAlignment="Center"
-                               Foreground="{DynamicResource MpTextHeading}"
-                               FontSize="{DynamicResource MpActivityHeadlineSize}"
+                               Foreground="{DynamicResource RmTextStrong}"
+                               FontFamily="{DynamicResource DisplayFont}"
+                               FontSize="{DynamicResource RmEmptyTitleSize}"
                                FontWeight="SemiBold"
                                TextWrapping="Wrap"/>
+                    <!-- 52ch at 13.5 px: the prototype's measure. -->
                     <TextBlock x:Name="EmptyBodyText"
                                Margin="0,8,0,0"
+                               MaxWidth="380"
                                HorizontalAlignment="Center"
                                TextAlignment="Center"
-                               Foreground="{DynamicResource MpTextMuted}"
-                               FontSize="{DynamicResource MpBodySize}"
+                               Foreground="{DynamicResource RmTextLabel}"
+                               FontSize="{DynamicResource QcLineSize}"
                                TextWrapping="Wrap"/>
+                    <!-- Kept for its readers (offline state, tests) but never shown: design 86
+                         puts "Create room" in the bar and the quick match card, not here. -->
                     <Button x:Name="EmptyCreateButton"
+                            Visibility="Collapsed"
                             Margin="0,14,0,0"
                             Height="34"
                             Padding="16,0"
@@ -1212,7 +1214,7 @@
                          underneath never show through, and the shadow is a SIBLING underlay — an
                          Effect on an ancestor of text would kill ClearType on every glyph. -->
                     <Grid x:Name="ActivityOverlayHost"
-                          Grid.Row="0"
+                          Grid.Row="1"
                           Panel.ZIndex="10"
                           VerticalAlignment="Bottom"
                           Margin="16,0,16,16"
@@ -1249,7 +1251,7 @@
                          The facts sit in a FitRowPanel: when they do not fit, whole facts are
                          dropped from the end (Most played first) and the line never wraps. Folded,
                          the block is its header line alone. -->
-                    <Grid x:Name="ActivityHost" Grid.Row="1" Margin="{DynamicResource MpPanelGapTop}" Visibility="Collapsed">
+                    <Grid x:Name="ActivityHost" Grid.Row="2" Margin="{DynamicResource MpPanelGapTop}" Visibility="Collapsed">
                     <Border x:Name="ActivityBlock"
                             Padding="{DynamicResource MpPanelPadding}"
                             CornerRadius="{StaticResource RadiusLg}"

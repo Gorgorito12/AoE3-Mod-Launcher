@@ -108,7 +108,7 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   dark at the exact instant the user was about to click it. Proven from screenshot pixels:
   same button, `#2F7FE0` with the pointer away and `#16263E` with it over. Hover now lives
   in each Style's own triggers, on the BUTTON's `Background`; the primary uses
-  `MpBlueHover` / `MpBluePressed`, the same pair `MpRoomActionPrimary` and `MpPrimaryButton`
+  `MpBlueHover` / `MpBluePressed`, the same pair `MpPrimaryButton`
   already use for an `MpAction` fill. Pinned by
   `DialogXamlTests.CreateButton_DoesNotInheritTheGhostButtonsHover`.
 - **While a control is BUSY, say it with the WORD, not with opacity — and give the
@@ -675,6 +675,53 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `ModId`); the other samples as before. Buttons whose content is a panel carry an AutomationId
   (`TournamentFilter:*`, `TournamentTab:*`, `TournamentRound:*`, `TournamentZoomIn/Out`), which is
   also how the testbed presses them.
+
+- **THE ROOMS PAGE IS DESIGN 86 (`Controls/MultiplayerTab.RoomRows.cs`, `.QuickCard.cs`,
+  `.RoomsDemo.cs`; the pure rules in `Services/Multiplayer/RoomActionRule`, `QuickCardView`,
+  `RoomListDemoData`). This SUPERSEDES the paragraphs further down about the rooms table's sort arrows,
+  capacity bars, design 66's coloured action buttons, the host cell's rank badge and the room sub-line.**
+  Six rules carry weight:
+  (1) **One decision per row, `RoomActionRule.Decide`**: mine → Ver sala (the one solid button),
+  started → Ver partida, full → "Llena" as TEXT (no disabled button), mod missing → Instalar mod (the
+  Library on that mod), other version → Revisar mi copia (the mod's settings on Local files), a
+  watching seat → Entrar a mirar (developer mode only, `RoomFormats.OfferFor`), else Unirse. The SAME
+  action decides the heading (`Rank`/`GroupOf`), so a button and its group cannot disagree; inside a
+  group the server's order stands (the sort is stable). The column sort is gone.
+  (2) **"Ver partida" opens the players peek** (the maintainer's call); the "watching a match" screen is
+  later work.
+  (3) **"Other version" never claims a mismatch it has not measured.** My copy's fingerprint is read
+  ONCE per mod and install path (`KnownModHash`, off the UI thread through `_computeModFingerprint`),
+  never per row, and the list repaints when it lands; an unknown hash, or a room without
+  `mod_combined_hash`, is "same version".
+  (4) **No badge in the row and no capacity bars** (the maintainer chose the prototype): the host's
+  name over his rating on the ROOM's ladder (team for a ranked 2v2/3v3). A host still being placed
+  shows "En posicionamiento 3/10" and never a number, even if an older server sends one
+  (`HiddenPlacementTag`, pinned by `PlacementPrivacyTests`).
+  (5) **The quick match card** replaces the "Find a 1v1 match" button: states Ready (who waits, nobody,
+  another version, unknown), Looking, Waiting (clock), Found, Outdated, NoMod, NotRanked, InOtherRoom;
+  hidden offline and signed out, and repainted by every session pass (entering or leaving a room
+  changes it). **NotRanked is learned, not known:** the server says a mod has no ladder only by making
+  the search's room casual, so the first search costs one room opened and closed (and the notice), and
+  the mod is then remembered for the session (`_qmUnrankedMods`) and the card says so before the next
+  click. **Found survives the search ending**: `RememberQuickMatchFound` keeps the room and the rival,
+  or the card read "you are in another room" the moment the rival arrived (found live). Its spinner and
+  pulse are clocks stopped through their controller, paused while hidden or minimised, and built still
+  under reduced effects — the SETTING too, not only the governor (`RankBadge.SetUserReducedEffects`).
+  Compact (one line, 40-px icon) below a 900-px window.
+  (5b) **Observer seats are inside `max_players`, as on the server (`playingSeatsOf`).**
+  `RoomPlayingSeats()` subtracts them; it used not to, so a room of four with two watching seats showed
+  "2 / 4", a free seat nobody could play in and "4 players · 2 observers", and auto-start waited for the
+  observer's ready. An observer's footer has nothing to press (`RoomFacts.Watching`) — the server starts
+  on the players alone and ignores his ready — except a watching HOST, who keeps Start, because the
+  server hands the room on by join order and only the host may start. Found live, against a local
+  server; pinned by `RoomFooterStatesTests`.
+  (6) **States**: four skeleton rows in the row's shape while loading; a failed load and no connection
+  are ONE centred message with Retry (`ShowRoomsProblem`), which the next list takes down; the refresh
+  icon is gone (the list polls every 5 s). Below a 1000-px window the community block stays the bar
+  unless the player opened it (`RoomsActivityLayout.Plan(windowTall:)`).
+  The server now sends `started_at` with an in-game room ("En partida · 14 min"); without it the chip
+  says "En partida". The ping is still the viewer's own, the same on every row: there is no per-host
+  address to measure.
 
 - **A LANGUAGE CHANGE REPAINTS ALL FOUR SUBTABS, AND THE RENDER MUST BE SEPARABLE FROM THE
   FETCH.** `ApplyStrings` assigns the fixed labels and then calls `RefreshActiveSubtabStrings`,
@@ -8173,7 +8220,7 @@ no longer computes seasons. This heading is kept so links to it still land somew
 
 ## QUICK MATCH (phase 0, docs/DISENO-PARTIDA-RAPIDA.md) — NO SERVER SUPPORT
 
-"Find a 1v1 match" (`QuickMatchButton`, in the rooms section header) joins a COMPETITIVE 1v1 room
+"Buscar partida 1v1" (the quick match card above the rooms list, design 86) joins a COMPETITIVE 1v1 room
 of the ACTIVE mod that is waiting for a rival, or opens one and waits. Phase 0 is the launcher
 alone: the public rooms list plus the same create / join everybody already uses. The flow is
 `Controls/MultiplayerTab.QuickMatch.cs`; every decision is the pure

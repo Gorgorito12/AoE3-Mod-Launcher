@@ -13,10 +13,10 @@ using Xunit;
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// The rank badge outside the Ranking table (docs/design_insignias_rango, 45b + 45c): the rooms
-/// row puts it in the host's avatar slot, the room's roster puts it beside each avatar. The
-/// refusal is the point in both: a <c>ladder_rank</c> the server did not send must draw NO
-/// badge, never a Discovery one — that would tell a player on the ladder that they are not.
+/// The rank badge outside the Ranking table (docs/design_insignias_rango, 45c): the room's roster
+/// puts it beside each avatar. The refusal is the point: a <c>ladder_rank</c> the server did not
+/// send must draw NO badge, never a Discovery one — that would tell a player on the ladder that
+/// they are not. The rooms LIST draws none since design 86 (the host's name and rating instead).
 /// </summary>
 [Collection("wpf-and-language")]
 public class RoomBadgesTests
@@ -24,27 +24,12 @@ public class RoomBadgesTests
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 
     [Fact]
-    public void THE_ONE_THAT_MATTERS_AnUnknownRankKeepsTheHostsAvatar()
+    public void TheRoomsRowDrawsNoBadgeWhateverTheRank()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var card = RoomCard(ladderRank: null);
-            Assert.Empty(Badges(card));
-        });
-        Assert.Null(error);
-    }
-
-    [Fact]
-    public void AKnownRankReplacesTheHostsAvatarWithItsAge()
-    {
-        var error = DialogXamlTests.RunOnStaThread(() =>
-        {
-            var badge = Assert.Single(Badges(RoomCard(ladderRank: 3)));
-            Assert.Equal(RankAges.For(3), badge.Tag);
-            Assert.Equal(MultiplayerTab.RoomRowBadgeWidth, badge.Width);
-
-            var discovery = Assert.Single(Badges(RoomCard(ladderRank: 0)));
-            Assert.Equal(RankAge.Discovery, discovery.Tag);
+            foreach (var rank in new int?[] { null, 0, 3 })
+                Assert.Empty(Badges(RoomCard(ladderRank: rank)));
         });
         Assert.Null(error);
     }

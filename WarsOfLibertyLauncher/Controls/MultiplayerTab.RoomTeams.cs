@@ -31,8 +31,18 @@ public partial class MultiplayerTab
     internal const string TeamOddsTag = "RoomTeamOdds";
     internal const string SidesLockedTag = "RoomSidesLocked";
 
-    /// <summary>The playing seats, or 0 when the capacity is not known yet.</summary>
-    private int RoomPlayingSeats() => TryGetCurrentLobbyMaxPlayers(out var max) ? max : 0;
+    /// <summary>
+    /// The playing seats, or 0 when the capacity is not known yet. The observers' seats come off,
+    /// as on the server (<c>playingSeatsOf</c>): a room of four with two watching seats is a 1v1, and
+    /// counting them made the roster show a free seat nobody could play in.
+    /// </summary>
+    private int RoomPlayingSeats()
+        => TryGetCurrentLobbyMaxPlayers(out var max) ? Math.Max(0, max - Math.Max(0, _currentLobbySpectatorSlots)) : 0;
+
+    /// <summary>Whether the viewer is in the room to watch, not to play.</summary>
+    private bool RoomViewerWatches()
+        => RoomViewerId is { } me && _roomMembers.TryGetValue(me, out var m)
+           && string.Equals(m.Role, "spectator", StringComparison.Ordinal);
 
     /// <summary>Whether this room has teams: 4 or 6 seats, casual or competitive.</summary>
     internal bool RoomHasTeams() => StartGate.HasTeams(RoomPlayingSeats());

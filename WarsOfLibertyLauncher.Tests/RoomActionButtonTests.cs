@@ -1,26 +1,23 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Shapes;
 using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
+using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
 
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// The Rooms list's action button in the colours the Discord announcement gives each room
-/// (design 66): green Join, blue In game, amber Full, each with a dot — and every other state
-/// exactly as it was. Nothing here throws when broken: a wrong colour still renders, and a caption
-/// that no longer fits its 96-px column is simply painted past the edge of the button.
+/// The rooms list's one action per row, as design 86 draws it: a faint secondary button for
+/// everything a viewer can do, the solid blue only for the room that is theirs, and "Full" as a
+/// word rather than a button nobody can press. The rule is <see cref="RoomActionRule"/>; these
+/// check that the row paints what it decides.
 /// </summary>
 [Collection("wpf-and-language")]
 public class RoomActionButtonTests
@@ -36,18 +33,17 @@ public class RoomActionButtonTests
         }
     }
 
-    private static LobbySummary Room(string id, int max, int current, string status = "open", string hostId = "someone-else") => new()
+    private static LobbySummary Room(string id, int max, int current, string status = "open", string mod = "wol") => new()
     {
         Id = id,
         Title = "Sala " + id,
-        ModId = "wol",
+        ModId = mod,
         MaxPlayers = max,
         CurrentPlayers = current,
         Status = status,
-        Host = new LobbyHost { Id = hostId, DiscordUsername = "host-" + id },
+        Host = new LobbyHost { Id = "someone-else", DiscordUsername = "host-" + id },
     };
 
-    /// <summary>A tab whose config says Wars of Liberty is installed, so its rooms can be joined.</summary>
     private static MultiplayerTab TabWithModInstalled(bool installed = true)
     {
         var tab = new MultiplayerTab();
@@ -57,92 +53,59 @@ public class RoomActionButtonTests
         return tab;
     }
 
-    private static Button ActionOf(MultiplayerTab tab, LobbySummary lobby)
-    {
-        var card = (Border)typeof(MultiplayerTab).GetMethod("BuildRoomCard", Private)!
-            .Invoke(tab, new object[] { lobby, 0 })!;
-        return Descendants(card).OfType<Button>().Single(b => ReferenceEquals(b.Tag, lobby));
-    }
+    private static Border Card(MultiplayerTab tab, LobbySummary lobby)
+        => (Border)typeof(MultiplayerTab).GetMethod("BuildRoomCard", Private)!.Invoke(tab, new object[] { lobby, 0 })!;
+
+    private static Button? ActionOf(Border card, LobbySummary lobby)
+        => Descendants(card).OfType<Button>().SingleOrDefault(b => ReferenceEquals(b.Tag, lobby));
 
     private static object Res(string key) => Application.Current.FindResource(key);
 
-    private static Ellipse? DotOf(Button b) => Descendants(b).OfType<Ellipse>()
-        .SingleOrDefault(e => Equals(e.Tag, MultiplayerTab.RoomActionDotTag));
-
     [Fact]
-    public void EachStateWearsTheColourTheDiscordPostGivesIt()
+    public void EachRoomOffersWhatTheRuleSays_InTheFaintSecondaryButton()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = TabWithModInstalled();
 
-            var join = ActionOf(tab, Room("OPEN0001", max: 4, current: 2));
-            Assert.Same(Res("MpRoomActionJoin"), join.Style);
+            var open = Room("OPEN0001", max: 4, current: 2);
+            var join = ActionOf(Card(tab, open), open)!;
+            Assert.Same(Res("RmRowButton"), join.Style);
+            Assert.Equal(Strings.Get("RmActJoin"), join.Content);
             Assert.True(join.IsEnabled);
-            Assert.Same(Res("MpRoomJoinBg"), join.Background);
-            Assert.Same(Res("MpRoomJoinRim"), join.BorderBrush);
-            Assert.Same(Res("MpRoomJoinDot"), DotOf(join)!.Fill);
 
-            var inGame = ActionOf(tab, Room("GAME0001", max: 2, current: 2, status: "in_game"));
-            Assert.Same(Res("MpRoomActionInGame"), inGame.Style);
-            Assert.False(inGame.IsEnabled);
-            Assert.Same(Res("MpRoomInGameBg"), inGame.Background);
-            Assert.Same(Res("MpRoomInGameRim"), inGame.BorderBrush);
-            Assert.Same(Res("MpRoomInGameText"), inGame.Foreground);
-            Assert.Same(Res("MpRoomInGameDot"), DotOf(inGame)!.Fill);
+            var game = Room("GAME0001", max: 2, current: 2, status: "in_game");
+            var see = ActionOf(Card(tab, game), game)!;
+            Assert.Same(Res("RmRowButton"), see.Style);
+            Assert.Equal(Strings.Get("RmActSeeMatch"), see.Content);
+            Assert.True(see.IsEnabled);
 
-            var full = ActionOf(tab, Room("FULL0001", max: 4, current: 4));
-            Assert.Same(Res("MpRoomActionFull"), full.Style);
-            Assert.False(full.IsEnabled);
-            Assert.Same(Res("MpRoomFullBg"), full.Background);
-            Assert.Same(Res("MpRoomFullRim"), full.BorderBrush);
-            Assert.Same(Res("MpRoomFullText"), full.Foreground);
-            Assert.Same(Res("MpRoomFullDot"), DotOf(full)!.Fill);
-
-            // The caption beside the dot sets no colour of its own, or the button's hover could
-            // never reach it.
-            foreach (var b in new[] { join, inGame, full })
-            {
-                var caption = Descendants(b).OfType<TextBlock>().Single();
-                Assert.Equal(DependencyProperty.UnsetValue, caption.ReadLocalValue(TextBlock.ForegroundProperty));
-            }
+            var other = Room("HDAY0001", max: 4, current: 1, mod: "hundred-days");
+            var install = ActionOf(Card(tab, other), other)!;
+            Assert.Equal(Strings.Get("RmActInstall"), install.Content);
+            Assert.True(install.IsEnabled);
         });
         Assert.Null(error);
     }
 
+    /// <summary>A full room says so as text: a disabled button would still read as something to try.</summary>
     [Fact]
-    public void JoinBrightensItsRimOnHover_AndAStatusSaysNothingToTheMouse()
+    public void AFullRoomSaysFullAndHasNoButton()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var join = (Style)Res("MpRoomActionJoin");
-            var hover = join.Triggers.OfType<Trigger>().Single(t => t.Property == UIElement.IsMouseOverProperty);
-            var setters = hover.Setters.OfType<Setter>().ToList();
-            Assert.Contains(setters, s => s.Property == Control.BackgroundProperty
-                && s.Value is DynamicResourceExtension d && Equals(d.ResourceKey, "MpRoomJoinHoverBg"));
-            Assert.Contains(setters, s => s.Property == Control.BorderBrushProperty
-                && s.Value is DynamicResourceExtension d && Equals(d.ResourceKey, "MpRoomJoinRimHover"));
-
-            foreach (var key in new[] { "MpRoomActionInGame", "MpRoomActionFull" })
-            {
-                var style = (Style)Res(key);
-                for (var s = style; s != null; s = s.BasedOn)
-                    Assert.Empty(s.Triggers);
-                var b = new Button { Style = style };
-                Assert.Same(Cursors.Arrow, b.Cursor);
-            }
+            var tab = TabWithModInstalled();
+            var full = Room("FULL0001", max: 4, current: 4);
+            var card = Card(tab, full);
+            Assert.Null(ActionOf(card, full));
+            Assert.Contains(Descendants(card).OfType<TextBlock>(), t => t.Text == Strings.Get("RmActFull"));
         });
         Assert.Null(error);
     }
 
-    /// <summary>
-    /// THE ONE THAT MATTERS: the dot costs width in a 96-px column whose button keeps 10 px of
-    /// padding a side, and a caption that does not fit is not trimmed — it is painted past the
-    /// button's edge. Spanish is the case that binds ("En partida"); in English all of it fits
-    /// with room to spare. The button is built exactly as the row builds it.
-    /// </summary>
+    /// <summary>The captions fit the 136-px action cell in both languages ("Revisar mi copia" binds).</summary>
     [Fact]
-    public void THE_ONE_THAT_MATTERS_TheDottedCaptionsFitTheActionColumn()
+    public void THE_ONE_THAT_MATTERS_EveryCaptionFitsTheActionColumn()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -152,22 +115,16 @@ public class RoomActionButtonTests
                 foreach (var language in new[] { "es", "en" })
                 {
                     Strings.SetLanguage(language);
-                    foreach (var (style, caption, dot) in new[]
-                    {
-                        ("MpRoomActionInGame", "MpRoomStatusInGame", "MpRoomInGameDot"),
-                        ("MpRoomActionFull", "MpRoomFull", "MpRoomFullDot"),
-                        ("MpRoomActionJoin", "MpRoomJoin", "MpRoomJoinDot"),
-                    })
+                    foreach (var action in Enum.GetValues<RoomAction>().Where(a => a != RoomAction.Full))
                     {
                         var b = new Button
                         {
-                            Style = (Style)Res(style),
-                            Padding = new Thickness(10, 4, 10, 4),
-                            Content = MultiplayerTab.RoomActionContent(Strings.Get(caption), dot),
+                            Style = (Style)Res(action == RoomAction.OpenMine ? "RmRowButtonPrimary" : "RmRowButton"),
+                            Content = Strings.Get(RoomActionRule.CaptionKey(action)),
                         };
                         b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                        Assert.True(b.DesiredSize.Width <= 96,
-                            $"'{Strings.Get(caption)}' ({language}) needs {b.DesiredSize.Width:0.#} px; the column is 96.");
+                        Assert.True(b.DesiredSize.Width <= 136,
+                            $"'{b.Content}' ({language}) needs {b.DesiredSize.Width:0.#} px; the cell is 136.");
                     }
                 }
             }
@@ -177,39 +134,39 @@ public class RoomActionButtonTests
     }
 
     /// <summary>
-    /// The maintainer kept every other state as it was: a Join for a mod that is not installed
-    /// stays the inert look with a plain caption — a dot there would say "open to you" on a button
-    /// that is not — and Re-enter and Your room keep their styles and plain captions. Those two
-    /// need a signed-in session to reach, so they are read from the source.
+    /// The list is grouped under the design's three headings, in its order, and every row sits
+    /// under the heading its own action belongs to.
     /// </summary>
     [Fact]
-    public void TheOtherStatesAreExactlyAsTheyWere()
+    public void TheListIsGroupedUnderTheThreeHeadingsInOrder()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var noMod = ActionOf(TabWithModInstalled(installed: false), Room("NOMOD001", max: 4, current: 1));
-            Assert.Same(Res("MpRoomActionInert"), noMod.Style);
-            Assert.False(noMod.IsEnabled);
-            Assert.Null(DotOf(noMod));
-            Assert.Equal(Strings.Get("MpRoomJoin"), noMod.Content as string);
+            var tab = TabWithModInstalled();
+            var rooms = new List<LobbySummary>
+            {
+                Room("FULL0001", max: 4, current: 4),
+                Room("GAME0001", max: 2, current: 2, status: "in_game"),
+                Room("OPEN0001", max: 4, current: 2),
+            };
+            typeof(MultiplayerTab).GetField("_lastBrowserList", Private)!.SetValue(tab, rooms);
+            typeof(MultiplayerTab).GetMethod("RenderRoomRows", Private)!.Invoke(tab, new object?[] { rooms });
+
+            var order = tab.RoomsListPanel.Children.OfType<FrameworkElement>()
+                .Select(e => e.Tag switch
+                {
+                    LobbySummary l => l.Id,
+                    string s => s,
+                    _ => "?",
+                })
+                .ToList();
+            Assert.Equal(new[]
+            {
+                "RoomGroup:" + RoomGroup.CanEnter, "OPEN0001",
+                "RoomGroup:" + RoomGroup.InGame, "GAME0001",
+                "RoomGroup:" + RoomGroup.Unavailable, "FULL0001",
+            }, order);
         });
         Assert.Null(error);
-
-        var source = File.ReadAllText(RepoFile("Controls/MultiplayerTab.xaml.cs")).Replace("\r\n", "\n");
-        Assert.Contains("actionBtn.Style = reenter;\n            actionBtn.Content = Strings.Get(\"MpRoomReenter\");", source);
-        Assert.Contains("actionBtn.Style = inert;\n            actionBtn.Content = Strings.Get(\"MpRoomYours\");", source);
-    }
-
-    private static string RepoFile(string relative)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null)
-        {
-            var project = System.IO.Path.Combine(dir.FullName, "WarsOfLibertyLauncher");
-            if (File.Exists(System.IO.Path.Combine(project, "App.xaml")))
-                return System.IO.Path.GetFullPath(System.IO.Path.Combine(project, relative));
-            dir = dir.Parent;
-        }
-        throw new DirectoryNotFoundException("WarsOfLibertyLauncher/App.xaml not found above the test output.");
     }
 }

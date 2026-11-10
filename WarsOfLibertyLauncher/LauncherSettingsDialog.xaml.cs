@@ -289,6 +289,9 @@ public partial class LauncherSettingsDialog : Window
         DemoRoomTitle.Text = Strings.Get("DlgSettingsDemoRoom");
         DemoRoomHint.Text = Strings.Get("DlgSettingsDemoRoomHint");
         DemoRoomButton.Content = Strings.Get("SettingsDemoRoom");
+        DemoRoomsTitle.Text = Strings.Get("DlgSettingsDemoRooms");
+        DemoRoomsHint.Text = Strings.Get("DlgSettingsDemoRoomsHint");
+        DemoRoomsButton.Content = Strings.Get("SettingsDemoRooms");
         DemoEloTitle.Text = Strings.Get("DlgSettingsDemoElo");
         DemoEloHint.Text = Strings.Get("DlgSettingsDemoEloHint");
         DemoEloButton.Content = Strings.Get("SettingsDemoElo");
@@ -1788,6 +1791,15 @@ public partial class LauncherSettingsDialog : Window
         var main = Application.Current?.MainWindow as MainWindow;
         Close();
         main?.ShowRoomDemo();
+    }
+
+    /// <summary>Fill the Rooms page with sample rooms (design 86). Closes this window first, like
+    /// its neighbours.</summary>
+    private void DemoRoomsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var main = Application.Current?.MainWindow as MainWindow;
+        Close();
+        main?.ShowRoomsDemo();
     }
 
     /// <summary>

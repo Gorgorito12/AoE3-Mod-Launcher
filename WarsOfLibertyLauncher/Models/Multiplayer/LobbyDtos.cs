@@ -250,6 +250,11 @@ public class LobbySummary
     [JsonPropertyName("created_at")]
     public string CreatedAt { get; set; } = "";
 
+    /// <summary>When the match under way began, sent only while the room is in game. Null from
+    /// an older server, and the row then says "In game" without a time.</summary>
+    [JsonPropertyName("started_at")]
+    public string? StartedAt { get; set; }
+
     [JsonPropertyName("host")]
     public LobbyHost Host { get; set; } = new();
 

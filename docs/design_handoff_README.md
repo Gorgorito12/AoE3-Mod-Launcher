@@ -807,6 +807,16 @@ the server's `my_entries`; a co-organiser is picked among the captains already e
 normalised like everywhere else; the cover is blurred once, never live; 32 and 64 places need the
 server to raise its limit. Under reduced effects the champion has no glow.
 
+**Screen 86 (Salas)**, compared with `Salas v2.dc.html` in 86a (1920) and 86b to 86e (1366), then
+English, 2560 and the Solid and Maximum glass. What differs, on purpose: the ping is the viewer's own,
+the same on every row, because there is no per-host address (the prototype draws a different ping per
+room); "Entrar a mirar" appears only in developer mode, so without it the observers' room reads
+"Llena"; "Ver partida" opens the players peek rather than a "watching a match" screen; the "no ranked
+ladder" state of the quick match card appears only after the first search for that mod, because only
+the server knows it, at create time;
+the activity facts keep their own count instead of 2/3/4 by width; the sample peak hours are the
+fixture's. The subtab bar (capitals, a blue line) is now the same for all four subtabs.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup

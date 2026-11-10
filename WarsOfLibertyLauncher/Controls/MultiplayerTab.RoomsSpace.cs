@@ -20,7 +20,7 @@ public partial class MultiplayerTab
     internal int ChatUnread => _chatUnread;
 
     /// <summary>Whether the chat is folded to its rail (remembered in the config).</summary>
-    internal bool ChatFolded => _config?.RoomsChatFolded == true;
+    internal bool ChatFolded => _demoChatFolded ?? _config?.RoomsChatFolded == true;
 
     /// <summary>
     /// The chat column's width (design 57): 280 below 1600 px of page width, 320 from there, the
@@ -59,6 +59,7 @@ public partial class MultiplayerTab
         Resources["MpPageGutterRightPane"] = new Thickness(0, m, m, m);
         Resources["MpPanelGap"] = new GridLength(m);
         Resources["MpPanelGapTop"] = new Thickness(0, m, 0, 0);
+        Resources["MpPanelGapBottom"] = new Thickness(0, 0, 0, m);
         // The passes that use the gap in code: the community cards' columns, the rooms/community
         // split and the ranking's.
         LayOutActivityColumns();
@@ -81,6 +82,8 @@ public partial class MultiplayerTab
     /// <summary>Fold or unfold the chat and remember it (57c).</summary>
     internal void SetChatFolded(bool folded)
     {
+        // The rooms preview folds without remembering it.
+        if (_demoChatFolded != null) { _demoChatFolded = folded; ApplyChatFold(); return; }
         if (_config != null && _config.RoomsChatFolded != folded)
         {
             _config.RoomsChatFolded = folded;
@@ -143,16 +146,18 @@ public partial class MultiplayerTab
     private void RefreshRoomsEmptyText()
     {
         if (EmptyTitleText == null) return;
-        EmptyTitleText.Text = Strings.Get("MpRoomsEmptyTitle");
+        // Design 86: the serif title and one sentence that says what happens next; "+ Create room"
+        // is in the bar above and the quick match card, so the notice no longer repeats it.
+        EmptyTitleText.Text = Strings.Get("RmEmptyTitle");
         if (TryLocalPeak(_communityStats, out _, out var peakStart))
         {
             var from = Strings.Format("MpActivityPeakHour", peakStart);
             var to = Strings.Format("MpActivityPeakHour", (peakStart + CommunityStatsView.PeakWindowHours) % 24);
-            EmptyBodyText.Text = Strings.Format("MpRoomsEmptyPeak", from, to);
+            EmptyBodyText.Text = Strings.Format("RmEmptyBodyPeak", from, to);
         }
         else
         {
-            EmptyBodyText.Text = Strings.Get("MpRoomsEmptyBody");
+            EmptyBodyText.Text = Strings.Get("RmEmptyBody");
         }
         EmptyCreateButton.Content = "+ " + Strings.Get("MpRoomsCreate");
         EmptyCreateButton.IsEnabled = !_offlineMode;

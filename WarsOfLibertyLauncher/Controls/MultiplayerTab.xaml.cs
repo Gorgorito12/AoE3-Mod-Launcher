@@ -162,23 +162,6 @@ public partial class MultiplayerTab : UserControl
     private string _lastRenderedRoomsSignature = "\0uninitialized";
 
     /// <summary>
-    /// The PING cells of the currently-rendered rooms rows, so the ping can
-    /// be refreshed in place (no row rebuild — that would disrupt the Join
-    /// buttons). Rebuilt each time the rooms list re-renders.
-    /// </summary>
-    private readonly System.Collections.Generic.List<StackPanel> _roomPingCells = new();
-
-    /// <summary>Per-room "open for X" sub-line cells + each room's UTC creation
-    /// time, so <see cref="RefreshRoomAgeCells"/> ticks them up in place (no
-    /// rebuild). Rebuilt with the rooms list, same as <see cref="_roomPingCells"/>.</summary>
-    // The subtitle line is ONE TextBlock (the reference gives the row a single second
-    // line), and its tail is a live "hace N" that ticks on the rooms timer — so the
-    // static part travels with it and the timer rewrites the whole string. Splitting the
-    // line in two so only the tail updated would need a horizontal StackPanel, which
-    // measures with infinite width and would leave the ellipsis inert.
-    private readonly System.Collections.Generic.List<(TextBlock Text, DateTime CreatedUtc, string Prefix)> _roomAgeCells = new();
-
-    /// <summary>
     /// The same trick for the community strip's "31 min ago" cells: the TextBlock plus the
     /// moment the match was reported, so <see cref="RefreshActivityAgeCells"/> ticks them up in
     /// place. Rebuilt with the strip, exactly like <see cref="_roomAgeCells"/>.
@@ -1358,8 +1341,10 @@ public partial class MultiplayerTab : UserControl
         Action? bringMultiplayerToFront = null,
         Action<string?, string?>? setQuickMatchPill = null,
         Action<ModProfile>? openModInLibrary = null,
-        Action<ModProfile?>? setTournamentBackdrop = null)
+        Action<ModProfile?>? setTournamentBackdrop = null,
+        Action<ModProfile, string>? openModSettings = null)
     {
+        _openModSettings = openModSettings;
         _setTournamentBackdrop = setTournamentBackdrop;
         _setConnectionChip = setConnectionChip;
         _setAccountChip = setAccountChip;
@@ -1520,7 +1505,7 @@ public partial class MultiplayerTab : UserControl
             if (!Services.Multiplayer.RoomsPageRefresh.ShouldTickCells(
                     onRooms: true, roomWindowOpen: _lobbyWindow != null, launcherActive: LauncherIsActive()))
                 return;
-            KickConnectionPing(); RefreshRoomPingCells(); RefreshRoomAgeCells(); RefreshActivityAgeCells();
+            KickConnectionPing(); RefreshRoomPingTexts(); RefreshActivityAgeCells();
         });
         _roomsPingTimer.Start();
         KickConnectionPing();
@@ -1584,12 +1569,13 @@ public partial class MultiplayerTab : UserControl
 
     internal void ApplyStrings()
     {
-        SubtabRooms.Content = Strings.Get("MpSubtabRooms");
-        SubtabTournaments.Content = Strings.Get("MpSubtabTournaments");
-        SubtabRanking.Content = Strings.Get("MpSubtabRanking");
+        // Design 86: the four subtabs in capitals, as the prototype writes them.
+        SubtabRooms.Content = Strings.Get("MpSubtabRooms").ToUpper(Strings.Culture);
+        SubtabTournaments.Content = Strings.Get("MpSubtabTournaments").ToUpper(Strings.Culture);
+        SubtabRanking.Content = Strings.Get("MpSubtabRanking").ToUpper(Strings.Culture);
         // It had none: declared in XAML with no Content and never assigned here, so the pill
         // rendered blank — clickable and anonymous — for as long as the subtab has existed.
-        SubtabStats.Content = Strings.Get("MpSubtabStats");
+        SubtabStats.Content = Strings.Get("MpSubtabStats").ToUpper(Strings.Culture);
         RankingModeSolo.Content = Strings.Get("MpRankingModeSolo");
         RankingModeTeam.Content = Strings.Get("MpRankingModeTeam");
         RankingModeHighlights.Content = Strings.Get("MpRankingModeHighlights");
@@ -1619,12 +1605,10 @@ public partial class MultiplayerTab : UserControl
         // strings would be fine too — we keep them simple to avoid
         // pulling icon fonts.
         // Refresh is an ICON since design handoff turn 36, so its caption is the tooltip.
-        RefreshButton.Content = "↻";
-        if (!_offlineMode) RefreshButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomsRefresh"));
-        CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
+        CreateRoomButton.Content = "+ " + Strings.Get("MpRoomsCreate");
         // The quick match's button (and, while it searches, the title-bar pill).
         RefreshQuickMatchUi();
-        RoomSearchPlaceholder.Text = Strings.Get("MpRoomsSearchPlaceholder");
+        RoomSearchPlaceholder.Text = Strings.Get("RmSearchPlaceholder");
         // The room-code field is gone (the code is pasted into this box). The two sentences it
         // carried as a tooltip are not dropped: they explain why a room you were given a code
         // for is not in the list, which is now this box's job.
@@ -1651,7 +1635,7 @@ public partial class MultiplayerTab : UserControl
         ApplyActivityToggleCaption();
 
         // Active-rooms section title + global chat panel labels.
-        RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
+        RoomsSectionTitle.Text = Strings.Get("RmListTitle");
         // "Chat ● N" (design 57a): "Chat global" did not leave room for two tabs and the fold
         // button in a 280-px column.
         GlobalChatHeaderText.Text = Strings.Get("MpChatTabTitle");
@@ -1700,12 +1684,13 @@ public partial class MultiplayerTab : UserControl
         }
 
         // Room-list column headers (localized) + empty-state copy.
-        ColHeaderRoom.Text = Strings.Get("MpColRoom");
-        ColHeaderHost.Text = Strings.Get("MpColHost");
-        ColHeaderPlayers.Text = Strings.Get("MpColPlayers");
-        ColHeaderPing.Text = Strings.Get("MpColPing");
-        UpdateSortArrows();
+        ColHeaderRoom.Text = Strings.Get("RmColRoom");
+        ColHeaderHost.Text = Strings.Get("RmColHost");
+        ColHeaderPlayers.Text = Strings.Get("RmColPlayers");
+        ColHeaderPing.Text = Strings.Get("RmColPing");
         RefreshRoomsEmptyText();
+        _quickCardKey = null;
+        RenderQuickCard();
         UpdateChatRail();
         UpdateRoomsUpdatedLabel();
 
@@ -1943,6 +1928,9 @@ public partial class MultiplayerTab : UserControl
             MaybeApplyPendingSessionRejection();
             SyncRoomSocketSubscription();
             RefreshFromSession();
+            // Entering or leaving a room changes what the quick match card says ("you are in a
+            // room", "found", searchable again). Keyed, so an unchanged card costs one comparison.
+            RenderQuickCard();
             // Sign-in / sign-out flips whether the global chat should be
             // connected; entering/leaving a room is harmless (idempotent).
             SyncGlobalChat();
@@ -2039,11 +2027,6 @@ public partial class MultiplayerTab : UserControl
             if (SignInButton != null) { SignInButton.IsEnabled = true; SignInButton.ToolTip = null; }
             // Refresh is an icon, so its tooltip is its caption and must come BACK rather than
             // be cleared — null would leave a bare ↻ that explains nothing.
-            if (RefreshButton != null)
-            {
-                RefreshButton.IsEnabled = true;
-                RefreshButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomsRefresh"));
-            }
             if (CreateRoomButton != null) { CreateRoomButton.IsEnabled = true; CreateRoomButton.ToolTip = null; }
             // The quick match's button is the fourth writer of the same rule: back online, it may
             // start a search again.
@@ -2055,6 +2038,8 @@ public partial class MultiplayerTab : UserControl
         }
         // The empty list's "+ Create room" follows the toolbar's.
         RefreshRoomsEmptyText();
+        _quickCardKey = null;
+        RenderQuickCard();
     }
 
     /// <summary>
@@ -2065,8 +2050,10 @@ public partial class MultiplayerTab : UserControl
     private void ApplyOfflineDisable()
     {
         if (SignInButton != null) { SignInButton.IsEnabled = false; SignInButton.ToolTip = _offlineNotice; }
-        if (RefreshButton != null) { RefreshButton.IsEnabled = false; RefreshButton.ToolTip = _offlineNeedsInternet; }
         if (CreateRoomButton != null) { CreateRoomButton.IsEnabled = false; CreateRoomButton.ToolTip = _offlineNeedsInternet; }
+        // Design 86e: the list itself says there is no connection, in place of rooms it cannot
+        // keep current. The next successful load takes the message down.
+        if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn) ShowRoomsProblem(offline: true);
         // A search can still be STOPPED offline (that is what its button does while it runs); a
         // new one cannot start — RefreshQuickMatchUi reads _offlineMode for both.
         RefreshQuickMatchUi();
@@ -3116,7 +3103,7 @@ public partial class MultiplayerTab : UserControl
         // rows pushed the panels under them out of the window.
         if (_rematchInvited is { } invited)
             _lobbyWindow!.RoomMembersPanel.Children.Add(BuildInvitedRow(invited));
-        else if (TryGetCurrentLobbyMaxPlayers(out var max) && max > RoomPlayerCount()
+        else if (RoomPlayingSeats() > RoomPlayerCount()
                  && CurrentRoomStage() is not (RoomStage.InGame or RoomStage.GameClosed) && _roomResult == null)
             _lobbyWindow!.RoomMembersPanel.Children.Add(BuildOpenSlotRow());
         RefreshMoreFreeText();
@@ -3173,8 +3160,9 @@ public partial class MultiplayerTab : UserControl
     private void RefreshRoomPlayerCount()
     {
         if (_lobbyWindow == null) return;
-        var playerCount = _roomMembers.Count;
-        var knowMax = TryGetCurrentLobbyMaxPlayers(out var maxP);
+        var playerCount = RoomPlayerCount();
+        var maxP = RoomPlayingSeats();
+        var knowMax = maxP > 0;
         _lobbyWindow.RoomPlayersText.Text = knowMax
             ? $"{playerCount} / {maxP}"
             : playerCount.ToString();
@@ -3228,9 +3216,6 @@ public partial class MultiplayerTab : UserControl
     /// the rating and the invite button off the panel.</summary>
     internal const double PlayersBadgeWidth = 19;
     private const double PlayersNameMaxWidth = 120;
-
-    /// <summary>The rooms row's host badge (45b), in the avatar's slot.</summary>
-    internal const double RoomRowBadgeWidth = 17;
 
     /// <summary>
     /// How many players are on a ladder, for <see cref="Services.Multiplayer.RankAges.For"/>'s
@@ -3427,7 +3412,7 @@ public partial class MultiplayerTab : UserControl
     private void RefreshMoreFreeText()
     {
         if (_lobbyWindow == null) return;
-        var free = TryGetCurrentLobbyMaxPlayers(out var max) ? max - RoomPlayerCount() : 0;
+        var free = RoomPlayingSeats() > 0 ? RoomPlayingSeats() - RoomPlayerCount() : 0;
         var more = RoomShowsTeams() ? 0 : free - 1;
         if (CurrentRoomStage() is RoomStage.InGame or RoomStage.GameClosed || _rematchInvited != null) more = 0;
         _lobbyWindow.RoomMoreFreeText.Visibility = more > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -4497,7 +4482,6 @@ public partial class MultiplayerTab : UserControl
         // Searching rooms and creating one are the Rooms page's; here they'd act on another page.
         var roomTools = tournaments ? Visibility.Collapsed : Visibility.Visible;
         RoomSearchField.Visibility = roomTools;
-        RefreshButton.Visibility = roomTools;
         CreateRoomButton.Visibility = roomTools;
 
         // THE GATE IS PART OF THIS TABLE, and that is the whole fix. It was three assignments
@@ -4506,7 +4490,7 @@ public partial class MultiplayerTab : UserControl
         bool gate = SubtabShowsSignInGate(
             _activeSubtab,
             _session?.Status == MultiplayerSession.SessionStatus.SignedIn,
-            _demoTournaments || _demoStats);
+            _demoTournaments || _demoStats || _demoRooms);
 
         SignInPanel.Visibility = gate ? Visibility.Visible : Visibility.Collapsed;
 
@@ -5830,7 +5814,8 @@ public partial class MultiplayerTab : UserControl
         _roomOdds = sample.Odds;
         _demoRoomViewerId = sample.ViewerId;
         _demoRoomStanding = sample.ViewerStanding;
-        _currentLobbyMaxPlayers = sample.Seats;
+        // The server's max_players holds the observers' seats too.
+        _currentLobbyMaxPlayers = sample.Seats + sample.SpectatorSlots;
         _currentLobbySpectatorSlots = sample.SpectatorSlots;
         _currentLobbyIsCompetitive = sample.Competitive;
 
@@ -9614,44 +9599,12 @@ public partial class MultiplayerTab : UserControl
         try { stale.Close(); } catch { }
     }
 
-    /// <summary>Shortest time the refresh button stays in its busy state.</summary>
-    private const int RefreshSpinMinMs = 500;
-
-    /// <summary>
-    /// Manual refresh. It holds the busy state for at least
-    /// <see cref="RefreshSpinMinMs"/> even when the round-trip beats it, which the
-    /// reference asks for so "el clic se sienta": the usual response is fast enough that
-    /// the list often comes back identical, and with no acknowledgement at all the button
-    /// reads as broken. Waiting out the remainder is the cheapest honest feedback — it
-    /// delays nothing the user can act on.
-    /// </summary>
-    private async void RefreshButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_refreshSpinning) return;
-        _refreshSpinning = true;
-        var started = Environment.TickCount64;
-        RefreshButton.IsEnabled = false;
-        try
-        {
-            await RefreshRoomsListAsync();
-            await RefreshQuotaAsync();
-        }
-        finally
-        {
-            var left = RefreshSpinMinMs - (int)(Environment.TickCount64 - started);
-            if (left > 0) await Task.Delay(left);
-            // Same rule as sign-in: going offline during the spin must not be undone here.
-            RefreshButton.IsEnabled = !_offlineMode;
-            _refreshSpinning = false;
-        }
-    }
-
-    /// <summary>Guards the manual refresh's minimum-spin window.</summary>
-    private bool _refreshSpinning;
-
     /// <summary>Retry after a failed rooms fetch — the link in the amber error line.</summary>
     private async void RoomsErrorRetry_Click(object sender, RoutedEventArgs e)
-        => await RefreshRoomsListAsync();
+    {
+        if (_demoRooms) { DemoRoomsSay(Strings.Get("RmRetry")); return; }
+        await RefreshRoomsListAsync();
+    }
 
     private async void CreateRoomButton_Click(object sender, RoutedEventArgs e)
     {
@@ -9900,6 +9853,8 @@ public partial class MultiplayerTab : UserControl
     /// </param>
     private async Task RefreshRoomsListAsync(bool quiet = false)
     {
+        // The rooms preview owns the list while it is showing.
+        if (_demoRooms) return;
         if (_session == null || _isRefreshingList) return;
         _isRefreshingList = true;
         try
@@ -9916,6 +9871,7 @@ public partial class MultiplayerTab : UserControl
                 RoomsListPanel.Children.Clear();
                 RoomsEmptyState.Visibility = Visibility.Collapsed;
                 RoomsErrorBox.Visibility = Visibility.Collapsed;
+                SetVisibility(RoomsHeaderBand, false);
                 for (int i = 0; i < SkeletonRowCount; i++)
                     RoomsListPanel.Children.Add(BuildRoomSkeletonRow());
             }
@@ -9996,14 +9952,8 @@ public partial class MultiplayerTab : UserControl
             }
             else
             {
-                RoomsListPanel.Children.Clear();
-                // The error REPLACES the empty state; it does not overlay it. Both are
-                // top-aligned siblings in the same cell, so a fetch that failed right after
-                // an empty render drew the amber line straight over "no rooms right now".
-                RoomsEmptyState.Visibility = Visibility.Collapsed;
-                RoomsErrorText.Text = ex.Message;
-                RoomsErrorRetry.Content = Strings.Get("MpRoomsErrorRetry");
-                RoomsErrorBox.Visibility = Visibility.Visible;
+                DiagnosticLog.Write($"RefreshRoomsList failed: {ex.Message}");
+                ShowRoomsProblem(offline: false);
             }
         }
         finally
@@ -10047,199 +9997,6 @@ public partial class MultiplayerTab : UserControl
     }
 
     // ---------- Rooms table sorting / footer / header alignment ----------
-
-    /// <summary>
-    /// Which column the rooms table is sorted by (None = server order).
-    ///
-    /// <para>Only the three the reference keeps orderable. Mod, Host and Status were
-    /// dropped along with their headers — a value in an enum whose only remaining use is
-    /// a switch arm nothing can reach is a claim that the feature exists.</para>
-    /// </summary>
-    private enum RoomSort { None, Room, Players, Ping }
-    private RoomSort _roomsSort = RoomSort.None;
-    private bool _roomsSortAsc = true;
-
-    /// <summary>
-    /// A column header was clicked: same column toggles asc/desc, a new column
-    /// selects it ascending. Re-renders from the cached list (no network).
-    /// </summary>
-    private void RoomHeader_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement fe || fe.Tag is not string tag) return;
-        if (!Enum.TryParse<RoomSort>(tag, out var col)) return;
-        if (_roomsSort == col) _roomsSortAsc = !_roomsSortAsc;
-        else { _roomsSort = col; _roomsSortAsc = true; }
-        UpdateSortArrows();
-        // Refresh the header line too, or its "sorted by X" suffix lags behind the
-        // arrows until the 3 s ping timer next fires.
-        UpdateRoomsUpdatedLabel();
-        RerenderRoomsFromCache();
-    }
-
-    /// <summary>Paint each header's sort arrow: ⇅ idle, ↑/↓ on the active column.</summary>
-    private void UpdateSortArrows()
-    {
-        var active = (Brush)Application.Current.FindResource("MpTextPrimary");
-        var idle = (Brush)Application.Current.FindResource("MpTextLabel");
-        void Set(TextBlock? arrow, RoomSort col)
-        {
-            if (arrow == null) return;
-            if (_roomsSort == col) { arrow.Text = _roomsSortAsc ? "↑" : "↓"; arrow.Foreground = active; }
-            else { arrow.Text = "⇅"; arrow.Foreground = idle; }
-        }
-        Set(SortArrowRoom, RoomSort.Room);
-        Set(SortArrowPlayers, RoomSort.Players);
-        Set(SortArrowPing, RoomSort.Ping);
-    }
-
-    /// <summary>How many placeholder rows the loading state shows.</summary>
-    private const int SkeletonRowCount = 3;
-
-    /// <summary>
-    /// One placeholder row for the loading state. The reference asks for three of these
-    /// instead of the single italic "cargando…" line that was here, and the reason is
-    /// that they occupy the space the rooms are about to take: the list stops jumping
-    /// when the answer lands, and an empty result is visibly different from a slow one.
-    ///
-    /// <para>Deliberately not animated. A shimmer would need an animated brush on a
-    /// Border, and the brushes here are frozen DynamicResources — animating one throws,
-    /// which is what froze the countdown line once.</para>
-    /// </summary>
-    private Border BuildRoomSkeletonRow()
-    {
-        var bar = (Brush)Application.Current.FindResource("MpField");
-        var row = new Border
-        {
-            Style = (Style)FindResource(_compactLayout ? "MpRoomCardCompact" : "MpRoomCard"),
-            Opacity = 0.55,
-        };
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var icon = new Border
-        {
-            Width = 30,
-            Height = 30,
-            CornerRadius = new CornerRadius(6),
-            Background = bar,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 11, 0),
-        };
-        Grid.SetColumn(icon, 0);
-        grid.Children.Add(icon);
-
-        var lines = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        lines.Children.Add(new Border
-        {
-            Height = 10,
-            Width = 168,
-            CornerRadius = new CornerRadius(3),
-            Background = bar,
-            HorizontalAlignment = HorizontalAlignment.Left,
-        });
-        lines.Children.Add(new Border
-        {
-            Height = 8,
-            Width = 104,
-            CornerRadius = new CornerRadius(3),
-            Background = bar,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(0, 6, 0, 0),
-        });
-        Grid.SetColumn(lines, 1);
-        grid.Children.Add(lines);
-
-        var action = new Border
-        {
-            Width = 84,
-            Height = 30,
-            CornerRadius = new CornerRadius(7),
-            Background = bar,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(action, 2);
-        grid.Children.Add(action);
-
-        row.Child = grid;
-        return row;
-    }
-
-    /// <summary>
-    /// The capacity indicator: ONE BAR PER SEAT (design handoff turn 36), 3 px tall — see
-    /// <see cref="RoomCapacityBars"/> for the rule and why it replaced four proportional
-    /// segments (a 1v1 with one player and a 4v4 with four drew the same picture).
-    ///
-    /// <para>The cell no longer has a constant width, which is what the four segments were
-    /// for; the widest case (eight seats at 7 px) is 77 px, inside the 88-px PLAYERS column, so
-    /// the column still stays a column.</para>
-    /// </summary>
-    private static StackPanel BuildCapacityBars(int current, int max)
-    {
-        var filledBrush = (Brush)Application.Current.FindResource("MpAction");
-        var emptyBrush = (Brush)Application.Current.FindResource("MpCapacityEmpty");
-        var (count, filled, width) = RoomCapacityBars.Layout(current, max);
-
-        var bars = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 5, 0, 0),
-            Tag = "capacity",
-        };
-        for (var i = 0; i < count; i++)
-        {
-            bars.Children.Add(new Border
-            {
-                Width = width,
-                Height = 3,
-                CornerRadius = new CornerRadius(2),
-                Margin = new Thickness(0, 0, i == count - 1 ? 0 : 3, 0),
-                Background = i < filled ? filledBrush : emptyBrush,
-            });
-        }
-        return bars;
-    }
-
-    /// <summary>Mod display name for sorting (falls back to the raw id).</summary>
-    private static string ModSortName(LobbySummary l)
-    {
-        var n = ModRegistry.Find(l.ModId)?.DisplayName;
-        return string.IsNullOrWhiteSpace(n) ? l.ModId : n!;
-    }
-
-    /// <summary>Host name for sorting (display → Discord username → em-dash).</summary>
-    private static string HostSortName(LobbySummary l)
-    {
-        var n = l.Host.DisplayName;
-        if (string.IsNullOrWhiteSpace(n) || n == "-") n = l.Host.DiscordUsername;
-        return string.IsNullOrWhiteSpace(n) || n == "-" ? "" : n;
-    }
-
-    /// <summary>Rank for status sorting: Waiting &lt; Full &lt; In Game.</summary>
-    private static int StatusRank(LobbySummary l)
-        => l.Status == "in_game" ? 2 : (l.CurrentPlayers >= l.MaxPlayers ? 1 : 0);
-
-    /// <summary>
-    /// Return a copy of the rooms ordered by the active sort. Server order when
-    /// <see cref="_roomsSort"/> is None. Stable (OrderBy) so equal keys keep
-    /// their relative order; a descending sort reverses the ascending result.
-    /// </summary>
-    private List<LobbySummary> ApplyRoomSort(IEnumerable<LobbySummary> src)
-    {
-        var listCopy = src.ToList();
-        if (_roomsSort == RoomSort.None) return listCopy;
-        IEnumerable<LobbySummary> ordered = _roomsSort switch
-        {
-            RoomSort.Room => listCopy.OrderBy(l => l.Title, StringComparer.OrdinalIgnoreCase),
-            RoomSort.Players => listCopy.OrderBy(l => l.CurrentPlayers).ThenBy(l => l.MaxPlayers),
-            RoomSort.Ping => listCopy, // your latency is identical across rows — no-op
-            _ => listCopy,
-        };
-        var result = ordered.ToList();
-        if (!_roomsSortAsc) result.Reverse();
-        return result;
-    }
 
     /// <summary>
     /// Re-render the rooms list from the cached snapshot applying the current
@@ -10359,7 +10116,7 @@ public partial class MultiplayerTab : UserControl
         // See the guard on its three siblings: the statistics preview owns these fields while
         // it is showing, and the ranking page reads the same payload, so this returns rather
         // than replacing it.
-        if (_demoStats) return;
+        if (_demoStats || _demoRooms) return;
 
         if (_session?.CurrentUser == null || ActivityStrip == null) return;
         if (DateTime.UtcNow - _activityFetchedUtc < ActivityMaxAge) return;
@@ -11346,12 +11103,12 @@ public partial class MultiplayerTab : UserControl
     /// <summary>The header element for a column, so it can be moved or hidden with its cells.</summary>
     private FrameworkElement? HeaderElementFor(Services.RoomColumn column) => column switch
     {
-        Services.RoomColumn.Room => ColButtonRoom,
+        Services.RoomColumn.Room => ColHeaderRoom,
         // ANFITRIÓN is a plain TextBlock now, not a sort button — the column can still
         // be moved and hidden, it just can't be clicked.
         Services.RoomColumn.Host => ColHeaderHost,
-        Services.RoomColumn.Players => ColButtonPlayers,
-        Services.RoomColumn.Ping => ColButtonPing,
+        Services.RoomColumn.Players => ColHeaderPlayers,
+        Services.RoomColumn.Ping => ColHeaderPing,
         Services.RoomColumn.Action => ColHeaderAction,
         _ => null,
     };
@@ -11921,7 +11678,7 @@ public partial class MultiplayerTab : UserControl
     {
         // The rating preview's sample players own the panel until the launcher restarts; a live
         // frame landing on top of them would swap the preview for real data mid-look.
-        if (_eloPreviewPlayers) return;
+        if (_eloPreviewPlayers || _demoRooms) return;
 
         if (frame.TryGetProperty("onlineUsers", out var arr) && arr.ValueKind == JsonValueKind.Array)
         {
@@ -12835,9 +12592,15 @@ public partial class MultiplayerTab : UserControl
     // it off instead of reopening (the StaysOpen=false auto-dismiss + click race).
     private System.Windows.Controls.Primitives.Popup? _peekPopup;
 
-    private async void PlayersPeek_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void PlayersPeek_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (sender is not FrameworkElement anchor || anchor.Tag is not LobbySummary lobby || _session == null)
+        if (sender is FrameworkElement anchor) OpenPlayersPeek(anchor);
+    }
+
+    /// <summary>Who is in a room, without joining it: the players cell and "See match" both open it.</summary>
+    private async void OpenPlayersPeek(FrameworkElement anchor)
+    {
+        if (anchor.Tag is not LobbySummary lobby || _session == null)
             return;
         // Toggle: a re-click on the same cell closes the open peek.
         if (_peekPopup != null) { _peekPopup.IsOpen = false; return; }
@@ -12987,608 +12750,6 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
-    /// <summary>Tag carried by the coloured dot inside a room's action button.</summary>
-    internal const string RoomActionDotTag = "RoomActionDot";
-
-    /// <summary>Gap between the dot and the caption in a room's action button.</summary>
-    internal const double RoomActionDotGap = 8;
-
-    /// <summary>
-    /// A room action's caption with the state's dot before it (design 66): the dot says, in the
-    /// colour the Discord announcement uses, whether the room can be joined, is in game or is
-    /// full. The caption sets NO <c>Foreground</c> of its own, so it takes the button's through
-    /// the ContentPresenter — which is the only route the Join style's hover has to reach it.
-    /// </summary>
-    internal static FrameworkElement RoomActionContent(string text, string dotBrushKey)
-    {
-        var dot = new System.Windows.Shapes.Ellipse
-        {
-            Width = 8,
-            Height = 8,
-            Margin = new Thickness(0, 0, RoomActionDotGap, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Tag = RoomActionDotTag,
-        };
-        dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, dotBrushKey);
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        panel.Children.Add(dot);
-        panel.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
-        return panel;
-    }
-
-    /// <summary>
-    /// Build one room as a full-width CARD styled like a table row: SALA
-    /// (mod icon disc — ★ fallback — + title + mod/private chips), ANFITRIÓN,
-    /// JUGADORES, PING, ESTADO, ACCIÓN. The six column widths mirror the header Grid in
-    /// MultiplayerTab.xaml (and its 31px side margin) so the columns line up
-    /// under the labels. Hover lift comes from the MpRoomCard style.
-    /// </summary>
-    private Border BuildRoomCard(LobbySummary lobby, int rowIndex)
-    {
-        // Is the lobby's mod actually installed on this PC? If not, the user
-        // can't join (they wouldn't pass the fingerprint check). The card is
-        // dimmed with a "mod not installed" note so it's obvious why Join is off.
-        var modInstalled = IsModInstalledLocally(lobby.ModId);
-        var inGame = lobby.Status == "in_game";
-
-        // Seats, split by kind. "Full" used to be one comparison; with observer seats it is
-        // two that run out separately, and asking the old question of a room with a free
-        // watching seat would hide a room anybody could still join.
-        var seats = Services.Multiplayer.RoomFormats.SeatsOf(
-            lobby.MaxPlayers, lobby.SpectatorSlots,
-            lobby.CurrentPlayers, lobby.SpectatorsPresent);
-
-        // ONE decision, not two booleans. Whether observing is available changes what "full"
-        // MEANS, so it cannot be applied by dropping the Watch button afterwards — a room
-        // with the game full and a watching seat free is not `seats.Full`, and the row would
-        // fall through to Join and offer a seat the server refuses. See RoomFormats.OfferFor.
-        var offer = Services.Multiplayer.RoomFormats.OfferFor(seats, ObserversUnlocked);
-        var isFull = offer == Services.Multiplayer.RoomOffer.Full;
-        var watchOnly = offer == Services.Multiplayer.RoomOffer.Watch;
-        var me = _session?.CurrentUser;
-
-        // A room whose mod you don't have reads as unavailable through its TEXT, never
-        // through an Opacity layer on the card — which is what this used to do
-        // (`Opacity = modInstalled ? 1.0 : 0.6`). An opacity below 1 on a container forces
-        // the whole subtree through a composition pass: ClearType is disabled for every
-        // glyph inside it, AND the real contrast of the faint labels collapses to roughly
-        // 2:1. Blurry and washed out at once, which is exactly how it was reported.
-        //
-        // The signal survives without it: both text roles step down one rung of the ramp,
-        // and the action button is already disabled for a mod you don't have.
-        var textPrimary = (Brush)Application.Current.FindResource(
-            modInstalled ? "MpTextPrimary" : "MpTextMuted");
-        var textSecondary = (Brush)Application.Current.FindResource(
-            modInstalled ? "MpTextMuted" : "MpTextFaint");
-
-        var card = new Border
-        {
-            // MpRoomCard is a LOCAL UserControl resource (not app-global like
-            // the brushes), so resolve it via this control's FindResource, not
-            // Application.Current.FindResource (which only sees merged app dicts).
-            // The compact layout (design handoff turn 36) has its own 52-px row.
-            Style = (Style)FindResource(_compactLayout ? "MpRoomCardCompact" : "MpRoomCard"),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Margin = new Thickness(0),
-            Tag = lobby,
-        };
-
-        // (The card's illumination — a STATIC, subtle BLUE rim + faint blue
-        // glow — lives in the MpRoomCard style now; no per-card animation.)
-
-        // The set comes from Services/RoomsTableLayout, which the header strip reads too —
-        // one list rather than two lists of literals kept in step by a comment. It also
-        // shrinks: on a narrow window the least useful columns are dropped and their values
-        // move into the room's sub-line below, so nothing is lost at any width.
-        // ClipToBounds because a Grid cell does not clip on its own.
-        var grid = new Grid { ClipToBounds = true };
-        foreach (var spec in _roomColumns)
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                // A null FixedWidth is the reference's `1fr`: the Room column absorbs
-                // whatever the fixed ones leave. MinWidth stays 0 so it can shrink and
-                // let its text ellipsise, rather than pushing the fixed columns off the
-                // edge of a list that does not scroll horizontally.
-                Width = spec.FixedWidth is double w
-                    ? new GridLength(w, GridUnitType.Pixel)
-                    : new GridLength(1, GridUnitType.Star),
-            });
-
-        // === Col 0: ROOM — mod icon disc (★ fallback) + title (wraps to 2
-        // lines, never hard-cut) over an optional sub-line (🔒 private / "not
-        // installed"). A Grid{Auto,*} — NOT a horizontal StackPanel — so the
-        // title is width-constrained and wrapping/ellipsis actually engage. ===
-        var modProfile = ModRegistry.Find(lobby.ModId);
-        var modName = modProfile?.DisplayName;
-        if (string.IsNullOrWhiteSpace(modName)) modName = lobby.ModId;
-
-        // Host name resolved HERE, above the ROOM cell, because when the HOST column is
-        // dropped at a narrow width the room's sub-line has to show it — and re-deriving it
-        // down in the host cell would be a second copy of this fallback chain to keep in step.
-        // Same order as everywhere else: display name → Discord username → me → em-dash.
-        var hostName = lobby.Host.DisplayName;
-        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
-            hostName = lobby.Host.DiscordUsername;
-        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
-        {
-            var hostIsMe = me != null
-                && _isHostInCurrentRoom
-                && string.Equals(lobby.Id, _session?.CurrentLobbyId, StringComparison.Ordinal);
-            if (hostIsMe)
-                hostName = string.IsNullOrEmpty(me!.DiscordUsername) ? me.DisplayName : me.DiscordUsername;
-        }
-        var hostNameKnown = !string.IsNullOrWhiteSpace(hostName) && hostName != "-";
-        if (!hostNameKnown) hostName = "—";
-
-        var salaCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
-        salaCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        salaCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var modIconBrush = ResolveRoomModIcon(modProfile);
-        FrameworkElement disc;
-        if (modIconBrush != null)
-        {
-            // 30px rounded SQUARE, not a circle: the reference shows the mod's own
-            // artwork, and a circular crop eats the corners of a square icon. The Border
-            // background is clipped to CornerRadius, so the UniformToFill brush is
-            // centre-cropped to that shape.
-            disc = new Border
-            {
-                Width = 30,
-                Height = 30,
-                CornerRadius = new CornerRadius(_compactLayout ? 7 : 6),
-                Background = modIconBrush,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0),
-            };
-        }
-        else
-        {
-            disc = new TextBlock
-            {
-                Text = "★",
-                Foreground = (Brush)Application.Current.FindResource("AccentBrush"),
-                // Mod-icon fallback glyph — sized to the icon slot, not a type token.
-                FontSize = 20,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0),
-            };
-        }
-        Grid.SetColumn(disc, 0);
-        salaCell.Children.Add(disc);
-
-        var salaText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-
-        // The room NAME gets the whole cell — it is a direct child of the vertical stack,
-        // with nothing beside it to take width away.
-        //
-        // It used to share a Grid{*,Auto} with the chips, and THAT was the truncation people
-        // reported. BuildRoomChip states outright that a chip never shrinks, so the name was
-        // the only thing in the row that could yield: the gold "COMPETITIVA / 1v1" badge took
-        // about 180 px of a ~300 px cell, the name kept ~115, and it ellipsised at "Sala de
-        // W...". Raising MpSectionLabelSize from 9.5 to 11 with the rest of the type scale had
-        // just made the badge wider still — the reminder that a TYPE token moves WIDTHS, not
-        // only heights. The chips moved down to the sub-line, which had the room all along.
-        var titleBlock = new TextBlock
-        {
-            Text = lobby.Title,
-            Foreground = textPrimary,
-            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-            // TWO lines before it gives up. Moving the badge to the sub-line took the name from
-            // ~115 px to ~272, which fixed most titles but not the long ones — and there is
-            // nothing left in this cell to take width from, so the remaining answer is height.
-            TextWrapping = TextWrapping.Wrap,
-            // "At most two lines", spelled the way WPF spells it: there is no MaxLines here,
-            // that is WinUI. The cap is a MaxHeight of exactly two line boxes, which is why
-            // LineHeight is pinned rather than left to the font.
-            LineHeight = 20,
-            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-            MaxHeight = 40,
-            // Now trims the SECOND line: the title field takes 64 characters, so there are
-            // still names that do not fit two lines at a narrow width.
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            // KEEPS ITS OWN TOOLTIP, and it is the one trimmed block in the launcher that
-            // has to. RevealText now gives every other one a hover for free — this line was
-            // going to be deleted as the hand-rolled version of it — but RevealText declines
-            // a WRAPPING block on purpose: a two-line cap is cut by HEIGHT, and no width
-            // measurement can see that. So this is exactly the excluded case, and dropping
-            // the tooltip would have left the longest room names unreadable again while
-            // every shorter label around them gained a way to be read.
-            ToolTip = TooltipHelper.Wrap(lobby.Title),
-        };
-        if (_compactLayout)
-        {
-            // ONE line in the compact row (handoff turn 36: 600 13.5, ellipsis). The two-line
-            // wrap above is what makes the wide row grow to 79 px; here the row is 52, and the
-            // cut name is read through RevealText's hover — which only arms on a block that is
-            // NOT wrapping and carries no tooltip of its own, hence both are cleared.
-            titleBlock.TextWrapping = TextWrapping.NoWrap;
-            titleBlock.ClearValue(TextBlock.LineHeightProperty);
-            titleBlock.ClearValue(TextBlock.LineStackingStrategyProperty);
-            titleBlock.ClearValue(FrameworkElement.MaxHeightProperty);
-            titleBlock.ClearValue(FrameworkElement.ToolTipProperty);
-            titleBlock.SetResourceReference(TextBlock.FontSizeProperty, "MpRoomNameSizeCompact");
-        }
-        salaText.Children.Add(titleBlock);
-
-        // Chips ride the SUB-LINE now; the row itself is assembled at the end of this cell,
-        // once the subtitle text is known. The competitive one comes FIRST because it is the
-        // fact that changes what the room IS, where "private" only changes how you get in.
-        var chips = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-
-        if (lobby.Competitive)
-        {
-            // Derived from the server's boolean, never from words in the title: anyone can
-            // type "competitive" into a room name, and a badge that a stranger can forge is
-            // worth less than no badge at all.
-            // ...and it names the format, from the same derivation the room itself uses, so a
-            // browser row and the room you join agree about what you are walking into.
-            var fmtKey = Services.Multiplayer.RoomFormats.LabelKey(
-                Services.Multiplayer.RoomFormats.Resolve(
-                    lobby.Competitive, lobby.MaxPlayers, lobby.SpectatorSlots));
-            var compChip = BuildRoomChip(
-                fmtKey == null
-                    ? Strings.Get("MpRoomCompetitiveBadge")
-                    : Strings.Get("MpRoomCompetitiveBadge") + " · " + Strings.Get(fmtKey),
-                (Brush)Application.Current.FindResource("MpCompetitiveBg"),
-                (Brush)Application.Current.FindResource("MpCompetitiveText"));
-            compChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomCompetitiveTooltip"));
-            chips.Children.Add(compChip);
-        }
-        else
-        {
-            // EVERY room says which kind it is since design handoff turn 36, not only the ones
-            // that score — a row with no chip read as "unknown" rather than as "casual". No
-            // format after the word: a casual room's size says nothing about how it will be
-            // played, which is the rule RoomFormats.Resolve encodes by answering Casual.
-            var casualChip = BuildRoomChip(
-                Strings.Get("MpRoomCasualBadge"),
-                (Brush)Application.Current.FindResource("MpCasualBg"),
-                (Brush)Application.Current.FindResource("MpCasualText"));
-            casualChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomCasualTooltip"));
-            chips.Children.Add(casualChip);
-        }
-        if (lobby.IsPrivate)
-        {
-            // Same rounded-pill look as the competitive chip, tinted purple: a low-alpha
-            // purple fill (mirrors the "Ready" pill idiom #223FB950) + the solid
-            // MpStatusLocked purple text. Reuses MpRoomStatusLocked ("Private"/"Privada").
-            //
-            // It is ALWAYS shown, and that is the point: a private room whose STATUS is
-            // In game / Full outranks the purple "Private" dot, so without this chip such a
-            // room would give no hint at all that it is private.
-            var privateChip = BuildRoomChip(
-                Strings.Get("MpRoomStatusLocked"),
-                (Brush)Application.Current.FindResource("MpPrivateBg"),
-                (Brush)Application.Current.FindResource("MpPrivateText"));
-            chips.Children.Add(privateChip);
-        }
-
-        // ONE subtitle line, per the reference: "{mod} · {context} · hace {t}".
-        // The mod name lives here now rather than in a column of its own — it reads as
-        // context, and nobody sorted by it. Anything the current width could not fit as a
-        // column joins it, so narrowing the window hides the COLUMN but never the fact.
-        // Built from the same resolved set the columns came from, so the two can't
-        // disagree about what is on screen.
-        var subtitle = new System.Collections.Generic.List<string>();
-        if (!string.IsNullOrWhiteSpace(modName)) subtitle.Add(modName!);
-
-        // The reference's middle segment: WHY this row is different from the others.
-        // Being the host outranks the password note — if it's yours you already know it
-        // is private, and the action button says "Re-enter" rather than offering a way
-        // in. Computed from the same host identity the action button uses further down.
-        var meCtx = _session?.CurrentUser;
-        bool ctxMine = meCtx != null && lobby.Host != null && (
-            (!string.IsNullOrEmpty(lobby.Host.Id)
-                && string.Equals(lobby.Host.Id, meCtx.Id, StringComparison.Ordinal))
-            || (!string.IsNullOrEmpty(lobby.Host.DiscordUsername)
-                && string.Equals(lobby.Host.DiscordUsername, meCtx.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
-        if (ctxMine) subtitle.Add(Strings.Get("MpRoomCtxYouHost"));
-        else if (lobby.IsPrivate) subtitle.Add(Strings.Get("MpRoomCtxNeedsPassword"));
-        foreach (var dropped in Services.RoomsTableLayout.Hidden(_roomColumns))
-        {
-            switch (dropped)
-            {
-                case Services.RoomColumn.Host when hostNameKnown:
-                    // The rating comes down with the name, never on its own — it lives in
-                    // that cell, so the two are folded by the same case rather than by an
-                    // order-of-drops rule that could put a bare number here. By the same rule as
-                    // the cell (HostRatingOf): the badge's ladder, and no number for somebody
-                    // else still being placed.
-                    subtitle.Add(HostWithRatingWords(lobby, hostName!, ctxMine));
-                    break;
-                // Ping is deliberately absent: it is YOUR latency, identical on every row,
-                // so repeating it per room would add noise rather than information.
-            }
-        }
-        if (!modInstalled) subtitle.Add(Strings.Get("MpRoomModNotInstalled"));
-
-        // The open time is the line's tail and ticks in place on the rooms timer, so the
-        // rest of the line travels with it (see _roomAgeCells).
-        var roomCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
-        var prefix = string.Join(" · ", subtitle);
-        TextBlock? subTb = null;
-        if (roomCreatedUtc.HasValue || prefix.Length > 0)
-        {
-            var age = roomCreatedUtc.HasValue
-                ? Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(DateTime.UtcNow - roomCreatedUtc.Value))
-                : "";
-            subTb = new TextBlock
-            {
-                Text = prefix.Length > 0 && age.Length > 0 ? prefix + " · " + age
-                     : prefix.Length > 0 ? prefix : age,
-                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-                FontSize = (double)Application.Current.FindResource("MpLabelSize"),
-                VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            };
-            if (roomCreatedUtc.HasValue) _roomAgeCells.Add((subTb, roomCreatedUtc.Value, prefix));
-        }
-
-        // The sub-line carries the chips now, as a Grid{Auto,*} and NOT a horizontal
-        // StackPanel: a horizontal StackPanel measures its children with INFINITE width, so
-        // the text's ellipsis would never fire and it would simply run past the cell. Chips in
-        // the Auto column, text in the star — so the thing that yields is still the TEXT, never
-        // a half-trimmed "COMPETITIV...". That is the same rule this row inherits from the
-        // title, only now the text beside the chips is the one that can afford to lose a word.
-        //
-        // Built when there is EITHER a chip or a subtitle: a competitive room with no subtitle
-        // text had no second row at all before, and would have lost its badge with it.
-        if (chips.Children.Count > 0 || subTb != null)
-        {
-            var subRow = new Grid { Margin = new Thickness(0, _compactLayout ? 4 : 2, 0, 0) };
-            subRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            subRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            if (chips.Children.Count > 0)
-            {
-                Grid.SetColumn(chips, 0);
-                subRow.Children.Add(chips);
-            }
-            if (subTb != null)
-            {
-                Grid.SetColumn(subTb, 1);
-                subRow.Children.Add(subTb);
-            }
-            salaText.Children.Add(subRow);
-        }
-        Grid.SetColumn(salaText, 1);
-        salaCell.Children.Add(salaText);
-        PlaceRoomCell(grid, Services.RoomColumn.Room, salaCell);
-
-        // === HOST — avatar disc, name, and the host's RATING right beside it. hostName was
-        // resolved above the ROOM cell because the sub-line needs it when this column drops.
-        //
-        // Auto | Auto | Auto | *, and the trailing star is the load-bearing part: it absorbs
-        // the leftover width so the name and the number stay together on the LEFT. A star on
-        // the NAME column (what this was) expands it instead, which is what pushed the rating
-        // ~100px away from the person it describes — and, before the cell was widened, hard
-        // against the edge where it collided with the "1/2" of PLAYERS. The name keeps its
-        // ellipsis via MaxWidth, since an Auto column measures with infinite width and would
-        // never trim. ===
-        var hostCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
-        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        // The rank badge TAKES the avatar's place (docs/design_insignias_rango, 45b): with both
-        // the cell does not fit, and the name is the only thing here allowed to trim. A backend
-        // that predates ladder_rank says nothing, and nothing keeps the avatar rather than
-        // drawing a Discovery the host may not be.
-        //
-        // WHICH badge is the room's call (design handoff 51b): a 1v1 room shows the host's 1v1
-        // badge, a 2v2/3v3 room the team one, and a casual room — whose seat count says nothing
-        // about how it will be played — the badge the host chose.
-        var hostBadge = BadgeOf(
-            Services.Multiplayer.RoomFormats.Resolve(lobby.Competitive, lobby.MaxPlayers, lobby.SpectatorSlots),
-            lobby.Host?.BadgeMode, lobby.Host?.LadderRank, lobby.Host?.LadderRankTeam);
-        FrameworkElement hostDisc = hostBadge is { } shownHostBadge
-            ? BuildShownBadge(shownHostBadge, RoomRowBadgeWidth,
-                string.IsNullOrEmpty(lobby.Host!.Id) ? hostName : lobby.Host.Id)
-            : BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, _compactLayout ? 22 : 20);
-        hostDisc.Margin = new Thickness(0, 0, 8, 0);
-        Grid.SetColumn(hostDisc, 0);
-        hostCell.Children.Add(hostDisc);
-        var hostNameText = new TextBlock
-        {
-            Text = hostName,
-            Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
-            // Was a bare 12 while the column HEADER above it read MpPillSize. Half the row
-            // was hardcoded, so raising the tokens alone would have left every heading
-            // larger than the value under it.
-            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-            FontWeight = FontWeights.Medium,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            // What makes the ellipsis work at all in an Auto column — less the extra width a
-            // team badge's second shield takes, so the cell stays the size it was.
-            MaxWidth = 120 - (hostBadge is { Kind: Services.Multiplayer.BadgeKind.Team }
-                ? RankBadge.FootprintWidth(RoomRowBadgeWidth, Services.Multiplayer.BadgeKind.Team) - RoomRowBadgeWidth
-                : 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(hostNameText, 1);
-        hostCell.Children.Add(hostNameText);
-
-        // The host's rating, glued to the name. One point LARGER and SemiBold, and that is
-        // not decoration: measured on a real screenshot, "Gorgorito12" spans 14px while
-        // "1500" at the SAME FontSize spans 11 — a name has ascenders and descenders, digits
-        // are cap-height only, so matching the size still reads as smaller. The bump brings
-        // the digits level with the name's capitals without towering over the row.
-        // The number follows the badge: the team rating beside the host's team badge.
-        // A host still being placed shows "3/10" to everybody else (the server does not send his
-        // number); the viewer's own room shows his own, from his standing.
-        var (hostRating, hostRd, hostGames, hostPlacement, hostTeam) = HostRatingOf(lobby, hostBadge);
-        if (BuildRatingTextFor(ctxMine, hostTeam, hostRating, hostRd, hostGames, hostPlacement,
-                numberSize: 13, unitSize: 10) is { } hostElo)
-        {
-            Grid.SetColumn(hostElo, 2);
-            hostCell.Children.Add(hostElo);
-        }
-
-        PlaceRoomCell(grid, Services.RoomColumn.Host, hostCell);
-
-        // === PLAYERS — "1/8" plus the reference's capacity segments: four bars that
-        // fill in proportion to how full the room is, so occupancy reads at a glance
-        // without parsing two numbers. Still clickable to PEEK the roster without
-        // joining. The count and the bars live in a vertical stack, and the whole cell
-        // carries the click so the small bars are not the only target. ===
-        var playersCell = new StackPanel
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            Background = Brushes.Transparent,   // or the gaps between children swallow the click
-            Cursor = System.Windows.Input.Cursors.Hand,
-            Tag = lobby,
-            ToolTip = Strings.Get("MpRoomPeekTooltip"),
-        };
-        var playersCount = new TextBlock
-        {
-            Text = $"{lobby.CurrentPlayers}/{lobby.MaxPlayers}",
-            Foreground = textPrimary,
-            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-            FontWeight = FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        playersCell.Children.Add(playersCount);
-        playersCell.Children.Add(BuildCapacityBars(lobby.CurrentPlayers, lobby.MaxPlayers));
-        playersCell.MouseEnter += (_, _) => playersCount.TextDecorations = TextDecorations.Underline;
-        playersCell.MouseLeave += (_, _) => playersCount.TextDecorations = null;
-        playersCell.MouseLeftButtonUp += PlayersPeek_Click;
-        PlaceRoomCell(grid, Services.RoomColumn.Players, playersCell);
-
-        // === Col 4: PING — registered so RefreshRoomPingCells() updates it in
-        // place (no rebuild). It's YOUR internet latency (same for every row;
-        // /lobbies has no per-host IP). ===
-        var pingCell = BuildPingCell(_connectionPingMs >= 0 ? _connectionPingMs : (double?)null);
-        pingCell.ToolTip = Strings.Get("MpRoomPingTooltip");
-        _roomPingCells.Add(pingCell);
-        // Wrapped in a clipping Grid: the inner StackPanel stays exactly as it is (the ping
-        // timer mutates its children in place), but it can no longer draw past its column.
-        PlaceRoomCell(grid, Services.RoomColumn.Ping, WrapCell(pingCell));
-
-        // STATUS had its own column and no longer does: the reference lets the ACTION
-        // button carry it, since "In game" and "Full" are already the reason that button
-        // is disabled and its caption says so. statusKind/statusLabel are gone with it;
-        // the flags they were derived from (inGame, isFull, IsPrivate) still drive the
-        // action below, and the purple PRIVADA chip beside the title still marks a
-        // private room at every status.
-        // === Col 6: ACTION — gold-outline button. SAME priority logic: in this
-        // room → Re-enter; our own room → "Your room" (disabled); in game →
-        // disabled; full → disabled; mod not installed → disabled Join; else →
-        // enabled Join. Enabled Join / Re-enter are the gold outline; disabled
-        // states fall back to the neutral secondary style. ===
-        var iAmInThisRoom = string.Equals(lobby.Id, _session?.CurrentLobbyId, StringComparison.Ordinal);
-        var iAmHost = me != null && (
-            (!string.IsNullOrEmpty(lobby.Host.Id)
-                && string.Equals(lobby.Host.Id, me.Id, StringComparison.Ordinal))
-            || (!string.IsNullOrEmpty(lobby.Host.DiscordUsername)
-                && string.Equals(lobby.Host.DiscordUsername, me.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
-
-        // The reference lifts YOUR OWN room out of the list with a brighter fill and a
-        // stronger rim. Set locally rather than in the MpRoomCard style, because "this
-        // one is mine" is per-row DATA, not a control state a trigger could express.
-        // Placed here because it reuses the two flags the action button already derives.
-        if (iAmInThisRoom || iAmHost)
-        {
-            card.Background = (Brush)Application.Current.FindResource("MpRowHighlight");
-            card.BorderBrush = (Brush)Application.Current.FindResource("MpRimMedium");
-        }
-
-        var actionBtn = new Button
-        {
-            // Compact + centred so the button stays button-sized (not stretched)
-            // now that the ACTION column has no MaxWidth and can grow wide.
-            HorizontalAlignment = HorizontalAlignment.Center,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            MinWidth = 96,
-            MaxWidth = 130,
-            Padding = new Thickness(10, 4, 10, 4),
-            Tag = lobby,
-        };
-        // The button wears the colour the Discord announcement gives the room's state (design
-        // 66), so one room reads the same in the launcher, in its STATUS dot and in the channel:
-        //   JOIN    - green tinted outline with a dot (MpRoomActionJoin): "come in here". An
-        //             outline rather than a solid fill: a page of six solid buttons was the
-        //             loudest thing on it, louder than the room names (turn 36).
-        //   IN GAME - blue (MpRoomActionInGame), FULL - amber (MpRoomActionFull): a state, not
-        //             an action — disabled, no hover, an arrow cursor, and the same dot.
-        //   RE-ENTER - the SOLID blue fill (MpRoomActionPrimary): "go back to where you already
-        //             are", the one action on the page that is about you. Unchanged by 66.
-        //   INERT   - Your room / a mod you do not have (MpRoomActionInert): no fill, a faint
-        //             rim, muted text, NO dot — the dot says "this is open to you", which a
-        //             disabled Join is not. Said with colour, never an Opacity layer.
-        var join = (Style)Application.Current.FindResource("MpRoomActionJoin");
-        var reenter = (Style)Application.Current.FindResource("MpRoomActionPrimary");
-        var inert = (Style)Application.Current.FindResource("MpRoomActionInert");
-        var secondary = (Style)Application.Current.FindResource("MpSecondaryButton");
-        if (iAmInThisRoom)
-        {
-            actionBtn.Style = reenter;
-            actionBtn.Content = Strings.Get("MpRoomReenter");
-            actionBtn.Click += (_, _) => OpenLobbyWindow();
-        }
-        else if (iAmHost)
-        {
-            actionBtn.Style = inert;
-            actionBtn.Content = Strings.Get("MpRoomYours");
-            actionBtn.IsEnabled = false;
-        }
-        else if (inGame)
-        {
-            actionBtn.Style = (Style)Application.Current.FindResource("MpRoomActionInGame");
-            actionBtn.Content = RoomActionContent(Strings.Get("MpRoomStatusInGame"), "MpRoomInGameDot");
-            actionBtn.IsEnabled = false;
-        }
-        else if (isFull)
-        {
-            actionBtn.Style = (Style)Application.Current.FindResource("MpRoomActionFull");
-            actionBtn.Content = RoomActionContent(Strings.Get("MpRoomFull"), "MpRoomFullDot");
-            actionBtn.IsEnabled = false;
-        }
-        else
-        {
-            // A private room says so on the button: the click opens a password prompt,
-            // and finding that out only after committing is a small ambush. A disabled
-            // Join (mod missing) keeps the plain caption — the reason is already the
-            // dimmed row and its "mod not installed" sub-line.
-            // WATCH, when the game is full but the room is not. The offer is exclusive
-            // rather than a second button: the row has one action cell, and there is only
-            // one kind of seat left to take. It stays SECONDARY even when the mod is
-            // installed, because watching is not what most people came to the row for and a
-            // solid button here would read as "join this game".
-            actionBtn.Style = watchOnly ? secondary : (modInstalled ? join : inert);
-            actionBtn.Content = watchOnly
-                ? Strings.Get("MpRoomWatch")
-                : modInstalled
-                    ? RoomActionContent(Strings.Get(lobby.IsPrivate ? "MpRoomJoinPrivate" : "MpRoomJoin"), "MpRoomJoinDot")
-                    : Strings.Get("MpRoomJoin");
-            actionBtn.IsEnabled = modInstalled;
-            if (watchOnly) actionBtn.Click += WatchRoomButton_Click;
-            else actionBtn.Click += JoinRoomButton_Click;
-        }
-        PlaceRoomCell(grid, Services.RoomColumn.Action, actionBtn);
-
-        // Double-click anywhere on the row does whatever its button does. It fires the
-        // button rather than duplicating the decision above, so a disabled Join stays
-        // disabled and the row can never take an action its own button refuses.
-        card.MouseLeftButtonUp += (_, e) =>
-        {
-            if (e.ClickCount < 2 || !actionBtn.IsEnabled) return;
-            actionBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-        };
-
-        // A room that appeared while the user was looking at the list gets a one-second
-        // blue wash, so a new room announces itself instead of silently shifting the
-        // rows. _knownRoomIds is seeded on the first render, or every room would flash
-        // on the first paint and the cue would mean nothing.
-        if (_roomIdsSeeded && !string.IsNullOrEmpty(lobby.Id) && !_knownRoomIds.Contains(lobby.Id))
-            FlashNewRoom(card);
-        if (!string.IsNullOrEmpty(lobby.Id)) _knownRoomIds.Add(lobby.Id);
-
-        card.Child = grid;
-        return card;
-    }
-
     /// <summary>
     /// Whether this launcher offers observing at all — developer mode, and nothing else.
     ///
@@ -13638,29 +12799,12 @@ public partial class MultiplayerTab : UserControl
         });
     }
 
-    /// <summary>
-    /// Puts a cell in its column, or drops it when this width doesn't show that column.
-    ///
-    /// <para>Column indices used to be written into each cell by hand (0..6), which only
-    /// worked while all seven were always present. Looking the index up from the resolved set
-    /// is what lets columns disappear without every cell after them landing in the wrong
-    /// place.</para>
-    /// </summary>
-    /// <summary>
-    /// Puts a horizontal StackPanel cell inside a clipping Grid so it can't overflow its column.
-    /// A StackPanel measures its children with INFINITE width, so nothing inside one ever trims —
-    /// that is what let the ping bars and the status badge draw over their neighbours.
-    /// </summary>
-    private static FrameworkElement WrapCell(FrameworkElement inner)
+    private void PlaceRoomCell(Grid grid, Services.RoomColumn column, UIElement cell, bool gap = false)
     {
-        var host = new Grid { ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
-        inner.HorizontalAlignment = HorizontalAlignment.Left;
-        host.Children.Add(inner);
-        return host;
-    }
-
-    private void PlaceRoomCell(Grid grid, Services.RoomColumn column, UIElement cell)
-    {
+        // Every column after the first opens with the design's 12-px gap. RoomsTableLayout's
+        // widths include it, so the header and the rows still line up.
+        if (gap && cell is FrameworkElement fe)
+            fe.Margin = new Thickness(fe.Margin.Left + RoomColumnGap, fe.Margin.Top, fe.Margin.Right, fe.Margin.Bottom);
         var index = -1;
         for (var i = 0; i < _roomColumns.Count; i++)
             if (_roomColumns[i].Column == column) { index = i; break; }
@@ -13669,27 +12813,6 @@ public partial class MultiplayerTab : UserControl
         Grid.SetColumn(cell, index);
         grid.Children.Add(cell);
     }
-
-    /// <summary>Small rounded badge for a room row (the MOD name). Bordered so
-    /// it stays legible over the row's hover fill.</summary>
-    private Border BuildRoomChip(string text, Brush bg, Brush fg) => new Border
-    {
-        // No border: the reference's chip is a tinted fill only. It also never shrinks —
-        // the room name beside it takes the ellipsis instead, because a half-trimmed
-        // "PRIVAD…" would be worse than a shorter title.
-        Background = bg,
-        CornerRadius = new CornerRadius(4),
-        Padding = new Thickness(6, 2, 6, 2),
-        Margin = new Thickness(0, 0, 6, 0),
-        VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock
-        {
-            Text = text,
-            Foreground = fg,
-            FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
-            FontWeight = FontWeights.SemiBold,
-        },
-    };
 
     /// <summary>
     /// Per-mod-id cache of the resolved rooms-browser icon brush, so a quiet
@@ -13757,132 +12880,28 @@ public partial class MultiplayerTab : UserControl
     private void UpdateRoomsUpdatedLabel()
     {
         if (RoomsUpdatedText == null) return;
-        if (_lastRoomsRenderedAt == DateTime.MinValue)
+        // Design 86: one of four states, never a sort (the list is ordered by what you can do).
+        var scenario = _demoRooms ? _demoRoomsScenario : (RoomListDemoData.Scenario?)null;
+        if (_offlineMode || scenario == RoomListDemoData.Scenario.Offline)
         {
-            RoomsUpdatedText.Text = "";
+            RoomsUpdatedText.Text = Strings.Get("RmOffline");
+            return;
+        }
+        if (scenario == RoomListDemoData.Scenario.Loading
+            || (!_demoRooms && _lastRoomsRenderedAt == DateTime.MinValue))
+        {
+            RoomsUpdatedText.Text = Strings.Get("RmLoading");
+            return;
+        }
+        if (_roomsFetchFailed || scenario == RoomListDemoData.Scenario.Error)
+        {
+            RoomsUpdatedText.Text = Strings.Get("RmNotUpdated");
             return;
         }
         var secs = (int)(DateTime.Now - _lastRoomsRenderedAt).TotalSeconds;
-        var stamp = secs < 5
-            ? Strings.Get("MpRoomsUpdatedNow")
-            : secs < 60
-                ? Strings.Format("MpRoomsUpdatedSecs", secs)
-                : Strings.Format("MpRoomsUpdatedMins", secs / 60);
-
-        // The reference ends this line with "· sorted by ping". It is NOT hardcoded
-        // here, for two reasons: the user can sort by any column, and — until the
-        // backend exposes each host's Radmin IP — the ping shown is YOUR latency,
-        // identical on every row, so sorting by it does nothing. Claiming an order the
-        // table isn't in, by a value that can't order it, is worse than saying nothing.
-        // Naming the ACTUAL sort keeps the reference's intent and stays true.
-        var sortKey = _roomsSort switch
-        {
-            RoomSort.Room => "MpColRoom",
-            RoomSort.Players => "MpColPlayers",
-            RoomSort.Ping => "MpColPing",
-            _ => null,
-        };
-        RoomsUpdatedText.Text = sortKey == null
-            ? stamp
-            : stamp + " · " + Strings.Format("MpRoomsSortedBy", Strings.Get(sortKey).ToLowerInvariant());
-    }
-
-    /// <summary>
-    /// Render the Ping column for a row. <paramref name="rttMs"/>
-    /// null = no value yet (em-dash + muted); otherwise a small
-    /// "signal bars" glyph coloured by RTT bucket plus the number.
-    /// </summary>
-    private StackPanel BuildPingCell(double? rttMs)
-    {
-        var panel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        FillPingCell(panel, rttMs);
-        return panel;
-    }
-
-    /// <summary>
-    /// (Re)populate a ping cell. Split out from <see cref="BuildPingCell"/>
-    /// so <see cref="RefreshRoomPingCells"/> can refresh the rooms-browser
-    /// cells in place without rebuilding rows (a rebuild would disrupt the
-    /// Join button mid-hover/click).
-    /// </summary>
-    private void FillPingCell(StackPanel panel, double? rttMs)
-    {
-        // In place when the cell already holds its one TextBlock: this runs for every room every
-        // 3 s, and it used to clear and rebuild the block each time for a number that rarely moves.
-        var existing = panel.Children.Count == 1 ? panel.Children[0] as TextBlock : null;
-        if (rttMs is null)
-        {
-            var muted = (Brush)Application.Current.FindResource("MpTextMuted");
-            var bodySize = (double)Application.Current.FindResource("FontSizeBody");
-            if (existing != null)
-            {
-                existing.Text = "—";
-                existing.Foreground = muted;
-                existing.FontSize = bodySize;
-                existing.FontWeight = FontWeights.Normal;
-                return;
-            }
-            panel.Children.Clear();
-            panel.Children.Add(new TextBlock
-            {
-                Text = "—",
-                Foreground = muted,
-                FontSize = bodySize,
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-            return;
-        }
-
-        // Design handoff turn 36's bands (60 / 120, see RoomPingBand). Only the rooms list
-        // follows them: the in-game and lobby readouts keep their own, because those measure a
-        // live match where a looser amber is the honest signal.
-        var rtt = rttMs.Value;
-        var brush = (Brush)Application.Current.FindResource(RoomPingBand.For(rtt) switch
-        {
-            PingBand.Good => "MpPingGood",
-            PingBand.Medium => "MpPingMedium",
-            _ => "MpPingBad",
-        });
-
-        var text = $"{(int)rtt} ms";
-        var metaSize = (double)Application.Current.FindResource("MpMetaSize");
-        if (existing != null)
-        {
-            existing.Text = text;
-            existing.Foreground = brush;
-            existing.FontSize = metaSize;
-            existing.FontWeight = FontWeights.SemiBold;
-            return;
-        }
-        panel.Children.Clear();
-        panel.Children.Add(new TextBlock
-        {
-            // Just the number, coloured by bucket. The reference drops the "▂▄▆" bar
-            // glyphs that used to precede it: the colour already carries the same
-            // three-way reading, and the bars doubled the cell's width to repeat it.
-            Text = text,
-            Foreground = brush,
-            FontSize = metaSize,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-    }
-
-    /// <summary>
-    /// Refresh the rooms-browser PING cells in place from the cached
-    /// <see cref="_connectionPingMs"/> — your internet latency, the same
-    /// value for every row because the launcher can't ping each host
-    /// individually (no per-host Radmin IP).
-    /// </summary>
-    private void RefreshRoomPingCells()
-    {
-        double? p = _connectionPingMs >= 0 ? _connectionPingMs : (double?)null;
-        foreach (var cell in _roomPingCells)
-            FillPingCell(cell, p);
+        RoomsUpdatedText.Text = secs < 60
+            ? Strings.Get("RmUpdatedNow")
+            : Strings.Format("MpRoomsUpdatedMins", secs / 60);
     }
 
     /// <summary>
@@ -13901,18 +12920,6 @@ public partial class MultiplayerTab : UserControl
             var elapsed = now - reportedUtc;
             if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
             text.Text = Strings.Format("MpActivityAgo", Services.RoomAgeFormat.Coarse(elapsed));
-        }
-    }
-
-    /// <summary>Tick the per-room "open for X" sub-lines up in place (rooms ping
-    /// timer, ~3 s) so the counter is live without re-rendering the whole list.</summary>
-    private void RefreshRoomAgeCells()
-    {
-        var now = DateTime.UtcNow;
-        foreach (var (text, createdUtc, prefix) in _roomAgeCells)
-        {
-            var age = Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(now - createdUtc));
-            text.Text = prefix.Length > 0 ? prefix + " · " + age : age;
         }
     }
 
@@ -14653,11 +13660,15 @@ public partial class MultiplayerTab : UserControl
         if (!_isHostInCurrentRoom) return;          // only the host triggers the start
         if (_matchPhase != MatchPhase.Lobby) return; // not during countdown / in a match
         if (_autoStartInFlight) return;              // already triggered this ready-up
-        if (_roomMembers.Count < 2) return;          // don't auto-launch a solo room
-        if (!TryGetCurrentLobbyMaxPlayers(out var max) || max <= 0) return; // capacity unknown
-        if (_roomMembers.Count < max) return;        // room not full — host starts manually
-        foreach (var m in _roomMembers.Values)
-            if (!m.Ready) return;                    // everyone (host too) must be ready
+        // Observers neither fill a seat nor have to be ready: the server starts on the players.
+        var players = _roomMembers.Values
+            .Where(m => !string.Equals(m.Role, "spectator", StringComparison.Ordinal)).ToList();
+        if (players.Count < 2) return;               // don't auto-launch a solo room
+        var seats = RoomPlayingSeats();
+        if (seats <= 0) return;                      // capacity unknown
+        if (players.Count < seats) return;           // room not full — host starts manually
+        foreach (var m in players)
+            if (!m.Ready) return;                    // every player (host too) must be ready
         if (!CurrentStartGate().CanStart) return;    // teams incomplete or uneven (design 55h)
 
         _autoStartInFlight = true;

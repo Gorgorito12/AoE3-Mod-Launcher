@@ -5609,11 +5609,6 @@ public static partial class Strings
             [LangEn] = "{0} opened a room",
             [LangEs] = "{0} abrió una sala",
         },
-        ["MpRoomsSearchPlaceholder"] = new()
-        {
-            [LangEn] = "Search room, mod, player or paste a code",
-            [LangEs] = "Busca sala, mod, jugador o pega un código",
-        },
         // Shown INSTEAD of the list when a search matches nothing. Without it an empty
         // panel reads as "there are no rooms" when they are only filtered out.
         ["MpRoomsNoMatches"] = new()
@@ -5886,12 +5881,9 @@ public static partial class Strings
 
         ["DlgClose"] = new() { [LangEn] = "Close", [LangEs] = "Cerrar" },
         ["MpRoomsCreate"] = new() { [LangEn] = "Create room", [LangEs] = "Crear sala" },
-        ["MpRoomsRefresh"] = new() { [LangEn] = "Refresh", [LangEs] = "Actualizar" },
         // Kept for the skeleton rows' accessibility text; the visible loading state is
         // three placeholder rows, not a line of prose.
         ["MpRoomsLoading"] = new() { [LangEn] = "Loading rooms…", [LangEs] = "Cargando salas…" },
-        ["MpRoomsErrorRetry"] = new() { [LangEn] = "Retry", [LangEs] = "Reintentar" },
-        ["MpRoomsSectionTitle"] = new() { [LangEn] = "Active rooms", [LangEs] = "Salas activas" },
         ["MpGlobalChatTitle"] = new() { [LangEn] = "Global chat", [LangEs] = "Chat global" },
         ["MpGlobalChatPresence"] = new() { [LangEn] = "{0} connected", [LangEs] = "{0} conectados" },
         ["MpGlobalChatPlaceholder"] = new() { [LangEn] = "Write a message…", [LangEs] = "Escribe un mensaje…" },
@@ -5904,45 +5896,14 @@ public static partial class Strings
         ["MpGlobalChatTimedOut"] = new() { [LangEn] = "Muted for spamming — try again shortly.", [LangEs] = "Silenciado por spam. Prueba de nuevo en un rato." },
         ["MpGlobalChatTooLong"] = new() { [LangEn] = "Message too long (max 500).", [LangEs] = "Mensaje demasiado largo (máx 500)." },
         ["MpRoomJoin"] = new() { [LangEn] = "Join", [LangEs] = "Unirse" },
-        // A private room's action says so, because the click opens a password prompt.
-        ["MpRoomJoinPrivate"] = new()
-        {
-            [LangEn] = "Join with password",
-            [LangEs] = "Unirse con contraseña",
-        },
-        // Room sub-line context, the middle segment of "{mod} · {context} · {age}".
-        ["MpRoomCtxYouHost"] = new() { [LangEn] = "you're the host", [LangEs] = "tú eres el anfitrión" },
-        ["MpRoomCtxNeedsPassword"] = new() { [LangEn] = "asks for a password", [LangEs] = "pide contraseña" },
-        ["MpRoomReenter"] = new() { [LangEn] = "Re-enter", [LangEs] = "Reingresar" },
-        ["MpRoomYours"] = new() { [LangEn] = "Your room", [LangEs] = "Tu sala" },
-        ["MpRoomFull"] = new() { [LangEn] = "Full", [LangEs] = "Llena" },
-        // The room is full of PLAYERS but still has a seat beside the game. It replaces
-        // "Unirse" rather than joining it, because there is only one seat left to take
-        // and offering both would let somebody ask for the one that is gone.
-        ["MpRoomWatch"] = new() { [LangEn] = "Watch", [LangEs] = "Ver" },
         ["MpRoomStatusWaiting"] = new() { [LangEn] = "Waiting", [LangEs] = "Esperando" },
-        ["MpRoomStatusLocked"] = new() { [LangEn] = "Private", [LangEs] = "Privada" },
         // How long a room has been open — live "count-up" in the rooms list
         // sub-line and the lobby header meta. {0} = a compact duration ("5 min",
         // "1 h 20 min"), formatted by RoomAgeFormat.Compact.
         ["MpRoomOpenedAgo"] = new() { [LangEn] = "open for {0}", [LangEs] = "abierta hace {0}" },
-        // Room cards (BuildRoomCard) + empty state + "last updated" header.
-        ["MpRoomModNotInstalled"] = new() { [LangEn] = "Mod not installed", [LangEs] = "Mod no instalado" },
-        ["MpRoomsEmptyTitle"] = new() { [LangEn] = "No rooms right now", [LangEs] = "No hay salas ahora" },
-        ["MpRoomsEmptyBody"] = new() { [LangEn] = "Be the first to create one and start a game!", [LangEs] = "¡Sé el primero en crear una y empezar a jugar!" },
-        // Appended to the "updated N ago" line when a column sort is active. {0} is the
-        // lowercased column name.
-        ["MpRoomsSortedBy"] = new() { [LangEn] = "sorted by {0}", [LangEs] = "orden por {0}" },
-        ["MpRoomsUpdatedNow"] = new() { [LangEn] = "Updated just now", [LangEs] = "Actualizado ahora" },
-        ["MpRoomsUpdatedSecs"] = new() { [LangEn] = "Updated {0}s ago", [LangEs] = "Actualizado hace {0} s" },
         ["MpRoomsUpdatedMins"] = new() { [LangEn] = "Updated {0}m ago", [LangEs] = "Actualizado hace {0} min" },
         ["MpRoomPrivate"] = new() { [LangEn] = "Private", [LangEs] = "Privado" },
-        // Room-list column headers (the card list mimics a table now).
-        ["MpColRoom"] = new() { [LangEn] = "ROOM", [LangEs] = "SALA" },
         ["MpColMod"] = new() { [LangEn] = "MOD", [LangEs] = "MOD" },
-        ["MpColHost"] = new() { [LangEn] = "HOST", [LangEs] = "ANFITRIÓN" },
-        ["MpColPlayers"] = new() { [LangEn] = "PLAYERS", [LangEs] = "JUGADORES" },
-        ["MpColPing"] = new() { [LangEn] = "PING", [LangEs] = "PING" },
         ["MpColStatus"] = new() { [LangEn] = "STATUS", [LangEs] = "ESTADO" },
         ["MpColAction"] = new() { [LangEn] = "ACTION", [LangEs] = "ACCIÓN" },
         ["MpRoomLeave"] = new() { [LangEn] = "Leave room", [LangEs] = "Salir de la sala" },
@@ -7412,10 +7373,6 @@ public static partial class Strings
             [LangEn] = "COMPETITIVE",
             [LangEs] = "COMPETITIVA",
         },
-        // Every room says which kind it is since design handoff turn 36, not only the ones that
-        // score. No format after it, unlike the competitive chip: a casual room's size says
-        // nothing about how it will be played (RoomFormats resolves it to Casual on purpose).
-        ["MpRoomCasualBadge"] = new() { [LangEn] = "CASUAL", [LangEs] = "CASUAL" },
         ["MpRoomCasualTooltip"] = new()
         {
             [LangEn] = "This match does not count towards the rating.",

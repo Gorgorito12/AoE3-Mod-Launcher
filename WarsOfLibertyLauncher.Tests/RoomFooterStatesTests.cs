@@ -416,4 +416,38 @@ public class RoomFooterStatesTests
         foreach (var id in "abcdefghijkl".Select(c => "87" + c))
             Assert.Equal(id, RoomDemoData.ByName(id).Name);
     }
+
+    /// <summary>An observer is never offered Ready (the server ignores it) nor Cancel on a countdown.</summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_AnObserverHasNothingToPress()
+    {
+        var waiting = RoomFooterState.Evaluate(Casual(2, 1, host: false) with { Watching = true });
+        Assert.Equal(RoomPrimary.None, waiting.Primary);
+        Assert.Equal(RoomSecondary.None, waiting.Secondary);
+        Assert.Equal("RoomFtWatchingSub", waiting.Sub!.Key);
+
+        var countdown = RoomFooterState.Evaluate(Casual(2, 0, host: false) with { Watching = true, Stage = RoomStage.Countdown });
+        Assert.Equal(RoomPrimary.None, countdown.Primary);
+
+        var competitive = RoomFooterState.Evaluate(new RoomFacts
+        {
+            Competitive = true, Players = 2, Seats = 2, NotReady = 1, RivalName = "Cuzco", HostName = "Kaiser", Watching = true,
+        });
+        Assert.Equal(RoomPrimary.None, competitive.Primary);
+    }
+
+    /// <summary>The server can make an observer the host, and only the host starts: he keeps Start.</summary>
+    [Fact]
+    public void AWatchingHostStartsWhenThePlayersAreReady()
+    {
+        var notYet = RoomFooterState.Evaluate(Casual(2, 1) with { Watching = true });
+        Assert.Equal(RoomPrimary.Start, notYet.Primary);
+        Assert.False(notYet.PrimaryEnabled);
+        Assert.Equal("RoomTipNeedsReady", notYet.PrimaryTipKey);
+
+        var ready = RoomFooterState.Evaluate(Casual(2, 0) with { Watching = true });
+        Assert.Equal(RoomPrimary.Start, ready.Primary);
+        Assert.True(ready.PrimaryEnabled);
+        Assert.Equal("RoomFtWatchingHostSub", ready.Sub!.Key);
+    }
 }
