@@ -44,7 +44,8 @@ import zlib
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-EXE = REPO / "WarsOfLibertyLauncher" / "bin" / "Release" / "net8.0-windows" / "Aoe3ModLauncher.exe"
+# AOE3ML_TESTBED_EXE runs another build (an A/B against an older commit) through the same harness.
+EXE = pathlib.Path(os.environ.get("AOE3ML_TESTBED_EXE") or (REPO / "WarsOfLibertyLauncher" / "bin" / "Release" / "net8.0-windows" / "Aoe3ModLauncher.exe"))
 OUT = HERE / "out"
 RUN = OUT / "run"            # AOE3ML_DATA_DIR of the launcher under test
 DOCUMENTS = OUT / "documents"  # AOE3ML_DOCUMENTS: copies of the player's files, never the originals
@@ -623,7 +624,7 @@ def check(args):
         sys.exit(done.stdout + done.stderr)
     if args.build:
         subprocess.run([sys.executable, "-I", __file__, "build"], check=True)
-    launch(argparse.Namespace(keep=args.keep, size=args.size, max=False, lang=args.lang, glass=args.glass, software=False,
+    launch(argparse.Namespace(keep=args.keep, size=args.size, max=False, lang=args.lang, glass=args.glass, software=args.software,
                               rest=args.rest))
     try:
         time.sleep(args.wait)
@@ -932,6 +933,8 @@ def main():
     p.add_argument("--wait", type=float, default=5)
     p.add_argument("--keep", action="store_true")
     p.add_argument("--build", action="store_true")
+    p.add_argument("--software", action="store_true",
+                   help="software rendering: a game in exclusive full screen leaves the GPU path drawing nothing")
     p.add_argument("rest", nargs="*")
     p = sub.add_parser("log")
     p.add_argument("--grep")

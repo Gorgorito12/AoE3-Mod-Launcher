@@ -289,6 +289,9 @@ public partial class MultiplayerTab
             Margin = new Thickness(team ? 3 : 0, 0, 0, 0),
             Tag = card.Team == team ? "active" : null,
         };
+        // Its name ("1v1" / "Teams") is the page's mode buttons' too, so the testbed presses it by id.
+        System.Windows.Automation.AutomationProperties.SetAutomationId(
+            button, $"RkSwitch:{card.Kind}:{(team ? "team" : "solo")}");
         button.Click += (_, _) =>
         {
             if (card.Kind == HighlightCellKind.TopClimb) _rankingLeadersClimbTeam = team;

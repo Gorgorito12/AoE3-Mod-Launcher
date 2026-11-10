@@ -48,6 +48,10 @@ python -I tools/testbed/testbed.py sidebyside out.png tools/testbed/out/shot.png
 
 - **`shot`** uses `PrintWindow`, which works while the window is covered and falsifies antialiasing.
 - **`shot --screen`** copies the screen and refuses if another window is on top. Use it to judge text.
+- **A blank white window with `PERF 0 redraws` in the log is the GPU, not the launcher:** a game in
+  exclusive full screen (another project's `age3y.exe`, which is never closed) leaves WPF's hardware
+  path drawing nothing. `check --software` renders the same layout; measure `perf` only with no game
+  running.
 - **Edge and WPF never match pixel for pixel.** WPF has no letter-spacing and the blur is emulated,
   so `sidebyside`'s percentage is a guide. Geometry is asserted in xUnit; the picture is for looking.
 
@@ -62,6 +66,10 @@ python -I tools/testbed/testbed.py sidebyside out.png tools/testbed/out/shot.png
 | `idle`, `tray` | 60 s doing nothing, visible and in the tray |
 | `workshop`, `multiplayer`, `settings`, `modsettings` | a screen left open |
 | `tabs`, `scroll`, `resize` | the launcher made to work |
+
+An A/B against an older commit: build it apart (`git archive <commit> WarsOfLibertyLauncher | tar -x`
+in a scratch folder, `dotnet build -c Release`) and run the same scenario with `AOE3ML_TESTBED_EXE`
+pointing at that exe, alternating the two builds so the machine's noise lands on both.
 
 Run the same scenario with `--software` to reproduce a weak PC. Close Visual Studio's XAML tools
 first: they force a frame every refresh.
