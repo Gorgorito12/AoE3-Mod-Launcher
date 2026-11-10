@@ -165,7 +165,7 @@ public static partial class Strings
         ["MpSignInFailLead"] = new()
         {
             [LangEn] = "The room server did not answer. Check your connection and try again.",
-            [LangEs] = "El servidor de salas no respondió. Comprueba tu conexión y vuelve a intentarlo.",
+            [LangEs] = "El servidor de salas no respondió. Revisa tu conexión y vuelve a intentarlo.",
         },
         ["MpSignInFailTitle"] = new() { [LangEn] = "No answer from the server", [LangEs] = "Sin respuesta del servidor" },
         ["MpSignInFailBody"] = new() { [LangEn] = "The authorization link could not be requested.", [LangEs] = "No se pudo pedir el enlace de autorización." },
@@ -291,7 +291,7 @@ public static partial class Strings
         ["DlgPatchGenFailZip"] = new()
         {
             [LangEn] = "One of the .zip files could not be opened. Check it is not damaged or in use by another program.",
-            [LangEs] = "Uno de los .zip no se pudo abrir. Comprueba que no esté dañado ni en uso por otro programa.",
+            [LangEs] = "Uno de los .zip no se pudo abrir. Revisa que no esté dañado ni en uso por otro programa.",
         },
         ["DlgPatchGenFailOther"] = new()
         {

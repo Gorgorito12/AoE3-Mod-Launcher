@@ -49,7 +49,7 @@ public static partial class Strings
         ["RmHostYou"] = new() { [LangEn] = "you", [LangEs] = "tú" },
         ["RmHostPlacement"] = new() { [LangEn] = "Placement", [LangEs] = "En posicionamiento" },
         ["RmErrorTitle"] = new() { [LangEn] = "The rooms couldn't be loaded", [LangEs] = "No se pudieron cargar las salas" },
-        ["RmErrorBody"] = new() { [LangEn] = "The server didn't answer. Check your connection and try again.", [LangEs] = "El servidor no respondió. Comprueba tu conexión y vuelve a intentarlo." },
+        ["RmErrorBody"] = new() { [LangEn] = "The server didn't answer. Check your connection and try again.", [LangEs] = "El servidor no respondió. Revisa tu conexión y vuelve a intentarlo." },
         ["RmOfflineTitle"] = new() { [LangEn] = "No connection to the server", [LangEs] = "Sin conexión con el servidor" },
         ["RmOfflineBody"] = new() { [LangEn] = "Rooms, chat and quick match need the internet. You can keep playing against the AI from the Library.", [LangEs] = "Las salas, el chat y la partida rápida necesitan internet. Puedes seguir jugando contra la IA desde la Biblioteca." },
         ["RmRetry"] = new() { [LangEn] = "Retry", [LangEs] = "Reintentar" },

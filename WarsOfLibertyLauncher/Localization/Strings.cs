@@ -5685,7 +5685,7 @@ public static partial class Strings
         {
             [LangEn] = "Check that the link starts with {0} and that it opens in a browser "
                      + "you recognize. If not, copy it and paste it into yours.",
-            [LangEs] = "Comprueba que el enlace empieza por {0} y que se abre en un navegador "
+            [LangEs] = "Revisa que el enlace empieza por {0} y que se abre en un navegador "
                      + "que reconoces. Si no, c\u00f3pialo y p\u00e9galo en el tuyo.",
         },
         // The card's own caption, so the URL is labelled rather than floating loose.
@@ -7244,7 +7244,7 @@ public static partial class Strings
         ["MpCreateDialogNoFingerprint"] = new()
         {
             [LangEn] = "Couldn't compute the mod fingerprint. Check the copy in the mod's settings.",
-            [LangEs] = "No se pudo calcular la huella del mod. Comprueba la copia en Ajustes del mod.",
+            [LangEs] = "No se pudo calcular la huella del mod. Revisa la copia en Ajustes del mod.",
         },
         // KEPT FOR RECOGNITION ONLY - do not delete as unused. The proposed room title is a
         // network value now and no longer localized (see RoomTitleProposal), but titles this

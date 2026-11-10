@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services;
 using Xunit;
 
@@ -11,6 +12,7 @@ namespace WarsOfLibertyLauncher.Tests;
 /// estimate is pure math (clone bytes + a fixed allowance); the free-space probe
 /// must never throw and must return -1 (== "unknown, don't warn") on a bad path.
 /// </summary>
+[Collection("wpf-and-language")]
 public class DiskSpaceServiceTests
 {
     // ---------------- Check: two volumes at once ----------------
@@ -214,12 +216,24 @@ public class DiskSpaceServiceTests
     [Fact]
     public void FormatBytes_IsHumanReadable()
     {
-        // Unknown → "?". The GB rendering is culture-dependent on purpose (a
-        // Spanish user sees "10,0 GB"), so assert unit + magnitude, not the exact
-        // decimal separator.
+        // Unknown → "?". The decimal separator is the LAUNCHER's language, never Windows'.
         Assert.Equal("?", DiskSpaceService.FormatBytes(-1));
-        var gb = DiskSpaceService.FormatBytes(10 * DiskSpaceService.GiB);
-        Assert.Contains("GB", gb);
-        Assert.StartsWith("10", gb);
+        var previous = Strings.Language;
+        var windows = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            // A Windows whose separator is the comma, to prove it is not the one used.
+            System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("es");
+            Strings.Language = Strings.LangEn;
+            Assert.Equal("12.0 GB", DiskSpaceService.FormatBytes(12 * DiskSpaceService.GiB));
+            Strings.Language = Strings.LangEs;
+            Assert.Equal("12,0 GB", DiskSpaceService.FormatBytes(12 * DiskSpaceService.GiB));
+            Assert.Equal("165 MB", DiskSpaceService.FormatBytes(165L * 1024 * 1024));
+        }
+        finally
+        {
+            Strings.Language = previous;
+            System.Globalization.CultureInfo.CurrentCulture = windows;
+        }
     }
 }

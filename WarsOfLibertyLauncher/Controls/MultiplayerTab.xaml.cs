@@ -7359,7 +7359,7 @@ public partial class MultiplayerTab : UserControl
 
         var n = new TextBlock
         {
-            Text = count.ToString("N0"),
+            Text = count.ToString("N0", Strings.Culture),
             Margin = new Thickness(10, 0, 0, 0),
             Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
             FontSize = (double)Application.Current.FindResource("MpLabelSize"),
@@ -18068,12 +18068,14 @@ public partial class MultiplayerTab : UserControl
             _ => "MpTextMuted",
         });
 
+    /// <summary>The match's traffic, with the launcher's decimal separator, never Windows'.</summary>
     private static string FormatBytes(long bytes)
     {
+        var c = Strings.Culture;
         if (bytes < 1024) return $"{bytes} B";
-        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
-        if (bytes < 1024L * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
-        return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+        if (bytes < 1024 * 1024) return (bytes / 1024.0).ToString("F1", c) + " KB";
+        if (bytes < 1024L * 1024 * 1024) return (bytes / (1024.0 * 1024)).ToString("F1", c) + " MB";
+        return (bytes / (1024.0 * 1024 * 1024)).ToString("F2", c) + " GB";
     }
 
     /// <summary>

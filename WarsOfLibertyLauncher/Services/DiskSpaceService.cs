@@ -204,7 +204,11 @@ public static class DiskSpaceService
         }
     }
 
-    /// <summary>Human-readable size (GB/MB/…). Small, dependency-free.</summary>
+    /// <summary>
+    /// Human-readable size (GB/MB/…), with the decimal separator of the LAUNCHER's language
+    /// (<see cref="Localization.Strings.Culture"/>), never Windows': an English launcher on a
+    /// Spanish Windows printed "12,0 GB left on C:".
+    /// </summary>
     public static string FormatBytes(long bytes)
     {
         if (bytes < 0) return "?";
@@ -212,6 +216,9 @@ public static class DiskSpaceService
         double v = bytes;
         int u = 0;
         while (v >= 1024 && u < units.Length - 1) { v /= 1024; u++; }
-        return u >= 3 ? $"{v:0.0} {units[u]}" : $"{v:0} {units[u]}";
+        var culture = Localization.Strings.Culture;
+        return u >= 3
+            ? v.ToString("0.0", culture) + " " + units[u]
+            : v.ToString("0", culture) + " " + units[u];
     }
 }

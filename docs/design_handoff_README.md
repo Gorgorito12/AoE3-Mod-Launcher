@@ -636,6 +636,8 @@ Screen 97 (Inicio de sesión):
 - **A refused sign-in has its own text.** The prototype knows "no answer" and "expired", but a server
   that answers no is neither, so there is a third failure.
 - **The address breaks at `&`.** WPF has no break-anywhere.
+- **While the link is being prepared (97a) Copy is hidden, not shown disabled.** There is nothing
+  to copy yet, and only "Open browser" keeps its place with the reason in its tooltip.
 
 Screen 100 (Launcher en este PC):
 
@@ -648,11 +650,16 @@ Screen 101 (Generar parche):
 - **The button is enabled once both zips are set**, so the amber mark on a missing tag can be reached.
 - **A path field has no ellipsis:** a `TextBox` cannot trim and its text is what gets read back.
 - **Cancel also removes a patch of that run** that had already finished writing.
+- **While it generates, Cancel is the footer's button and Generate is hidden**, rather than a
+  Cancel inside the progress card beside a Generate that stays: one button in the footer, and the
+  click cancels the token either way.
 
 Screen 102 (Empaquetar traducción):
 
 - **"Faltan 3 cosas" is written with a digit**, and the mod picker is a `ComboBox` with a template.
 - **The preview shows no flag:** a pack declares a language, not a country.
+- **"Generate anyway" is the primary button relabelled**, not a second button inside the amber
+  box: the box says why, and the one button that generates is the one that confirms it.
 
 Screen 99 (Ver una partida):
 
@@ -784,7 +791,8 @@ because the server refuses a line-up without its captain; "you have version 1.1.
 drawn, since a tournament records a mod and no version; "played with you" appears only when the match
 history is already loaded, and nothing is fetched for it; the mod's colour is normalised as everywhere;
 a tournament whose places are full says you go on the waiting list, which the prototype has no state
-for; a mod with a cover shows it.
+for; a mod with a cover shows it. The facts' values are drawn at regular weight where the
+prototype asks for 500: Segoe UI has no 500, and WPF and Edge resolve the gap differently.
 
 **Screen 83 (Mis equipos)**, compared with `Mis equipos v2.dc.html` in 83a to 83m, the minimum size,
 solid glass and English; 83l, the toast, by rendering the card from a test. What differs, on purpose:
@@ -833,6 +841,15 @@ gone from the header (the guide opens from any badge and from the account menu);
 its month capsule where the prototype has a "see last month" link; the Matches view is unchanged.
 With no peak sent for anybody (93d) the table has three columns, so its ELO column starts further
 right than the prototype's four.
+
+**Closing the set (2026-11-10).** Every screen of this handoff was compared again at 1920 x 1080 in
+Spanish and English after the last one landed, to catch a later screen moving an earlier one
+through a shared piece; none had. Still outside the launcher: the organiser's chat in a bracket
+match (99d) waits for the server to admit him into a game under way, and the server changes the
+redesign needs (per-host Radmin addresses, `started_at`, `tournament_id`, `my_entries`, sent
+invitations, 32 and 64 places) are listed, with their order, in the backend's `DEPLOY.md`. Only two
+real accounts can prove the rematch, an entry that needs approval, a real bracket match, a team
+invitation and the per-host ping between two PCs.
 
 ## If you read them
 

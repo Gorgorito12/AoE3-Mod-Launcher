@@ -2113,7 +2113,7 @@ public partial class LauncherSettingsDialog : Window
 
         TextScaleResolvedText.Text = App.TextScaleDiagonalInches is double inches
             ? Strings.Format("DlgSettingsTextScaleResolved",
-                             inches.ToString("0.#"), screen.Width, screen.Height, percent)
+                             inches.ToString("0.#", Strings.Culture), screen.Width, screen.Height, percent)
             : Strings.Format("DlgSettingsTextScaleResolvedUnknown", percent);
     }
 
