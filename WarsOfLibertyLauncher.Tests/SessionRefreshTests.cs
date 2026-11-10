@@ -28,7 +28,7 @@ public class SessionRefreshTests
 
     /// <summary>A server that answers every request with <paramref name="answer"/> and records the
     /// request heads it was sent.</summary>
-    private static (string BaseUrl, Task Server, CancellationTokenSource Stop, ConcurrentQueue<string> Requests) Serve(
+    internal static (string BaseUrl, Task Server, CancellationTokenSource Stop, ConcurrentQueue<string> Requests) Serve(
         Func<string, (int Status, string Reason, string Body)> answer)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -67,7 +67,7 @@ public class SessionRefreshTests
         return ($"http://127.0.0.1:{port}", server, stop, requests);
     }
 
-    private static LauncherConfig SignedIn(string baseUrl, string token, long expiresAt)
+    internal static LauncherConfig SignedIn(string baseUrl, string token, long expiresAt)
     {
         var config = new LauncherConfig();
         config.Multiplayer.LobbyBaseUrl = baseUrl;
@@ -77,7 +77,7 @@ public class SessionRefreshTests
         return config;
     }
 
-    private static async Task Finish(CancellationTokenSource stop, Task server)
+    internal static async Task Finish(CancellationTokenSource stop, Task server)
     {
         stop.Cancel();
         try { await server; } catch { }

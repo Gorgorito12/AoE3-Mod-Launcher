@@ -534,7 +534,7 @@ public partial class MultiplayerTab
     private void RenderRoomRows(IReadOnlyList<LobbySummary>? all)
     {
         RoomsListPanel.Children.Clear();
-        _roomPingTexts.Clear();
+        _hostPingCells.Clear();
         // A list to draw means the problem message, if any, is over.
         RoomsErrorBox.Visibility = Visibility.Collapsed;
 

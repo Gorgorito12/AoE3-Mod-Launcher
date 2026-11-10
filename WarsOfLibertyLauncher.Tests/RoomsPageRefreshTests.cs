@@ -59,32 +59,33 @@ public class RoomsPageRefreshTests
     }
 
     /// <summary>
-    /// A ping cell is updated IN PLACE: the same TextBlock across every 3-s tick, with the text and
-    /// colour of the latest reading (design 86's bands). It was cleared and rebuilt for every room
-    /// on every tick.
+    /// The viewer's own ping is said ONCE, above the list, and updated in place: the same
+    /// TextBlock across every tick, with the text and colour of the latest reading. With no
+    /// reading it hides rather than showing a dash.
     /// </summary>
     [Fact]
-    public void APingCellKeepsItsTextBlockAcrossTicks()
+    public void MyPingIsUpdatedInPlaceAndHiddenWithoutAMeasure()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var fill = typeof(MultiplayerTab).GetMethod("FillRoomPing", BindingFlags.Static | BindingFlags.NonPublic)!;
-            var cell = new TextBlock();
+            DialogXamlTests.EnsureResources();
+            var text = new TextBlock();
 
-            fill.Invoke(null, new object?[] { cell, null });
-            Assert.Equal("—", cell.Text);
-            Assert.Same(System.Windows.Application.Current.FindResource("RmPingUnknown"), cell.Foreground);
+            MultiplayerTab.FillMyPing(text, null);
+            Assert.Equal(System.Windows.Visibility.Collapsed, text.Visibility);
 
-            fill.Invoke(null, new object?[] { cell, 42.0 });
-            Assert.Equal("42 ms", cell.Text);
-            Assert.Same(System.Windows.Application.Current.FindResource("RmPingGood"), cell.Foreground);
+            MultiplayerTab.FillMyPing(text, 42.0);
+            Assert.Equal(System.Windows.Visibility.Visible, text.Visibility);
+            Assert.Equal(WarsOfLibertyLauncher.Localization.Strings.Format("RmMyPing", 42), text.Text);
+            Assert.Same(System.Windows.Application.Current.FindResource("RmPingGood"), text.Foreground);
 
-            fill.Invoke(null, new object?[] { cell, 250.0 });
-            Assert.Equal("250 ms", cell.Text);
-            Assert.Same(System.Windows.Application.Current.FindResource("RmPingSlow"), cell.Foreground);
+            MultiplayerTab.FillMyPing(text, 250.0);
+            Assert.Equal(WarsOfLibertyLauncher.Localization.Strings.Format("RmMyPing", 250), text.Text);
+            Assert.Same(System.Windows.Application.Current.FindResource("RmPingSlow"), text.Foreground);
         });
         Assert.Null(error);
     }
+
 
     private static string Slice(string src, string start, string end)
     {

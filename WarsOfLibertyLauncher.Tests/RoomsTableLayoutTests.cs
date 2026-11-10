@@ -45,9 +45,29 @@ public class RoomsTableLayoutTests
         }
 
         // Mod and Status are no longer columns at all — the design handoff folds the mod
-        // into the room's second line and lets the action button carry the status — so
-        // the two that remain droppable are Ping then Host. (The rating is not a column:
-        // it lives inside the Host cell, so it drops with the name by construction.)
+        // into the room's second line and lets the action button carry the status — and Ping
+        // is gone too (the only ping is the viewer's own, said once above the list), so the one
+        // column that can be dropped is Host. (The rating is not a column: it lives inside the
+        // Host cell, so it drops with the name by construction.)
+        Assert.Equal(new[] { RoomColumn.Host }, order);
+    }
+
+    /// <summary>With a server that publishes the hosts' addresses the PING column joins, before the
+    /// action, and it is the first thing given up.</summary>
+    [Fact]
+    public void WithThePingColumn_PingGoesFirstThenHost()
+    {
+        Assert.Equal(new[] { RoomColumn.Room, RoomColumn.Host, RoomColumn.Players, RoomColumn.Ping, RoomColumn.Action },
+            RoomsTableLayout.Resolve(Wide, includePing: true).Select(c => c.Column));
+
+        var order = new System.Collections.Generic.List<RoomColumn>();
+        RoomColumn[] previous = RoomsTableLayout.Resolve(Wide, includePing: true).Select(c => c.Column).ToArray();
+        for (var width = Wide; width >= 200; width -= 10)
+        {
+            var now = RoomsTableLayout.Resolve(width, includePing: true).Select(c => c.Column).ToArray();
+            order.AddRange(previous.Except(now));
+            previous = now;
+        }
         Assert.Equal(new[] { RoomColumn.Ping, RoomColumn.Host }, order);
     }
 
@@ -106,9 +126,12 @@ public class RoomsTableLayoutTests
     [Fact]
     public void EveryColumnIsDeclaredExactlyOnce()
     {
-        var declared = RoomsTableLayout.All.Select(c => c.Column).ToList();
+        // WithPing is the full set: the base one minus PING, which only a server that publishes
+        // the hosts' addresses can fill.
+        var declared = RoomsTableLayout.WithPing.Select(c => c.Column).ToList();
 
         Assert.Equal(declared.Count, declared.Distinct().Count());
         Assert.Equal(System.Enum.GetValues<RoomColumn>().Length, declared.Count);
+        Assert.Equal(declared.Where(c => c != RoomColumn.Ping), RoomsTableLayout.All.Select(c => c.Column));
     }
 }

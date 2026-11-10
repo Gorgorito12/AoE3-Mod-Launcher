@@ -31,6 +31,9 @@ public partial class MultiplayerTab
     {
         _demoRooms = true;
         _demoRoomsScenario = RoomListDemoData.Parse(scenario);
+        // The sample carries a PING column (HostPingColumnShown), so the columns are re-resolved.
+        _roomColumnsApplied = false;
+        ApplyRoomColumns();
         _activeSubtab = Subtab.Rooms;
         UpdateSubtabHighlights();
         ShowSubtabView();
@@ -91,7 +94,6 @@ public partial class MultiplayerTab
     private void ShowRoomsProblem(bool offline)
     {
         RoomsListPanel.Children.Clear();
-        _roomPingTexts.Clear();
         RoomsEmptyState.Visibility = Visibility.Collapsed;
         SetVisibility(RoomsHeaderBand, false);
         RoomsErrorTitle.Text = Strings.Get(offline ? "RmOfflineTitle" : "RmErrorTitle");

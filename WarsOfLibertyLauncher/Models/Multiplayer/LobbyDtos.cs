@@ -291,6 +291,16 @@ public class LobbyListResponse
     public List<LobbySummary> Lobbies { get; set; } = new();
 }
 
+/// <summary>
+/// GET /lobbies/radmin: the Radmin address of each public room's host, keyed by lobby id, for the
+/// rooms list's per-host ping. Signed-in callers only; private and tournament rooms are never in it.
+/// </summary>
+public class HostRadminResponse
+{
+    [JsonPropertyName("hosts")]
+    public Dictionary<string, string> Hosts { get; set; } = new();
+}
+
 /// <summary>One member in a lobby's roster (from GET /lobbies/:id), used by the
 /// "see who's in a room without joining" peek.</summary>
 public class LobbyMember

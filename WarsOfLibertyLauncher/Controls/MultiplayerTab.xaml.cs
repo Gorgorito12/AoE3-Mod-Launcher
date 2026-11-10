@@ -1505,7 +1505,7 @@ public partial class MultiplayerTab : UserControl
             if (!Services.Multiplayer.RoomsPageRefresh.ShouldTickCells(
                     onRooms: true, roomWindowOpen: _lobbyWindow != null, launcherActive: LauncherIsActive()))
                 return;
-            KickConnectionPing(); RefreshRoomPingTexts(); RefreshActivityAgeCells();
+            KickConnectionPing(); RefreshMyPing(); RefreshActivityAgeCells(); MaybeMeasureHostPings();
         });
         _roomsPingTimer.Start();
         KickConnectionPing();
@@ -11061,7 +11061,7 @@ public partial class MultiplayerTab : UserControl
         var available = RoomsHeaderStrip.ActualWidth;
         if (available <= 0) return;   // not laid out yet; the next SizeChanged will do it
 
-        var resolved = Services.RoomsTableLayout.Resolve(available);
+        var resolved = Services.RoomsTableLayout.Resolve(available, includePing: HostPingColumnShown);
         // _roomColumnsApplied FIRST: the set matching on the very first call is the normal
         // case (the field is seeded with the full set), and skipping then leaves the header
         // on its XAML placeholder for the whole session. See the field's own comment.
@@ -11096,6 +11096,9 @@ public partial class MultiplayerTab : UserControl
             var header = HeaderElementFor(dropped);
             if (header != null) header.Visibility = Visibility.Collapsed;
         }
+        // PING is not in the base set, so Hidden() never names it: it shows exactly when it is in.
+        if (!resolved.Any(c => c.Column == Services.RoomColumn.Ping))
+            ColHeaderPing.Visibility = Visibility.Collapsed;
 
         RerenderRoomsFromCache();
     }
@@ -12880,6 +12883,7 @@ public partial class MultiplayerTab : UserControl
     private void UpdateRoomsUpdatedLabel()
     {
         if (RoomsUpdatedText == null) return;
+        RefreshMyPing();
         // Design 86: one of four states, never a sort (the list is ordered by what you can do).
         var scenario = _demoRooms ? _demoRoomsScenario : (RoomListDemoData.Scenario?)null;
         if (_offlineMode || scenario == RoomListDemoData.Scenario.Offline)

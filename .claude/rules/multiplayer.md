@@ -720,8 +720,25 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   icon is gone (the list polls every 5 s). Below a 1000-px window the community block stays the bar
   unless the player opened it (`RoomsActivityLayout.Plan(windowTall:)`).
   The server now sends `started_at` with an in-game room ("En partida · 14 min"); without it the chip
-  says "En partida". The ping is still the viewer's own, the same on every row: there is no per-host
-  address to measure.
+  says "En partida".
+  (7) **PING is the ICMP round trip to each HOST over Radmin, and the column exists only when the
+  server publishes the hosts' addresses** (`Controls/MultiplayerTab.HostPing.cs`, the rule in
+  `Services/Multiplayer/HostPing`). It used to show the viewer's own latency to 1.1.1.1 on every
+  row, which beside a room read as the host's; that figure is now said ONCE above the list ("Tu
+  conexión · 18 ms", `RoomsMyPingText`, hidden while unmeasured). The addresses come from
+  `GET /lobbies/radmin` (backend `src/lobbies/hostRadmin.ts`): signed-in callers only — the
+  `/lobbies` body is one anonymous memo — public rooms only (never a password or tournament room),
+  and the LIVE room's host, never the row's. A server without the route answers 404 (an old server
+  reads it as the room called "radmin"), `GetHostRadminIpsAsync` returns null and **the list stays
+  exactly as without the feature: no column** (`RoomsTableLayout.Resolve(width, includePing)`;
+  `THE_ONE_THAT_MATTERS_NoPingColumnWithoutTheServer`). Measured every 10 s on the rooms tick's own
+  gate, at most 20 hosts, 1 s timeout, off the UI thread. **A number is never invented**: my own room
+  is empty; no Radmin here, a room whose host is not published, a host with no address, and two
+  probes in a row without an answer each show "—" with a tooltip saying which. Windows and Radmin
+  often block the echo while the game works fine (`PeerNetHealth`), so expect dashes; the log says
+  once a minute `Host ping: N of M probes answered`, and that number decides whether the column
+  stays. Verified live against a local server: an answering host, a silent one, a password room and
+  a host without Radmin.
 
 - **A LANGUAGE CHANGE REPAINTS ALL FOUR SUBTABS, AND THE RENDER MUST BE SEPARABLE FROM THE
   FETCH.** `ApplyStrings` assigns the fixed labels and then calls `RefreshActiveSubtabStrings`,

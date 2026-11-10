@@ -1017,14 +1017,27 @@
                                                    FontWeight="SemiBold"/>
                                     </Border>
                                 </StackPanel>
-                                <TextBlock x:Name="RoomsUpdatedText"
-                                           Grid.Column="1"
-                                           Margin="10,0,10,0"
-                                           HorizontalAlignment="Right"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource MpTextMuted}"
-                                           FontSize="{DynamicResource MpLabelSize}"/>
+                                <!-- "Updated..." trims in the star column; the viewer's own ping sits
+                                     after it, once for the whole list (the rows carry none: there
+                                     is no per-host figure). -->
+                                <Grid Grid.Column="1" Margin="10,0,10,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="RoomsUpdatedText"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource MpTextMuted}"
+                                               FontSize="{DynamicResource MpLabelSize}"/>
+                                    <TextBlock x:Name="RoomsMyPingText"
+                                               Grid.Column="1"
+                                               Margin="12,0,0,0"
+                                               Visibility="Collapsed"
+                                               VerticalAlignment="Center"
+                                               FontSize="{DynamicResource MpLabelSize}"/>
+                                </Grid>
                             </Grid>
 
                             <!-- Column headers for the room list. The header and the rows
@@ -1073,7 +1086,6 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="202"/>
                                     <ColumnDefinition Width="86"/>
-                                    <ColumnDefinition Width="76"/>
                                     <ColumnDefinition Width="148"/>
                                 </Grid.ColumnDefinitions>
                                 <!-- Design 86: plain headings, 11 bold, no sorting. The list is
@@ -1091,10 +1103,12 @@
                                 <TextBlock Grid.Column="2" x:Name="ColHeaderPlayers" Margin="12,0,0,0"
                                            Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="3" x:Name="ColHeaderPing" Margin="12,0,0,0"
+                                <!-- PING: only with a server that publishes the hosts' Radmin
+                                     addresses; ApplyRoomColumns places it and shows it then. -->
+                                <TextBlock Grid.Column="2" x:Name="ColHeaderPing" Margin="12,0,0,0" Visibility="Collapsed"
                                            Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="4" x:Name="ColHeaderAction"/>
+                                <TextBlock Grid.Column="3" x:Name="ColHeaderAction"/>
                             </Grid>
                             </Border>
 

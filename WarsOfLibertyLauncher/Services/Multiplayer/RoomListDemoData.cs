@@ -55,8 +55,22 @@ internal static class RoomListDemoData
     /// <summary>The sample copy's fingerprint, and the one every room but the odd one carries.</summary>
     internal const string MyHash = "DEMO-SAME-VERSION";
 
-    /// <summary>The sample's own internet ping: one number for every row, as in the real list.</summary>
+    /// <summary>The sample's own internet ping, said once above the list.</summary>
     internal const double PingMs = 62;
+
+    /// <summary>
+    /// The sample's ping to each host over Radmin, so every state of the PING cell can be seen
+    /// without a server: a figure, slow, no answer (-1) and a host not on Radmin (null).
+    /// </summary>
+    internal static int? HostPingMs(string lobbyId) => lobbyId switch
+    {
+        "DEMO86K1" => 38,
+        "DEMO86N2" => 162,
+        "DEMO86R1" => 51,
+        OtherVersionId => -1,
+        "DEMO86X2" => 96,
+        _ => null,
+    };
 
     internal const string Wol = "wol";
     internal const string HundredDays = "hundred-days";

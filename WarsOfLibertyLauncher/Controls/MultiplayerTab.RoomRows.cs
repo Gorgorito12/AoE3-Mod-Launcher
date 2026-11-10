@@ -16,7 +16,8 @@ namespace WarsOfLibertyLauncher.Controls;
 
 /// <summary>
 /// One row of the rooms list, as design 86 draws it: the mod's icon, the room's name over its
-/// chips, the host over his rating, the players, the ping and ONE action. What the action is and
+/// chips, the host over his rating, the players, the ping to the host (when the server publishes
+/// it) and ONE action. What the action is and
 /// which heading the row sits under come from <see cref="RoomActionRule"/>, so they cannot
 /// disagree.
 /// </summary>
@@ -251,12 +252,9 @@ public partial class MultiplayerTab
         players.MouseLeftButtonUp += PlayersPeek_Click;
         PlaceRoomCell(grid, RoomColumn.Players, players, gap: true);
 
-        // === PING: mine, the same on every row (no per-host address), updated in place ===
-        var ping = new TextBlock { FontFamily = MonoFont, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center, ToolTip = Strings.Get("MpRoomPingTooltip") };
-        ping.SetResourceReference(TextBlock.FontSizeProperty, "RmButtonSize");
-        FillRoomPing(ping, CurrentRoomPing());
-        _roomPingTexts.Add(ping);
-        PlaceRoomCell(grid, RoomColumn.Ping, ping, gap: true);
+        // === PING: to this host over Radmin, only when the server publishes hosts' addresses ===
+        if (HostPingColumnShown)
+            PlaceRoomCell(grid, RoomColumn.Ping, BuildHostPingCell(lobby), gap: true);
 
         // === ACTION ===
         var actionCell = BuildRoomAction(lobby, action, out var fire);
@@ -511,28 +509,33 @@ public partial class MultiplayerTab
         PlaceRoomCell(grid, RoomColumn.Room, room);
         PlaceRoomCell(grid, RoomColumn.Host, Bar(90, 12, 0x12), gap: true);
         PlaceRoomCell(grid, RoomColumn.Players, Bar(30, 12, 0x12), gap: true);
-        PlaceRoomCell(grid, RoomColumn.Ping, Bar(40, 12, 0x12), gap: true);
+        if (HostPingColumnShown) PlaceRoomCell(grid, RoomColumn.Ping, Bar(40, 12, 0x12), gap: true);
         row.Child = grid;
         return row;
     }
 
-    // ---- Ping, updated in place on the rooms timer ----
-
-    /// <summary>The ping texts of the rows on screen, refreshed without rebuilding a row.</summary>
-    private readonly List<TextBlock> _roomPingTexts = new();
+    // ---- The viewer's own ping, once, above the list ----
+    //
+    // There is no per-host figure to put in a row: the lobby server does not publish a host's
+    // Radmin address. What the launcher measures is the viewer's internet latency, the same for
+    // every room, and beside a room it read as the host's. So it is said once, as what it is.
 
     private double? CurrentRoomPing() => _demoRooms ? RoomListDemoData.PingMs : _connectionPingMs >= 0 ? _connectionPingMs : null;
 
-    private static void FillRoomPing(TextBlock tb, double? ms)
+    /// <summary>"Your connection · 18 ms", or nothing at all while there is no measure.</summary>
+    internal static void FillMyPing(TextBlock tb, double? ms)
     {
         int? v = ms is double d ? (int)Math.Round(d) : null;
-        tb.Text = v is int n ? $"{n} ms" : "—";
+        tb.Visibility = v.HasValue ? Visibility.Visible : Visibility.Collapsed;
+        if (v is not int n) return;
+        tb.Text = Strings.Format("RmMyPing", n);
         tb.Foreground = Rm(RoomActionRule.PingBrushKey(v));
     }
 
-    private void RefreshRoomPingTexts()
+    private void RefreshMyPing()
     {
-        var p = CurrentRoomPing();
-        foreach (var tb in _roomPingTexts) FillRoomPing(tb, p);
+        if (RoomsMyPingText == null) return;
+        FillMyPing(RoomsMyPingText, _offlineMode ? null : CurrentRoomPing());
+        RoomsMyPingText.ToolTip = Strings.Get("MpRoomPingTooltip");
     }
 }

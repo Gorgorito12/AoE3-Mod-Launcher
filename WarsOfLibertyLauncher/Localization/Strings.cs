@@ -6015,8 +6015,8 @@ public static partial class Strings
         ["MpRoomBadgeHost"] = new() { [LangEn] = "Host", [LangEs] = "Anfitrión" },
         ["MpRoomPingTooltip"] = new()
         {
-            [LangEn] = "Your internet latency — the same for every room. A per-host ping isn't available.",
-            [LangEs] = "Tu latencia de internet — igual para todas las salas. El ping por host no está disponible.",
+            [LangEn] = "Your internet latency, not the host's. How a match plays depends on Radmin and on the host's connection, which the launcher can't measure from the list.",
+            [LangEs] = "Tu latencia a Internet, no la del anfitrión. Cómo va una partida depende de Radmin y de la conexión del anfitrión, que el launcher no puede medir desde la lista.",
         },
 
         // -------- Lobby match-phase overlays (LobbyWindow.xaml) --------

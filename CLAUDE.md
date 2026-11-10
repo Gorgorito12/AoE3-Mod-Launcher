@@ -608,7 +608,8 @@ rather than the reverse.
   (the rooms table with its sort arrows and capacity bars, the rank badge in the host cell, design 66's
   green/blue/amber action buttons, the refresh icon, the "Find a 1v1 match" button in the list header,
   the 58/54-px rows). One row per room (`Controls/MultiplayerTab.RoomRows.cs`): icon, name over chips,
-  host over "1630 ELO" or "En posicionamiento 3/10", players, ping, and ONE action decided by the pure
+  host over "1630 ELO" or "En posicionamiento 3/10", players, the ping to the host over Radmin (only
+  with a server that publishes hosts' addresses), and ONE action decided by the pure
   `Services/Multiplayer/RoomActionRule`, which also groups the list under PUEDES ENTRAR / EN PARTIDA /
   NO DISPONIBLES AHORA. The quick match is a card above the list (`MultiplayerTab.QuickCard.cs` over
   `Services/Multiplayer/QuickCardView`). The rules are in `.claude/rules/multiplayer.md` (ROOMS PAGE).

@@ -808,9 +808,10 @@ normalised like everywhere else; the cover is blurred once, never live; 32 and 6
 server to raise its limit. Under reduced effects the champion has no glow.
 
 **Screen 86 (Salas)**, compared with `Salas v2.dc.html` in 86a (1920) and 86b to 86e (1366), then
-English, 2560 and the Solid and Maximum glass. What differs, on purpose: the ping is the viewer's own,
-the same on every row, because there is no per-host address (the prototype draws a different ping per
-room); "Entrar a mirar" appears only in developer mode, so without it the observers' room reads
+English, 2560 and the Solid and Maximum glass. What differs, on purpose: the PING column is the
+ping to each host over Radmin and appears only when the server publishes the hosts' addresses
+(`GET /lobbies/radmin`); a host that does not answer shows "—" with the reason, and the viewer's own
+internet ping is said once above the list ("Tu conexión · 62 ms"); "Entrar a mirar" appears only in developer mode, so without it the observers' room reads
 "Llena"; "Ver partida" opens the players peek rather than a "watching a match" screen; the "no ranked
 ladder" state of the quick match card appears only after the first search for that mod, because only
 the server knows it, at create time;
