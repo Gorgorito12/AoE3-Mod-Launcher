@@ -202,6 +202,16 @@ internal sealed class TournamentSimulator
         {
             MaxCapacity = MaxCapacity,
             Tournaments = _store.Where(t => t.Status != "draft").Select(Summary).ToList(),
+            MyEntries = _store.Where(t => TournamentPermissions.MyEntrant(t, viewer) != null).Select(t => new MyTournamentEntry
+            {
+                TournamentId = t.Id,
+                Alert = (t.Matches ?? new()).Select(m => MatchCards.For(m, viewer, t.Entrants)).Aggregate((string?)null, (alert, state) => state switch
+                {
+                    MatchCardState.Playable or MatchCardState.ReturnToRoom => "play",
+                    MatchCardState.JoinRoom => "join",
+                    _ => alert,
+                }),
+            }).ToList(),
             Drafts = _store
                 .Where(t => t.Status == "draft"
                             && string.Equals(t.OwnerUserId, viewer, StringComparison.Ordinal))

@@ -30,8 +30,9 @@ public class RankingBadgesLayoutTests
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = RenderedRanking();
-            var header = (Grid)((Border)tab.RankingHeaderHost.Children[0]).Child;
+            var header = (Grid)tab.RankingHeaderHost.Children[0];
             var rows = RowGrids(tab.RankingBody).ToList();
+            // Twelve ranked less the three on the podium, and the three being placed.
             Assert.True(rows.Count >= 12);
 
             var headerX = header.TranslatePoint(new Point(0, 0), tab.RankingHeaderHost).X;
@@ -55,11 +56,12 @@ public class RankingBadgesLayoutTests
     }
 
     /// <summary>
-    /// 55a: the placement rows come AFTER every ranked row, in the same table, with no badge and no
-    /// place — and the ranked ones in the server's order.
+    /// Design 93: the table starts at the fourth place (the first three are the podium), in the
+    /// server's order; the placement rows come AFTER every ranked row, in the same table, each with
+    /// the Discovery badge and no place.
     /// </summary>
     [Fact]
-    public void PlacementRowsFollowTheRankedOnes_WithNoBadge()
+    public void PlacementRowsFollowTheRankedOnes_WithTheDiscoveryBadge()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -69,10 +71,10 @@ public class RankingBadgesLayoutTests
             var firstPlacing = tags.FindIndex(t => t is Models.Multiplayer.PlacementRow);
             Assert.True(lastRanked >= 0 && firstPlacing > lastRanked);
             Assert.Equal(
-                StatsDemoData.Community().Leaderboard.Select(r => r.Rank),
+                StatsDemoData.Community().Leaderboard.Skip(RankingGroups.PodiumPlaces).Select(r => r.Rank),
                 tags.OfType<Models.Multiplayer.LeaderboardRow>().Select(r => r.Rank));
             foreach (var b in tab.RankingBody.Children.OfType<Border>().Where(b => b.Tag is Models.Multiplayer.PlacementRow))
-                Assert.Null(BadgeOf((Grid)b.Child));
+                Assert.Equal(RankAge.Discovery, BadgeOf((Grid)b.Child)!.Tag);
         });
         Assert.Null(error);
     }
@@ -89,9 +91,12 @@ public class RankingBadgesLayoutTests
             var tab = RenderedRanking();
             var rows = tab.RankingBody.Children.OfType<Border>()
                 .Where(b => b.Tag is Models.Multiplayer.LeaderboardRow).ToList();
+            var ladder = StatsDemoData.Community().Leaderboard.Count;
+            Assert.Equal(ladder - RankingGroups.PodiumPlaces, rows.Count);
             for (var i = 0; i < rows.Count; i++)
             {
-                Assert.Equal(RankAges.For(i + 1, rows.Count), (RankAge)BadgeOf((Grid)rows[i].Child)!.Tag);
+                var place = ((Models.Multiplayer.LeaderboardRow)rows[i].Tag).Rank;
+                Assert.Equal(RankAges.For(place, ladder), (RankAge)BadgeOf((Grid)rows[i].Child)!.Tag);
                 Assert.DoesNotContain(Walk(rows[i]).OfType<FrameworkElement>(), e => Equals(e.Tag, "RankBanner"));
             }
         });

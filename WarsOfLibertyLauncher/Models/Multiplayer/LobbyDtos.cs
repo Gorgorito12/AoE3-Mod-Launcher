@@ -250,6 +250,11 @@ public class LobbySummary
     [JsonPropertyName("created_at")]
     public string CreatedAt { get; set; } = "";
 
+    /// <summary>When the match under way began, sent only while the room is in game. Null from
+    /// an older server, and the row then says "In game" without a time.</summary>
+    [JsonPropertyName("started_at")]
+    public string? StartedAt { get; set; }
+
     [JsonPropertyName("host")]
     public LobbyHost Host { get; set; } = new();
 
@@ -284,6 +289,16 @@ public class LobbyListResponse
 {
     [JsonPropertyName("lobbies")]
     public List<LobbySummary> Lobbies { get; set; } = new();
+}
+
+/// <summary>
+/// GET /lobbies/radmin: the Radmin address of each public room's host, keyed by lobby id, for the
+/// rooms list's per-host ping. Signed-in callers only; private and tournament rooms are never in it.
+/// </summary>
+public class HostRadminResponse
+{
+    [JsonPropertyName("hosts")]
+    public Dictionary<string, string> Hosts { get; set; } = new();
 }
 
 /// <summary>One member in a lobby's roster (from GET /lobbies/:id), used by the
@@ -2171,8 +2186,24 @@ public class TournamentSummary
 /// <summary>Answer to <c>GET /tournaments</c>. <c>Drafts</c> holds the caller's own
 /// unopened tournaments, which the public list deliberately hides — without them the
 /// person who just created one could not find it again.</summary>
+/// <summary>A tournament the signed-in player has an entry in, and what it wants from them.</summary>
+public class MyTournamentEntry
+{
+    [JsonPropertyName("tournament_id")]
+    public string TournamentId { get; set; } = "";
+
+    /// <summary>"play" (your match is ready), "join" (your rival opened the room), or null.</summary>
+    [JsonPropertyName("alert")]
+    public string? Alert { get; set; }
+}
+
 public class TournamentListResponse
 {
+    /// <summary>Null against a server that predates it: the list then knows only the tournament on
+    /// screen, and puts the rest under Other tournaments.</summary>
+    [JsonPropertyName("my_entries")]
+    public List<MyTournamentEntry>? MyEntries { get; set; }
+
     /// <summary>The most entrants this server takes. Null against one that predates 32 and 64.</summary>
     [JsonPropertyName("max_capacity")]
     public int? MaxCapacity { get; set; }

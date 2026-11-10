@@ -108,7 +108,7 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   dark at the exact instant the user was about to click it. Proven from screenshot pixels:
   same button, `#2F7FE0` with the pointer away and `#16263E` with it over. Hover now lives
   in each Style's own triggers, on the BUTTON's `Background`; the primary uses
-  `MpBlueHover` / `MpBluePressed`, the same pair `MpRoomActionPrimary` and `MpPrimaryButton`
+  `MpBlueHover` / `MpBluePressed`, the same pair `MpPrimaryButton`
   already use for an `MpAction` fill. Pinned by
   `DialogXamlTests.CreateButton_DoesNotInheritTheGhostButtonsHover`.
 - **While a control is BUSY, say it with the WORD, not with opacity — and give the
@@ -645,25 +645,142 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   is told (`NtCapacityChanged*`). The format starts on 16 places in 1v1 and 8 in teams, and changing
   format goes back to that.
 
-- **THE ORGANISER'S ACTIONS ON A PERSON LIVE IN THE ROW'S `\u22ef` MENU, and that is a layout
-  invariant, not a preference.** Disqualifying an entrant and making one a co-organiser are the two
-  longest captions in the entrant table and the two that act on somebody else, so they sit behind a
-  deliberate second click. **What forced it:** the table's action column was a fixed 190 px holding
-  a horizontal `StackPanel`, which measures its children at INFINITE width; the strip's own
-  `DesiredSize` is then clamped back to 190, so the `Grid` is told it fits. Measured in Spanish with
-  all four actions it was **396 px** - and because the strip is right-aligned, it was arranged at
-  its real width BACKWARDS from the column's right edge, painting across the status and over the
-  name. Not a clipped button: a row drawing on top of itself.
-  The column is `Auto` now, so the deficit goes to the star column, which is the only one that can
-  give (the name is the one thing in the row with `TextTrimming`).
-  \u26a0 **Two independent `if`s is how this happened.** Accept/Reject are an `if`/`else if` chain,
-  and disqualify and appoint were each added as their own `if` on top - so the worst case went from
-  two buttons to four without anybody deciding it should.
-  `THE_ONE_THAT_MATTERS_AnEntrantRowStaysInsideItsCard` pins it, in **Spanish** (in English the row
-  fits and the test passes over a broken layout) and by ARRANGED positions rather than a measure,
-  because `DesiredSize` is clamped to the constraint and an overflow reports itself as a fit. It
-  also asserts the two actions are still REACHABLE, because the cheap way to pass a width test is
-  to delete the buttons.
+- **THE TOURNAMENTS PAGE IS DESIGN 80 (`Controls/MultiplayerTab.TournamentsPage.cs`, the pure rules in
+  `Services/Multiplayer/TournamentPage.cs`).** A list that folds to 72 px (groups PLAYING · ORGANISING
+  · OTHER, four filters), and a page with the mod's cover behind it (`MainWindow.TournamentBackdrop.cs`,
+  its own layer, never the Library's), five steps, one card saying what is yours to do with ONE primary
+  (`TournamentPage.Call`), and three tabs built together and toggled by visibility: Bracket,
+  Participants, Organise. Four rules carry weight:
+  (1) **The bracket is arithmetic, never a measure** (`TournamentPage.Sheet`): a card sits midway
+  between the two that feed it, so a 64 draw is 63 placements and the zoom (60-100 %) is one
+  `ScaleTransform` — `ZoomingRebuildsNoCard` and the 64-draw tests pin that it rebuilds nothing. The
+  column heads follow the zoom but their type does not, so at 60 % the count keeps its number alone
+  and trims short of the next head.
+  (2) **Going back to the tab rebuilds nothing when nothing changed** (`RenderTournamentsTab(onlyIfChanged)`,
+  keyed on the list and the detail serialized, the language, the viewer and the invitations). It
+  used to rebuild the whole bracket on every return: tab switches cost up to 100 ms and the frame
+  p95 of the `switches` scenario doubled (16 -> 31 ms); with the key, 5-10 ms. What the viewer
+  changes on the page itself — filter, tab, zoom, search — repaints its own part directly.
+  (3) **"Your turn" in the LIST needs `my_entries`** (`GET /tournaments`, signed-in callers only,
+  `alert` = `play` | `join`, from `store.listMyEntries`). The list itself is one anonymous memo
+  shared by everybody, so per-viewer state cannot live in it. A server without the field files every
+  tournament but the open one under OTHER (`WithoutMyEntriesOnlyTheOpenOneIsKnown`).
+  (4) **What an organiser does TO somebody is a deliberate extra click**: Disqualify sits in the
+  tile's `⋯` menu and asks first; a request's answer is Accept/Reject on the tile itself; the
+  co-organiser is added from Organise, picked among the captains already in. Cancelling the
+  tournament asks first (`CancellingATournamentAsksFirst`) — the rewrite had lost that confirmation
+  and only the dead-strings sweep found it. A tile never overflows its card, in Spanish, by arranged
+  positions (`THE_ONE_THAT_MATTERS_AnEntrantTileStaysInsideItsCard`).
+  Seeing it: `--demo-tournaments=big32` is a 32-place draw with a mod cover (the only sample with a
+  `ModId`); the other samples as before. Buttons whose content is a panel carry an AutomationId
+  (`TournamentFilter:*`, `TournamentTab:*`, `TournamentRound:*`, `TournamentZoomIn/Out`), which is
+  also how the testbed presses them.
+
+- **THE ROOMS PAGE IS DESIGN 86 (`Controls/MultiplayerTab.RoomRows.cs`, `.QuickCard.cs`,
+  `.RoomsDemo.cs`; the pure rules in `Services/Multiplayer/RoomActionRule`, `QuickCardView`,
+  `RoomListDemoData`). This SUPERSEDES the paragraphs further down about the rooms table's sort arrows,
+  capacity bars, design 66's coloured action buttons, the host cell's rank badge and the room sub-line.**
+  Six rules carry weight:
+  (1) **One decision per row, `RoomActionRule.Decide`**: mine → Ver sala (the one solid button),
+  started → Ver partida, full → "Llena" as TEXT (no disabled button), mod missing → Instalar mod (the
+  Library on that mod), other version → Revisar mi copia (the mod's settings on Local files), a
+  watching seat → Entrar a mirar (developer mode only, `RoomFormats.OfferFor`), else Unirse. The SAME
+  action decides the heading (`Rank`/`GroupOf`), so a button and its group cannot disagree; inside a
+  group the server's order stands (the sort is stable). The column sort is gone.
+  (2) **"Ver partida" opens the players peek** (the maintainer's call); the "watching a match" screen is
+  later work.
+  (3) **"Other version" never claims a mismatch it has not measured.** My copy's fingerprint is read
+  ONCE per mod and install path (`KnownModHash`, off the UI thread through `_computeModFingerprint`),
+  never per row, and the list repaints when it lands; an unknown hash, or a room without
+  `mod_combined_hash`, is "same version".
+  (4) **No badge in the row and no capacity bars** (the maintainer chose the prototype): the host's
+  name over his rating on the ROOM's ladder (team for a ranked 2v2/3v3). A host still being placed
+  shows "En posicionamiento 3/10" and never a number, even if an older server sends one
+  (`HiddenPlacementTag`, pinned by `PlacementPrivacyTests`).
+  (5) **The quick match card** replaces the "Find a 1v1 match" button: states Ready (who waits, nobody,
+  another version, unknown), Looking, Waiting (clock), Found, Outdated, NoMod, NotRanked, InOtherRoom;
+  hidden offline and signed out, and repainted by every session pass (entering or leaving a room
+  changes it). **NotRanked is learned, not known:** the server says a mod has no ladder only by making
+  the search's room casual, so the first search costs one room opened and closed (and the notice), and
+  the mod is then remembered for the session (`_qmUnrankedMods`) and the card says so before the next
+  click. **Found survives the search ending**: `RememberQuickMatchFound` keeps the room and the rival,
+  or the card read "you are in another room" the moment the rival arrived (found live). Its spinner and
+  pulse are clocks stopped through their controller, paused while hidden or minimised, and built still
+  under reduced effects — the SETTING too, not only the governor (`RankBadge.SetUserReducedEffects`).
+  Compact (one line, 40-px icon) below a 900-px window.
+  (5b) **Observer seats are inside `max_players`, as on the server (`playingSeatsOf`).**
+  `RoomPlayingSeats()` subtracts them; it used not to, so a room of four with two watching seats showed
+  "2 / 4", a free seat nobody could play in and "4 players · 2 observers", and auto-start waited for the
+  observer's ready. An observer's footer has nothing to press (`RoomFacts.Watching`) — the server starts
+  on the players alone and ignores his ready — except a watching HOST, who keeps Start, because the
+  server hands the room on by join order and only the host may start. Found live, against a local
+  server; pinned by `RoomFooterStatesTests`.
+  (6) **States**: four skeleton rows in the row's shape while loading; a failed load and no connection
+  are ONE centred message with Retry (`ShowRoomsProblem`), which the next list takes down; the refresh
+  icon is gone (the list polls every 5 s). Below a 1000-px window the community block stays the bar
+  unless the player opened it (`RoomsActivityLayout.Plan(windowTall:)`).
+  The server now sends `started_at` with an in-game room ("En partida · 14 min"); without it the chip
+  says "En partida".
+  (7) **PING is the ICMP round trip to each HOST over Radmin, and the column exists only when the
+  server publishes the hosts' addresses** (`Controls/MultiplayerTab.HostPing.cs`, the rule in
+  `Services/Multiplayer/HostPing`). It used to show the viewer's own latency to 1.1.1.1 on every
+  row, which beside a room read as the host's; that figure is now said ONCE above the list ("Tu
+  conexión · 18 ms", `RoomsMyPingText`, hidden while unmeasured). The addresses come from
+  `GET /lobbies/radmin` (backend `src/lobbies/hostRadmin.ts`): signed-in callers only — the
+  `/lobbies` body is one anonymous memo — public rooms only (never a password or tournament room),
+  and the LIVE room's host, never the row's. A server without the route answers 404 (an old server
+  reads it as the room called "radmin"), `GetHostRadminIpsAsync` returns null and **the list stays
+  exactly as without the feature: no column** (`RoomsTableLayout.Resolve(width, includePing)`;
+  `THE_ONE_THAT_MATTERS_NoPingColumnWithoutTheServer`). Measured every 10 s on the rooms tick's own
+  gate, at most 20 hosts, 1 s timeout, off the UI thread. **A number is never invented**: my own room
+  is empty; no Radmin here, a room whose host is not published, a host with no address, and two
+  probes in a row without an answer each show "—" with a tooltip saying which. Windows and Radmin
+  often block the echo while the game works fine (`PeerNetHealth`), so expect dashes; the log says
+  once a minute `Host ping: N of M probes answered`, and that number decides whether the column
+  stays. Verified live against a local server: an answering host, a silent one, a password room and
+  a host without Radmin.
+
+- **THE RANKING PAGE IS DESIGN 93 (`Controls/MultiplayerTab.Ranking.cs`, `.RankingPodium.cs`,
+  `.RankingHighlights.cs`; the pure rules in `Services/Multiplayer/RankingView.cs`). This SUPERSEDES
+  the paragraphs further down about the pinned "YOU" row, the plain rows and the uppercase Highlights
+  cards.** Seven rules carry weight:
+  (1) **Nobody is renumbered or re-sorted.** The podium is the server's first three, drawn 2 · 1 · 3
+  (`RankingGroups.PodiumDrawOrder`; fewer than three stand in order), and the table is everybody from
+  the fourth on, grouped by `RankAges.For(row.Rank, ladderSize)` in the order they came. Every ranked
+  player is on the podium or in exactly one group (`THE_ONE_THAT_MATTERS_EveryoneIsOnThePodiumOrInOneGroup`).
+  A group's range is the age's places on the WHOLE ladder, so "INDUSTRIAL · places 3–4" stays true
+  with the third on the podium.
+  (2) **"Your position" invents nothing (`YourStandingView.For`).** On the page: the player above and
+  the one below with their ELO gaps, and "you need N", which is the gap PLUS ONE (level on ELO is not
+  ahead). Past the page the server sent: the place from his own standing and NO neighbours. Being
+  placed: the progress, and his own number only when the launcher has it. Neither on a list nor with
+  a standing: no card at all.
+  (3) **There is no pinned copy of the viewer's row.** "Your position" says where he is at every
+  scroll offset; `RankingPinnedRow` and its scroll handler are gone.
+  (4) **The headings are outside the ScrollViewer and the rows are plates** (8 px in, a 1-px rim, 12 px
+  of padding): `RankingTableLayout.SidePadding` is that sum, and `SyncRankingScrollGutter` takes the
+  bar's width off the headings. `THE_ONE_THAT_MATTERS_TheHeadingsUseTheRowsColumns` checks every
+  column of every row while the list scrolls.
+  (5) **Only the viewer's own row, podium card and "Your position" open a profile** (`OpenOwnProfileFromRanking`,
+  the sample profile while the preview owns the page). There is no page for another player, so their
+  rows are not clickable; a hand cursor there would promise something that does not happen.
+  (6) **Going back to the subtab draws nothing when nothing moved** (`RenderRankingIfChanged`, used by
+  the session pass only). The key holds the payload, the standing and the month's highlights by
+  REFERENCE (every answer is a new object, so a new answer always draws), the mode, the language, the
+  viewer, the sizes, the gap, the effects, the flag tables and the minute. Measured: a switch to the
+  subtab went from 27 ms to 63 ms with the new page and is ~3 ms with the key. Every caller that
+  changed something calls `RenderRanking()`. Highlights and Matches always draw, as before.
+  (7) **The sheen on the first podium card follows the badges' rule, not a copy of it.** It ran on
+  with the launcher behind another program (the log said `LAYOUT STORM … nobody watching`, one
+  `DoubleAnimationUsingKeyFrames` clock). `RankBadge.MayRunOn(host)` is the rule (foreground, on
+  screen, not minimised, effects on) and `RankBadge.RunConditionsChanged` is raised by every
+  `Reevaluate`; the quick-match card's marks use both too. With the effects reduced the podium is
+  drawn again without glow or sheen. Measured, the sheen adds no redraws: the animated badges alone
+  give the same figure.
+  The page gap (12 or 16) is applied in `ApplyRankingSplit`/`ApplyPodiumGap`, not only when drawing,
+  so a window crossing 1600 px gets it at once. Highlights (93f): a card per ~300 px
+  (`LeaderColumns`), the first row of each in soft gold, the viewer's own blue with a rim.
+  `--demo-elo=93a..93f` opens each block; 93e is the empty ladder.
 
 - **A LANGUAGE CHANGE REPAINTS ALL FOUR SUBTABS, AND THE RENDER MUST BE SEPARABLE FROM THE
   FETCH.** `ApplyStrings` assigns the fixed labels and then calls `RefreshActiveSubtabStrings`,
@@ -8162,7 +8279,7 @@ no longer computes seasons. This heading is kept so links to it still land somew
 
 ## QUICK MATCH (phase 0, docs/DISENO-PARTIDA-RAPIDA.md) — NO SERVER SUPPORT
 
-"Find a 1v1 match" (`QuickMatchButton`, in the rooms section header) joins a COMPETITIVE 1v1 room
+"Buscar partida 1v1" (the quick match card above the rooms list, design 86) joins a COMPETITIVE 1v1 room
 of the ACTIVE mod that is waiting for a rival, or opens one and waits. Phase 0 is the launcher
 alone: the public rooms list plus the same create / join everybody already uses. The flow is
 `Controls/MultiplayerTab.QuickMatch.cs`; every decision is the pure

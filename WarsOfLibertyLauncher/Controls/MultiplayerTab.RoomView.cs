@@ -90,6 +90,9 @@ public partial class MultiplayerTab
     /// <summary>Header, panels and footer, from the state as it is now.</summary>
     private void RefreshRoomView()
     {
+        // The quick match card in the list follows who is in the room (key-cached: a repaint
+        // with the same words rebuilds nothing).
+        RenderQuickCard();
         if (_lobbyWindow == null) return;
         RefreshRoomChrome();
         RefreshRoomHeader();
@@ -880,6 +883,7 @@ public partial class MultiplayerTab
             OffersFindAnother = result != null && OffersFindAnother(result) && !InTournamentRoom,
             UnratedReason = result != null ? UnratedSentence(result) : null,
             OnTeams = players.Count(m => m.Team is 1 or 2),
+            Watching = RoomViewerWatches(),
         };
         var view = RoomFooterState.Evaluate(WithTournamentFacts(facts, result));
         _roomFooter = view;

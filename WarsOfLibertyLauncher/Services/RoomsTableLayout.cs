@@ -63,18 +63,18 @@ public static class RoomsTableLayout
     /// </summary>
     public static readonly IReadOnlyList<RoomColumnSpec> All = new[]
     {
-        new RoomColumnSpec(RoomColumn.Room,    null, 210),
-        // 208 rather than the reference's 152 because this cell now carries the host's
-        // RATING as well as their name: 20+8 disc + 120 name + 6 + ~30 number + ~23 for the
-        // "ELO" beside it, which is what makes the number legible as a rating at all.
-        // The rating had a column of its own for one revision; it read as a number stranded
-        // ~100px from the name it belongs to, and comparing ratings BETWEEN rooms — the only
-        // thing a column buys — is not what this table is for. Even so this is 2px CHEAPER
-        // than that version, which cost 152 + 58.
-        new RoomColumnSpec(RoomColumn.Host,    208,  208),
-        new RoomColumnSpec(RoomColumn.Players,  88,   88),
-        new RoomColumnSpec(RoomColumn.Ping,     66,   66),
-        new RoomColumnSpec(RoomColumn.Action,   96,   96),
+        // Design 86: `36px minmax(0,1fr) minmax(130px,190px) 74px 64px 136px` with a 12-px gap.
+        // PING is NOT in this set: it is the ping to each host over Radmin, which only a server
+        // that publishes the hosts' addresses makes possible, so it is added by WithPing.
+        // The 36-px icon lives INSIDE the Room cell (with its gap, 48 px) because it has no
+        // heading; every fixed width below carries the 12-px gap that opens its column, which
+        // the row builder applies as a left margin. Room's comfort is the icon plus a name.
+        new RoomColumnSpec(RoomColumn.Room,    null, 230),
+        // The host's NAME over his rating: the reference's 190 + its gap.
+        new RoomColumnSpec(RoomColumn.Host,    202,  202),
+        new RoomColumnSpec(RoomColumn.Players,  86,   86),
+        // Wide enough for "Revisar mi copia" / "Entrar a mirar" at 12.5 semibold.
+        new RoomColumnSpec(RoomColumn.Action,  148,  148),
     };
 
     /// <summary>
@@ -96,13 +96,24 @@ public static class RoomsTableLayout
     };
 
     /// <summary>
+    /// <see cref="All"/> with the PING column before the action: the ping to each host over
+    /// Radmin. Only offered when the server publishes the hosts' addresses
+    /// (<c>GET /lobbies/radmin</c>); without that there is no per-room figure to show.
+    /// </summary>
+    public static readonly IReadOnlyList<RoomColumnSpec> WithPing = All
+        .Take(All.Count - 1)
+        .Append(new RoomColumnSpec(RoomColumn.Ping, 76, 76))
+        .Append(All[All.Count - 1])
+        .ToArray();
+
+    /// <summary>
     /// The columns worth showing in <paramref name="availableWidth"/> logical pixels, in display
     /// order. Never returns fewer than Room + Players + Action: past that point the table is as
     /// small as it is allowed to get, and the cells trim instead.
     /// </summary>
-    public static IReadOnlyList<RoomColumnSpec> Resolve(double availableWidth)
+    public static IReadOnlyList<RoomColumnSpec> Resolve(double availableWidth, bool includePing = false)
     {
-        var kept = All.ToList();
+        var kept = (includePing ? WithPing : All).ToList();
 
         foreach (var candidate in DropOrder)
         {

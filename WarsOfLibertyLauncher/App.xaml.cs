@@ -401,10 +401,22 @@ public partial class App : System.Windows.Application
         // somebody else has already joined.
         foreach (var a in e.Args)
         {
-            if (!a.StartsWith("--demo-room", StringComparison.OrdinalIgnoreCase)) continue;
+            // Exactly --demo-room or --demo-room=…: a bare StartsWith would also take --demo-rooms.
+            if (!a.Equals("--demo-room", StringComparison.OrdinalIgnoreCase)
+                && !a.StartsWith("--demo-room=", StringComparison.OrdinalIgnoreCase)) continue;
             DemoRoom = true;
             int eq = a.IndexOf('=');
             if (eq > 0) DemoRoomScenario = a[(eq + 1)..];
+        }
+
+        // The rooms LIST (design 86): seven rooms of every kind need seven hosts.
+        foreach (var a in e.Args)
+        {
+            if (!a.Equals("--demo-rooms", StringComparison.OrdinalIgnoreCase)
+                && !a.StartsWith("--demo-rooms=", StringComparison.OrdinalIgnoreCase)) continue;
+            DemoRooms = true;
+            int eq = a.IndexOf('=');
+            if (eq > 0) DemoRoomsScenario = a[(eq + 1)..];
         }
 
         // The rating screens (design handoff 55): placement, streaks, team rooms, anti-farm and
@@ -812,6 +824,13 @@ public partial class App : System.Windows.Application
     /// <c>2v2</c>, <c>full</c> or <c>long-name</c>. Null means the 1v1, which is the room
     /// the redesign is about.</summary>
     public static string? DemoRoomScenario { get; private set; }
+
+    /// <summary>True when <c>--demo-rooms</c> was passed: the Rooms page opens on sample rooms
+    /// (design 86). Same single-instance caveat as the others, and a Settings button.</summary>
+    public static bool DemoRooms { get; private set; }
+
+    /// <summary><c>86a</c>..<c>86e</c> (or empty / loading / error / offline); null is 86a.</summary>
+    public static string? DemoRoomsScenario { get; private set; }
 
     /// <summary>True when <c>--demo-elo</c> was passed: one scene of the rating preview opens once
     /// the window is up. Same single-instance caveat as every other argument here, and the same

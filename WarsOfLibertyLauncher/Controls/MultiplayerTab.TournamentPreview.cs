@@ -140,6 +140,8 @@ public partial class MultiplayerTab
     {
         var matches = t?.Matches;
         if (t == null || matches == null || matches.Count == 0) return null;
+        // The sample that opens as a player finds it: nothing picked.
+        if (t.Id == TournamentDemoData.Big32Id) return null;
         var me = TournamentViewerId(t);
 
         var mine = matches
@@ -175,8 +177,9 @@ public partial class MultiplayerTab
         box.SetResourceReference(Border.CornerRadiusProperty, "RadiusControl");
         box.SetResourceReference(Border.BackgroundProperty, "MpCautionBg");
         box.SetResourceReference(Border.BorderBrushProperty, "MpCautionRim");
+        Grid.SetRow(box, 0);
 
-        var stack = new StackPanel();
+        var stack = new FlexLine { Gap = 16, LineGap = 6 };
         var text = new TextBlock
         {
             Text = Strings.Get("MpTournamentDemoBanner"),
@@ -191,7 +194,7 @@ public partial class MultiplayerTab
         {
             // WrapPanels throughout: a horizontal StackPanel measures at infinite width and draws
             // past the edge of the pane, and these captions are longest in Spanish.
-            var view = new WrapPanel { Margin = new Thickness(0, 9, 0, 0) };
+            var view = new WrapPanel();
             view.Children.Add(PreviewLabel(Strings.Get("MpTournamentPreviewViewAs")));
 
             var role = sim.RoleOf(t.Id);
@@ -218,7 +221,7 @@ public partial class MultiplayerTab
             }
             stack.Children.Add(view);
 
-            var actions = new WrapPanel { Margin = new Thickness(0, 2, 0, 0) };
+            var actions = new WrapPanel();
             if (t.Status == "running")
             {
                 actions.Children.Add(PreviewButton("MpTournamentPreviewPlayRound", "PlayRound",

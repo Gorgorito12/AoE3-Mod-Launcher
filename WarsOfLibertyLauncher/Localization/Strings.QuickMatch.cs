@@ -43,20 +43,8 @@ public static partial class Strings
         // {0} the mod.
         ["QmSeatWho"] = new() { [LangEn] = "Whoever looks for a 1v1 in {0} joins", [LangEs] = "Entra quien busque un 1v1 en {0}" },
         ["QmFindMatch"] = new() { [LangEn] = "Find a 1v1 match", [LangEs] = "Buscar partida 1v1" },
-        ["QmFindMatchTip"] = new()
-        {
-            [LangEn] = "Joins a competitive 1v1 room of your active mod that is waiting for a rival, or opens one "
-                       + "and waits until somebody joins. It counts for your rating.",
-            [LangEs] = "Entra en una sala competitiva 1v1 de tu mod activo que esté esperando rival, o abre una "
-                       + "y espera a que alguien entre. Cuenta para tu ELO.",
-        },
         // {0} is the time searched, "02:13".
         ["QmSearching"] = new() { [LangEn] = "Searching… {0} · Cancel", [LangEs] = "Buscando… {0} · Cancelar" },
-        ["QmSearchingTip"] = new()
-        {
-            [LangEn] = "Your room is listed for anybody looking for a 1v1. Click to stop searching and close it.",
-            [LangEs] = "Tu sala está anunciada para quien busque un 1v1. Haz clic para dejar de buscar y cerrarla.",
-        },
         // The title-bar pill: {0} is the time searched.
         ["QmPill"] = new() { [LangEn] = "Searching 1v1 · {0}", [LangEs] = "Buscando 1v1 · {0}" },
         // {0} is the mod's name.

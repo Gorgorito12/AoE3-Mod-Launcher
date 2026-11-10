@@ -108,7 +108,8 @@ public class BracketLayoutTests
         Assert.Equal("MpTournamentRoundQuarter", BracketLayout.RoundLabelKey(1, 3));
         // Deeper than a quarter-final, or a bracket whose size is not known yet.
         Assert.Equal("MpTournamentRoundSixteenth", BracketLayout.RoundLabelKey(1, 5));
-        Assert.Equal("MpTournamentRoundN", BracketLayout.RoundLabelKey(1, 6));
+        Assert.Equal("MpTournamentRoundThirtySecond", BracketLayout.RoundLabelKey(1, 6));
+        Assert.Equal("MpTournamentRoundN", BracketLayout.RoundLabelKey(1, 7));
         Assert.Equal("MpTournamentRoundN", BracketLayout.RoundLabelKey(2, null));
     }
 

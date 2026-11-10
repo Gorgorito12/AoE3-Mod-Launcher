@@ -532,6 +532,11 @@ public partial class MainWindow
         };
         PlayView.SizeChanged += (_, _) => ApplyLibraryLayout();
         LibraryBackdrop.SizeChanged += (_, _) => UpdateLibraryCover();
+        TournamentBackdrop.SizeChanged += (_, _) =>
+        {
+            UpdateTournamentCover();
+            QueueTournamentClip();
+        };
         MainNav.SizeChanged += (_, _) => UpdateLibraryBlurClip();
         LibraryRail.SizeChanged += (_, _) => UpdateLibraryBlurClip();
         LibraryRail.IsVisibleChanged += (_, _) => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(UpdateLibraryBlurClip));
@@ -545,6 +550,9 @@ public partial class MainWindow
     private void ApplyLibraryAppearance()
     {
         GlassTheme.Apply(_config.GlassLevel);
+        // "Reduced" turns the multiplayer lights off too (rank badges, the update pill, the quick
+        // match card's marks), not only the Library's.
+        Controls.RankBadge.SetUserReducedEffects(_config.EffectsMode == "low");
         ApplyLibraryShade();
         ApplyDashboardHero(_updateService.Profile);
         _libraryRailKey = "";

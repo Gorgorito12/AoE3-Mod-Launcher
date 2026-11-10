@@ -82,7 +82,6 @@ public static partial class Strings
 
         // ---------------------------------------------------------------- my teams
         ["MpTeamsButton"] = new() { [LangEn] = "My teams", [LangEs] = "Mis equipos" },
-        ["MpTeamsButtonInvites"] = new() { [LangEn] = "My teams · {0} invitation(s)", [LangEs] = "Mis equipos · {0} invitación(es)" },
         ["MpTeamsButtonTip"] = new()
         {
             [LangEn] = "The saved teams you enter team tournaments with, and the invitations waiting for you.",

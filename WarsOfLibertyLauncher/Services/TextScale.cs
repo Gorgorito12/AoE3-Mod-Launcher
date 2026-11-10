@@ -97,7 +97,7 @@ public static class TextScale
         "MpSectionLabelSize", "MpStatValueSize", "MpRoomNameSize", "MpResultTitleSize",
         "MpRatingSize", "MpActivityTitleSize", "MpActivityBodySize", "MpActivityHeadlineSize",
         "MpPageTitleSize", "MpRankNameSize", "MpRankSmallSize", "MpProfileNameSize", "MpProfileRatingSize",
-        "MpProfileRecordSize", "MpHistoryDeltaSize",
+        "MpProfileRecordSize", "MpHistoryDeltaSize", "RmListTitleSize", "RmNameSize", "RmHostSize", "RmButtonSize", "RmSmallSize", "RmCountSize", "RmChipSize", "QcTitleSize", "RmEmptyTitleSize", "QcTitleSizeCompact", "QcClockSize", "QcLineSize", "QcButtonSize", "QcButtonSizeCompact", "QcButton2Size", "QcButton2SizeCompact",
         "MpHistoryTitleSize", "MpHistoryMetaSize", "MpHistoryTrailSize",
         "MpToastTitleSize", "MpMatchesEmptyTitleSize",
         "MpHlTitleSize", "MpHlMetaSize", "MpHlNameSize", "MpHlFigureSize", "MpRefundGlyphSize",
@@ -114,7 +114,7 @@ public static class TextScale
         "SidebarNavTextSize", "NavTabTextSize",
         // The compact layout (design handoff turns 38-39): the nav row's tabs at 12 in a 42-px
         // row, and a room's one-line name.
-        "NavTabCompactTextSize", "MpRoomNameSizeCompact",
+        "NavTabCompactTextSize",
     };
 
     /// <summary>

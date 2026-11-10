@@ -585,6 +585,12 @@ public partial class MainWindow : Window
             // The update button on the multiplayer gate is the gold pill by another name.
             onUpdateRequested: () => LauncherUpdatePill_Click(this, new RoutedEventArgs()),
             openModInLibrary: profile => ModsBrowserView_OpenInLibraryRequested(this, profile),
+            setTournamentBackdrop: SetTournamentBackdrop,
+            openModSettings: (profile, section) =>
+            {
+                OpenModPropertiesDialog(profile);
+                _modPropertiesDialog?.ShowTabNamed(section);
+            },
             // An invite's Join (and the quick match's "see room") can be pressed on the DESKTOP
             // card, with this window minimised or in the tray: show it first, on Multiplayer.
             bringMultiplayerToFront: () =>
@@ -595,6 +601,7 @@ public partial class MainWindow : Window
             // The quick match's search, in the title bar while it runs (MainWindow.QuickMatch.cs).
             setQuickMatchPill: SetQuickMatchPill);
         UpdateAccentResources(activeProfile);
+        Controls.RankBadge.SetUserReducedEffects(_config.EffectsMode == "low");
 
         ApplyLanguage();
 
@@ -754,6 +761,12 @@ public partial class MainWindow : Window
             {
                 SwitchTopTab(TopTab.Multiplayer);
                 MultiplayerView.ShowDemoRoom(App.DemoRoomScenario);
+            }
+
+            if (App.DemoRooms)
+            {
+                SwitchTopTab(TopTab.Multiplayer);
+                MultiplayerView.ShowDemoRooms(App.DemoRoomsScenario);
             }
 
             // --demo-elo: one scene of the rating preview. Deferred like the file dialogs: some
@@ -5212,6 +5225,13 @@ public partial class MainWindow : Window
         MultiplayerView.ShowDemoRoom();
     }
 
+    /// <summary>The Rooms page with sample rooms (design 86). Reached from Settings.</summary>
+    public void ShowRoomsDemo()
+    {
+        SwitchTopTab(TopTab.Multiplayer);
+        MultiplayerView.ShowDemoRooms();
+    }
+
     /// <summary>
     /// One scene of the RATING PREVIEW (design handoff 55) — the ranking, placement, a sample
     /// profile, both rooms, the team countdown, the result cards, the History, the monthly
@@ -5768,6 +5788,7 @@ public partial class MainWindow : Window
         if (IsVisible) ScreenTrace.Clicked();
         _activeTopTab = tab;
         LibraryBackdrop.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
+        UpdateTournamentBackdrop();
         PlayView.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
         ModsBrowserView.Visibility = tab == TopTab.Mods ? Visibility.Visible : Visibility.Collapsed;
         MultiplayerView.Visibility = tab == TopTab.Multiplayer ? Visibility.Visible : Visibility.Collapsed;

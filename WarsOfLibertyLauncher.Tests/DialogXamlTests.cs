@@ -907,8 +907,7 @@ public class DialogXamlTests
 
                 foreach (var t in TournamentDemoData.All())
                 {
-                    Assert.NotNull(tab.BuildTournamentCard(t, isDraft: false));
-                    Assert.NotNull(tab.BuildEntrantsList(t, TournamentDemoData.MeUserId));
+                                        Assert.NotNull(tab.BuildEntrantsList(t, TournamentDemoData.MeUserId));
                     if (t.Matches is { Count: > 0 })
                         Assert.NotNull(tab.BuildBracketPanel(t, TournamentDemoData.MeUserId));
                 }
@@ -921,53 +920,6 @@ public class DialogXamlTests
                     if (t.Matches is { Count: > 0 })
                         Assert.NotNull(tab.BuildBracketPanel(t, TournamentDemoData.MeUserId));
                 }
-            }
-            finally { Strings.SetLanguage(previous); }
-        });
-
-        Assert.Null(error);
-    }
-
-    [Fact]
-    public void TheTournamentHeaderPutsTheTurnCapsuleAndTheEntrantToggleOnTheRight()
-    {
-        // The capsule is the answer to the only question somebody opens this tab with, and
-        // the toggle is the only way back to the entrant table once a bracket hides it. Both
-        // are built in code, both are conditional, and neither is checked by anything else -
-        // so if a layout edit drops one, the loss is invisible until somebody goes looking
-        // for a match they cannot find.
-        //
-        // Asserted by WALKING THE TREE and measuring, not by trusting the builder returned
-        // something: an element added to a Grid column that ends up zero-wide is present,
-        // non-null, and completely absent from the screen.
-        var error = RunOnStaThread(() =>
-        {
-            var previous = Strings.Language;
-            try
-            {
-                Strings.SetLanguage("es");
-                var tab = new MultiplayerTab();
-                var t = TournamentDemoData.Running();
-                var header = (FrameworkElement)tab.BuildTournamentHeader(
-                    t, TournamentDemoData.MeUserId);
-
-                header.Measure(new Size(1200, double.PositiveInfinity));
-                header.Arrange(new Rect(new Point(0, 0), header.DesiredSize));
-
-                var texts = Descendants(header).OfType<TextBlock>().ToList();
-
-                // The fixture has a playable match, so the capsule must name its round.
-                Assert.Contains(texts, tb => tb.Text.Contains(
-                    Strings.Get("MpTournamentRoundQuarter").ToLowerInvariant(),
-                    StringComparison.OrdinalIgnoreCase));
-
-                var toggle = Descendants(header).OfType<Button>().ToList();
-                Assert.Contains(toggle, b =>
-                    (b.Content as string) == Strings.Get("MpTournamentSeeEntrants"));
-
-                // And they must have actually been given room. Zero width is the failure
-                // this test exists for.
-                foreach (var b in toggle) Assert.True(b.ActualWidth > 1, "the toggle is zero-wide");
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -2337,7 +2289,7 @@ public class DialogXamlTests
             panel.Arrange(new Rect(0, 0, 1000, panel.DesiredSize.Height));
             panel.UpdateLayout();
 
-            // The bracket lives under the ScrollViewer; the action bar is its sibling above.
+            // The bracket lives under the ScrollViewer; the panel of the picked match beside it.
             var scroller = VisualsUnder(panel).OfType<ScrollViewer>().First();
             var inCells = VisualsUnder(scroller).OfType<Button>().ToList();
             Assert.True(inCells.Count == 0,
@@ -2352,55 +2304,6 @@ public class DialogXamlTests
                 .Where(c => !string.IsNullOrWhiteSpace(c))
                 .ToList();
             Assert.Contains(Strings.Get("MpTournamentWatchRoom"), captions);
-        });
-        Assert.Null(error);
-    }
-
-    /// <summary>
-    /// The organiser's two powers live behind the \u22ef, and never as a second button.
-    ///
-    /// <para>Deciding a match by hand and ordering it replayed both act on other people's
-    /// game. They take a deliberate extra click, and they are absent rather than disabled for
-    /// anyone who cannot use them \u2014 the same shape the award flyout already had.</para>
-    /// </summary>
-    [Fact]
-    public void TheOrganisersPowersAreBehindTheOverflow()
-    {
-        var error = RunOnStaThread(() =>
-        {
-            EnsureResources();
-            var previous = Strings.Language;
-            try
-            {
-                Strings.SetLanguage("es");
-                var tab = new WarsOfLibertyLauncher.Controls.MultiplayerTab();
-                var t = TournamentDemoData.Organiser();
-                var live = t.Matches!.First(m => m.Lobby != null);
-                tab.SelectBracketMatchForPreview(t.Id, live.Id);
-
-                var panel = (FrameworkElement)tab.BuildBracketPanel(t, TournamentDemoData.MeUserId);
-                panel.Measure(new Size(1000, double.PositiveInfinity));
-                panel.Arrange(new Rect(0, 0, 1000, panel.DesiredSize.Height));
-                panel.UpdateLayout();
-
-                var overflow = VisualsUnder(panel).OfType<Button>()
-                    .FirstOrDefault(b => b.ContextMenu != null);
-                Assert.NotNull(overflow);
-
-                var items = overflow!.ContextMenu!.Items.OfType<MenuItem>()
-                    .Select(i => i.Header as string ?? "")
-                    .ToList();
-
-                // Both winners, and the replay - three ways to end or restart one tie, none
-                // of them a button sitting next to "Ver la sala".
-                Assert.Contains(items, i => i.Contains(EntrantNameFor(t, live.Entrant1Id)));
-                Assert.Contains(items, i => i.Contains(EntrantNameFor(t, live.Entrant2Id)));
-                Assert.Contains(Strings.Get("MpTournamentReplay"), items);
-            }
-            finally
-            {
-                Strings.SetLanguage(previous);
-            }
         });
         Assert.Null(error);
     }
@@ -2838,126 +2741,6 @@ public class DialogXamlTests
     }
 
     /// <summary>
-    /// THE ONE THAT MATTERS for the entrant table: <b>a row stays inside its card</b>.
-    ///
-    /// <para>It did not, and the direction is the surprise. The action column is a FIXED
-    /// 190 px and the strip inside it is a horizontal <c>StackPanel</c>, which measures its
-    /// children at infinite width; its own <c>DesiredSize</c> is clamped back to 190, so the
-    /// Grid is told it fits. Measured, the strip is <b>396 px</b>. Because it is right-aligned
-    /// it is then arranged from x=87 — <b>to the LEFT of the name, which starts at 47</b>.
-    /// It does not spill past the card: it spills BACKWARDS across its own row and paints on
-    /// top of the two columns beside it.</para>
-    ///
-    /// <para><b>Spanish explicitly</b>, like the diagnostics row below: "Descalificar" plus
-    /// "Hacer co-organizador" wants ~260 px where the English pair wants ~40 less and fits, so
-    /// in English this test would pass over the broken layout.</para>
-    ///
-    /// <para>And the WORST case, not the common one: a pending entrant, seen by the owner of a
-    /// running tournament, whose captain is not yet a co-organiser, is offered four actions at
-    /// once — Accept and Reject from one chain, and Disqualify and Make co-organiser from two
-    /// independent <c>if</c>s that stack on top.</para>
-    /// </summary>
-    [Fact]
-    public void THE_ONE_THAT_MATTERS_AnEntrantRowStaysInsideItsCard()
-    {
-        var error = RunOnStaThread(() =>
-        {
-            EnsureResources();
-            var previous = Strings.Language;
-            try
-            {
-                Strings.SetLanguage("es");
-                var tab = new WarsOfLibertyLauncher.Controls.MultiplayerTab();
-
-                // Every action at once: pending (Accept + Reject), running and owned by me
-                // (Disqualify), and a captain who is not a manager yet (Make co-organiser).
-                var entrant = new TournamentEntrant
-                {
-                    Id = "e1",
-                    Kind = "solo",
-                    DisplayName = "Rioplatense",
-                    Status = "pending",
-                    Seed = 12,
-                    CaptainUserId = "u-e1",
-                    MemberIds = new List<string> { "u-e1" },
-                };
-                var t = new TournamentDetail
-                {
-                    Id = "c1",
-                    Name = "Copa",
-                    Status = "running",
-                    OwnerUserId = "me",
-                    Capacity = 8,
-                    Entrants = new List<TournamentEntrant> { entrant },
-                };
-
-                var list = (FrameworkElement)tab.BuildEntrantsList(t, "me");
-
-                // The narrowest the card can be: the window's own MinWidth, minus the nav
-                // rail, the 300 px tournament list and the detail pane's margins. The card
-                // caps at 760 but never gets it at this size.
-                const double narrowest = 900 - 64 - 300 - 21;
-                list.Measure(new Size(narrowest, double.PositiveInfinity));
-                list.Arrange(new Rect(0, 0, narrowest, list.DesiredSize.Height));
-                list.UpdateLayout();
-
-                // Where the status column ends. Found by the row's own content rather than by
-                // arithmetic over the column widths, so the test keeps meaning what it says if
-                // those widths are ever retuned.
-                var statusEnd = VisualsUnder(list).OfType<TextBlock>()
-                    .Where(x => x.Text == Strings.Get("MpTournamentAskedToEnter"))
-                    .Select(x => x.TranslatePoint(new Point(0, 0), list).X + x.ActualWidth)
-                    .DefaultIfEmpty(0)
-                    .Max();
-                Assert.True(statusEnd > 0, "the status cell is gone; this guard has to move.");
-
-                var buttons = VisualsUnder(list).OfType<Button>().ToList();
-                Assert.NotEmpty(buttons);
-
-                foreach (var button in buttons)
-                {
-                    var origin = button.TranslatePoint(new Point(0, 0), list);
-                    var right = origin.X + button.ActualWidth;
-
-                    // Backwards, over its neighbours - the reported symptom.
-                    Assert.True(origin.X >= statusEnd,
-                        $"'{button.Content as string ?? "?"}' starts at {origin.X:0}, before the "
-                        + $"status column ends at {statusEnd:0} - so it is painted ON TOP of "
-                        + "the row's own name and status. A horizontal StackPanel measures at "
-                        + "infinity and is then arranged at its full width from a right-aligned "
-                        + "edge, so a fixed column cannot hold it back.");
-
-                    // And forwards, past the card, which is the same defect mirrored.
-                    Assert.True(right <= narrowest + 0.5,
-                        $"'{button.Content as string ?? "?"}' ends at {right:0} in a "
-                        + $"{narrowest:0} px pane, so it is painted outside the card.");
-                }
-
-                // THE OTHER HALF, because the cheap way to pass the assertions above is to
-                // delete the actions. The two long ones moved into a menu; they did not go.
-                var overflow = buttons.FirstOrDefault(b => b.ContextMenu != null);
-                Assert.NotNull(overflow);
-                var items = overflow!.ContextMenu!.Items.OfType<MenuItem>()
-                    .Select(i => i.Header as string ?? "")
-                    .ToList();
-                Assert.Contains(Strings.Get("MpTournamentDisqualify"), items);
-                Assert.Contains(Strings.Get("MpTournamentMakeManager"), items);
-
-                // And the row's own reason for existing stays a button, not a menu entry: a
-                // request waiting on a yes or a no is the one thing here that is urgent.
-                var captions = buttons.Select(b => b.Content as string ?? "").ToList();
-                Assert.Contains(Strings.Get("MpTournamentAccept"), captions);
-                Assert.Contains(Strings.Get("MpTournamentReject"), captions);
-            }
-            finally
-            {
-                Strings.SetLanguage(previous);
-            }
-        });
-        Assert.Null(error);
-    }
-
-    /// <summary>
     /// THE PROMISE ONE. A card's tooltip says what the card does only when the mod actually
     /// says something about it.
     ///
@@ -3231,122 +3014,6 @@ public class DialogXamlTests
                 {
                     ["HCXPRefrigeration"] = lines,
                 });
-
-    /// <summary>
-    /// THE SYMMETRY ONE. The status column starts at the same x on every row of a card, and
-    /// on its header.
-    ///
-    /// <para>It did not. <c>BuildEntrantGrid</c> hands out a NEW Grid per row, so the Auto
-    /// actions column was measured per row and took its width out of the star column beside
-    /// it. A row with "Withdraw" therefore gave up star width that the row under it kept, and
-    /// the status column - whose left edge is 46 plus whatever the star came to - landed
-    /// somewhere different on each. "In" beside a button and "No seed" without one could never
-    /// line up, and the STATUS heading, on a row with no actions at all, sat furthest right of
-    /// the lot.</para>
-    ///
-    /// <para>Measured against the HEADING, deliberately: the heading is the column's promise,
-    /// and a table whose rows agree with each other but not with their own header is still
-    /// wrong.</para>
-    /// </summary>
-    [Fact]
-    public void THE_SYMMETRY_ONE_EveryStatusStartsUnderTheStatusHeading()
-    {
-        var error = RunOnStaThread(() =>
-        {
-            EnsureResources();
-            var previous = Strings.Language;
-            try
-            {
-                // Spanish: the longest captions, which is what made the columns diverge.
-                Strings.SetLanguage("es");
-                var tab = new WarsOfLibertyLauncher.Controls.MultiplayerTab();
-
-                // The three shapes that used to disagree: a confirmed entrant with a Withdraw
-                // button (it is me), one with only the overflow, and one with no seed at all.
-                var t = new TournamentDetail
-                {
-                    Id = "c1",
-                    Name = "Copa",
-                    Status = "registration",
-                    OwnerUserId = "someone-else",
-                    Capacity = 8,
-                    Entrants = new List<TournamentEntrant>
-                    {
-                        new()
-                        {
-                            Id = "e1", Kind = "solo", DisplayName = "Gorgo", Status = "confirmed",
-                            Seed = 1, CaptainUserId = "me", MemberIds = new List<string> { "me" },
-                        },
-                        new()
-                        {
-                            Id = "e2", Kind = "solo", DisplayName = "Aluclown", Status = "confirmed",
-                            Seed = 2, CaptainUserId = "u2", MemberIds = new List<string> { "u2" },
-                        },
-                        new()
-                        {
-                            Id = "e3", Kind = "solo", DisplayName = "Vandalia", Status = "confirmed",
-                            Seed = null, CaptainUserId = "u3", MemberIds = new List<string> { "u3" },
-                        },
-                    },
-                };
-
-                var list = (FrameworkElement)tab.BuildEntrantsList(t, "me");
-
-                const double narrowest = 900 - 64 - 300 - 21;
-                list.Measure(new Size(narrowest, double.PositiveInfinity));
-                list.Arrange(new Rect(0, 0, narrowest, list.DesiredSize.Height));
-                list.UpdateLayout();
-
-                // Every status label, plus the heading, by their own text rather than by
-                // arithmetic over the column widths - so this keeps meaning what it says if
-                // those widths are ever retuned.
-                var wanted = new[]
-                {
-                    Strings.Get("MpTournamentColStatus"),
-                    Strings.Get("MpTournamentNoSeed"),
-                    EntrantStatusText("confirmed"),
-                };
-
-                var lefts = VisualsUnder(list).OfType<TextBlock>()
-                    .Where(x => wanted.Contains(x.Text))
-                    .Select(x => (x.Text, X: x.TranslatePoint(new Point(0, 0), list).X))
-                    .ToList();
-
-                // The three shapes really are all on screen, or this would pass over an empty
-                // table.
-                Assert.Contains(lefts, l => l.Text == Strings.Get("MpTournamentColStatus"));
-                Assert.Contains(lefts, l => l.Text == Strings.Get("MpTournamentNoSeed"));
-                Assert.True(lefts.Count >= 4, $"only {lefts.Count} status cells were drawn.");
-
-                var heading = lefts.First(l => l.Text == Strings.Get("MpTournamentColStatus")).X;
-                foreach (var (text, x) in lefts)
-                {
-                    // The status dot sits before the label in a row and not in the header, so
-                    // the label itself is offset by the dot's width there. What must hold is
-                    // that every ROW agrees, and that none of them wanders off the heading.
-                    Assert.True(System.Math.Abs(x - heading) < 20,
-                        $"\"{text}\" starts at {x:0} but the STATUS heading is at {heading:0}. "
-                        + "The actions column is being measured per row again, so the star "
-                        + "column - and with it the status column's left edge - is a different "
-                        + "width on every row.");
-                }
-
-                // And the rows agree with each OTHER exactly, dot and all.
-                var rowLefts = lefts
-                    .Where(l => l.Text != Strings.Get("MpTournamentColStatus"))
-                    .Select(l => l.X)
-                    .ToList();
-                Assert.True(rowLefts.Max() - rowLefts.Min() < 0.5,
-                    $"the status labels start between {rowLefts.Min():0} and {rowLefts.Max():0}; "
-                    + "they are meant to be one column.");
-            }
-            finally
-            {
-                Strings.SetLanguage(previous);
-            }
-        });
-        Assert.Null(error);
-    }
 
     /// <summary>The label a confirmed entrant's status cell carries.</summary>
     /// <summary>
@@ -4067,81 +3734,6 @@ public class DialogXamlTests
         Assert.Null(error);
     }
 
-    /// <summary>
-    /// The tournaments panel's create button fits its column, in both languages and at the
-    /// biggest text size the launcher offers.
-    ///
-    /// <para>It used to be a bare text link with zero padding, so it fitted anything. It is a
-    /// 32px filled button now, with a plus and a two-word label, sharing a <b>300px</b> column
-    /// with a 17px bold heading — the same shape as the rooms top bar, and the same way to get
-    /// it wrong. English is the worse case ("+ New tournament" against "+ Nuevo torneo") and
-    /// 125% is the biggest offered scale, so the two are tested together.</para>
-    ///
-    /// <para>What is asserted is that BOTH fit — not that one of them gives way. The first
-    /// version of this change kept the long "New tournament" label and let the heading lose,
-    /// and at English/125% the heading came out clipped mid-word with no ellipsis, which reads
-    /// as a broken screen rather than as a truncation. Shortening the label to one word is
-    /// what makes both fit, and this is the tripwire for lengthening it again.</para>
-    /// </summary>
-    [Fact]
-    public void TheTournamentsCreateButtonFitsItsColumnInBothLanguages()
-    {
-        var error = RunOnStaThread(() =>
-        {
-            var previous = Strings.Language;
-            var baseline = (double)Application.Current.Resources["MpLabelSize"];
-            try
-            {
-                foreach (var lang in new[] { "es", "en" })
-                {
-                    Strings.SetLanguage(lang);
-                    var tab = new MultiplayerTab();
-
-                    // The largest step the Interface setting offers, scoped to THIS tab.
-                    //
-                    // It used to be written into Application.Current.Resources, which every
-                    // test in the process shares and which no `finally` can un-bake once a
-                    // style has resolved against it: the suite grew a flake in an unrelated
-                    // style test that appeared once and would not reproduce. An element-level
-                    // resource overrides the application one for this subtree only, measures
-                    // exactly the same thing, and dies with the tab.
-                    tab.Resources["MpLabelSize"] = baseline * 1.25;
-
-                    var header = (FrameworkElement)LogicalTreeHelper.GetParent(
-                        tab.TournamentCreateButton);
-                    Assert.IsType<Grid>(header);
-
-                    header.Measure(new Size(300, double.PositiveInfinity));
-                    header.Arrange(new Rect(0, 0, 300, header.DesiredSize.Height));
-
-                    var button = tab.TournamentCreateButton;
-                    var title = tab.TournamentsTitleText;
-
-                    Assert.True(button.DesiredSize.Width > 0, $"[{lang}] the button measured to nothing");
-                    Assert.True(
-                        Math.Abs(button.ActualWidth - button.DesiredSize.Width) < 0.5,
-                        $"[{lang}] the create button was squeezed: it wants "
-                        + $"{button.DesiredSize.Width:F0} px and got {button.ActualWidth:F0}.");
-
-                    // THE HEADING IS NOT CLIPPED EITHER. It carries no TextTrimming, so a
-                    // heading that does not fit is cut mid-word with nothing to say it was cut.
-                    Assert.True(
-                        title.ActualWidth + 0.5 >= title.DesiredSize.Width,
-                        $"[{lang}] the heading needs {title.DesiredSize.Width:F0} px and got "
-                        + $"{title.ActualWidth:F0}: it will be cut mid-word with no ellipsis. "
-                        + "Shorten MpTournamentCreate rather than widening the column - the "
-                        + "heading already supplies the noun, so the button only needs the verb.");
-                }
-            }
-            finally
-            {
-                Strings.SetLanguage(previous);
-            }
-        });
-
-        Assert.Null(error);
-    }
-
     [Fact]
     public void TheRoomsTopBarFitsAtTheNarrowestWindow()
     {
@@ -4273,12 +3865,12 @@ public class DialogXamlTests
             Assert.Same(tab.ActivityBlockGrid, LogicalTreeHelper.GetParent(tab.ActivityStrip));
 
             // The rows sit on the panel's 16-px padding with no inset of their own (one margin,
-            // one gap, one panel padding); the header is inset by the row's 1 + 12, so each
-            // heading stays over its column (57a: the rows sit inside the list's card).
+            // one gap, one panel padding); the header is inset by the row's 1 + 11 (design 86's
+            // 12 of padding), so each heading stays over its column.
             Assert.Equal(new Thickness(16), tab.RoomsBlock.Padding);
             Assert.Equal(0, tab.RoomsListPanel.Margin.Left);
             Assert.Equal(0, tab.RoomsListPanel.Margin.Right);
-            Assert.Equal(tab.RoomsListPanel.Margin.Left + 13, tab.RoomsHeaderStrip.Margin.Left);
+            Assert.Equal(tab.RoomsListPanel.Margin.Left + 12, tab.RoomsHeaderStrip.Margin.Left);
         });
 
         Assert.Null(error);
@@ -4312,7 +3904,7 @@ public class DialogXamlTests
             var ten = RowWidth(10);
             Assert.True(tab.RoomsListScroll.ScrollableHeight > 0, "ten rows in 420 px did not scroll");
             Assert.Equal(one, ten, 1);
-            Assert.Equal(tab.RoomsListPanel.Margin.Right + 13, tab.RoomsHeaderStrip.Margin.Right);
+            Assert.Equal(tab.RoomsListPanel.Margin.Right + 12, tab.RoomsHeaderStrip.Margin.Right);
         });
 
         Assert.Null(error);

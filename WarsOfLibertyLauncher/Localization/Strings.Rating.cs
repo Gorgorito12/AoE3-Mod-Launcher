@@ -31,7 +31,10 @@ public static partial class Strings
         foreach (var kv in NewTournamentTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in EnrollTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in MyTeamsTable) Table.Add(kv.Key, kv.Value);
+        foreach (var kv in TournamentsPageTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in TournamentRoomTable) Table.Add(kv.Key, kv.Value);
+        foreach (var kv in RoomsTable) Table.Add(kv.Key, kv.Value);
+        foreach (var kv in RankingTable) Table.Add(kv.Key, kv.Value);
     }
 
     private static readonly Dictionary<string, Dictionary<string, string>> RatingTable = new()
@@ -382,12 +385,6 @@ public static partial class Strings
         {
             [LangEn] = "{0} players connected · see them",
             [LangEs] = "{0} jugadores conectados · verlos",
-        },
-        // 56a's notice under an empty list, when the busy hours are known.
-        ["MpRoomsEmptyPeak"] = new()
-        {
-            [LangEn] = "More people usually play around {0}–{1} (your local time).",
-            [LangEs] = "Más gente suele jugar entre las {0} y {1} (tu hora local).",
         },
 
         // ---------------------------------------------------------------- 55n refunds

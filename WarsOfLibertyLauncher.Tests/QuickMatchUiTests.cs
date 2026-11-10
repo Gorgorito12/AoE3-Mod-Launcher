@@ -53,37 +53,6 @@ public class QuickMatchUiTests
     }
 
     /// <summary>
-    /// The button over the rooms list is built empty in the XAML and captioned from code, so a
-    /// missing key would show the key itself — visible, but easy to miss in the language you do
-    /// not read. Both languages, and the tooltip says what it does.
-    /// </summary>
-    [Fact]
-    public void TheQuickMatchButtonSaysWhatItDoesInBothLanguages()
-    {
-        var error = DialogXamlTests.RunOnStaThread(() =>
-        {
-            var previous = Strings.Language;
-            try
-            {
-                foreach (var lang in new[] { "es", "en" })
-                {
-                    Strings.SetLanguage(lang);
-                    var tab = new MultiplayerTab();
-
-                    var caption = tab.QuickMatchButton.Content as string;
-                    Assert.False(string.IsNullOrWhiteSpace(caption), lang);
-                    Assert.Equal(Strings.Get("QmFindMatch"), caption);
-                    Assert.NotEqual("QmFindMatch", caption);
-                    Assert.NotNull(tab.QuickMatchButton.ToolTip);
-                    Assert.True(tab.QuickMatchButton.IsEnabled, lang);
-                }
-            }
-            finally { Strings.SetLanguage(previous); }
-        });
-        Assert.Null(error);
-    }
-
-    /// <summary>
     /// A room that filled, started or closed between the list and the join is a LOST RACE: the
     /// search tries the next room in silence. Everything else the server says is about the player
     /// (another version, a password, a room already joined, an old launcher) and still reaches him.

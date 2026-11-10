@@ -430,13 +430,8 @@
     <SolidColorBrush x:Key="MpDanger" Color="#8E3F37"/>
     <SolidColorBrush x:Key="MpDangerHover" Color="#A65049"/>
 
-    <!-- Rooms table PING colours (green / amber / red) — read only by the rooms list's
-         ping cell (FillPingCell, banded by Services/Multiplayer/RoomPingBand). Design handoff
-         turn 36's own values: the old saturated #22C55E / #F59E0B / #EF4444 shouted louder
-         than the room names beside them. -->
-    <SolidColorBrush x:Key="MpPingGood" Color="#4FD68A"/>
-    <SolidColorBrush x:Key="MpPingMedium" Color="#E6C06A"/>
-    <SolidColorBrush x:Key="MpPingBad" Color="#E07A5F"/>
+    <!-- The rooms list's ping colours are RmPing* (design 86: green under 100 ms, amber over 150),
+         banded by RoomActionRule.PingBrushKey. -->
 
     <!-- ==== Rooms-table navy refresh (mockup-driven) — MP-only, no external
          consumers, so no leak into non-MP chrome. ==== -->
@@ -444,9 +439,8 @@
          blue (rgba(59,130,246,~0.25)) so it reads as a subtle premium rim. -->
     <SolidColorBrush x:Key="MpCardBorder" Color="#403B82F6"/>
     <!-- Room ROW fill — a distinct navy band so each room stands out against the
-         card (MpSurface #0F1A2B), instead of blending in. Hover lifts a touch. -->
+         card (MpSurface #0F1A2B), instead of blending in. -->
     <SolidColorBrush x:Key="MpRoomRowBg" Color="#16243A"/>
-    <SolidColorBrush x:Key="MpRoomRowHover" Color="#1B2D49"/>
     <!-- MOD badge fill + outline. Deliberately DISTINCT from the row bg
          (MpRoomRowBg #16243A) so the badge stays legible on the row + hover. -->
     <SolidColorBrush x:Key="MpModBadgeBg" Color="#1F3358"/>
@@ -532,6 +526,39 @@
          are pinned to the Discord webhook's embed colours on purpose. Room
          status dots keep those; everything else uses these. -->
     <SolidColorBrush x:Key="MpAction" Color="#2F7FE0"/>
+    <!-- The rooms list (design 86). Alpha values are the prototype's rgba(...): .04 = 0A,
+         .07 = 12, .08 = 14, .06 = 0F, .12 = 1F, .14 = 24, .16 = 29, .35 = 59. -->
+    <SolidColorBrush x:Key="RmTextStrong" Color="#F0F5FB"/>
+    <SolidColorBrush x:Key="RmSubBarBg" Color="#520A1321"/>
+    <SolidColorBrush x:Key="RmSubBarRim" Color="#0FFFFFFF"/>
+    <SolidColorBrush x:Key="RmSearchBg" Color="#66050A12"/>
+    <SolidColorBrush x:Key="RmTextHost" Color="#DCE7F5"/>
+    <SolidColorBrush x:Key="RmTextLabel" Color="#A8BCD2"/>
+    <SolidColorBrush x:Key="RmHeading" Color="#61779A"/>
+    <SolidColorBrush x:Key="RmPingGood" Color="#7FE0A8"/>
+    <SolidColorBrush x:Key="RmPingSlow" Color="#F5BD76"/>
+    <SolidColorBrush x:Key="RmPingPlain" Color="#DCE7F5"/>
+    <SolidColorBrush x:Key="RmPingUnknown" Color="#61779A"/>
+    <SolidColorBrush x:Key="RmRowBg" Color="#0AFFFFFF"/>
+    <SolidColorBrush x:Key="RmRowHover" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="RmRowMineBg" Color="#1455ACEE"/>
+    <SolidColorBrush x:Key="RmRowMineRim" Color="#5955ACEE"/>
+    <SolidColorBrush x:Key="RmChipBg" Color="#0FFFFFFF"/>
+    <SolidColorBrush x:Key="RmChipRim" Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="RmCountBg" Color="#14FFFFFF"/>
+    <SolidColorBrush x:Key="RmButtonBg" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="RmButtonHover" Color="#24FFFFFF"/>
+    <SolidColorBrush x:Key="RmButtonRim" Color="#29FFFFFF"/>
+    <SolidColorBrush x:Key="RmPrimaryHover" Color="#348CF6"/>
+    <SolidColorBrush x:Key="RmDotRanked" Color="#E6C06A"/>
+    <SolidColorBrush x:Key="RmDotCasual" Color="#8C9CB1"/>
+    <SolidColorBrush x:Key="RmDotPassword" Color="#A8BCD2"/>
+    <SolidColorBrush x:Key="RmDotBlue" Color="#55ACEE"/>
+    <SolidColorBrush x:Key="RmTextBlue" Color="#9FD0F5"/>
+    <SolidColorBrush x:Key="RmDotGreen" Color="#4FD68A"/>
+    <SolidColorBrush x:Key="RmTextGreen" Color="#7FE0A8"/>
+    <SolidColorBrush x:Key="RmDotOrange" Color="#F4900C"/>
+    <SolidColorBrush x:Key="RmTextOrange" Color="#F5BD76"/>
     <SolidColorBrush x:Key="MpActionText" Color="#8CBCF5"/>
     <SolidColorBrush x:Key="MpOk" Color="#4FD68A"/>
     <SolidColorBrush x:Key="MpOkText" Color="#8FE0B0"/>
@@ -599,37 +626,6 @@
     <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
     <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
     <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>
-    <!-- Competitive-room chip. Gold rather than a fifth hue: it is the launcher's own accent,
-         and a room that puts rating on the line is exactly the row worth looking at first. -->
-    <SolidColorBrush x:Key="MpCompetitiveBg" Color="#33C9A227"/>
-    <SolidColorBrush x:Key="MpCompetitiveText" Color="#F0D68A"/>
-    <!-- CASUAL chip (design handoff turn 36): the same tinted-pill shape as the competitive
-         one, in the link blue — every room now says which kind it is, not only the ones that
-         score. rgba(47,127,224,.14) and #8FB6EA, the handoff's values. Its own keys rather than
-         MpMatchModeCasual, which belongs to the match-history surface. -->
-    <SolidColorBrush x:Key="MpCasualBg" Color="#242F7FE0"/>
-    <SolidColorBrush x:Key="MpCasualText" Color="#8FB6EA"/>
-    <!-- The rooms list's action button wears the colour the Discord announcement gives the
-         same room (design 66): green while it can be joined, blue in game, amber when full —
-         the webhook's own embed colours, so one room reads the same in the launcher and in the
-         channel. Each state is a dark fill, a rim of the hue at partial alpha, a light text of
-         the hue and a solid dot; the fills are the design's tints flattened onto the row.
-         Join stays a tinted outline rather than a solid fill (handoff turn 36): a list of six
-         solid buttons was the loudest thing on the page. -->
-    <SolidColorBrush x:Key="MpRoomJoinBg" Color="#1D4A37"/>
-    <SolidColorBrush x:Key="MpRoomJoinHoverBg" Color="#245C44"/>
-    <SolidColorBrush x:Key="MpRoomJoinRim" Color="#8C4FD68A"/>
-    <SolidColorBrush x:Key="MpRoomJoinRimHover" Color="#CC4FD68A"/>
-    <SolidColorBrush x:Key="MpRoomJoinText" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="MpRoomJoinDot" Color="#4FD68A"/>
-    <SolidColorBrush x:Key="MpRoomInGameBg" Color="#173A57"/>
-    <SolidColorBrush x:Key="MpRoomInGameRim" Color="#7355ACEE"/>
-    <SolidColorBrush x:Key="MpRoomInGameText" Color="#A9D6F7"/>
-    <SolidColorBrush x:Key="MpRoomInGameDot" Color="#55ACEE"/>
-    <SolidColorBrush x:Key="MpRoomFullBg" Color="#3D2C17"/>
-    <SolidColorBrush x:Key="MpRoomFullRim" Color="#80F4900C"/>
-    <SolidColorBrush x:Key="MpRoomFullText" Color="#F5BD76"/>
-    <SolidColorBrush x:Key="MpRoomFullDot" Color="#F4900C"/>
     <!-- The community block's three cards (design 60a): a step lighter than the block they
          sit in (MpPanel), which is how they read as cards inside a card. -->
     <SolidColorBrush x:Key="MpActivityInnerCard" Color="#132542"/>
@@ -647,7 +643,7 @@
          ticking "private", and the room it produced then wore a gold badge.
 
          Same alphas as the private set it replaces (.08 fill, .24 rim, .30 field rim),
-         over #C9A227 — the colour MpCompetitiveBg was already built from. No fifth hue
+         over #C9A227, the launcher's gold. No fifth hue
          is introduced, which is the decision the badge had already taken. -->
     <SolidColorBrush x:Key="MpCompetitive" Color="#C9A227"/>
     <SolidColorBrush x:Key="MpCompetitiveSoftBg" Color="#14C9A227"/>
@@ -1068,9 +1064,6 @@
     <!-- Design 58b: the thin rim round a civilization's flag in a match row (18 x 12), so a dark
          flag still reads against the card. rgba(255,255,255,.14). -->
     <SolidColorBrush x:Key="MpFlagRim" Color="#24FFFFFF"/>
-    <!-- Design 57a: a room row inside the list's card, one step lighter than the card (#12213a),
-         and the folded chat rail's chat button. -->
-    <SolidColorBrush x:Key="MpRoomRowBgInCard" Color="#14243B"/>
     <SolidColorBrush x:Key="MpRailChatBg" Color="#1F3350"/>
     <!-- 55f: the amber notice of an inactive ladder; its fill is MpCautionBg (.08). -->
     <SolidColorBrush x:Key="MpInactiveNoticeRim" Color="#4DE6B455"/>     <!-- .30 -->

@@ -77,8 +77,9 @@ public class EloPreviewTests
     }
 
     /// <summary>
-    /// 55a, drawn: the ranked rows with the viewer's own marked "YOU", the streak pills from 3,
-    /// INACTIVE on an inactive player, and the placement rows after them; the summary counts both.
+    /// 55a as design 93 draws it: the first three on the podium and the rest in the table, the
+    /// viewer's own row marked "YOU", the streak pills from 3, INACTIVE on an inactive player, and
+    /// the placement rows after them; the summary counts the whole ladder.
     /// </summary>
     [Fact]
     public void TheRankingSceneDrawsTheHandoffsStates()
@@ -96,8 +97,11 @@ public class EloPreviewTests
                 var rows = tab.RankingBody.Children.OfType<Border>().ToList();
                 var ranked = rows.Where(b => b.Tag is LeaderboardRow).ToList();
                 var placing = rows.Where(b => b.Tag is PlacementRow).ToList();
-                Assert.Equal(StatsDemoData.DemoLadder().Count, ranked.Count);
+                var table = StatsDemoData.DemoLadder().Skip(RankingGroups.PodiumPlaces).ToList();
+                Assert.Equal(table.Count, ranked.Count);
                 Assert.Equal(StatsDemoData.DemoPlacement().Count, placing.Count);
+                Assert.Equal(RankingGroups.PodiumPlaces, Walk(tab.RankingPodiumHost).OfType<FrameworkElement>()
+                    .Count(e => Equals(e.Tag, MultiplayerTab.PodiumCardTag)));
 
                 var mine = Assert.Single(ranked, b => ((LeaderboardRow)b.Tag).UserId == EloDemoData.ViewerId);
                 Assert.NotNull(mine.Background);
@@ -108,11 +112,14 @@ public class EloPreviewTests
                 Assert.Contains(Texts(mine), t => t == "1720");
 
                 var pills = ranked.Count(b => Tagged(b, "StreakPill"));
-                Assert.Equal(StatsDemoData.DemoLadder().Count(r => r.Streak >= 3), pills);
-                Assert.Equal(StatsDemoData.DemoLadder().Count(r => r.Inactive == true),
+                Assert.Equal(table.Count(r => r.Streak >= 3), pills);
+                Assert.Equal(table.Count(r => r.Inactive == true),
                     ranked.Count(b => Tagged(b, "InactiveTag")));
 
-                Assert.Contains(StatsDemoData.DemoLadder().Count.ToString(), tab.RankingSubtitleText.Text);
+                // The summary is built from runs (its figures are in another face), so its Text is empty.
+                var summary = string.Concat(tab.RankingSubtitleText.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text));
+                Assert.Contains(StatsDemoData.DemoLadder().Count.ToString(), summary);
+                Assert.Contains(StatsDemoData.DemoPlacement().Count.ToString(), summary);
             }
         });
         Assert.Null(error);
@@ -135,7 +142,9 @@ public class EloPreviewTests
                 var children = tab.RankingBody.Children.OfType<Border>().ToList();
                 Assert.Equal("RankingEmptyPlacement", children[0].Tag);
                 Assert.All(children.Skip(1), b => Assert.IsType<PlacementRow>(b.Tag));
-                Assert.Empty(tab.RankingHeaderHost.Children);
+                // Design 93d keeps the column headings over the notice; there is no podium.
+                Assert.Single(tab.RankingHeaderHost.Children);
+                Assert.Equal(Visibility.Collapsed, tab.RankingPodiumHost.Visibility);
 
                 // Nobody ranked means no peak on this ladder, so the table has three columns —
                 // and is still the WIDE one: the long "Placement 6/10", not 55b's "6/10".

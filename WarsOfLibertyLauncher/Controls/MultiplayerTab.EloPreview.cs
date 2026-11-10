@@ -35,6 +35,9 @@ public partial class MultiplayerTab
     /// <summary>The 55c scene: the ranked tables empty, the placement rows still there.</summary>
     private bool _eloPreviewNobodyRanked;
 
+    /// <summary>Design 93e: nobody has played a rated match at all, so the table is its empty state.</summary>
+    private bool _eloPreviewEmptyLadder;
+
     /// <summary>The Players panel is showing sample players; live presence frames leave it alone
     /// until the launcher restarts.</summary>
     private bool _eloPreviewPlayers;
@@ -62,10 +65,24 @@ public partial class MultiplayerTab
             ShowProfileVariant(scene["profile:".Length..]);
             return;
         }
-        var picked = EloDemoData.SceneByName(scene);
+        // Design 93's blocks by their own names: 93a and 93b are the ranking (at two window
+        // sizes), 93c the Teams table, 93d nobody ranked yet, 93e nobody at all, 93f Highlights.
+        var block = (scene ?? "").Trim().ToLowerInvariant();
+        var picked = block switch
+        {
+            "93a" or "93b" or "93c" or "93e" => EloPreviewScene.Ranking,
+            "93d" => EloPreviewScene.Placement,
+            "93f" => EloPreviewScene.RankingHighlights,
+            _ => EloDemoData.SceneByName(scene),
+        };
+        // Only a block names its mode. The plain scenes keep whichever view is open, which is
+        // what a redraw of the preview relies on.
+        if (block is "93a" or "93b" or "93c" or "93d" or "93e")
+            _rankingMode = block == "93c" ? RankingMode.Team : RankingMode.Solo;
 
         _eloPreview = true;
         _eloPreviewNobodyRanked = picked == EloPreviewScene.Placement;
+        _eloPreviewEmptyLadder = block == "93e";
         _demoStats = true;
         ApplyDemoStats();
 
@@ -371,7 +388,7 @@ public partial class MultiplayerTab
             BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusSm"),
             Padding = new Thickness(9, 4, 9, 4),
-            Margin = new Thickness(0, 0, 8, 0),
+            Margin = new Thickness(12, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock
             {

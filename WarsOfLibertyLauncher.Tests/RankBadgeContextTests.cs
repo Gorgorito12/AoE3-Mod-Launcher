@@ -16,62 +16,27 @@ namespace WarsOfLibertyLauncher.Tests;
 /// call site can still hand it the wrong room or the wrong preference, which is the failure a
 /// player would actually see.
 ///
-/// <para>The cases that matter are the ones where the room OVERRULES the player: a 2v2 room shows
-/// the team badge to somebody who chose 1v1, and a 1v1 room the 1v1 badge to somebody who chose
-/// Teams. Only a room that says nothing about its format — a casual one — defers to the choice.</para>
+/// <para>The rooms LIST no longer wears one (design 86, the maintainer's call: the host's name and
+/// rating, as the prototype draws them); the badge lives in the room, the profile and the ranking.
+/// The room still decides which one shows there.</para>
 /// </summary>
 [Collection("wpf-and-language")]
 public class RankBadgeContextTests
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 
+    /// <summary>Design 86: whatever the host's places, the rooms row draws no badge.</summary>
     [Fact]
-    public void THE_ONE_THAT_MATTERS_ATeamRoomShowsTheHostsTeamBadgeEvenWhenTheyChose1v1()
+    public void TheRoomsRowWearsNoBadgeAnyMore()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var card = RoomCard(competitive: true, maxPlayers: 4, solo: 5, team: 2, mode: "1v1");
-            var team = Assert.Single(TeamBadges(card));
-            Assert.Equal(RankAges.ForOptional(2, 0), ((RankBadge.TeamBadgeTag)team.Tag).Age);
-        });
-        Assert.Null(error);
-    }
-
-    [Fact]
-    public void A1v1RoomIgnoresATeamPreference()
-    {
-        var error = DialogXamlTests.RunOnStaThread(() =>
-        {
-            var card = RoomCard(competitive: true, maxPlayers: 2, solo: 5, team: 2, mode: "team");
-            Assert.Empty(TeamBadges(card));
-            Assert.Equal(RankAges.ForOptional(5, 0), Assert.Single(Badges(card)).Tag);
-        });
-        Assert.Null(error);
-    }
-
-    [Fact]
-    public void ACasualRoomFollowsTheHostsChoice()
-    {
-        var error = DialogXamlTests.RunOnStaThread(() =>
-        {
-            Assert.Single(TeamBadges(RoomCard(competitive: false, maxPlayers: 8, solo: 5, team: 2, mode: "team")));
-            Assert.Empty(TeamBadges(RoomCard(competitive: false, maxPlayers: 8, solo: 5, team: 2, mode: "1v1")));
-        });
-        Assert.Null(error);
-    }
-
-    /// <summary>
-    /// A team room with somebody who never played a team match still shows the TEAM badge — the
-    /// double Discovery shield — and never quietly the 1v1 one, which would tell the room their
-    /// team record is their 1v1 record.
-    /// </summary>
-    [Fact]
-    public void ATeamRoomShowsTheDiscoveryDoubleShieldToANewcomer()
-    {
-        var error = DialogXamlTests.RunOnStaThread(() =>
-        {
-            var card = RoomCard(competitive: true, maxPlayers: 4, solo: 3, team: 0, mode: "highest");
-            Assert.Equal(RankAge.Discovery, ((RankBadge.TeamBadgeTag)Assert.Single(TeamBadges(card)).Tag).Age);
+            foreach (var (competitive, max, mode) in new[] { (true, 4, "1v1"), (true, 2, "team"), (false, 8, "team") })
+            {
+                var card = RoomCard(competitive, max, solo: 5, team: 2, mode);
+                Assert.Empty(TeamBadges(card));
+                Assert.Empty(Badges(card));
+            }
         });
         Assert.Null(error);
     }

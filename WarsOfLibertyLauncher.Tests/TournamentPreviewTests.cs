@@ -56,8 +56,8 @@ public class TournamentPreviewTests
             Assert.False(string.IsNullOrEmpty(done.WinnerEntrantId));
 
             // The champion line the finished tournament draws, on screen.
-            var champion = Strings.Format("MpTournamentChampion",
-                done.Entrants!.First(e => e.Id == done.WinnerEntrantId).DisplayName ?? "");
+            var champion = done.Entrants!.First(e => e.Id == done.WinnerEntrantId).DisplayName ?? "";
+            Assert.Contains(Strings.Get("TpChampion"), Texts(tab.TournamentDetailPanel));
             Assert.Contains(champion, Texts(tab.TournamentDetailPanel));
 
             // Nothing left to simulate, so the preview stops offering to.
@@ -127,7 +127,7 @@ public class TournamentPreviewTests
             tab.ClickBracketCellForPreview(live.Id);
 
             // "No": nothing is sent.
-            ClickMenuItem(AwardItem(tab, winnerName));
+            Click(AwardButton(tab, winnerName));
             var question = Overlay(tab);
             Assert.Equal(Strings.Get("MpTournamentAwardConfirmTitle"), question.Title);
             Click(question.Buttons.First(b => (b.Content as string) == Strings.Get("MpAlertCancel")));
@@ -135,7 +135,7 @@ public class TournamentPreviewTests
             Assert.Equal("pending", MatchOf(sim, id, live.Id).Status);
 
             // "Yes": the simulated server decides it, as a walkover for the side chosen.
-            ClickMenuItem(AwardItem(tab, winnerName));
+            Click(AwardButton(tab, winnerName));
             question = Overlay(tab);
             Click(question.Buttons.First(
                 b => (b.Content as string) == Strings.Get("MpTournamentAwardConfirmYes")));
@@ -240,17 +240,17 @@ public class TournamentPreviewTests
 
             var live = sim.Detail(id)!.Matches!.First(m => m.Lobby != null && m.Status == "pending");
             tab.ClickBracketCellForPreview(live.Id);
-            Assert.NotNull(BarOverflow(tab));
+            Assert.NotNull(CaptionedOrNull(tab, "MpTournamentReplay"));
             Assert.Equal("active", PreviewButton(tab, "ViewAs:Organiser")!.Tag as string);
 
             Click(PreviewButton(tab, "ViewAs:Spectator")!);
-            Assert.Null(BarOverflow(tab));
+            Assert.Null(CaptionedOrNull(tab, "MpTournamentReplay"));
             Assert.Equal("active", PreviewButton(tab, "ViewAs:Spectator")!.Tag as string);
             Assert.Null(PreviewButton(tab, "ViewAs:Organiser")!.Tag as string);
             Assert.Equal(live.Id, tab.SelectedBracketMatchId);
 
             Click(PreviewButton(tab, "ViewAs:Organiser")!);
-            Assert.NotNull(BarOverflow(tab));
+            Assert.NotNull(CaptionedOrNull(tab, "MpTournamentReplay"));
 
             // Another tournament opens as the person IT was written for.
             Click(PreviewButton(tab, "ViewAs:Spectator")!);
@@ -299,7 +299,7 @@ public class TournamentPreviewTests
         var error = DialogXamlTests.RunOnStaThread(() => InSpanish(() =>
         {
             var tab = new MultiplayerTab();
-            var prefix = Strings.Get("MpTournamentSidesWarningTeam").Split("{0}")[0];
+            var prefix = Strings.Get("TpCallSides").Split("{0}")[0];
 
             tab.ShowDemoTournaments("teams");
             Assert.NotNull(tab.SelectedBracketMatchId);
@@ -575,20 +575,29 @@ public class TournamentPreviewTests
 
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, b));
 
-    private static void ClickMenuItem(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, item));
-
-    /// <summary>The ⋯ of the bracket's action bar: the one Button whose menu decides matches.</summary>
-    private static Button? BarOverflow(MultiplayerTab tab)
+    /// <summary>The organiser's button for one side of the picked match.</summary>
+    private static Button AwardButton(MultiplayerTab tab, string winnerName)
         => Logical(tab.TournamentDetailPanel).OfType<Button>()
-            .FirstOrDefault(b => b.ContextMenu != null
-                                 && b.ContextMenu.Items.OfType<MenuItem>()
-                                     .Any(i => (i.Header as string)?.Contains(
-                                         Strings.Get("MpTournamentReplay")) == true));
+            .First(b => (b.Content as string) == Strings.Format("MpTournamentAwardTo", winnerName));
 
-    private static MenuItem AwardItem(MultiplayerTab tab, string winnerName)
-        => (BarOverflow(tab) ?? throw new Xunit.Sdk.XunitException("the bar has no ⋯"))
-            .ContextMenu!.Items.OfType<MenuItem>()
-            .First(i => (i.Header as string) == Strings.Format("MpTournamentAwardTo", winnerName));
+    [Fact]
+    public void CancellingATournamentAsksFirst()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() => InSpanish(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoTournaments("organiser");
+            var sim = tab.TournamentPreview;
+            Click(Logical(tab.TournamentDetailPanel).OfType<Button>().First(b =>
+                System.Windows.Automation.AutomationProperties.GetAutomationId(b) == "TournamentTab:Organise"));
+
+            Click(Captioned(tab, "MpTournamentCancel"));
+
+            Assert.NotNull(Overlay(tab));
+            Assert.NotEqual("cancelled", sim.Detail(TournamentDemoData.OrganiserId)!.Status);
+        }));
+        Assert.Null(error);
+    }
 
     private static List<string> Texts(DependencyObject root)
         => Logical(root).OfType<TextBlock>().Select(RevealText.PlainTextOf).ToList();

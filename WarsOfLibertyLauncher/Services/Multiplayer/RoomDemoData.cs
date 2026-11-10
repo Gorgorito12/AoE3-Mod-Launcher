@@ -66,8 +66,8 @@ public static class RoomDemoData
         public required string Code { get; init; }
         public required string RoomName { get; init; }
 
-        /// <summary>Total seats. The roster draws this many rows: the occupied ones from
-        /// <see cref="Players"/>, the rest as free seats.</summary>
+        /// <summary>Seats to PLAY in, observers' seats aside (those are <see cref="SpectatorSlots"/>).
+        /// The server's <c>max_players</c> counts both, which is what the room is given.</summary>
         public required int Seats { get; init; }
 
         public required bool Competitive { get; init; }

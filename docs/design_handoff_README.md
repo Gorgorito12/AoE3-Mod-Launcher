@@ -796,6 +796,44 @@ team cannot be read says "You were invited". A refused create keeps the form wit
 sheet's list shows its scrollbar where the prototype's headless render hides it.
 `CreateTeamDialog` is gone, and with it `--preview-dialog=small:k`.
 
+**Screen 80 (Torneos)**, compared with `Torneos v2.dc.html` (80a) at its own 1600 x 960, then at
+1366 and 1920 in Media, 1920 in Solid and Maximum, 2560, reduced effects and English. What differs,
+on purpose: the subtab bar keeps the launcher's pills until screen 86 changes it for every subtab;
+the sample data carries an amber strip saying it is not real; Replay is offered only on a match not
+yet decided, because the server refuses it on a decided one (the prototype offers it on both); a tile
+keeps a `⋯` with Disqualify for the organiser; the list states a tournament's round and winner only
+for the one that is open, because the list payload does not carry them; "your turn" in the list needs
+the server's `my_entries`; a co-organiser is picked among the captains already entered; the accent is
+normalised like everywhere else; the cover is blurred once, never live; 32 and 64 places need the
+server to raise its limit. Under reduced effects the champion has no glow.
+
+**Screen 86 (Salas)**, compared with `Salas v2.dc.html` in 86a (1920) and 86b to 86e (1366), then
+English, 2560 and the Solid and Maximum glass. What differs, on purpose: the PING column is the
+ping to each host over Radmin and appears only when the server publishes the hosts' addresses
+(`GET /lobbies/radmin`); a host that does not answer shows "—" with the reason, and the viewer's own
+internet ping is said once above the list ("Tu conexión · 62 ms"); "Entrar a mirar" appears only in developer mode, so without it the observers' room reads
+"Llena"; "Ver partida" opens the players peek rather than a "watching a match" screen; the "no ranked
+ladder" state of the quick match card appears only after the first search for that mod, because only
+the server knows it, at create time;
+the activity facts keep their own count instead of 2/3/4 by width; the sample peak hours are the
+fixture's. The subtab bar (capitals, a blue line) is now the same for all four subtabs.
+
+**Screen 93 (Clasificación)**, compared with `Clasificación v3.dc.html` in 93a (1920), 93b, 93d and 93e
+(1366), 93c (2560, Teams) and 93f (Highlights), then English, reduced effects and the Solid and
+Maximum glass. What differs, on purpose: the ages are the launcher's own shares of the ladder
+(`RankAges`), so a table of nine does not cut where the prototype's sample does; the badge is the
+launcher's `RankBadge`, larger and with its own light, and Discovery's is the dull plate it is
+everywhere else rather than a shield with an "I"; a group's range is the age's places on the whole
+ladder; only the viewer's own row, podium card and "Your position" open a profile, because there is
+no profile page for another player; the month's climb ("+41 in November") is drawn only for a player
+the server's biggest-climb list names, there being no figure for anybody else; the glows that are
+box-shadows in the prototype are left out (no live effect over lists) and the cards' fill is the
+launcher's glass level, not a live blur; the "Clasificación" title and the "How ranks work" button are
+gone from the header (the guide opens from any badge and from the account menu); Highlights keeps
+its month capsule where the prototype has a "see last month" link; the Matches view is unchanged.
+With no peak sent for anybody (93d) the table has three columns, so its ELO column starts further
+right than the prototype's four.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup

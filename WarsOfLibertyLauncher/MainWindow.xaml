@@ -262,6 +262,32 @@
              than in PlayView. Nothing in it takes a click. The blurred layer is one image decoded
              small and blurred once, clipped to the panels: a live BlurEffect behind them would be
              recomputed on every frame anything moves. -->
+        <!-- The Tournaments page's cover: its own layer, because it follows the tournament and the
+             Library's follows the active mod. Same shape: one image, its blurred twin clipped to the
+             panels, and the design's two gradients on top. -->
+        <Grid x:Name="TournamentBackdrop" Grid.RowSpan="3" IsHitTestVisible="False" ClipToBounds="True" Visibility="Collapsed">
+            <Border x:Name="TournamentCover" RenderOptions.BitmapScalingMode="HighQuality" Background="{DynamicResource MpAppBg}"/>
+            <Border x:Name="TournamentBlur" RenderOptions.BitmapScalingMode="Linear" Visibility="Collapsed"/>
+            <Rectangle>
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,.5" EndPoint="1,.5">
+                        <GradientStop Color="#E60F1C2E" Offset="0"/>
+                        <GradientStop Color="#B80F1C2E" Offset=".3"/>
+                        <GradientStop Color="#800F1C2E" Offset=".62"/>
+                        <GradientStop Color="#570F1C2E" Offset="1"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+            <Rectangle>
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
+                        <GradientStop Color="#F00F1C2E" Offset="0"/>
+                        <GradientStop Color="#8C0F1C2E" Offset=".45"/>
+                        <GradientStop Color="#260F1C2E" Offset="1"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+        </Grid>
         <Grid x:Name="LibraryBackdrop" Grid.RowSpan="3" IsHitTestVisible="False" ClipToBounds="True">
             <Border x:Name="DashboardBgFill"
                     RenderOptions.BitmapScalingMode="HighQuality"

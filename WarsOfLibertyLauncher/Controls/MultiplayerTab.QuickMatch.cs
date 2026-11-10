@@ -45,6 +45,9 @@ public partial class MultiplayerTab
     /// <summary>The Library on this mod: where installing happens.</summary>
     private Action<Models.ModProfile>? _openModInLibrary;
 
+    /// <summary>Opens a mod's settings on a section ("local-files"): "Check my copy" in the rooms list.</summary>
+    private Action<Models.ModProfile, string>? _openModSettings;
+
     /// <summary>MainWindow's title-bar pill: its text and tooltip, or null to hide it.</summary>
     private Action<string?, string?>? _setQuickMatchPill;
 
@@ -63,11 +66,21 @@ public partial class MultiplayerTab
 
     private QuickMatchStage _qmStage = QuickMatchStage.Idle;
     private string? _qmLobbyId;
+
+    /// <summary>The room the last search ENDED in, and who the rival there is: the quick match card
+    /// says "You play X" while the player is in it (design 86, "dentro"). The search itself is over
+    /// by then, which is why this outlives <see cref="_qmLobbyId"/>.</summary>
+    private string? _qmFoundLobbyId;
+    private string? _qmFoundRival;
+    private bool _qmFoundHosting;
     private RoomDemoData.Sample? _demoQuickSearch;
     private bool _qmRadminNotReady;
     private bool _qmRoomWasAlone;
     private AnimationClock? _qmSeatDotClock;
     private string? _qmModId;
+
+    /// <summary>Mods the server refused a competitive room for this session: they have no ladder.</summary>
+    private readonly HashSet<string> _qmUnrankedMods = new(StringComparer.Ordinal);
     private string? _qmModHash;
     private string? _qmModName;
     private DateTime _qmStartedUtc;
@@ -101,16 +114,6 @@ public partial class MultiplayerTab
     public bool IsQuickMatchSearchingMod(string? modId)
         => IsQuickMatchSearching && !string.IsNullOrEmpty(modId)
            && string.Equals(_qmModId, modId, StringComparison.OrdinalIgnoreCase);
-
-    private async void QuickMatchButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (IsQuickMatchSearching)
-        {
-            await CancelQuickMatchAsync(Strings.Get("QmCancelled"));
-            return;
-        }
-        await StartQuickMatchAsync();
-    }
 
     /// <summary>
     /// Starts a search for the ACTIVE mod: the cheap refusals, the room the player may already be
@@ -192,6 +195,7 @@ public partial class MultiplayerTab
             DiagnosticLog.Write($"QuickMatch: trying waiting room {room.Id}.");
             if (await JoinLobbyCoreAsync(room, quietOnRaceLoss: true))
             {
+                RememberQuickMatchFound(room.Id, RoomHostName(room), hosting: false);
                 EndQuickMatch($"joined waiting room {room.Id}");
                 await SayInRoomAsync(room.Id, Strings.Get("QmJoinedRoom"));
                 return;
@@ -286,6 +290,9 @@ public partial class MultiplayerTab
 
         if (!created.Competitive)
         {
+            // Remembered for the session, so the card says it before the next click instead of
+            // opening and closing another room to learn it again.
+            if (_qmModId is { } unranked) _qmUnrankedMods.Add(unranked);
             EndQuickMatch("the server would not make the room competitive (no ladder for this mod)");
             await LeaveRoomQuietlyAsync("quick match: the mod has no ladder");
             await MpAlertOverlay.NoticeAsync(
@@ -331,6 +338,7 @@ public partial class MultiplayerTab
 
             if (await JoinLobbyCoreAsync(target, quietOnRaceLoss: true))
             {
+                RememberQuickMatchFound(target.Id, RoomHostName(target), hosting: false);
                 EndQuickMatch($"moved into older room {target.Id}");
                 await SayInRoomAsync(target.Id, Strings.Get("QmMovedToOlderRoom"));
                 return;
@@ -391,6 +399,7 @@ public partial class MultiplayerTab
         if (string.Equals(userId, _session?.CurrentUser?.Id, StringComparison.Ordinal)) return;
         if (!string.Equals(_session?.CurrentLobbyId, _qmLobbyId, StringComparison.Ordinal)) return;
 
+        RememberQuickMatchFound(_qmLobbyId!, login, hosting: true);
         EndQuickMatch($"rival '{login}' joined");
         _showAppToast?.Invoke(new AppToast.ToastOptions(
             "⚔",
@@ -577,6 +586,13 @@ public partial class MultiplayerTab
         RefreshQuickMatchUi();
     }
 
+    private void RememberQuickMatchFound(string lobbyId, string rival, bool hosting)
+    {
+        _qmFoundLobbyId = lobbyId;
+        _qmFoundRival = rival;
+        _qmFoundHosting = hosting;
+    }
+
     /// <summary>Ends the search's state and its clocks. Idempotent.</summary>
     private void EndQuickMatch(string reason)
     {
@@ -654,14 +670,7 @@ public partial class MultiplayerTab
     {
         var searching = IsQuickMatchSearching;
         var elapsed = QuickMatchPlanner.Elapsed(DateTime.UtcNow - _qmStartedUtc);
-        if (QuickMatchButton != null)
-        {
-            QuickMatchButton.Content = searching ? Strings.Format("QmSearching", elapsed) : Strings.Get("QmFindMatch");
-            QuickMatchButton.IsEnabled = searching || !_offlineMode;
-            QuickMatchButton.ToolTip = !searching && _offlineMode
-                ? _offlineNeedsInternet
-                : TooltipHelper.Wrap(Strings.Get(searching ? "QmSearchingTip" : "QmFindMatchTip"));
-        }
+        RenderQuickCard();
         _setQuickMatchPill?.Invoke(
             searching ? Strings.Format("QmPill", elapsed) : null,
             searching ? Strings.Format("QmPillTip", _qmModName ?? _qmModId ?? "") : null);

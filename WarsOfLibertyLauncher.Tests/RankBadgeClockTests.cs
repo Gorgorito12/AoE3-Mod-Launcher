@@ -174,4 +174,55 @@ public class RankBadgeClockTests
         });
         Assert.Null(error);
     }
+    /// <summary>
+    /// The looping lights that are not badges - the podium's sheen, the quick-match card's marks -
+    /// are told when the launcher gains or loses the foreground, and ask the badges' own rule
+    /// whether they may run. The podium's sheen ran on with the launcher behind another program:
+    /// the log called it a storm of redraws "nobody watching".
+    /// </summary>
+    [Fact]
+    public void TheOtherLoopingLightsAreToldAndFollowTheSameRule()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var told = 0;
+            void Count() => told++;
+            RankBadge.RunConditionsChanged += Count;
+            try
+            {
+                RankBadge.SetAppActive(false);
+                Assert.Equal(1, told);
+                Assert.False(RankBadge.MayRunOn(new System.Windows.Controls.Grid()));
+                RankBadge.SetAppActive(true);
+                Assert.Equal(2, told);
+                // A window minimised or restored goes through the same door.
+                RankBadge.Reevaluate();
+                Assert.Equal(3, told);
+                Assert.False(RankBadge.MayRunOn(null));
+            }
+            finally
+            {
+                RankBadge.RunConditionsChanged -= Count;
+                RankBadge.SetAppActive(true);
+            }
+        });
+        Assert.Null(error);
+
+        // Both of them ask that rule, and neither keeps a copy of it.
+        foreach (var file in new[] { "MultiplayerTab.RankingPodium.cs", "MultiplayerTab.QuickCard.cs" })
+        {
+            var code = System.IO.File.ReadAllText(System.IO.Path.Combine(RepoRoot(), "WarsOfLibertyLauncher", "Controls", file));
+            Assert.Contains("RankBadge.MayRunOn(", code);
+            Assert.Contains("RankBadge.RunConditionsChanged +=", code);
+            Assert.DoesNotContain("WindowState.Minimized", code);
+        }
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "WarsOfLibertyLauncher.Tests")))
+            dir = dir.Parent;
+        return dir!.FullName;
+    }
 }

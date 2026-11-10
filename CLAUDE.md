@@ -596,6 +596,37 @@ rather than the reverse.
   desktop card lands on the primary monitor, not the test one. The room NAME stays
   the English network value of `RoomTitleProposal`, against the prototype's Spanish samples.
 
+- **Screen 80 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the Tournaments
+  subtab** (the action bar, the entrant table with its `⋯` column, the tournament header). The page is
+  `MultiplayerTab.TournamentsPage.cs` over the pure `Services/Multiplayer/TournamentPage`, with the
+  mod's cover behind it (`MainWindow.TournamentBackdrop.cs`); the rules are in
+  `.claude/rules/multiplayer.md` (TOURNAMENTS). `--demo-tournaments=big32` is the 32-place draw.
+  `Controls/FlexLine` is a wrapping row whose `Spring` child takes what is left of its line (CSS
+  flex-wrap), and `AutoFillPanel` is `repeat(auto-fill, minmax())`.
+
+- **Screen 86 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the Rooms page**
+  (the rooms table with its sort arrows and capacity bars, the rank badge in the host cell, design 66's
+  green/blue/amber action buttons, the refresh icon, the "Find a 1v1 match" button in the list header,
+  the 58/54-px rows). One row per room (`Controls/MultiplayerTab.RoomRows.cs`): icon, name over chips,
+  host over "1630 ELO" or "En posicionamiento 3/10", players, the ping to the host over Radmin (only
+  with a server that publishes hosts' addresses), and ONE action decided by the pure
+  `Services/Multiplayer/RoomActionRule`, which also groups the list under PUEDES ENTRAR / EN PARTIDA /
+  NO DISPONIBLES AHORA. The quick match is a card above the list (`MultiplayerTab.QuickCard.cs` over
+  `Services/Multiplayer/QuickCardView`). The rules are in `.claude/rules/multiplayer.md` (ROOMS PAGE).
+  `--demo-rooms=86a..86e` (and a Settings → Developer row) paints it with sample rooms; buttons there
+  say what they would do instead of doing it.
+
+- **Screen 93 of `docs/design_base_launcher_2` SUPERSEDES what this file and `multiplayer.md` say about
+  the Clasificación page** (the pinned copy of the viewer's row, the plain hairline rows, the page title
+  and its "How ranks work" button, the uppercase cards of Highlights). The first three stand on a
+  podium (`Controls/MultiplayerTab.RankingPodium.cs`), the table starts at the fourth under a heading
+  per age, players being placed are its last group, and "Your position" sits over "Latest matches" in
+  the side column; the pure rules are `Services/Multiplayer/RankingView.cs` (`RankingGroups`,
+  `YourStandingView`, `RankingPodiumFluid`, `RankAgeColors`). `--demo-elo=93a..93f` opens each block.
+  Going back to the subtab draws nothing unless something moved (`RenderRankingIfChanged`), and a
+  looping light that is not a badge asks `RankBadge.MayRunOn` and listens to
+  `RankBadge.RunConditionsChanged`. The rules are in `.claude/rules/multiplayer.md` (RANKING PAGE).
+
 - **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the
   piece of the blurred cover under it plus the level's tint (`GlassTheme.Spec.Menu`), which supersedes
   the "denser than the design" note below while a cover is on screen; with none, `Spec.Floating`
@@ -2092,7 +2123,9 @@ rather than the reverse.
   halo), so the blur is worked out once instead of every frame — **never on anything holding crisp
   text**, which would lose ClearType exactly like an Effect. (3) **`Services/EffectsGovernor`**
   turns every light off for the session (`RankBadge.SetReducedEffects`, which the update pill
-  follows) after three watched seconds in a row spending ≥ 400 ms drawing at ≥ 60 ms a frame, or
+  follows; the Settings choice "Effects and animations: Reduced" turns them off too, through the
+  separate `SetUserReducedEffects`, so switching it back never re-lights a PC the governor found
+  slow) after three watched seconds in a row spending ≥ 400 ms drawing at ≥ 60 ms a frame, or
   at start on a rendering tier below 2, and logs one `EFFECTS REDUCED` line. Both halves of that
   rule are needed: a fast PC dragging the window's edge also spends most of a second drawing, in
   many cheap frames, and must keep its lights. `AOE3ML_SOFTWARE_RENDER=1` forces software
@@ -2146,8 +2179,8 @@ rather than the reverse.
   `TargetName` into each Style's own triggers, on the control's `Background`, which reaches
   the template through the `TemplateBinding`. Triggers merge base-first down the `BasedOn`
   chain and the last setter wins, so the derived style's state is the one that lands. A
-  style that supplies its OWN `Template` is exempt — that is why `MpRoomActionGhost` and
-  `MpRowJoinButton` legitimately keep a `TargetName` trigger. The implicit global `Button`
+  style that supplies its OWN `Template` is exempt — that is why `MpRowJoinButton` and
+  `QcButtonPrimary` legitimately keep a `TargetName` trigger. The implicit global `Button`
   style solves it a third way, by animating an overlay's `Opacity` rather than a colour.
   Pinned by `DialogXamlTests.NoDerivedStyleDeclaresAStateItsInheritedTemplateStomps`, which
   walks every style in `Styles/*.xaml` and asserts it examined a non-zero number of them.
@@ -6175,7 +6208,7 @@ rather than the reverse.
 
 - **Seeing a populated tournament bracket without running one: `MultiplayerTab.ShowDemoTournaments`**,
   reachable from Settings → Developer and from the **`--demo-tournaments`** launch argument,
-  which takes a scenario: `--demo-tournaments=teams`, `=myroom`, `=waiting`, `=registration`,
+  which takes a scenario: `--demo-tournaments=teams`, `=big32`, `=myroom`, `=waiting`, `=registration`,
   `=finished`, or `=dialog` for the new-tournament modal. Six samples and not four, because a
   person is one entrant in a tournament and an entrant has one live match: `Playable`,
   `JoinRoom`, `ReturnToRoom` and `WaitingOpponent` are four answers to one question and no

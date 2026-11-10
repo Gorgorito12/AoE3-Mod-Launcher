@@ -81,6 +81,7 @@ internal static class BracketLayout
         if (round == total - 2) return "MpTournamentRoundQuarter";
         if (round == total - 3) return "MpTournamentRoundEighth";
         if (round == total - 4) return "MpTournamentRoundSixteenth";
+        if (round == total - 5) return "MpTournamentRoundThirtySecond";
         return "MpTournamentRoundN";
     }
 

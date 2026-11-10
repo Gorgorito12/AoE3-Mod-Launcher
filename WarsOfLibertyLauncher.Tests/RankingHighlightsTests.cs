@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services.Multiplayer;
@@ -90,8 +91,8 @@ public class RankingHighlightsTests
                 var titles = cards.Select(c => TextOf(c)[0]).ToList();
                 Assert.Equal(new[]
                 {
-                    "BIGGEST CLIMB", "MOST WINS", "MOST MATCHES", "BEST STREAK",
-                    "BEST WIN RATE", "BIGGEST UPSET", "CIVILIZATION OF THE MONTH",
+                    "Biggest climb", "Most wins", "Most matches", "Best streak",
+                    "Best win rate", "Biggest upset", "Civilization of the month",
                 }, titles);
                 Assert.All(cards, c => Assert.InRange(RowsOf(c).Count, 1, 5));
                 // The subtitle says how many matches stand behind the month.
@@ -114,9 +115,10 @@ public class RankingHighlightsTests
         {
             var tab = new MultiplayerTab();
             tab.ShowDemoElo("rankinghighlights");
-            var own = Application.Current.FindResource("MpRankOwnRow");
+            // Design 93f: the viewer's own row is blue with a rim; the first of a card is soft gold.
+            var own = Color.FromArgb(0x14, 0x55, 0xAC, 0xEE);
             var rows = CardsOf(tab).SelectMany(RowsOf).ToList();
-            var marked = rows.Where(r => ReferenceEquals(r.Background, own)).ToList();
+            var marked = rows.Where(r => r.Background is SolidColorBrush b && b.Color == own).ToList();
             Assert.Equal(3, marked.Count);
             Assert.All(marked, r => Assert.Contains(Strings.Get("MpRankYouTag"), TextOf(r)));
             Assert.All(rows.Except(marked), r => Assert.DoesNotContain(Strings.Get("MpRankYouTag"), TextOf(r)));

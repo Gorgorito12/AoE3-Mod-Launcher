@@ -4,7 +4,7 @@ using Xunit;
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// Going offline greys the three multiplayer actions that need the network; coming back must
+/// Going offline greys the multiplayer actions that need the network; coming back must
 /// give every one of them back.
 ///
 /// <para><b>Why this needs a test.</b> The online branch of <c>SetOfflineMode</c> re-enabled
@@ -33,10 +33,10 @@ public class OfflineModeButtonsTests
             {
                 tab.SetOfflineMode(true, "needs internet", "offline");
                 Assert.False(tab.SignInButton.IsEnabled);
-                Assert.False(tab.RefreshButton.IsEnabled);
                 Assert.False(tab.CreateRoomButton.IsEnabled);
-                // The quick match needs the server as much as "+ Create room" does…
-                Assert.False(tab.QuickMatchButton.IsEnabled);
+                // The quick match card needs the server as much as "+ Create room" does, and
+                // offline it is not drawn at all (design 86e): the list already says why.
+                Assert.NotEqual(System.Windows.Visibility.Visible, tab.QuickCardHost.Visibility);
 
                 tab.SetOfflineMode(false, "needs internet", "offline");
                 Assert.Equal(before, State(tab));
@@ -44,13 +44,11 @@ public class OfflineModeButtonsTests
 
             Assert.True(tab.SignInButton.IsEnabled);
             Assert.True(tab.CreateRoomButton.IsEnabled);
-            // …and is the fourth button the online branch has to give back.
-            Assert.True(tab.QuickMatchButton.IsEnabled);
         });
         Assert.Null(error);
     }
 
-    private static (bool SignIn, bool Refresh, bool Create, bool EmptyCreate, bool QuickMatch) State(MultiplayerTab tab)
-        => (tab.SignInButton.IsEnabled, tab.RefreshButton.IsEnabled,
-            tab.CreateRoomButton.IsEnabled, tab.EmptyCreateButton.IsEnabled, tab.QuickMatchButton.IsEnabled);
+    private static (bool SignIn, bool Create, bool EmptyCreate, System.Windows.Visibility QuickCard) State(MultiplayerTab tab)
+        => (tab.SignInButton.IsEnabled, tab.CreateRoomButton.IsEnabled, tab.EmptyCreateButton.IsEnabled,
+            tab.QuickCardHost.Visibility);
 }

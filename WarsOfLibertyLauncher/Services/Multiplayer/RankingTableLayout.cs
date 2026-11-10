@@ -81,17 +81,28 @@ public static class RankingTableLayout
     /// <summary>The longest the ELO bar and the placement segments get (design 59).</summary>
     public const double BarMaxWidth = 300;
 
-    /// <summary>The ELO bar: 4 px high, radius 2, 5 px under the figure (design 59).</summary>
-    public const double BarHeight = 4;
+    /// <summary>The ELO bar: 6 px high, radius 3, 5 px under the figure (design 93; 4 px in 59).</summary>
+    public const double BarHeight = 6;
     public const double BarGap = 5;
 
     /// <summary>The placement segments: 4 px high, 3 px apart, radius 1 (design 59).</summary>
     public const double SegmentHeight = 4;
     public const double SegmentGap = 3;
 
-    /// <summary>The column headings' row: 34 px, labels 16 px in from each side (design 59).</summary>
-    public const double HeaderHeight = 34;
-    public const double SidePadding = 16;
+    /// <summary>The column headings' row: 38 px, its labels in line with the rows' content
+    /// (design 93). A row is a plate 8 px in from the card, with a 1-px rim and 12 px of padding,
+    /// so the headings sit <see cref="SidePadding"/> in.</summary>
+    public const double HeaderHeight = 38;
+    public const double SidePadding = BodyInset + 1 + RowPadding;
+
+    /// <summary>The rows' inset from the card, the padding inside a row's plate, and the space
+    /// between two plates (design 93).</summary>
+    public const double BodyInset = 8;
+    public const double RowPadding = 12;
+    public const double RowGap = 4;
+
+    /// <summary>The picture in a row: 58 % of the row's height (design 93), 28 to 36 px.</summary>
+    public static double AvatarSize(double rowHeight) => Math.Round(Math.Max(48, rowHeight) * 0.58);
 
     /// <summary>
     /// <c>40 · minmax(180,2fr) · minmax(200,1.3fr) · minmax(64,.45fr)</c> — design 59's widths, the

@@ -89,64 +89,6 @@ public class TournamentRateLimitTests
 
     // ---------------------------------------------------------------- the dead button
 
-    /// <summary>
-    /// AN ENTRY THAT IS ALREADY OUT OFFERS NOTHING. "Withdraw" was drawn on every entry of
-    /// mine, withdrawn ones included, because the rule it asked (`CanWithdraw`) is about the
-    /// tournament and about me and never about the row. Pressing it sent a request the server
-    /// accepts and does nothing with — and spent one of the account's tournament actions for
-    /// that minute, which is how somebody reaches the ceiling by pressing a button that could
-    /// not have worked.
-    /// </summary>
-    [Fact]
-    public void AWithdrawnEntryDoesNotOfferToWithdrawAgain()
-    {
-        var error = DialogXamlTests.RunOnStaThread(() =>
-        {
-            var previous = Strings.Language;
-            try
-            {
-                Strings.SetLanguage("es");
-                var tab = new WarsOfLibertyLauncher.Controls.MultiplayerTab();
-
-                var t = new TournamentDetail
-                {
-                    Id = "c1",
-                    Name = "Copa",
-                    Status = "registration",
-                    OwnerUserId = "me",
-                    Capacity = 4,
-                    Entrants = new List<TournamentEntrant>
-                    {
-                        new()
-                        {
-                            Id = "in", Kind = "solo", DisplayName = "Gorgorito12",
-                            Status = "confirmed", CaptainUserId = "me",
-                            MemberIds = new List<string> { "me" },
-                        },
-                        new()
-                        {
-                            Id = "out", Kind = "solo", DisplayName = "Gorgorito12",
-                            Status = "withdrawn", CaptainUserId = "me",
-                            MemberIds = new List<string> { "me" },
-                        },
-                    },
-                };
-
-                var list = (FrameworkElement)tab.BuildEntrantsList(t, "me");
-                var withdraw = Strings.Get("MpTournamentWithdraw");
-                var buttons = Descendants(list).OfType<Button>()
-                    .Count(b => b.Content as string == withdraw);
-
-                // One button for two rows of mine: the live entry has it, the withdrawn one
-                // does not.
-                Assert.Equal(1, buttons);
-            }
-            finally { Strings.SetLanguage(previous); }
-        });
-
-        Assert.Null(error);
-    }
-
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
     {
         foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())

@@ -906,79 +906,22 @@
     </Style>
 
     <!-- Outline blue (empty-state Create button under the illustration). -->
-    <!-- Room-row action buttons (design handoff 1a). The reference gives the two
-         ENABLED states different weights on purpose: joining a room you are not in is
-         the table's primary act and gets a solid fill, while returning to the room you
-         are already in is a way back rather than an invitation, so it is a ghost. They
-         used to share one outline style, which made every row look equally like a call
-         to action. Disabled states keep the neutral MpSecondaryButton. -->
-    <Style x:Key="MpRoomActionPrimary" TargetType="Button">
-        <Setter Property="Background" Value="{DynamicResource MpAction}"/>
-        <Setter Property="Foreground" Value="#FFFFFF"/>
-        <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Height" Value="{StaticResource MpControlHeight}"/>
-        <Setter Property="Padding" Value="14,0"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="b"
-                            Background="{TemplateBinding Background}"
-                            CornerRadius="{StaticResource RadiusControl}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="b" Property="Background" Value="{DynamicResource MpBlueHover}"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <Style x:Key="MpRoomActionGhost" TargetType="Button" BasedOn="{StaticResource MpRoomActionPrimary}">
-        <Setter Property="Background" Value="{DynamicResource MpActionSoftBg}"/>
-        <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{DynamicResource MpActionRim}"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusControl}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="#FFFFFF"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <!-- The rooms list's JOIN (design handoff turn 36, coloured by design 66): a tinted
-         outline, 30 high, radius 7, in the green the Discord announcement gives a room that can
-         be joined. Its own template on purpose, with every state in the Style's triggers on the
-         TemplateBound Background/BorderBrush — never a TargetName setter — so nothing that
-         derives from it inherits a state it cannot override (the trap that left fifteen
-         dialogs with dead hovers). -->
-    <Style x:Key="MpRoomActionJoin" TargetType="Button">
-        <Setter Property="Background" Value="{DynamicResource MpRoomJoinBg}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource MpRoomJoinRim}"/>
-        <Setter Property="Foreground" Value="{DynamicResource MpRoomJoinText}"/>
+    <!-- The rooms list's row button (design 86): 32 high, radius 7, 0 14 padding, 12.5 semibold.
+         Secondary is a faint fill with a rim; primary is the action blue. State lives in each
+         Style's own triggers on Background, which the template TemplateBinds, so the primary
+         derived from it keeps its own hover (the TargetName trap in CLAUDE.md). -->
+    <Style x:Key="RmRowButton" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource RmButtonBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource RmButtonRim}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Height" Value="{StaticResource MpControlHeight}"/>
-        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Foreground" Value="{DynamicResource RmTextHost}"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Padding" Value="13,0"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="{DynamicResource RmButtonSize}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="HorizontalAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -994,9 +937,110 @@
         </Setter>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{DynamicResource MpRoomJoinHoverBg}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource MpRoomJoinRimHover}"/>
-                <Setter Property="Foreground" Value="#FFFFFF"/>
+                <Setter Property="Background" Value="{DynamicResource RmButtonHover}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- The quick match card's buttons (design 86): 52 high (40 compact), radius 10. The primary
+         is the ACTIVE MOD's accent, as the design paints it, with the glow as a sibling under the
+         caption (an Effect on the caption's ancestor would cost it ClearType). Hover brightens
+         through an overlay's opacity, so the fill stays the mod's own colour. -->
+    <Style x:Key="QcButton" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource RmButtonBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource RmButtonRim}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="{DynamicResource RmTextHost}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="10"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource RmButtonHover}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="QcButtonPrimary" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource ModAccent}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ModOnAccent}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border CornerRadius="10" Background="{TemplateBinding Background}">
+                            <Border.Effect>
+                                <DropShadowEffect ShadowDepth="6" BlurRadius="20" Opacity="0.35"
+                                                  Color="{DynamicResource ModAccentGlowColor}"/>
+                            </Border.Effect>
+                            <Border.CacheMode>
+                                <BitmapCache/>
+                            </Border.CacheMode>
+                        </Border>
+                        <Border CornerRadius="10" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border x:Name="lift" CornerRadius="10" Background="#FFFFFF" Opacity="0" IsHitTestVisible="False"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="lift" Property="Opacity" Value="0.1"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- "+ Crear sala" in the subtab bar (design 86): 34 high, radius 8, 13 semibold. -->
+    <Style x:Key="RmCreateButton" TargetType="Button" BasedOn="{StaticResource RmRowButton}">
+        <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="FontSize" Value="{DynamicResource RmHostSize}"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource RmPrimaryHover}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{DynamicResource RmButtonBg}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="RmRowButtonPrimary" TargetType="Button" BasedOn="{StaticResource RmRowButton}">
+        <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource RmPrimaryHover}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -1027,47 +1071,6 @@
             </Setter.Value>
         </Setter>
     </Style>
-    <Style x:Key="MpRoomActionInGame" TargetType="Button" BasedOn="{StaticResource MpRoomActionStatus}">
-        <Setter Property="Background" Value="{DynamicResource MpRoomInGameBg}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource MpRoomInGameRim}"/>
-        <Setter Property="Foreground" Value="{DynamicResource MpRoomInGameText}"/>
-    </Style>
-    <Style x:Key="MpRoomActionFull" TargetType="Button" BasedOn="{StaticResource MpRoomActionStatus}">
-        <Setter Property="Background" Value="{DynamicResource MpRoomFullBg}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource MpRoomFullRim}"/>
-        <Setter Property="Foreground" Value="{DynamicResource MpRoomFullText}"/>
-    </Style>
-
-    <!-- A room action that cannot be taken — Your room, or Join for a mod you do not have
-         (handoff turn 36's look: no fill, a .16 rim, muted text; In game and Full have their own
-         colours since design 66, MpRoomActionStatus above). Said with
-         COLOUR, never an Opacity layer: the launcher-wide rule, because an Opacity on the
-         Border holding the caption turns ClearType off for it and drops its contrast to ~1.6:1.
-         It looks the same enabled or not, deliberately — the look already says "inert". -->
-    <Style x:Key="MpRoomActionInert" TargetType="Button">
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource MpRimField}"/>
-        <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Height" Value="{StaticResource MpControlHeight}"/>
-        <Setter Property="Padding" Value="14,0"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="7"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
     <Style x:Key="MpOutlineBlueButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="#7fb0ff"/>

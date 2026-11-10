@@ -215,14 +215,6 @@ public partial class MultiplayerTab
     /// <summary>How many team invitations are waiting, for the account menu.</summary>
     internal int TeamInviteCount => _teamInviteCount;
 
-    private void UpdateMyTeamsButton()
-    {
-        if (TournamentsMyTeamsButton == null) return;
-        TournamentsMyTeamsButton.Content = _teamInviteCount > 0
-            ? Strings.Format("MpTeamsButtonInvites", _teamInviteCount)
-            : Strings.Get("MpTeamsButton");
-    }
-
     /// <summary>
     /// Somebody invited me to a team (<c>team_invite</c> on the global socket). Only a doorbell:
     /// the invitation itself is a row, waiting in "My teams" whether or not this arrives.

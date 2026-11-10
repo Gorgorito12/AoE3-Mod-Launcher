@@ -1632,6 +1632,24 @@
                                         </Grid>
                                     </Border>
 
+                                    <!-- The rooms LIST (design 86): seven rooms of every kind need
+                                         seven hosts at once. -->
+                                    <Border Style="{StaticResource SetActionRow}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="DemoRoomsTitle" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="DemoRoomsHint" Style="{StaticResource SetRowDesc}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" x:Name="DemoRoomsButton"
+                                                    Style="{StaticResource SetActionButtonLg}"
+                                                    Click="DemoRoomsButton_Click"/>
+                                        </Grid>
+                                    </Border>
+
                                     <!-- The rating screens (design handoff 55), most of which need dozens
                                          of rated matches before a real server can show them. A list
                                          of scenes rather than one button because the rating touches

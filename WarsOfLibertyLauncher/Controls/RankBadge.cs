@@ -61,7 +61,7 @@ public static class RankBadge
     /// </summary>
     internal static bool? AnimationsOverride { get; set; }
 
-    private static bool AnimationsEnabled
+    internal static bool AnimationsEnabled
         => !s_reducedEffects && (AnimationsOverride ?? SystemParameters.ClientAreaAnimation);
 
     /// <summary>
@@ -83,12 +83,16 @@ public static class RankBadge
 
     // ── Reduced effects ──────────────────────────────────────────────────
 
-    private static bool s_reducedEffects;
+    private static bool s_governorReduced;
+    private static bool s_userReduced;
+    private static bool s_reducedEffects => s_governorReduced || s_userReduced;
 
     /// <summary>
-    /// Whether every light is off for the rest of the session because this PC was measured to
-    /// draw too slowly (<see cref="Services.EffectsGovernor"/>). Badges built afterwards are still,
-    /// and nothing already running keeps running.
+    /// Whether every light is off: because this PC was measured to draw too slowly
+    /// (<see cref="Services.EffectsGovernor"/>, for the rest of the session) or because the player
+    /// chose "Effects and animations: Reduced" in Settings. Badges built afterwards are still, and
+    /// nothing already running keeps running. The two causes are kept apart so turning the setting
+    /// back off never re-lights a PC the governor measured as slow.
     /// </summary>
     internal static bool ReducedEffects => s_reducedEffects;
 
@@ -102,10 +106,19 @@ public static class RankBadge
     /// </summary>
     internal static void SetReducedEffects(bool reduced)
     {
-        if (s_reducedEffects == reduced) return;
-        s_reducedEffects = reduced;
-        Reevaluate();
-        ReducedEffectsChanged?.Invoke();
+        if (s_governorReduced == reduced) return;
+        var before = s_reducedEffects;
+        s_governorReduced = reduced;
+        if (before != s_reducedEffects) { Reevaluate(); ReducedEffectsChanged?.Invoke(); }
+    }
+
+    /// <summary>The Settings choice "Effects and animations: Reduced" (config <c>effectsMode</c> = low).</summary>
+    internal static void SetUserReducedEffects(bool reduced)
+    {
+        if (s_userReduced == reduced) return;
+        var before = s_reducedEffects;
+        s_userReduced = reduced;
+        if (before != s_reducedEffects) { Reevaluate(); ReducedEffectsChanged?.Invoke(); }
     }
 
     /// <summary>
@@ -720,7 +733,21 @@ public static class RankBadge
             if (!root.Dispatcher.CheckAccess()) continue;
             if (ShouldRun(root)) Start(root); else Stop(root);
         }
+        RunConditionsChanged?.Invoke();
     }
+
+    /// <summary>
+    /// Raised after every <see cref="Reevaluate"/>: the launcher gained or lost the foreground, a
+    /// window was minimised or restored, or the effects went on or off. For the few looping lights
+    /// that are not badges (the podium's sheen, the quick-match card's marks), which follow the
+    /// same rule: they move only while somebody can see them.
+    /// </summary>
+    internal static event Action? RunConditionsChanged;
+
+    /// <summary>Whether a looping light that is not a badge may run on <paramref name="host"/>.</summary>
+    internal static bool MayRunOn(FrameworkElement? host)
+        => host != null && !s_reducedEffects
+           && ShouldRun(s_appActive, loaded: true, host.IsVisible, Window.GetWindow(host)?.WindowState);
 
     /// <summary>Whether a badge's light should be running: effects not reduced, the launcher in
     /// the foreground, the badge on screen, and its window not minimized.</summary>

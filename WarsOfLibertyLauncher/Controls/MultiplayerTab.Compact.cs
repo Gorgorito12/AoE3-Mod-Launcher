@@ -254,7 +254,10 @@ public partial class MultiplayerTab
         RememberActivityHeights();
 
         var hasActivity = ActivityStrip.Tag is true;
-        var column = RoomsLeftColumn.ActualHeight;
+        // The quick match card sits above the list and is not part of the split.
+        var column = RoomsLeftColumn.ActualHeight
+                     - (QuickCardHost.Visibility == Visibility.Visible
+                         ? QuickCardHost.ActualHeight + QuickCardHost.Margin.Bottom : 0);
         var gap = PageGap;
         var empty = RoomsEmptyState.Visibility == Visibility.Visible;
 
@@ -290,7 +293,8 @@ public partial class MultiplayerTab
         }
 
         var plan = RoomsActivityLayout.Plan(
-            column, roomsMin, empty, hasActivity, _config?.RoomsActivityChoice, MeasuredActivitySizes(), gap);
+            column, roomsMin, empty, hasActivity, _config?.RoomsActivityChoice, MeasuredActivitySizes(), gap,
+            windowTall: !(Window.GetWindow(this) is { } w && w.ActualHeight > 0 && w.ActualHeight < RoomsActivityLayout.CardsWindowHeight));
         var mode = plan.Mode;
         // A block whose three cards are all empty has nothing to open: it is its header line.
         if (!_activityHasCards && mode is RoomsActivityMode.Fixed or RoomsActivityMode.Overlay)
@@ -530,18 +534,22 @@ public partial class MultiplayerTab
     private void RenderRoomRows(IReadOnlyList<LobbySummary>? all)
     {
         RoomsListPanel.Children.Clear();
-        _roomPingCells.Clear();
-        _roomAgeCells.Clear();
+        _hostPingCells.Clear();
+        // A list to draw means the problem message, if any, is over.
+        RoomsErrorBox.Visibility = Visibility.Collapsed;
 
         var rooms = all ?? (IReadOnlyList<LobbySummary>)Array.Empty<LobbySummary>();
-        // Filter BEFORE sorting: the sort is stable, so filtering first keeps the surviving rooms
-        // in exactly the order they would have had anyway.
-        var ordered = ApplyRoomSort(RoomSearchFilter.Apply(rooms, _roomsQuery));
+        // Design 86 orders by what the viewer can DO (RoomActionRule.Rank) and keeps the server's
+        // order inside each rank — the sort is stable. Filter first, then rank.
+        var ordered = RoomSearchFilter.Apply(rooms, _roomsQuery)
+            .Select(l => (Room: l, Action: RoomActionRule.Decide(RoomFactsOf(l))))
+            .OrderBy(x => RoomActionRule.Rank(x.Action))
+            .ToList();
 
         // A listed room whose id IS the code is already on screen with its own Join; a second
         // "Join room" row for it would be the same door drawn twice.
         var code = _roomCodeQuery;
-        if (code != null && ordered.Any(l => string.Equals(l.Id, code, StringComparison.OrdinalIgnoreCase)))
+        if (code != null && ordered.Any(x => string.Equals(x.Room.Id, code, StringComparison.OrdinalIgnoreCase)))
             code = null;
 
         if (code != null)
@@ -587,10 +595,20 @@ public partial class MultiplayerTab
         {
             RoomsEmptyState.Visibility = Visibility.Collapsed;
             var idx = 0;
-            foreach (var lobby in ordered)
+            RoomGroup? group = null;
+            foreach (var (lobby, action) in ordered)
+            {
+                var g = RoomActionRule.GroupOf(action);
+                if (g != group)
+                {
+                    RoomsListPanel.Children.Add(BuildRoomGroupHeading(g));
+                    group = g;
+                }
                 RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
+            }
             UpdateRoomsCount(ordered.Count);
         }
+        RenderQuickCard();
 
         // Rooms the filter hid were still SEEN: without this, clearing the search would flash
         // every one of them as "new". Added after the rows are built, so a genuinely new room in
@@ -611,10 +629,8 @@ public partial class MultiplayerTab
     {
         var card = new Border
         {
-            Style = (Style)FindResource(_compactLayout ? "MpRoomCardCompact" : "MpRoomCard"),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Margin = new Thickness(0, 0, 0, 6),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRoomJoinRim"),
+            // The row about the viewer's own code wears the "mine" ring of design 86.
+            Style = (Style)FindResource("RmRowCardMine"),
             Tag = "JoinCodeRow",
         };
 
@@ -625,12 +641,12 @@ public partial class MultiplayerTab
 
         var icon = new Border
         {
-            Width = 30,
-            Height = 30,
-            CornerRadius = new CornerRadius(7),
+            Width = 36,
+            Height = 36,
+            CornerRadius = new CornerRadius(8),
             Background = (Brush)Application.Current.FindResource("MpActionSoftBg"),
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 0),
+            Margin = new Thickness(0, 0, 12, 0),
             Child = new TextBlock
             {
                 Text = "",
@@ -647,11 +663,11 @@ public partial class MultiplayerTab
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var title = new TextBlock
         {
-            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
-            FontSize = (double)Application.Current.FindResource(_compactLayout ? "MpRoomNameSizeCompact" : "FontSizeBodyStrong"),
+            Foreground = (Brush)Application.Current.FindResource("RmTextStrong"),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
+        title.SetResourceReference(TextBlock.FontSizeProperty, "RmNameSize");
         // The localised template is split at {0} so the code can be monospaced inside the
         // sentence — two half-sentence keys could not be translated.
         var parts = Strings.Get("MpRoomsJoinCodeRow").Split(new[] { "{0}" }, 2, StringSplitOptions.None);
@@ -659,28 +675,23 @@ public partial class MultiplayerTab
         title.Inlines.Add(new System.Windows.Documents.Run(code) { FontFamily = new FontFamily("Consolas") });
         if (parts.Length > 1 && parts[1].Length > 0) title.Inlines.Add(new System.Windows.Documents.Run(parts[1]));
         text.Children.Add(title);
-        text.Children.Add(new TextBlock
+        var hint = new TextBlock
         {
             Text = Strings.Get("MpRoomsJoinCodeHint"),
             Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
             TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 2, 0, 0),
-        });
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        hint.SetResourceReference(TextBlock.FontSizeProperty, "RmSmallSize");
+        text.Children.Add(hint);
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
 
         var join = new Button
         {
-            Style = (Style)Application.Current.FindResource(_offlineMode ? "MpRoomActionInert" : "MpRoomActionJoin"),
-            // The same green Join, dot and all, as a listed room's (design 66); offline it is
-            // the inert look with no dot, like a Join for a mod you do not have.
-            Content = _offlineMode
-                ? Strings.Get("MpRoomJoin")
-                : RoomActionContent(Strings.Get("MpRoomJoin"), "MpRoomJoinDot"),
-            MinWidth = 92,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
+            // The listed rooms' Join (design 86); offline it is disabled, with the reason on its tooltip.
+            Style = (Style)Application.Current.FindResource("RmRowButton"),
+            Content = Strings.Get("RmActJoin"),
             Margin = new Thickness(12, 0, 0, 0),
             IsEnabled = !_offlineMode,
             ToolTip = _offlineMode ? _offlineNeedsInternet : null,

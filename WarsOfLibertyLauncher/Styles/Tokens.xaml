@@ -238,25 +238,15 @@
          stops dragging the window.
          ============================================================ -->
     <!-- The multiplayer sub-tab strip (Salas / Amigos / Perfil / Historial). -->
-    <sys:Double x:Key="MpSubBarHeight">48</sys:Double>
+    <sys:Double x:Key="MpSubBarHeight">44</sys:Double>
     <!-- The same strip in the compact layout (design handoff turns 38-39). -->
     <sys:Double x:Key="MpSubBarHeightCompact">44</sys:Double>
-    <!-- Room row. A MINIMUM, not a fixed height — MpRoomCard binds it to MinHeight.
-         It was uniform by contract ("the row is ONE line with ellipsis, so its height must
-         not depend on the content"), and that reading survived until the type sizes went to
-         the 13 floor: the room NAME then truncated to "Sala de W…" in a narrow window,
-         because it is the only element in that cell that yields. The name may wrap to a
-         second line, so short rows measure exactly this and long ones grow past it.
-
-         Back to 58, because it only ever went to 64 to carry the raised type sizes and
-         those have been reverted (see the block below). The MinHeight semantics and the
-         wrapping name STAY: that was fixed for a reason of its own — a long name in a
-         narrow window — which the type size never governed. -->
-    <sys:Double x:Key="MpRoomRowHeight">58</sys:Double>
-    <!-- The compact layout's room row (design handoff turns 38-39: 54). Still a MINIMUM
-         (MpRoomCardCompact binds MinHeight): the name is one line there, so a row measures
-         exactly this at 100 % text and grows instead of clipping at 125 %. -->
-    <sys:Double x:Key="MpRoomRowHeightCompact">54</sys:Double>
+    <!-- Room row (design 86): a MINIMUM of 62 in both layouts, which RmRowCard binds to
+         MinHeight. The name is one line with an ellipsis and the chips one line that drops a
+         chip whole, so a row measures exactly this at 100 % text and grows instead of clipping
+         at 125 %. The compact key stays for its reader (ApplyActivityLayout) and now agrees. -->
+    <sys:Double x:Key="MpRoomRowHeight">62</sys:Double>
+    <sys:Double x:Key="MpRoomRowHeightCompact">62</sys:Double>
     <!-- (The chat / players panel's width is no longer a token: design 57 makes it 280 below
          1600 px of page width, 320 above and a 44-px rail folded — RoomsActivityLayout.ChatWidth.) -->
     <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main
@@ -315,9 +305,6 @@
     <sys:Double x:Key="MpLabelSize">11.5</sys:Double>
     <sys:Double x:Key="MpBodySize">12.5</sys:Double>
     <sys:Double x:Key="MpMetaSize">12</sys:Double>
-    <!-- A room's NAME in the compact layout's one-line row (handoff turn 36). The wide row keeps
-         FontSizeBodyStrong and its two-line wrap. -->
-    <sys:Double x:Key="MpRoomNameSizeCompact">13.5</sys:Double>
     <sys:Double x:Key="MpPillSize">10.5</sys:Double>
     <sys:Double x:Key="MpMicroSize">10</sys:Double>
     <!-- The uppercase stat captions in the room header, and the values under them. The
@@ -567,6 +554,24 @@
     <sys:Double x:Key="RoomGroupSize">13.5</sys:Double>
     <sys:Double x:Key="RoomChatSize">13.5</sys:Double>
     <sys:Double x:Key="RoomChatSystemSize">12.5</sys:Double>
+    <!-- The rooms list (design 86): Salas abiertas, the rows, their chips and buttons. -->
+    <sys:Double x:Key="RmListTitleSize">15</sys:Double>
+    <sys:Double x:Key="RmNameSize">14</sys:Double>
+    <sys:Double x:Key="RmHostSize">13</sys:Double>
+    <sys:Double x:Key="RmButtonSize">12.5</sys:Double>
+    <sys:Double x:Key="RmSmallSize">12</sys:Double>
+    <sys:Double x:Key="RmCountSize">11.5</sys:Double>
+    <sys:Double x:Key="RmChipSize">11</sys:Double>
+    <!-- The quick match card (design 86). -->
+    <sys:Double x:Key="QcTitleSize">24</sys:Double>
+    <sys:Double x:Key="RmEmptyTitleSize">22</sys:Double>
+    <sys:Double x:Key="QcTitleSizeCompact">17</sys:Double>
+    <sys:Double x:Key="QcClockSize">20</sys:Double>
+    <sys:Double x:Key="QcLineSize">13.5</sys:Double>
+    <sys:Double x:Key="QcButtonSize">16</sys:Double>
+    <sys:Double x:Key="QcButtonSizeCompact">14</sys:Double>
+    <sys:Double x:Key="QcButton2Size">15</sys:Double>
+    <sys:Double x:Key="QcButton2SizeCompact">13.5</sys:Double>
     <sys:Double x:Key="RoomFigureSize">30</sys:Double>
     <sys:Double x:Key="TournamentFigureSize">20</sys:Double>
     <sys:Double x:Key="EnrollTitleSize">22</sys:Double>

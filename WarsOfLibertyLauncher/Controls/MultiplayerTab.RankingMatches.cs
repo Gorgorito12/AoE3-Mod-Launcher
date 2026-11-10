@@ -138,8 +138,6 @@ public partial class MultiplayerTab
     /// <summary>Called by <see cref="RenderRanking"/> in Matches mode.</summary>
     private void RenderRankingMatches()
     {
-        RankingTitleText.Text = Strings.Get("MpSubtabRanking");
-        RankGuideLink.Content = "?  " + Strings.Get("MpGuideLink");
         RankingSubtitleText.Text = "";
         ApplyPreviewChip();
 

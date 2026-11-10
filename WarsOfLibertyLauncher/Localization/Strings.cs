@@ -4079,13 +4079,6 @@ public static partial class Strings
         },
         // Only the watched room's chat uses this now: everything in the tournament preview
         // acts on its simulated server, and that chat has nobody on the other end.
-        ["MpTournamentDemoInert"] = new()
-        {
-            [LangEn] = "This is sample data, so this button has nowhere to send anything. "
-                       + "Restart the launcher to see the real tournaments.",
-            [LangEs] = "Son datos de ejemplo, así que este botón no tiene adónde enviar nada. "
-                       + "Reinicia el launcher para ver los torneos de verdad.",
-        },
         ["MpTournamentDemoRunningName"] = new()
         {
             [LangEn] = "Sample Cup — sixteen players",
@@ -4176,32 +4169,15 @@ public static partial class Strings
             [LangEn] = "Player",
             [LangEs] = "Jugador",
         },
-        ["MpTournamentPreviewAsPlayerTip"] = new()
-        {
-            [LangEn] = "Look at it as somebody playing in it: your match, your room, your results.",
-            [LangEs] = "Míralo como alguien que juega en él: tu partida, tu sala, tus resultados.",
-        },
         ["MpTournamentPreviewAsOrganiser"] = new()
         {
             [LangEn] = "Organiser",
             [LangEs] = "Organizador",
         },
-        ["MpTournamentPreviewAsOrganiserTip"] = new()
-        {
-            [LangEn] = "Look at it as whoever runs it: registration, seeding, starting it, and "
-                       + "deciding matches by hand.",
-            [LangEs] = "Míralo como quien lo organiza: la inscripción, el sorteo, el inicio y "
-                       + "decidir partidas a mano.",
-        },
         ["MpTournamentPreviewAsSpectator"] = new()
         {
             [LangEn] = "Spectator",
             [LangEs] = "Espectador",
-        },
-        ["MpTournamentPreviewAsSpectatorTip"] = new()
-        {
-            [LangEn] = "Look at it as somebody who neither plays in it nor runs it.",
-            [LangEs] = "Míralo como alguien que ni juega ni organiza.",
         },
         ["MpTournamentPreviewPlayRound"] = new()
         {
@@ -4290,11 +4266,6 @@ public static partial class Strings
         // text in English needs 169px beside a 130px heading in 279px of usable column, and
         // what gave way was the TITLE, clipped mid-word with no ellipsis. Pinned by
         // TheTournamentsCreateButtonFitsItsColumnInBothLanguages.
-        ["MpTournamentCreate"] = new()
-        {
-            [LangEn] = "New",
-            [LangEs] = "Nuevo",
-        },
         ["MpTournamentsEmpty"] = new()
         {
             [LangEn] = "No tournaments yet. Create the first one.",
@@ -4350,21 +4321,6 @@ public static partial class Strings
             [LangEs] = "Abandonado",
         },
 
-        ["MpTournamentPlaces"] = new()
-        {
-            [LangEn] = "{0} of {1} places",
-            [LangEs] = "{0} de {1} plazas",
-        },
-        ["MpTournamentEntrants"] = new()
-        {
-            [LangEn] = "ENTRANTS",
-            [LangEs] = "PARTICIPANTES",
-        },
-        ["MpTournamentChampion"] = new()
-        {
-            [LangEn] = "Champion: {0}",
-            [LangEs] = "Campeón: {0}",
-        },
         ["MpTournamentTbd"] = new()
         {
             [LangEn] = "TBD",
@@ -4373,8 +4329,8 @@ public static partial class Strings
 
         ["MpTournamentEntrantConfirmed"] = new()
         {
-            [LangEn] = "In",
-            [LangEs] = "Dentro",
+            [LangEn] = "Confirmed",
+            [LangEs] = "Confirmado",
         },
         ["MpTournamentEntrantWaitlist"] = new()
         {
@@ -4406,11 +4362,6 @@ public static partial class Strings
         {
             [LangEn] = "Enter",
             [LangEs] = "Inscribirme",
-        },
-        ["MpTournamentWithdraw"] = new()
-        {
-            [LangEn] = "Withdraw",
-            [LangEs] = "Retirarme",
         },
         ["MpTournamentOpenRegistration"] = new()
         {
@@ -4444,11 +4395,6 @@ public static partial class Strings
             [LangEn] = "Cancel tournament",
             [LangEs] = "Cancelar torneo",
         },
-        ["MpTournamentAccept"] = new()
-        {
-            [LangEn] = "Accept",
-            [LangEs] = "Aceptar",
-        },
         ["MpTournamentReject"] = new()
         {
             [LangEn] = "Reject",
@@ -4462,8 +4408,8 @@ public static partial class Strings
         },
         ["MpTournamentRoundSemi"] = new()
         {
-            [LangEn] = "SEMI-FINALS",
-            [LangEs] = "SEMIFINALES",
+            [LangEn] = "SEMI-FINAL",
+            [LangEs] = "SEMIFINAL",
         },
         ["MpTournamentRoundQuarter"] = new()
         {
@@ -4491,32 +4437,12 @@ public static partial class Strings
             [LangEn] = "Back to my room",
             [LangEs] = "Volver a mi sala",
         },
-        ["MpTournamentWaitingOpponent"] = new()
-        {
-            [LangEn] = "Waiting for an opponent",
-            [LangEs] = "Esperando rival",
-        },
         // Teams are picked inside AoE3, not here. Getting them wrong means the match does
         // not rate AND the bracket does not move, so the card says it before you go in.
-        ["MpTournamentSidesWarning"] = new()
-        {
-            [LangEn] = "Pick these same sides inside the game, or the match will not count.",
-            [LangEs] = "Elige estos mismos bandos dentro del juego, o la partida no contará.",
-        },
 
         // --- Co-organisers: people the OWNER lets help run one tournament ---
         // Never "admin" or "moderator" in the copy: there is no such thing on this server,
         // the grant is one tournament wide, and calling it a role would promise otherwise.
-        ["MpTournamentMakeManager"] = new()
-        {
-            [LangEn] = "Make co-organiser",
-            [LangEs] = "Hacer co-organizador",
-        },
-        ["MpTournamentManagers"] = new()
-        {
-            [LangEn] = "CO-ORGANISERS",
-            [LangEs] = "CO-ORGANIZADORES",
-        },
         ["MpTournamentRemoveManager"] = new()
         {
             [LangEn] = "Remove as co-organiser",
@@ -4524,11 +4450,6 @@ public static partial class Strings
         },
         // The fallback for a server that sends ids and no names. A row of identifiers would
         // not be honest; a count is.
-        ["MpTournamentManagerCount"] = new()
-        {
-            [LangEn] = "{0} co-organisers",
-            [LangEs] = "{0} co-organizadores",
-        },
         // --- The owner settling a match by hand, and throwing somebody out ---
         // Both confirmations say the same load-bearing thing: from the launcher this does not
         // come back. Undoing a bracket result is `tournament:void`, which is the maintainer's
@@ -4540,8 +4461,8 @@ public static partial class Strings
         },
         ["MpTournamentAwardTo"] = new()
         {
-            [LangEn] = "{0} wins",
-            [LangEs] = "Gana {0}",
+            [LangEn] = "Award the win to {0}",
+            [LangEs] = "Dar la victoria a {0}",
         },
         ["MpTournamentAwardConfirmTitle"] = new()
         {
@@ -4586,21 +4507,6 @@ public static partial class Strings
         {
             [LangEn] = "Yes, disqualify",
             [LangEs] = "Sí, descalificar",
-        },
-        ["MpTournamentOutcomeWalkover"] = new()
-        {
-            [LangEn] = "W.O.",
-            [LangEs] = "W.O.",
-        },
-        ["MpTournamentOutcomeDq"] = new()
-        {
-            [LangEn] = "Disq.",
-            [LangEs] = "Desc.",
-        },
-        ["MpTournamentOutcomeBye"] = new()
-        {
-            [LangEn] = "BYE",
-            [LangEs] = "PASA",
         },
 
         ["MpTournamentActionFailed"] = new()
@@ -4770,31 +4676,16 @@ public static partial class Strings
         // slot, and it is what turns a wall of "to be decided" into a readable tree.
         // The action bar over the bracket. It names the tie the way the bracket names it, so
         // the bar reads as belonging to the card that was clicked.
-        ["MpTournamentVersus"] = new()
-        {
-            [LangEn] = "{0} vs {1}",
-            [LangEs] = "{0} contra {1}",
-        },
-        ["MpTournamentBarPlaying"] = new()
-        {
-            [LangEn] = "{0} \u00b7 being played now",
-            [LangEs] = "{0} \u00b7 jug\u00e1ndose ahora",
-        },
         // An unresolved slot when the long form does not fit. The long form is NOT gone - it
         // is the tooltip - because a column of "to be decided" is what made the top half of a
         // bracket unreadable, which is why FeederLabel exists at all. What changed is that a
         // truncated "Ganador de Rioplatense \u00b7 TercioVi\u2026" told you neither thing.
-        ["MpTournamentSlotUndecided"] = new()
-        {
-            [LangEn] = "to be decided",
-            [LangEs] = "por definir",
-        },
         // Ordering an undecided tie replayed. Never "anular": nothing is undone, because
         // nothing was decided - the slot was already open and this says so out loud.
         ["MpTournamentReplay"] = new()
         {
-            [LangEn] = "Have them play it again",
-            [LangEs] = "Que la repitan",
+            [LangEn] = "Replay the match",
+            [LangEs] = "Repetir partido",
         },
         ["MpTournamentReplayConfirmTitle"] = new()
         {
@@ -4813,41 +4704,11 @@ public static partial class Strings
             [LangEn] = "Have them play again",
             [LangEs] = "Que la repitan",
         },
-        ["MpTournamentWinnerOf"] = new()
-        {
-            [LangEn] = "Winner of {0} · {1}",
-            [LangEs] = "Ganador de {0} · {1}",
-        },
         // On the row of the card that is mine, and on the list entry I own. Short because
         // they sit inside a chip beside a name that must stay readable.
-        ["MpTournamentYouTag"] = new()
-        {
-            [LangEn] = "YOU",
-            [LangEs] = "TÚ",
-        },
-        ["MpTournamentYourTeamTag"] = new()
-        {
-            [LangEn] = "YOUR TEAM",
-            [LangEs] = "TU EQUIPO",
-        },
-        ["MpTournamentMineTag"] = new()
-        {
-            [LangEn] = "MINE",
-            [LangEs] = "MÍO",
-        },
         // The capsule at the top right of an open tournament. It is the first thing
         // somebody looks for, and before this the only way to find it was to read the
         // whole bracket.
-        ["MpTournamentYourTurnIn"] = new()
-        {
-            [LangEn] = "Your match is in the {0}",
-            [LangEs] = "Te toca jugar en {0}",
-        },
-        ["MpTournamentYourTurn"] = new()
-        {
-            [LangEn] = "Your turn to play",
-            [LangEs] = "Te toca jugar",
-        },
         // The organiser's door into a match being played. WATCH, never join: a seat is a
         // different request with a different answer, and this one is for the person who may
         // have to settle the match afterwards.
@@ -4870,51 +4731,6 @@ public static partial class Strings
         ["MpWatchInGameFor"] = new() { [LangEn] = "In a match · {0} min", [LangEs] = "En partida · {0} min" },
         // Says what this window IS, inside the window. A preview that only admits to being
         // one in a commit message is a preview somebody screenshots as a promise.
-        ["MpTournamentInProgress"] = new()
-        {
-            [LangEn] = "Being played now",
-            [LangEs] = "Jugándose ahora",
-        },
-        ["MpTournamentWaitingRoom"] = new()
-        {
-            [LangEn] = "Waiting for the room",
-            [LangEs] = "Esperando que abran sala",
-        },
-        ["MpTournamentCreatedByYou"] = new()
-        {
-            [LangEn] = "created by you",
-            [LangEs] = "creado por ti",
-        },
-        ["MpTournamentRoundOfTotal"] = new()
-        {
-            [LangEn] = "round {0} of {1}",
-            [LangEs] = "ronda {0} de {1}",
-        },
-        ["MpTournamentPlacesShort"] = new()
-        {
-            [LangEn] = "{0} of {1} places",
-            [LangEs] = "{0} de {1} plazas",
-        },
-        ["MpTournamentPlayerCount"] = new()
-        {
-            [LangEn] = "{0} players",
-            [LangEs] = "{0} jugadores",
-        },
-        ["MpTournamentRequests"] = new()
-        {
-            [LangEn] = "{0} requests",
-            [LangEs] = "{0} solicitudes",
-        },
-        ["MpTournamentRequestsOne"] = new()
-        {
-            [LangEn] = "1 request",
-            [LangEs] = "1 solicitud",
-        },
-        ["MpTournamentSeeEntrants"] = new()
-        {
-            [LangEn] = "Entrants",
-            [LangEs] = "Participantes",
-        },
         ["MpTournamentMoreActions"] = new()
         {
             [LangEn] = "More actions",
@@ -4924,54 +4740,11 @@ public static partial class Strings
         // team. It is the rule that decides whether the match counts at all: the sides are
         // chosen inside AoE3, and if they come out wrong everybody is reported on team 0,
         // the match is refused as not-a-1v1, and the bracket does not move.
-        ["MpTournamentSidesWarningTeam"] = new()
-        {
-            [LangEn] = "The room seats {0} on its own side; pick the same sides inside the game. "
-                       + "If the sides do not match, the match does not count and the bracket "
-                       + "does not move. The bracket moves once a player of the other team "
-                       + "confirms the result, so keep the launcher open when the game ends.",
-            [LangEs] = "La sala pone a {0} en su propio bando; elijan los mismos bandos dentro "
-                       + "del juego. Si los bandos no coinciden, la partida no cuenta y el cuadro "
-                       + "no avanza. El cuadro avanza cuando un jugador del otro equipo confirma "
-                       + "el resultado, así que deja el launcher abierto al terminar.",
-        },
 
         // The four steps. The third is why this bar exists: seeding is what blocks the
         // start, and nothing on the screen used to say so.
-        ["MpTournamentStepCreated"] = new()
-        {
-            [LangEn] = "Created",
-            [LangEs] = "Creado",
-        },
-        ["MpTournamentStepRegistration"] = new()
-        {
-            [LangEn] = "Registration",
-            [LangEs] = "Inscripción",
-        },
-        ["MpTournamentStepSeeds"] = new()
-        {
-            [LangEn] = "Seeds",
-            [LangEs] = "Semillas",
-        },
-        ["MpTournamentStepRunning"] = new()
-        {
-            [LangEn] = "Under way",
-            [LangEs] = "En curso",
-        },
 
         // The line under the primary action: what the next step needs, or what is missing.
-        ["MpTournamentNextOpen"] = new()
-        {
-            [LangEn] = "Opening registration makes the tournament visible to everybody.",
-            [LangEs] = "Al abrir la inscripción el torneo se hace visible para todos.",
-        },
-        ["MpTournamentNextClose"] = new()
-        {
-            [LangEn] = "Closing registration lets you assign the seeds. Until every "
-                       + "confirmed entrant has one, the tournament cannot start.",
-            [LangEs] = "Al cerrar la inscripción podrás asignar las semillas. Hasta que "
-                       + "todos los confirmados tengan una, el torneo no puede empezar.",
-        },
         ["MpTournamentNextSeed"] = new()
         {
             [LangEn] = "Hand out the seeds and the bracket can be drawn.",
@@ -5013,16 +4786,6 @@ public static partial class Strings
             [LangEn] = "OUT OF THE BRACKET",
             [LangEs] = "FUERA DEL CUADRO",
         },
-        ["MpTournamentColEntrant"] = new()
-        {
-            [LangEn] = "ENTRANT",
-            [LangEs] = "PARTICIPANTE",
-        },
-        ["MpTournamentColStatus"] = new()
-        {
-            [LangEn] = "STATUS",
-            [LangEs] = "ESTADO",
-        },
         // The row that stops the tournament starting. Amber, in its own column, and said
         // in words: a blank seed cell explains nothing.
         ["MpTournamentNoSeed"] = new()
@@ -5032,8 +4795,8 @@ public static partial class Strings
         },
         ["MpTournamentAskedToEnter"] = new()
         {
-            [LangEn] = "asked to enter",
-            [LangEs] = "pidió entrar",
+            [LangEn] = "Asks to enter",
+            [LangEs] = "Pide entrar",
         },
         ["MpTournamentGivePlace"] = new()
         {
@@ -5043,11 +4806,6 @@ public static partial class Strings
 
         // Cancelling, moved away from the other actions. It used to sit beside "Enter"
         // in the same blue at the same weight.
-        ["MpTournamentDangerZone"] = new()
-        {
-            [LangEn] = "DANGER ZONE",
-            [LangEs] = "ZONA DE PELIGRO",
-        },
         ["MpTournamentCancelTitle"] = new()
         {
             [LangEn] = "Cancel the tournament",
@@ -5851,11 +5609,6 @@ public static partial class Strings
             [LangEn] = "{0} opened a room",
             [LangEs] = "{0} abrió una sala",
         },
-        ["MpRoomsSearchPlaceholder"] = new()
-        {
-            [LangEn] = "Search room, mod, player or paste a code",
-            [LangEs] = "Busca sala, mod, jugador o pega un código",
-        },
         // Shown INSTEAD of the list when a search matches nothing. Without it an empty
         // panel reads as "there are no rooms" when they are only filtered out.
         ["MpRoomsNoMatches"] = new()
@@ -6128,12 +5881,9 @@ public static partial class Strings
 
         ["DlgClose"] = new() { [LangEn] = "Close", [LangEs] = "Cerrar" },
         ["MpRoomsCreate"] = new() { [LangEn] = "Create room", [LangEs] = "Crear sala" },
-        ["MpRoomsRefresh"] = new() { [LangEn] = "Refresh", [LangEs] = "Actualizar" },
         // Kept for the skeleton rows' accessibility text; the visible loading state is
         // three placeholder rows, not a line of prose.
         ["MpRoomsLoading"] = new() { [LangEn] = "Loading rooms…", [LangEs] = "Cargando salas…" },
-        ["MpRoomsErrorRetry"] = new() { [LangEn] = "Retry", [LangEs] = "Reintentar" },
-        ["MpRoomsSectionTitle"] = new() { [LangEn] = "Active rooms", [LangEs] = "Salas activas" },
         ["MpGlobalChatTitle"] = new() { [LangEn] = "Global chat", [LangEs] = "Chat global" },
         ["MpGlobalChatPresence"] = new() { [LangEn] = "{0} connected", [LangEs] = "{0} conectados" },
         ["MpGlobalChatPlaceholder"] = new() { [LangEn] = "Write a message…", [LangEs] = "Escribe un mensaje…" },
@@ -6146,45 +5896,14 @@ public static partial class Strings
         ["MpGlobalChatTimedOut"] = new() { [LangEn] = "Muted for spamming — try again shortly.", [LangEs] = "Silenciado por spam. Prueba de nuevo en un rato." },
         ["MpGlobalChatTooLong"] = new() { [LangEn] = "Message too long (max 500).", [LangEs] = "Mensaje demasiado largo (máx 500)." },
         ["MpRoomJoin"] = new() { [LangEn] = "Join", [LangEs] = "Unirse" },
-        // A private room's action says so, because the click opens a password prompt.
-        ["MpRoomJoinPrivate"] = new()
-        {
-            [LangEn] = "Join with password",
-            [LangEs] = "Unirse con contraseña",
-        },
-        // Room sub-line context, the middle segment of "{mod} · {context} · {age}".
-        ["MpRoomCtxYouHost"] = new() { [LangEn] = "you're the host", [LangEs] = "tú eres el anfitrión" },
-        ["MpRoomCtxNeedsPassword"] = new() { [LangEn] = "asks for a password", [LangEs] = "pide contraseña" },
-        ["MpRoomReenter"] = new() { [LangEn] = "Re-enter", [LangEs] = "Reingresar" },
-        ["MpRoomYours"] = new() { [LangEn] = "Your room", [LangEs] = "Tu sala" },
-        ["MpRoomFull"] = new() { [LangEn] = "Full", [LangEs] = "Llena" },
-        // The room is full of PLAYERS but still has a seat beside the game. It replaces
-        // "Unirse" rather than joining it, because there is only one seat left to take
-        // and offering both would let somebody ask for the one that is gone.
-        ["MpRoomWatch"] = new() { [LangEn] = "Watch", [LangEs] = "Ver" },
         ["MpRoomStatusWaiting"] = new() { [LangEn] = "Waiting", [LangEs] = "Esperando" },
-        ["MpRoomStatusLocked"] = new() { [LangEn] = "Private", [LangEs] = "Privada" },
         // How long a room has been open — live "count-up" in the rooms list
         // sub-line and the lobby header meta. {0} = a compact duration ("5 min",
         // "1 h 20 min"), formatted by RoomAgeFormat.Compact.
         ["MpRoomOpenedAgo"] = new() { [LangEn] = "open for {0}", [LangEs] = "abierta hace {0}" },
-        // Room cards (BuildRoomCard) + empty state + "last updated" header.
-        ["MpRoomModNotInstalled"] = new() { [LangEn] = "Mod not installed", [LangEs] = "Mod no instalado" },
-        ["MpRoomsEmptyTitle"] = new() { [LangEn] = "No rooms right now", [LangEs] = "No hay salas ahora" },
-        ["MpRoomsEmptyBody"] = new() { [LangEn] = "Be the first to create one and start a game!", [LangEs] = "¡Sé el primero en crear una y empezar a jugar!" },
-        // Appended to the "updated N ago" line when a column sort is active. {0} is the
-        // lowercased column name.
-        ["MpRoomsSortedBy"] = new() { [LangEn] = "sorted by {0}", [LangEs] = "orden por {0}" },
-        ["MpRoomsUpdatedNow"] = new() { [LangEn] = "Updated just now", [LangEs] = "Actualizado ahora" },
-        ["MpRoomsUpdatedSecs"] = new() { [LangEn] = "Updated {0}s ago", [LangEs] = "Actualizado hace {0} s" },
         ["MpRoomsUpdatedMins"] = new() { [LangEn] = "Updated {0}m ago", [LangEs] = "Actualizado hace {0} min" },
         ["MpRoomPrivate"] = new() { [LangEn] = "Private", [LangEs] = "Privado" },
-        // Room-list column headers (the card list mimics a table now).
-        ["MpColRoom"] = new() { [LangEn] = "ROOM", [LangEs] = "SALA" },
         ["MpColMod"] = new() { [LangEn] = "MOD", [LangEs] = "MOD" },
-        ["MpColHost"] = new() { [LangEn] = "HOST", [LangEs] = "ANFITRIÓN" },
-        ["MpColPlayers"] = new() { [LangEn] = "PLAYERS", [LangEs] = "JUGADORES" },
-        ["MpColPing"] = new() { [LangEn] = "PING", [LangEs] = "PING" },
         ["MpColStatus"] = new() { [LangEn] = "STATUS", [LangEs] = "ESTADO" },
         ["MpColAction"] = new() { [LangEn] = "ACTION", [LangEs] = "ACCIÓN" },
         ["MpRoomLeave"] = new() { [LangEn] = "Leave room", [LangEs] = "Salir de la sala" },
@@ -6296,8 +6015,8 @@ public static partial class Strings
         ["MpRoomBadgeHost"] = new() { [LangEn] = "Host", [LangEs] = "Anfitrión" },
         ["MpRoomPingTooltip"] = new()
         {
-            [LangEn] = "Your internet latency — the same for every room. A per-host ping isn't available.",
-            [LangEs] = "Tu latencia de internet — igual para todas las salas. El ping por host no está disponible.",
+            [LangEn] = "Your internet latency, not the host's. How a match plays depends on Radmin and on the host's connection, which the launcher can't measure from the list.",
+            [LangEs] = "Tu latencia a Internet, no la del anfitrión. Cómo va una partida depende de Radmin y de la conexión del anfitrión, que el launcher no puede medir desde la lista.",
         },
 
         // -------- Lobby match-phase overlays (LobbyWindow.xaml) --------
@@ -7654,10 +7373,6 @@ public static partial class Strings
             [LangEn] = "COMPETITIVE",
             [LangEs] = "COMPETITIVA",
         },
-        // Every room says which kind it is since design handoff turn 36, not only the ones that
-        // score. No format after it, unlike the competitive chip: a casual room's size says
-        // nothing about how it will be played (RoomFormats resolves it to Casual on purpose).
-        ["MpRoomCasualBadge"] = new() { [LangEn] = "CASUAL", [LangEs] = "CASUAL" },
         ["MpRoomCasualTooltip"] = new()
         {
             [LangEn] = "This match does not count towards the rating.",
