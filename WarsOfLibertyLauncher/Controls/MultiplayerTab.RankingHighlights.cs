@@ -47,7 +47,7 @@ public partial class MultiplayerTab
     private static readonly TimeSpan RankingLeadersMaxAge = TimeSpan.FromSeconds(60);
 
     /// <summary>The width one card column asks for; the grid has as many as fit, 1 to 4.</summary>
-    private const double RankingLeaderColumnWidth = 380;
+    internal const double LeaderColumnMinWidth = 300;
 
     /// <summary>The <c>Tag</c> of each card and of each row, for the tests.</summary>
     internal const string LeaderCardTag = "LeaderCard";
@@ -61,8 +61,6 @@ public partial class MultiplayerTab
     /// </summary>
     private void RenderRankingHighlights()
     {
-        RankingTitleText.Text = Strings.Get("MpSubtabRanking");
-        RankGuideLink.Content = "?  " + Strings.Get("MpGuideLink");
         ApplyPreviewChip();
         RankingHighlightsBody.Children.Clear();
         _rankingLeadersGrid = null;
@@ -109,7 +107,14 @@ public partial class MultiplayerTab
             return;
         }
 
-        var grid = new UniformGrid { Columns = LeaderColumns(), VerticalAlignment = VerticalAlignment.Top };
+        // Each card carries the gap to the next as its own margin; the grid takes the last
+        // column's back so the right edge lines up with the page.
+        var grid = new UniformGrid
+        {
+            Columns = LeaderColumns(cards.Count),
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 0, -PageGap, 0),
+        };
         var meId = RankingViewerId;
         foreach (var card in cards) grid.Children.Add(BuildLeaderCard(card, meId));
         _rankingLeadersGrid = grid;
@@ -118,18 +123,25 @@ public partial class MultiplayerTab
         _ = EnsureLeaderCivArtAsync(cards);
     }
 
-    /// <summary>One card column per ~380 px of page, between 1 and 4.</summary>
-    private int LeaderColumns()
+    /// <summary>
+    /// How many columns of cards (design 93f): all of them in one row if each gets 300 px, else
+    /// two rows, else three, else two columns, else one.
+    /// </summary>
+    internal static int LeaderColumns(int cards, double pageWidth, double gap)
     {
-        var width = RankingPage?.ActualWidth ?? 0;
-        return width > 0 ? Math.Clamp((int)(width / RankingLeaderColumnWidth), 1, 4) : 3;
+        if (cards <= 0 || !(pageWidth > 0)) return Math.Max(1, Math.Min(cards, 3));
+        foreach (var k in new[] { cards, (cards + 1) / 2, (cards + 2) / 3, 2, 1 })
+            if (k > 0 && (pageWidth - (k - 1) * gap) / k >= LeaderColumnMinWidth) return k;
+        return 1;
     }
+
+    private int LeaderColumns(int cards) => LeaderColumns(cards, RankingPage?.ActualWidth ?? 0, PageGap);
 
     /// <summary>Follow the page's width without rebuilding the cards.</summary>
     private void UpdateRankingHighlightsColumns()
     {
         if (_rankingLeadersGrid == null) return;
-        var columns = LeaderColumns();
+        var columns = LeaderColumns(_rankingLeadersGrid.Children.Count);
         if (_rankingLeadersGrid.Columns != columns) _rankingLeadersGrid.Columns = columns;
     }
 
@@ -196,8 +208,8 @@ public partial class MultiplayerTab
     };
 
     /// <summary>
-    /// One card: its title in capitals, the "1v1 · Teams" switch for climb and streak when both
-    /// ladders have someone, its rule in one muted line, then up to five rows.
+    /// One card (design 93f): a glass plate with its title, the "1v1 / Teams" switch for climb and
+    /// streak when both ladders have someone, its rule in one muted line, then up to five rows.
     /// </summary>
     private FrameworkElement BuildLeaderCard(LeaderCard card, string? meId)
     {
@@ -206,68 +218,77 @@ public partial class MultiplayerTab
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var words = new StackPanel();
         var title = new TextBlock
         {
-            Text = Strings.Get(card.TitleKey).ToUpper(Strings.Culture),
-            Foreground = (Brush)Application.Current.FindResource("MpTextLabel"),
+            Text = Strings.Get(card.TitleKey),
+            Foreground = Solid("#F0F5FB"),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center,
         };
-        title.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
-        head.Children.Add(title);
-        if (card.HasBothLadders)
-        {
-            var sw = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            sw.Children.Add(LadderSwitch(card, team: false));
-            sw.Children.Add(LadderSwitch(card, team: true));
-            Grid.SetColumn(sw, 1);
-            head.Children.Add(sw);
-        }
-        stack.Children.Add(head);
-
+        title.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBodyStrong");
+        words.Children.Add(title);
         if (!string.IsNullOrWhiteSpace(card.Rule))
         {
             var rule = new TextBlock
             {
                 Text = card.Rule,
-                Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+                Foreground = Solid("#8C9CB1"),
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, 0, 6),
+                Margin = new Thickness(0, 4, 0, 0),
             };
-            rule.SetResourceReference(TextBlock.FontSizeProperty, "MpHistoryMetaSize");
-            stack.Children.Add(rule);
+            rule.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
+            words.Children.Add(rule);
         }
+        head.Children.Add(words);
+        if (card.HasBothLadders)
+        {
+            var sw = new StackPanel { Orientation = Orientation.Horizontal };
+            sw.Children.Add(LadderSwitch(card, team: false));
+            sw.Children.Add(LadderSwitch(card, team: true));
+            var capsule = new Border
+            {
+                Child = sw,
+                Margin = new Thickness(10, 0, 0, 0),
+                Padding = new Thickness(3),
+                CornerRadius = new CornerRadius(13),
+                Background = Solid("#66050A12"),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            Grid.SetColumn(capsule, 1);
+            head.Children.Add(capsule);
+        }
+        stack.Children.Add(head);
 
-        foreach (var row in card.Rows) stack.Children.Add(BuildLeaderRow(row, meId));
+        var rows = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+        foreach (var row in card.Rows) rows.Children.Add(BuildLeaderRow(row, meId));
+        stack.Children.Add(rows);
 
-        return new Border
+        var plate = new Border
         {
             Tag = LeaderCardTag,
             Child = stack,
-            Margin = new Thickness(0, 0, 14, 14),
-            Padding = new Thickness(16, 12, 16, 10),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusLg"),
-            Background = (Brush)Application.Current.FindResource("MpPanel"),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
+            Margin = new Thickness(0, 0, PageGap, PageGap),
+            Padding = new Thickness(16, 14, 14, 12),
+            CornerRadius = new CornerRadius(14),
+            BorderBrush = Solid("#12FFFFFF"),
             BorderThickness = new Thickness(1),
         };
+        // The fill follows the transparency level, like every other card of the page.
+        plate.SetResourceReference(Border.BackgroundProperty, "GlassPanel");
+        return plate;
     }
 
-    /// <summary>One side of the climb / streak card's "1v1 · Teams" switch.</summary>
+    /// <summary>One side of the climb / streak card's "1v1 / Teams" switch: a small capsule.</summary>
     private Button LadderSwitch(LeaderCard card, bool team)
     {
         var button = new Button
         {
             Content = Strings.Get(team ? "MpRankingModeTeam" : "MpRankingModeSolo"),
-            Style = (Style)Application.Current.FindResource("MpLinkButton"),
-            Margin = new Thickness(team ? 10 : 0, 0, 0, 0),
+            Style = (Style)FindResource("RkSwitchButton"),
+            Margin = new Thickness(team ? 3 : 0, 0, 0, 0),
             Tag = card.Team == team ? "active" : null,
-            Opacity = 1,
         };
-        button.SetResourceReference(Control.FontSizeProperty, "MpHistoryMetaSize");
-        if (card.Team == team)
-            button.SetResourceReference(Control.ForegroundProperty, "MpTextHeading");
         button.Click += (_, _) =>
         {
             if (card.Kind == HighlightCellKind.TopClimb) _rankingLeadersClimbTeam = team;
@@ -278,16 +299,18 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// One row: place · avatar (or the civilization's flag) · name over its detail · the figure
-    /// or the 🔥 pill. The viewer's own row carries the ladder's own-row tint and "YOU".
+    /// One row (design 93f): place, avatar (or the civilization's flag), name over its detail,
+    /// then the figure or the streak pill. The first of each card is soft gold; the viewer's own
+    /// is blue with a rim and "YOU", whatever its place.
     /// </summary>
     private FrameworkElement BuildLeaderRow(LeaderRow row, string? meId)
     {
         var isMe = !string.IsNullOrEmpty(meId) && row.UserIds.Any(id => string.Equals(id, meId, StringComparison.Ordinal));
+        var first = row.Place == 1;
 
-        var grid = new Grid { MinHeight = 40 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var grid = new Grid { MinHeight = 32 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -295,7 +318,7 @@ public partial class MultiplayerTab
         {
             Text = row.Place.ToString(Strings.Culture),
             FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            Foreground = (Brush)Application.Current.FindResource(row.Place == 1 ? "MpTextHeading" : "MpTextFaint"),
+            Foreground = Solid(first ? "#F4D9A0" : "#8C9CB1"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -310,9 +333,9 @@ public partial class MultiplayerTab
             {
                 var chip = new Border
                 {
-                    Width = MatchFlagWidth * 1.33,
-                    Height = MatchFlagHeight * 1.33,
-                    CornerRadius = new CornerRadius(2),
+                    Width = 28,
+                    Height = 19,
+                    CornerRadius = new CornerRadius(3),
                     Background = new ImageBrush(flag) { Stretch = Stretch.UniformToFill },
                     BorderBrush = (Brush)Application.Current.FindResource("MpFlagRim"),
                     BorderThickness = new Thickness(1),
@@ -324,24 +347,27 @@ public partial class MultiplayerTab
         }
         else
         {
-            face = BuildAvatarDisc(row.Name, row.AvatarUrl, 24);
+            face = BuildAvatarDisc(row.Name, row.AvatarUrl, 28);
         }
         if (face != null)
         {
-            face.Margin = new Thickness(0, 0, 10, 0);
+            face.HorizontalAlignment = HorizontalAlignment.Left;
             Grid.SetColumn(face, 1);
             grid.Children.Add(face);
         }
 
         var who = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
+        // A grid, not a horizontal StackPanel: that one measures the name with no limit, so it
+        // would never trim and "YOU" would be pushed out of the row.
+        var nameLine = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
+        nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var name = new TextBlock
         {
             Text = row.Name,
-            Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
-            FontWeight = row.Place == 1 ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground = Solid("#F0F5FB"),
+            FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 260,
         };
         name.SetResourceReference(TextBlock.FontSizeProperty, "MpBodySize");
         nameLine.Children.Add(name);
@@ -351,11 +377,12 @@ public partial class MultiplayerTab
             {
                 Text = Strings.Get("MpRankYouTag"),
                 Margin = new Thickness(8, 0, 0, 0),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)Application.Current.FindResource("MpActionText"),
+                FontWeight = FontWeights.Bold,
+                Foreground = Solid("#9FD0F5"),
                 VerticalAlignment = VerticalAlignment.Center,
             };
             you.SetResourceReference(TextBlock.FontSizeProperty, "MpMicroSize");
+            Grid.SetColumn(you, 1);
             nameLine.Children.Add(you);
         }
         who.Children.Add(nameLine);
@@ -364,11 +391,11 @@ public partial class MultiplayerTab
             var detail = new TextBlock
             {
                 Text = row.Detail,
-                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                Foreground = Solid("#A8BCD2"),
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 2, 0, 0),
             };
-            detail.SetResourceReference(TextBlock.FontSizeProperty, "MpHistoryMetaSize");
+            detail.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
             who.Children.Add(detail);
         }
         Grid.SetColumn(who, 2);
@@ -385,10 +412,10 @@ public partial class MultiplayerTab
             {
                 Text = row.Figure ?? "",
                 FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-                FontWeight = FontWeights.Bold,
-                Foreground = (Brush)Application.Current.FindResource(row.Positive ? "MpOkText" : "MpTextHeading"),
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Solid(row.Positive ? "#7FE0A8" : "#F0F5FB"),
             };
-            text.SetResourceReference(TextBlock.FontSizeProperty, "MpStatValueSize");
+            text.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBodyStrong");
             figure = text;
         }
         figure.VerticalAlignment = VerticalAlignment.Center;
@@ -400,12 +427,15 @@ public partial class MultiplayerTab
         {
             Tag = LeaderRowTag,
             Child = grid,
-            Padding = new Thickness(6, 4, 6, 4),
-            Margin = new Thickness(-6, 0, -6, 0),
-            CornerRadius = new CornerRadius(6),
-            Background = isMe ? (Brush)Application.Current.FindResource("MpRankOwnRow") : Brushes.Transparent,
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
-            BorderThickness = new Thickness(0, 0, 0, row.Place < 5 ? 1 : 0),
+            MinHeight = 46,
+            Padding = new Thickness(8, 6, 8, 6),
+            Margin = new Thickness(0, row.Place > 1 ? 3 : 0, 0, 0),
+            CornerRadius = new CornerRadius(9),
+            Background = isMe ? Solid("#1455ACEE")
+                : first ? Across((Rgba("#F4D9A0", .13), 0), (Rgba("#F4D9A0", .02), 1))
+                : Brushes.Transparent,
+            BorderBrush = isMe ? Solid("#5955ACEE") : first ? Solid("#33F4D9A0") : Brushes.Transparent,
+            BorderThickness = new Thickness(1),
         };
     }
 

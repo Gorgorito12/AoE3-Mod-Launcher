@@ -740,6 +740,48 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   stays. Verified live against a local server: an answering host, a silent one, a password room and
   a host without Radmin.
 
+- **THE RANKING PAGE IS DESIGN 93 (`Controls/MultiplayerTab.Ranking.cs`, `.RankingPodium.cs`,
+  `.RankingHighlights.cs`; the pure rules in `Services/Multiplayer/RankingView.cs`). This SUPERSEDES
+  the paragraphs further down about the pinned "YOU" row, the plain rows and the uppercase Highlights
+  cards.** Seven rules carry weight:
+  (1) **Nobody is renumbered or re-sorted.** The podium is the server's first three, drawn 2 · 1 · 3
+  (`RankingGroups.PodiumDrawOrder`; fewer than three stand in order), and the table is everybody from
+  the fourth on, grouped by `RankAges.For(row.Rank, ladderSize)` in the order they came. Every ranked
+  player is on the podium or in exactly one group (`THE_ONE_THAT_MATTERS_EveryoneIsOnThePodiumOrInOneGroup`).
+  A group's range is the age's places on the WHOLE ladder, so "INDUSTRIAL · places 3–4" stays true
+  with the third on the podium.
+  (2) **"Your position" invents nothing (`YourStandingView.For`).** On the page: the player above and
+  the one below with their ELO gaps, and "you need N", which is the gap PLUS ONE (level on ELO is not
+  ahead). Past the page the server sent: the place from his own standing and NO neighbours. Being
+  placed: the progress, and his own number only when the launcher has it. Neither on a list nor with
+  a standing: no card at all.
+  (3) **There is no pinned copy of the viewer's row.** "Your position" says where he is at every
+  scroll offset; `RankingPinnedRow` and its scroll handler are gone.
+  (4) **The headings are outside the ScrollViewer and the rows are plates** (8 px in, a 1-px rim, 12 px
+  of padding): `RankingTableLayout.SidePadding` is that sum, and `SyncRankingScrollGutter` takes the
+  bar's width off the headings. `THE_ONE_THAT_MATTERS_TheHeadingsUseTheRowsColumns` checks every
+  column of every row while the list scrolls.
+  (5) **Only the viewer's own row, podium card and "Your position" open a profile** (`OpenOwnProfileFromRanking`,
+  the sample profile while the preview owns the page). There is no page for another player, so their
+  rows are not clickable; a hand cursor there would promise something that does not happen.
+  (6) **Going back to the subtab draws nothing when nothing moved** (`RenderRankingIfChanged`, used by
+  the session pass only). The key holds the payload, the standing and the month's highlights by
+  REFERENCE (every answer is a new object, so a new answer always draws), the mode, the language, the
+  viewer, the sizes, the gap, the effects, the flag tables and the minute. Measured: a switch to the
+  subtab went from 27 ms to 63 ms with the new page and is ~3 ms with the key. Every caller that
+  changed something calls `RenderRanking()`. Highlights and Matches always draw, as before.
+  (7) **The sheen on the first podium card follows the badges' rule, not a copy of it.** It ran on
+  with the launcher behind another program (the log said `LAYOUT STORM … nobody watching`, one
+  `DoubleAnimationUsingKeyFrames` clock). `RankBadge.MayRunOn(host)` is the rule (foreground, on
+  screen, not minimised, effects on) and `RankBadge.RunConditionsChanged` is raised by every
+  `Reevaluate`; the quick-match card's marks use both too. With the effects reduced the podium is
+  drawn again without glow or sheen. Measured, the sheen adds no redraws: the animated badges alone
+  give the same figure.
+  The page gap (12 or 16) is applied in `ApplyRankingSplit`/`ApplyPodiumGap`, not only when drawing,
+  so a window crossing 1600 px gets it at once. Highlights (93f): a card per ~300 px
+  (`LeaderColumns`), the first row of each in soft gold, the viewer's own blue with a rim.
+  `--demo-elo=93a..93f` opens each block; 93e is the empty ladder.
+
 - **A LANGUAGE CHANGE REPAINTS ALL FOUR SUBTABS, AND THE RENDER MUST BE SEPARABLE FROM THE
   FETCH.** `ApplyStrings` assigns the fixed labels and then calls `RefreshActiveSubtabStrings`,
   whose switch must have a `case` for every `Subtab`. It had three; **Rooms was missing**, and

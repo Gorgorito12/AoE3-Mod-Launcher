@@ -733,7 +733,21 @@ public static class RankBadge
             if (!root.Dispatcher.CheckAccess()) continue;
             if (ShouldRun(root)) Start(root); else Stop(root);
         }
+        RunConditionsChanged?.Invoke();
     }
+
+    /// <summary>
+    /// Raised after every <see cref="Reevaluate"/>: the launcher gained or lost the foreground, a
+    /// window was minimised or restored, or the effects went on or off. For the few looping lights
+    /// that are not badges (the podium's sheen, the quick-match card's marks), which follow the
+    /// same rule: they move only while somebody can see them.
+    /// </summary>
+    internal static event Action? RunConditionsChanged;
+
+    /// <summary>Whether a looping light that is not a badge may run on <paramref name="host"/>.</summary>
+    internal static bool MayRunOn(FrameworkElement? host)
+        => host != null && !s_reducedEffects
+           && ShouldRun(s_appActive, loaded: true, host.IsVisible, Window.GetWindow(host)?.WindowState);
 
     /// <summary>Whether a badge's light should be running: effects not reduced, the launcher in
     /// the foreground, the badge on screen, and its window not minimized.</summary>

@@ -138,8 +138,12 @@ public class PageSpacingTests
                 Assert.Equal(new Thickness(s, 0, s, 0), tab.SubBar.Padding);
                 Assert.Equal(new Thickness(s), tab.RankingPage.Margin);
                 Assert.Equal(s, tab.RankingPage.TranslatePoint(new Point(0, 0), tab.TabRootGrid).X, 3);
-                if (tab.RankingHistoryCard.Visibility == Visibility.Visible)
-                    Assert.Equal(s, Math.Max(tab.RankingHistoryCard.Margin.Left, tab.RankingHistoryCard.Margin.Top));
+                // The side column (design 93) sits one gap from the table, and "Your position" one
+                // gap above the match list.
+                Assert.Equal(Visibility.Visible, tab.RankingSideColumn.Visibility);
+                Assert.Equal(s, Math.Max(tab.RankingSideColumn.Margin.Left, tab.RankingSideColumn.Margin.Top));
+                Assert.Equal(s, tab.RankingYouHost.Margin.Bottom);
+                Assert.Equal(s, tab.RankingPodiumHost.Margin.Bottom);
                 Assert.Equal(new Thickness(s), tab.StatsPage.Margin);
             }
         });

@@ -79,6 +79,75 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Design 93: one option of the Clasificación mode capsule. 30 tall, a pill; the chosen
+             one is a raised blue plate. The state is painted by the template's own triggers, on a
+             template this style supplies itself. -->
+        <Style x:Key="RkModeButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#A8BCD2"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="plate" CornerRadius="15" Background="Transparent"
+                                BorderBrush="Transparent" BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="active">
+                                <Setter TargetName="plate" Property="Background">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#2E4D7A" Offset="0"/>
+                                            <GradientStop Color="#1E3455" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter TargetName="plate" Property="BorderBrush" Value="#4D82AFFF"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The small "1v1 / Teams" switch inside a Highlights card (design 93f). -->
+        <Style x:Key="RkSwitchButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#A8BCD2"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpLabelSize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="plate" CornerRadius="10" Background="Transparent"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="active">
+                                <Setter TargetName="plate" Property="Background" Value="#24FFFFFF"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SubTab" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource MpPillIdleText}"/>
@@ -1899,8 +1968,8 @@
              page because it is community data, not a preference, and it lives under
              MULTIPLAYER because that is where the data comes from.
 
-             It SCROLLS, unlike the ranking page — there is no pinned row here to make
-             page-level scrolling meaningless, and the tables can run to a hundred rows. -->
+             It SCROLLS, unlike the ranking page — there is no podium or side card here to
+             keep in view, and the tables can run to a hundred rows. -->
         <Grid Grid.Row="1" x:Name="StatsView" Visibility="Collapsed"
               SizeChanged="StatsView_SizeChanged">
             <!-- Named so a repaint can put the page back where the reader left it. Four
@@ -2031,13 +2100,58 @@
              was ~1350 px long and V-D and % sat at the far edge, while "Latest matches" was
              squeezed into a fixed 440 px. -->
         <Grid Grid.Row="1" x:Name="RankingView" Visibility="Collapsed">
-            <!-- The PAGE does not scroll; the table inside the card does. That is what makes
-                 "your row pinned to the foot" mean anything — pinning inside a page that
-                 scrolls as a whole would just be appending a duplicate row at the end. It also
-                 keeps the footnote, which explains the entry rule, on screen at every height.
+            <!-- The PAGE does not scroll; the table inside the card does. That keeps the podium,
+                 "Your position" and the footnote, which explains the entry rule, on screen at
+                 every height.
 
                  The page's margin is design 59's frame padding (16 / 14): a "cqw" of its
                  clamp() sizes is a hundredth of THIS grid's width. -->
+            <!-- Design 93: four soft lights behind the page, one per corner, in the colours of the
+                 top ages. Static gradients on plain rectangles: nothing here animates and nothing
+                 is blurred. The cards over it are GlassPanel, so the level of transparency the
+                 player chose decides how much of it shows through. -->
+            <Grid x:Name="RankingBackdrop" IsHitTestVisible="False">
+                <Rectangle>
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#101F34" Offset="0"/>
+                            <GradientStop Color="#0B1626" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <Rectangle>
+                    <Rectangle.Fill>
+                        <RadialGradientBrush Center="0.30,0.10" GradientOrigin="0.30,0.10" RadiusX="0.42" RadiusY="0.50">
+                            <GradientStop Color="#33FF2F45" Offset="0"/>
+                            <GradientStop Color="#00FF2F45" Offset="0.72"/>
+                        </RadialGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <Rectangle>
+                    <Rectangle.Fill>
+                        <RadialGradientBrush Center="0.82,0.02" GradientOrigin="0.82,0.02" RadiusX="0.40" RadiusY="0.55">
+                            <GradientStop Color="#2BA742FF" Offset="0"/>
+                            <GradientStop Color="#00A742FF" Offset="0.72"/>
+                        </RadialGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <Rectangle>
+                    <Rectangle.Fill>
+                        <RadialGradientBrush Center="0,1" GradientOrigin="0,1" RadiusX="0.50" RadiusY="0.60">
+                            <GradientStop Color="#261E9FD4" Offset="0"/>
+                            <GradientStop Color="#001E9FD4" Offset="0.72"/>
+                        </RadialGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <Rectangle>
+                    <Rectangle.Fill>
+                        <RadialGradientBrush Center="1,1" GradientOrigin="1,1" RadiusX="0.45" RadiusY="0.55">
+                            <GradientStop Color="#292F7FE0" Offset="0"/>
+                            <GradientStop Color="#002F7FE0" Offset="0.72"/>
+                        </RadialGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+            </Grid>
             <Grid x:Name="RankingPage"
                   Margin="{DynamicResource MpPageGutter}" HorizontalAlignment="Stretch"
                   SizeChanged="RankingPage_SizeChanged">
@@ -2045,7 +2159,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <!-- The third row is only used below ~1000 px, where the match list goes
+                    <!-- The third row is only used below ~1000 px, where the side column goes
                          under the table (RankingTableLayout.Split); it is 0 the rest of the time. -->
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -2053,67 +2167,56 @@
                         <RowDefinition x:Name="RankingStackedRow" Height="0"/>
                     </Grid.RowDefinitions>
 
-                    <!-- One row across BOTH cards (59): the title, the 1v1 / Teams capsule, and
-                         at the right the size of the table — "12 ranked · 3 in placement" — and
-                         the rank guide. -->
-                    <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="2,0,2,14">
+                    <!-- Design 93: the 1v1 / Teams / Highlights / Matches capsule on the left, and
+                         on the right the size of the table. No title: the subtab already says where
+                         this is. -->
+                    <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,14">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="RankingTitleText"
-                                   Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   FontFamily="{DynamicResource DisplayFont}"
-                                   FontSize="{DynamicResource MpPageTitleSize}"
-                                   FontWeight="Bold"
-                                   Foreground="{DynamicResource MpTextHeading}"/>
-                        <!-- The 1v1 / Equipos pair, in a capsule: one either-or, not two labels. -->
-                        <Border Grid.Column="1"
-                                Margin="12,0,0,0"
-                                Padding="3"
+                        <Border Grid.Column="0"
+                                Padding="4"
                                 VerticalAlignment="Center"
-                                CornerRadius="{StaticResource RadiusRow}"
-                                Background="{DynamicResource MpPanel}">
+                                CornerRadius="19"
+                                Background="{DynamicResource GlassPanel}"
+                                BorderBrush="#12FFFFFF"
+                                BorderThickness="1">
                             <StackPanel Orientation="Horizontal">
                                 <Button x:Name="RankingModeSolo" Click="RankingModeSolo_Click"
-                                        Style="{StaticResource SubTab}"/>
+                                        Style="{StaticResource RkModeButton}"/>
                                 <Button x:Name="RankingModeTeam" Click="RankingModeTeam_Click"
-                                        Style="{StaticResource SubTab}"/>
-                                <!-- The month's highlights in depth: the top five of each,
-                                     over the whole page (no handoff covers this view). -->
+                                        Style="{StaticResource RkModeButton}" Margin="4,0,0,0"/>
                                 <Button x:Name="RankingModeHighlights" Click="RankingModeHighlights_Click"
-                                        Style="{StaticResource SubTab}"/>
-                                <!-- Handoff 63: a year of community matches, searchable, with
-                                     their recordings. -->
+                                        Style="{StaticResource RkModeButton}" Margin="4,0,0,0"/>
                                 <Button x:Name="RankingModeMatches" Click="RankingModeMatches_Click"
-                                        Style="{StaticResource SubTab}"/>
+                                        Style="{StaticResource RkModeButton}" Margin="4,0,0,0"/>
                             </StackPanel>
                         </Border>
                         <TextBlock x:Name="RankingSubtitleText"
-                                   Grid.Column="2"
-                                   Margin="12,0,12,0"
+                                   Grid.Column="1"
+                                   Margin="16,0,0,0"
                                    HorizontalAlignment="Right"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
                                    FontSize="{DynamicResource MpMetaSize}"
                                    Foreground="{DynamicResource MpTextMuted}"/>
-                        <!-- The preview chip (while a preview owns the data) and the rank guide —
-                             a SECONDARY BUTTON, never a pill (46b.1). -->
+                        <!-- The preview chip (while a preview owns the data) and, in Highlights,
+                             this month or the last one. -->
                         <StackPanel x:Name="RankingScopeChips"
-                                    Grid.Column="3"
+                                    Grid.Column="2"
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center">
-                            <!-- Highlights only: this month or the last one. -->
                             <Border x:Name="RankingMonthCapsule"
-                                    Margin="0,0,10,0"
+                                    Margin="12,0,0,0"
                                     Padding="3"
                                     VerticalAlignment="Center"
                                     Visibility="Collapsed"
-                                    CornerRadius="{StaticResource RadiusRow}"
-                                    Background="{DynamicResource MpPanel}">
+                                    CornerRadius="16"
+                                    Background="{DynamicResource GlassPanel}"
+                                    BorderBrush="#12FFFFFF"
+                                    BorderThickness="1">
                                 <StackPanel Orientation="Horizontal">
                                     <Button x:Name="RankingMonthCurrent" Click="RankingMonthCurrent_Click"
                                             Style="{StaticResource SubTab}"/>
@@ -2121,123 +2224,126 @@
                                             Style="{StaticResource SubTab}"/>
                                 </StackPanel>
                             </Border>
-                            <Button x:Name="RankGuideLink"
-                                    Style="{StaticResource MpSecondaryButton}"
-                                    FontSize="{DynamicResource MpMetaSize}"
-                                    Height="30"
-                                    Padding="12,0"
-                                    VerticalAlignment="Center"
-                                    Click="RankGuideLink_Click"/>
                         </StackPanel>
                     </Grid>
 
-                    <!-- The table: ONE card holding the column headings, the rows, the viewer's
-                         own row pinned to the foot when it is out of sight, and — design 59 — the
-                         footnote, which used to float under the card at the window's edge. -->
-                    <Border x:Name="RankingTableCard"
-                            Grid.Row="1"
-                            VerticalAlignment="Top"
-                            CornerRadius="{StaticResource RadiusLg}"
-                            Background="{DynamicResource MpPanel}"
-                            BorderBrush="{DynamicResource MpRimFaint}"
-                            BorderThickness="1">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <!-- Column headings, outside the scroller so they stay put. -->
-                            <Grid x:Name="RankingHeaderHost" Grid.Row="0"/>
-                            <ScrollViewer x:Name="RankingRowsScroll"
-                                          Grid.Row="1"
-                                          VerticalScrollBarVisibility="Auto"
-                                          HorizontalScrollBarVisibility="Disabled"
-                                          ScrollChanged="RankingRowsScroll_ScrollChanged">
-                                <StackPanel x:Name="RankingBody" SizeChanged="RankingBody_SizeChanged"/>
-                            </ScrollViewer>
-                            <!-- The viewer's own row, shown only while their real row is
-                                 scrolled out of sight. Collapsed the rest of the time, so a
-                                 player who can see themselves is not shown twice. -->
-                            <Grid x:Name="RankingPinnedRow"
-                                  Grid.Row="2"
-                                  Visibility="Collapsed"/>
-                            <!-- The footnote, on the page's own background like the handoff
-                                 draws it. Its bottom corners follow the card's, one pixel in. -->
-                            <Border Grid.Row="3"
-                                    Padding="16,10,16,10"
-                                    CornerRadius="0,0,9,9"
-                                    Background="{DynamicResource MpAppBg}">
-                                <Grid>
+                    <!-- The left column: the podium of the first three, then the table from the
+                         fourth on. The page does not scroll; the table inside its card does. -->
+                    <Grid x:Name="RankingLeftColumn" Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <!-- Built in code (MultiplayerTab.RankingPodium.cs). -->
+                        <Grid x:Name="RankingPodiumHost" Grid.Row="0" Visibility="Collapsed"/>
+                        <Border x:Name="RankingTableCard"
+                                Grid.Row="1"
+                                CornerRadius="14"
+                                Background="{DynamicResource GlassPanel}"
+                                BorderBrush="#12FFFFFF"
+                                BorderThickness="1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <!-- Column headings, outside the scroller so they stay put. -->
+                                <Grid x:Name="RankingHeaderHost" Grid.Row="0"/>
+                                <ScrollViewer x:Name="RankingRowsScroll"
+                                              Grid.Row="1"
+                                              Padding="0"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <StackPanel x:Name="RankingBody" Margin="8,2,8,8" SizeChanged="RankingBody_SizeChanged"/>
+                                </ScrollViewer>
+                                <!-- The footnote: what counts, the flame, INACTIVE; and the guide. -->
+                                <Border x:Name="RankingFootBand"
+                                        Grid.Row="2"
+                                        Padding="20,10,20,12"
+                                        BorderBrush="#12FFFFFF"
+                                        BorderThickness="0,1,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="RankingFootnoteText"
+                                                   Grid.Column="0"
+                                                   Margin="0,0,16,0"
+                                                   TextWrapping="Wrap"
+                                                   FontSize="{DynamicResource MpHistoryMetaSize}"
+                                                   Foreground="{DynamicResource MpTextFaint}"/>
+                                        <Button x:Name="RankingEloHelpButton"
+                                                Grid.Column="1"
+                                                VerticalAlignment="Top"
+                                                FontSize="{DynamicResource MpHistoryMetaSize}"
+                                                Click="RankingEloHelpButton_Click"
+                                                Style="{StaticResource MpLinkButton}"/>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- The right column: "Your position" over the community's last matches. Its
+                         width is set from code (RankingTableLayout.Split): 40 % of the page, never a
+                         fixed number. Collapsed when it has neither. -->
+                    <Grid x:Name="RankingSideColumn" Grid.Row="1" Grid.Column="1" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <!-- Built in code (MultiplayerTab.RankingPodium.cs). -->
+                        <Grid x:Name="RankingYouHost" Grid.Row="0" Visibility="Collapsed"/>
+                        <Border x:Name="RankingHistoryCard"
+                                Grid.Row="1"
+                                Padding="18,14,18,4"
+                                Visibility="Collapsed"
+                                CornerRadius="14"
+                                Background="{DynamicResource GlassPanel}"
+                                BorderBrush="#12FFFFFF"
+                                BorderThickness="1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="RankingFootnoteText"
-                                               Grid.Column="0"
-                                               Margin="0,0,14,0"
-                                               TextWrapping="Wrap"
-                                               FontSize="{DynamicResource MpHistoryMetaSize}"
-                                               Foreground="{DynamicResource MpTextFaint}"/>
-                                    <Button x:Name="RankingEloHelpButton"
+                                    <TextBlock x:Name="RankingHistoryTitle"
+                                               Margin="0,0,10,0"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               FontSize="{DynamicResource FontSizeBodyStrong}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource MpTextPrimary}"/>
+                                    <!-- Handoff 63: the panel keeps the latest thirty and this is the
+                                         way to the whole year, the Matches view. -->
+                                    <Button x:Name="RankingAllMatchesLink"
                                             Grid.Column="1"
-                                            VerticalAlignment="Top"
-                                            FontSize="{DynamicResource MpHistoryMetaSize}"
-                                            Click="RankingEloHelpButton_Click"
-                                            Style="{StaticResource MpLinkButton}"/>
+                                            VerticalAlignment="Center"
+                                            FontSize="{DynamicResource MpMetaSize}"
+                                            FontWeight="SemiBold"
+                                            Style="{StaticResource MpLinkButton}"
+                                            Click="RankingAllMatchesLink_Click"/>
                                 </Grid>
-                            </Border>
-                        </Grid>
-                    </Border>
-
-                    <!-- The community's last matches, beside the ladder: who beat whom, on
-                         which map, with which civilization — each name with its flag. Its width
-                         is set from code (RankingTableLayout.Split): 40 % of the page, never a
-                         fixed number. Collapsed while the payload has no matches. Top-aligned
-                         like the table, so a short list is a short card; it scrolls inside
-                         itself for the same reason the ladder does. -->
-                    <Border x:Name="RankingHistoryCard"
-                            Grid.Row="1" Grid.Column="1"
-                            Margin="14,0,0,0"
-                            Padding="16,12,16,4"
-                            VerticalAlignment="Top"
-                            Visibility="Collapsed"
-                            CornerRadius="{StaticResource RadiusLg}"
-                            Background="{DynamicResource MpPanel}"
-                            BorderBrush="{DynamicResource MpRimFaint}"
-                            BorderThickness="1">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock x:Name="RankingHistoryTitle"
-                                       Grid.Row="0"
-                                       FontSize="{DynamicResource MpPillSize}"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource MpTextLabel}"/>
-                            <!-- Margin -8 on the right is the gutter the overlaid bar is drawn
-                                 in, so the rows keep the card's full width. -->
-                            <ScrollViewer x:Name="RankingHistoryScroll"
-                                          Grid.Row="1"
-                                          Margin="0,8,-8,0"
-                                          Style="{StaticResource MpOverlayScrollViewer}"
-                                          VerticalScrollBarVisibility="Auto"
-                                          HorizontalScrollBarVisibility="Disabled">
-                                <StackPanel x:Name="RankingHistoryList"/>
-                            </ScrollViewer>
-                            <!-- Handoff 63: the panel keeps the latest thirty and ends in a way to
-                                 the whole year — the Matches view. -->
-                            <Button x:Name="RankingAllMatchesLink"
-                                    Grid.Row="2"
-                                    Margin="0,10,0,8"
-                                    HorizontalAlignment="Right"
-                                    Style="{StaticResource MpMatchesPillButton}"
-                                    Click="RankingAllMatchesLink_Click"/>
-                        </Grid>
-                    </Border>
+                                <!-- Margin -8 on the right is the gutter the overlaid bar is drawn
+                                     in, so the rows keep the card's full width. -->
+                                <ScrollViewer x:Name="RankingHistoryScroll"
+                                              Grid.Row="1"
+                                              Margin="0,6,-8,6"
+                                              Style="{StaticResource MpOverlayScrollViewer}"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <StackPanel x:Name="RankingHistoryList"/>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Grid>
 
                     <!-- HIGHLIGHTS (the third option of the selector): one card per highlight with
                          its top five, in a grid as wide as the page — a column per ~380 px. Built

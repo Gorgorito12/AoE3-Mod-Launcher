@@ -116,15 +116,39 @@ internal static class EloDemoData
     /// tables empty, the placement rows still there — what the ladder looks like the day the new
     /// system starts.
     /// </summary>
-    internal static CommunityStats Community(string? mod, string? mode, bool nobodyRanked)
+    internal static CommunityStats Community(string? mod, string? mode, bool nobodyRanked, bool nobodyAtAll = false)
     {
         var stats = StatsDemoData.Community(mod, mode);
-        if (nobodyRanked)
+        // The ranking's side card reads these; the statistics fixture leaves them empty.
+        stats.RecentMatches = ReplayDemoData.Matches(DateTime.UtcNow).Take(12).ToList();
+        if (nobodyRanked || nobodyAtAll)
         {
             stats.Leaderboard = new List<LeaderboardRow>();
             stats.LeaderboardTeam = new List<LeaderboardRow>();
             stats.RankedPlayers = 0;
             stats.RankedPlayersTeam = 0;
+        }
+        if (nobodyRanked && !nobodyAtAll)
+        {
+            // 93d: the viewer is being placed too, four matches in.
+            stats.LeaderboardPlacement.Insert(1, new PlacementRow
+            {
+                UserId = ViewerId,
+                DiscordUsername = "Gorgorito12",
+                DisplayName = "Gorgorito12",
+                PlacementPlayed = 4,
+                PlacementRequired = StatsDemoData.PlacementDefault,
+            });
+            stats.PlacementPlayers = stats.LeaderboardPlacement.Count;
+        }
+        if (nobodyAtAll)
+        {
+            // 93e: the day the ladder starts. Nobody ranked, nobody placing, no match played.
+            stats.LeaderboardPlacement = new List<PlacementRow>();
+            stats.LeaderboardTeamPlacement = new List<PlacementRow>();
+            stats.PlacementPlayers = 0;
+            stats.PlacementPlayersTeam = 0;
+            stats.RecentMatches = new List<CommunityMatch>();
         }
         stats.MonthlyHighlights = Highlights();
         return stats;

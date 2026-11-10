@@ -616,6 +616,17 @@ rather than the reverse.
   `--demo-rooms=86a..86e` (and a Settings → Developer row) paints it with sample rooms; buttons there
   say what they would do instead of doing it.
 
+- **Screen 93 of `docs/design_base_launcher_2` SUPERSEDES what this file and `multiplayer.md` say about
+  the Clasificación page** (the pinned copy of the viewer's row, the plain hairline rows, the page title
+  and its "How ranks work" button, the uppercase cards of Highlights). The first three stand on a
+  podium (`Controls/MultiplayerTab.RankingPodium.cs`), the table starts at the fourth under a heading
+  per age, players being placed are its last group, and "Your position" sits over "Latest matches" in
+  the side column; the pure rules are `Services/Multiplayer/RankingView.cs` (`RankingGroups`,
+  `YourStandingView`, `RankingPodiumFluid`, `RankAgeColors`). `--demo-elo=93a..93f` opens each block.
+  Going back to the subtab draws nothing unless something moved (`RenderRankingIfChanged`), and a
+  looping light that is not a badge asks `RankBadge.MayRunOn` and listens to
+  `RankBadge.RunConditionsChanged`. The rules are in `.claude/rules/multiplayer.md` (RANKING PAGE).
+
 - **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the
   piece of the blurred cover under it plus the level's tint (`GlassTheme.Spec.Menu`), which supersedes
   the "denser than the design" note below while a cover is on screen; with none, `Spec.Floating`

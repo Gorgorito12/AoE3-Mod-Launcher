@@ -34,17 +34,19 @@ public partial class MultiplayerTab
 
     private bool _quickCardClocksHooked;
 
-    /// <summary>The marks move only while somebody can see them: paused while the card is hidden
-    /// (another tab, the tray) or the window is minimised, which keeps IsVisible true.</summary>
+    /// <summary>The marks move only while somebody can see them, the badges' own rule: paused
+    /// while the launcher is behind another program, the card is hidden (another tab, the tray) or
+    /// the window is minimised, which keeps IsVisible true.</summary>
     private void SyncQuickCardClocks()
     {
-        if (!_quickCardClocksHooked && QuickCardHost != null && Window.GetWindow(this) is { } w)
+        if (!_quickCardClocksHooked && QuickCardHost != null && Window.GetWindow(this) != null)
         {
             _quickCardClocksHooked = true;
             QuickCardHost.IsVisibleChanged += (_, _) => SyncQuickCardClocks();
-            w.StateChanged += (_, _) => SyncQuickCardClocks();
+            // Foreground, and minimise and restore: one event for both.
+            RankBadge.RunConditionsChanged += SyncQuickCardClocks;
         }
-        var run = QuickCardHost?.IsVisible == true && Window.GetWindow(this)?.WindowState != WindowState.Minimized;
+        var run = RankBadge.MayRunOn(QuickCardHost);
         foreach (var c in _quickCardClocks)
         {
             if (run) c.Controller?.Resume();

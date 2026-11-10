@@ -3322,11 +3322,6 @@ public partial class MultiplayerTab : UserControl
         _closeRankGuide = close;
     }
 
-    private void RankGuideLink_Click(object sender, RoutedEventArgs e)
-        => ShowRankGuide(initial: _rankingShowsTeam
-            ? Services.Multiplayer.BadgeKind.Team
-            : Services.Multiplayer.BadgeKind.Solo);
-
     /// <summary>The Ranking subtab, the same way its button opens it — for the guide's
     /// "Open ranking". <paramref name="mode"/> picks the ladder (the Teams tab's "Open team
     /// ranking" opens TEAMS); null leaves the Ranking's own choice alone. A TEAMS request on a
@@ -4408,7 +4403,7 @@ public partial class MultiplayerTab : UserControl
         {
             case Subtab.Rooms:      ShowSubtabView(); Services.DiagnosticLog.Time("MP RenderRoomsTab", RenderRoomsTab);   break;
             case Subtab.Tournaments: ShowSubtabView(); RenderTournamentsTab(onlyIfChanged: true); break;
-            case Subtab.Ranking:    ShowSubtabView(); RenderRanking();    break;
+            case Subtab.Ranking:    ShowSubtabView(); RenderRankingIfChanged(); break;
             case Subtab.Stats:      ShowSubtabView(); RenderStatsTab();   break;
         }
 
@@ -5993,7 +5988,7 @@ public partial class MultiplayerTab : UserControl
         // now and only one of them is what the statistics page reads. The rating preview's
         // payload is the same one, with the ranked tables emptied for its 55c scene.
         _communityStats = _eloPreview
-            ? Services.Multiplayer.EloDemoData.Community(mod, mode, _eloPreviewNobodyRanked)
+            ? Services.Multiplayer.EloDemoData.Community(mod, mode, _eloPreviewNobodyRanked, _eloPreviewEmptyLadder)
             : Services.Multiplayer.StatsDemoData.Community(mod, mode);
         _statsCommunity = _communityStats;
         _civStats = _demoStatsEmpty
@@ -7876,8 +7871,8 @@ public partial class MultiplayerTab : UserControl
     private void RenderRankingHistory()
     {
         if (RankingHistoryList == null) return;
-        // A section label, uppercase like the column headings (design 59).
-        RankingHistoryTitle.Text = Strings.Get("MpRankHistoryTitle").ToUpper(Strings.Culture);
+        // A card title in sentence case (design 93).
+        RankingHistoryTitle.Text = Strings.Get("MpRankHistoryTitle");
         RankingHistoryList.Children.Clear();
 
         var matches = Services.Multiplayer.CommunityStatsView.RecentMatches(_communityStats);
@@ -7895,42 +7890,52 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// The card is drawn when there is something to draw — at every width since design 59,
-    /// which shares the page 60/40 rather than taking the list away from a narrow window — and
-    /// the page's columns follow <see cref="RankingTableLayout.Split"/>.
+    /// The side column (design 93) holds "Your position" over the community's last matches. Each
+    /// is drawn when it has something to say, the column when either does, and the page's columns
+    /// follow <see cref="RankingTableLayout.Split"/>.
     /// </summary>
     private void UpdateRankingHistoryVisibility()
     {
         if (RankingHistoryCard == null) return;
-        // The match list goes with the table: Highlights and Matches take the whole page.
-        RankingHistoryCard.Visibility = _rankingHistoryHasRows
-                                        && _rankingMode is not (RankingMode.Highlights or RankingMode.Matches)
+        // The side column goes with the table: Highlights and Matches take the whole page.
+        var tableMode = _rankingMode is not (RankingMode.Highlights or RankingMode.Matches);
+        RankingHistoryCard.Visibility = _rankingHistoryHasRows && tableMode
+            ? Visibility.Visible : Visibility.Collapsed;
+        RankingYouHost.Visibility = _rankingYouShown && tableMode
+            ? Visibility.Visible : Visibility.Collapsed;
+        RankingSideColumn.Visibility = RankingSideShown && tableMode
             ? Visibility.Visible : Visibility.Collapsed;
         ApplyRankingSplit();
     }
 
+    /// <summary>Whether the side column has anything in it: the viewer's place, or matches.</summary>
+    private bool RankingSideShown => _rankingHistoryHasRows || _rankingYouShown;
+
     /// <summary>
-    /// The table and the match list as design 59 shares them: side by side at 60/40 of what is
+    /// The table and the side column as design 59 shares them: side by side at 60/40 of what is
     /// left past their 640 / 340 bases, or — under ~1000 px, which <c>UiScale</c> does not let
-    /// the tab reach today — one above the other, 3 : 2 in height. With no match list the table
-    /// has the page.
+    /// the tab reach today — one above the other, 3 : 2 in height. With nothing at the side the
+    /// table has the page.
     /// </summary>
     private void ApplyRankingSplit()
     {
-        if (RankingPage == null || RankingHistoryCard == null) return;
-        // The gap between the table and the list is the tab's G, like every other gap (PageSpacing).
+        if (RankingPage == null || RankingSideColumn == null) return;
+        // The gap between the table and the side is the tab's G, like every other gap (PageSpacing).
         var gap = PageGap;
         var split = RankingTableLayout.Split(RankingPage.ActualWidth, gap);
-        var withList = _rankingHistoryHasRows && split.TableWidth > 0;
-        var stacked = withList && split.Stacked;
+        var withSide = RankingSideShown && split.TableWidth > 0;
+        var stacked = withSide && split.Stacked;
 
-        Grid.SetRow(RankingHistoryCard, stacked ? 2 : 1);
-        Grid.SetColumn(RankingHistoryCard, stacked ? 0 : 1);
-        Grid.SetColumnSpan(RankingHistoryCard, stacked ? 2 : 1);
-        RankingHistoryCard.Margin = stacked
+        Grid.SetRow(RankingSideColumn, stacked ? 2 : 1);
+        Grid.SetColumn(RankingSideColumn, stacked ? 0 : 1);
+        Grid.SetColumnSpan(RankingSideColumn, stacked ? 2 : 1);
+        RankingSideColumn.Margin = stacked
             ? new Thickness(0, gap, 0, 0)
             : new Thickness(gap, 0, 0, 0);
-        RankingHistoryCard.Width = withList && !stacked ? split.PanelWidth : double.NaN;
+        RankingSideColumn.Width = withSide && !stacked ? split.PanelWidth : double.NaN;
+        // "Your position" sits a gap above the match list, when both are there.
+        RankingYouHost.Margin = new Thickness(0, 0, 0, _rankingHistoryHasRows ? gap : 0);
+        ApplyPodiumGap(gap);
         RankingTableRow.Height = new GridLength(stacked ? 3 : 1, GridUnitType.Star);
         RankingStackedRow.Height = stacked ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
     }

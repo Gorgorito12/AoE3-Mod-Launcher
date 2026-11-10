@@ -653,6 +653,9 @@ def parse_log(path=LOG):
         "switches": [(to, int(ms), kind == "first time") for to, ms, kind in
                      re.findall(r"SWITCH  .+? -> (.+?)  (\d+) ms \((first time|repeat)\)", text)],
         "storms": len(re.findall(r"LAYOUT STORM  ", text)),
+        # The lines themselves: the log is overwritten by the next run, and a count alone
+        # cannot say which page stormed.
+        "storm_lines": [line[:1200] for line in text.splitlines() if "LAYOUT STORM  " in line],
         "effects_reduced": "EFFECTS REDUCED" in text,
     }
 
@@ -754,6 +757,7 @@ def perf(args):
         "stalls_over_250ms": sum(len(r["log"]["stalls"]) for r in results),
         "slow_ops": sum(len(r["log"]["ops"]) for r in results),
         "layout_storms": sum(r["log"]["storms"] for r in results),
+        "layout_storm_lines": [line for r in results for line in r["log"].get("storm_lines", [])],
         "effects_reduced": any(r["log"]["effects_reduced"] for r in results),
     }
     switches = [s for r in results for s in r["log"]["switches"]]

@@ -818,6 +818,22 @@ the server knows it, at create time;
 the activity facts keep their own count instead of 2/3/4 by width; the sample peak hours are the
 fixture's. The subtab bar (capitals, a blue line) is now the same for all four subtabs.
 
+**Screen 93 (Clasificación)**, compared with `Clasificación v3.dc.html` in 93a (1920), 93b, 93d and 93e
+(1366), 93c (2560, Teams) and 93f (Highlights), then English, reduced effects and the Solid and
+Maximum glass. What differs, on purpose: the ages are the launcher's own shares of the ladder
+(`RankAges`), so a table of nine does not cut where the prototype's sample does; the badge is the
+launcher's `RankBadge`, larger and with its own light, and Discovery's is the dull plate it is
+everywhere else rather than a shield with an "I"; a group's range is the age's places on the whole
+ladder; only the viewer's own row, podium card and "Your position" open a profile, because there is
+no profile page for another player; the month's climb ("+41 in November") is drawn only for a player
+the server's biggest-climb list names, there being no figure for anybody else; the glows that are
+box-shadows in the prototype are left out (no live effect over lists) and the cards' fill is the
+launcher's glass level, not a live blur; the "Clasificación" title and the "How ranks work" button are
+gone from the header (the guide opens from any badge and from the account menu); Highlights keeps
+its month capsule where the prototype has a "see last month" link; the Matches view is unchanged.
+With no peak sent for anybody (93d) the table has three columns, so its ELO column starts further
+right than the prototype's four.
+
 ## If you read them
 
 - **Read the prototype markup, not only the prose.** The README omits values the markup

@@ -12,21 +12,22 @@ using Xunit;
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// The Clasificación rows: the player's picture beside every name, the PEAK (with the day it was
-/// reached) where the server sends one and a dash where it does not, and the pinned "YOU" row drawn
-/// on exactly the same columns as the list — which lives inside a ScrollViewer that keeps a gutter
-/// and a bar the pinned row does not have.
+/// The Clasificación rows (design 93): the player's picture beside every name, the PEAK (with the
+/// day it was reached) where the server sends one and a dash where it does not, and the column
+/// headings drawn on exactly the same columns as the rows - which live inside a ScrollViewer, as
+/// plates with a rim and a padding the headings do not have.
 /// </summary>
 [Collection("wpf-and-language")]
 public class RankingRowsTests
 {
     /// <summary>
-    /// THE ONE THAT MATTERS: with the list scrolled so the viewer's own row is out of sight, the
-    /// pinned copy at the foot puts every column — the ELO and the peak — at the same X as the real
-    /// row. It used to sit to the right by the ScrollViewer's gutter and bar.
+    /// THE ONE THAT MATTERS: every heading sits at the same X, and is as wide, as its column in a
+    /// row of the list. The headings are outside the ScrollViewer and a row is a plate 8 px in
+    /// with a rim and 12 px of padding, so nothing but the arithmetic keeps them together - and
+    /// with the list scrolling, the bar takes width from the rows only.
     /// </summary>
     [Fact]
-    public void THE_ONE_THAT_MATTERS_ThePinnedRowUsesTheListsColumns()
+    public void THE_ONE_THAT_MATTERS_TheHeadingsUseTheRowsColumns()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -35,35 +36,73 @@ public class RankingRowsTests
 
             var host = (FrameworkElement)(VisualTreeHelper.GetParent(tab.RankingHeaderHost)
                                           ?? tab.RankingHeaderHost.Parent);
+            // Short on purpose: the list has to scroll, which is when the two could part.
             void Layout()
             {
-                host.Measure(new Size(1100, 420));
-                host.Arrange(new Rect(0, 0, 1100, 420));
+                host.Measure(new Size(1100, 300));
+                host.Arrange(new Rect(0, 0, 1100, 300));
                 host.UpdateLayout();
             }
             Layout();
+            // The gutter is synced after the first layout (it is deferred in the launcher).
             tab.RankingRowsScroll.ScrollToEnd();
             Layout();
+            tab.GetType().GetMethod("SyncRankingScrollGutter",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(tab, null);
             Layout();
+            Assert.True(tab.RankingRowsScroll.ScrollableHeight > 0, "the list should be scrolling");
 
-            Assert.Equal(Visibility.Visible, tab.RankingPinnedRow.Visibility);
-
-            var own = tab.RankingBody.Children.OfType<Border>()
-                .Single(b => b.Tag is LeaderboardRow r && r.UserId == EloDemoData.ViewerId);
-            var listRow = (Grid)own.Child;
-            var pinnedRow = (Grid)((Border)((Border)tab.RankingPinnedRow.Children[0]).Child).Child;
-
-            Assert.Equal(listRow.ColumnDefinitions.Count, pinnedRow.ColumnDefinitions.Count);
-            double listOffset = 0, pinnedOffset = 0;
-            for (var c = 0; c < listRow.ColumnDefinitions.Count; c++)
+            var heading = (Grid)tab.RankingHeaderHost.Children[0];
+            var rows = tab.RankingBody.Children.OfType<Border>().Where(b => b.Tag is LeaderboardRow).ToList();
+            Assert.NotEmpty(rows);
+            foreach (var plate in rows)
             {
-                var listX = listRow.TranslatePoint(new Point(listOffset, 0), host).X;
-                var pinnedX = pinnedRow.TranslatePoint(new Point(pinnedOffset, 0), host).X;
-                Assert.Equal(listX, pinnedX, 0.5);
-                Assert.Equal(listRow.ColumnDefinitions[c].ActualWidth, pinnedRow.ColumnDefinitions[c].ActualWidth, 0.5);
-                listOffset += listRow.ColumnDefinitions[c].ActualWidth;
-                pinnedOffset += pinnedRow.ColumnDefinitions[c].ActualWidth;
+                var row = (Grid)plate.Child;
+                Assert.Equal(heading.ColumnDefinitions.Count, row.ColumnDefinitions.Count);
+                double headOffset = 0, rowOffset = 0;
+                for (var c = 0; c < row.ColumnDefinitions.Count; c++)
+                {
+                    var headX = heading.TranslatePoint(new Point(headOffset, 0), host).X;
+                    var rowX = row.TranslatePoint(new Point(rowOffset, 0), host).X;
+                    Assert.Equal(rowX, headX, 0.5);
+                    Assert.Equal(row.ColumnDefinitions[c].ActualWidth, heading.ColumnDefinitions[c].ActualWidth, 0.5);
+                    headOffset += heading.ColumnDefinitions[c].ActualWidth;
+                    rowOffset += row.ColumnDefinitions[c].ActualWidth;
+                }
             }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// There is no pinned copy of the viewer's row any more: the first three are on the podium,
+    /// the table starts at the fourth, and "Your position" beside it says where the viewer is at
+    /// every scroll offset.
+    /// </summary>
+    [Fact]
+    public void ThePodiumTakesTheFirstThreeAndYourPositionReplacesThePinnedRow()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("ranking");
+
+            var podium = Walk(tab.RankingPodiumHost).OfType<FrameworkElement>()
+                .Where(e => Equals(e.Tag, MultiplayerTab.PodiumCardTag)).ToList();
+            Assert.Equal(3, podium.Count);
+            Assert.Equal(Visibility.Visible, tab.RankingPodiumHost.Visibility);
+
+            var places = tab.RankingBody.Children.OfType<Border>()
+                .Select(b => b.Tag).OfType<LeaderboardRow>().Select(r => r.Rank).ToList();
+            Assert.Equal(4, places.Min());
+            Assert.DoesNotContain(1, places);
+
+            Assert.Equal(Visibility.Visible, tab.RankingSideColumn.Visibility);
+            Assert.Equal(Visibility.Visible, tab.RankingYouHost.Visibility);
+            Assert.Single(Walk(tab.RankingYouHost).OfType<FrameworkElement>(),
+                e => Equals(e.Tag, MultiplayerTab.YouCardTag));
+            Assert.Null(tab.FindName("RankingPinnedRow"));
         });
         Assert.Null(error);
     }
@@ -173,6 +212,228 @@ public class RankingRowsTests
         });
         Assert.Null(error);
     }
+
+    /// <summary>
+    /// The podium card is built in code, so nothing checks it at compile time. In both languages,
+    /// for each place: the name, the ELO, the age and the peak are there, and the moving light is
+    /// on the first card only - and on none with reduced effects.
+    /// </summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("es")]
+    public void ThePodiumCardBuildsForEveryPlace_AndOnlyTheFirstShines(string language)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            Strings.SetLanguage(language);
+            try
+            {
+                foreach (var effects in new[] { true, false })
+                {
+                    RankBadge.AnimationsOverride = effects;
+                    var tab = new MultiplayerTab();
+                    for (var place = 1; place <= 3; place++)
+                    {
+                        var row = new LeaderboardRow
+                        {
+                            Rank = place, UserId = "u" + place, DisplayName = "Jugador " + place,
+                            Rating = 1800 - place * 40, RatingPeak = 1900, Streak = place == 1 ? 5 : 0,
+                        };
+                        var climb = place == 2 ? new HighlightPlayer { UserId = "u2", Points = 31, RatingFrom = 1689, RatingTo = 1720, Matches = 9 } : null;
+                        var card = tab.BuildPodiumCard(row, team: false, ladderSize: 12, isMe: place == 3, climb, month: "octubre");
+                        Assert.Equal(MultiplayerTab.PodiumCardTag, card.Tag);
+
+                        var text = string.Join(" ", TextsOf(card));
+                        Assert.Contains("Jugador " + place, text);
+                        Assert.Contains(PlacementView.RatingText(row.Rating), text);
+                        Assert.Contains(Strings.Get(RankAges.NameKey(RankAges.For(place, 12))).ToUpper(Strings.Culture), text);
+                        Assert.Contains(Strings.Format("RkPeakShort", "1900"), text);
+                        Assert.Equal(place == 3, text.Contains(Strings.Get("MpRankYouTag")));
+                        Assert.Equal(place == 2, text.Contains("+31"));
+
+                        var sheen = Walk(card).OfType<FrameworkElement>().Count(e => Equals(e.Tag, "RankingPodiumSheen"));
+                        Assert.Equal(place == 1 && effects ? 1 : 0, sheen);
+                    }
+                }
+            }
+            finally
+            {
+                RankBadge.AnimationsOverride = null;
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// "Your position", built in code, in both languages and its three shapes: on the table with
+    /// the place above in a higher age, first on the table, and being placed. The sentence at the
+    /// foot is the one for that shape, and a placement shows one segment per match it takes.
+    /// </summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("es")]
+    public void YourPositionBuildsInItsThreeShapes(string language)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            Strings.SetLanguage(language);
+            try
+            {
+                var tab = new MultiplayerTab();
+                string Foot(FrameworkElement card) => Walk(card).OfType<TextBlock>()
+                    .Single(t => Equals(t.Tag, "RankingYouNext")).Text;
+
+                var neighbours = new[]
+                {
+                    new StandingNeighbour(4, "Comandante_Supremo_de_la_Gran_Armada_Libertadora", null, 1467, 65, false),
+                    new StandingNeighbour(5, "Gorgo", null, 1402, 0, true),
+                    new StandingNeighbour(6, "Malinche", null, 1395, -7, false),
+                };
+                var ranked = tab.BuildYouCard(new YourStanding
+                {
+                    Ranked = true, Place = 5, Of = 9, Age = RankAge.Fortress, Elo = 1402, Streak = 3,
+                    Neighbours = neighbours, ToNextPlace = 66, NextPlace = 4, NextAge = RankAge.Industrial,
+                }, team: false, climb: null, month: null, results: null);
+                Assert.Equal(MultiplayerTab.YouCardTag, ranked.Tag);
+                Assert.Equal(Strings.Format("RkYouNextAge", 66, 4, Strings.Get(RankAges.NameKey(RankAge.Industrial))), Foot(ranked));
+                var words = string.Join(" ", TextsOf(ranked));
+                Assert.Contains("#5", words);
+                Assert.Contains("1402", words);
+                Assert.Contains("+65", words);
+                Assert.Contains("Malinche", words);
+                // One line per neighbour, the viewer's own among them.
+                Assert.Equal(3, Walk(ranked).OfType<FrameworkElement>().Count(e => e.Tag is StandingNeighbour));
+
+                var sameAge = tab.BuildYouCard(new YourStanding
+                {
+                    Ranked = true, Place = 6, Of = 9, Age = RankAge.Fortress, Elo = 1395,
+                    Neighbours = neighbours, ToNextPlace = 8, NextPlace = 5,
+                }, team: false, climb: null, month: null, results: null);
+                Assert.Equal(Strings.Format("RkYouNext", 8, 5), Foot(sameAge));
+
+                var first = tab.BuildYouCard(new YourStanding
+                {
+                    Ranked = true, Place = 1, Of = 9, Age = RankAge.Sovereign, Elo = 1630,
+                }, team: false, climb: null, month: null, results: null);
+                Assert.Equal(Strings.Get("RkYouFirst"), Foot(first));
+
+                var placing = tab.BuildYouCard(new YourStanding
+                {
+                    Ranked = false, Age = RankAge.Discovery, Elo = 1534, PlacementPlayed = 2, PlacementRequired = 5,
+                }, team: true, climb: null, month: null, results: null);
+                Assert.Equal(Strings.Format("RkYouLeft", 3), Foot(placing));
+                Assert.Contains("2/5", string.Join(" ", TextsOf(placing)));
+
+                var oneLeft = tab.BuildYouCard(new YourStanding
+                {
+                    Ranked = false, Age = RankAge.Discovery, PlacementPlayed = 9, PlacementRequired = 10,
+                }, team: false, climb: null, month: null, results: null);
+                Assert.Equal(Strings.Get("RkYouLeftOne"), Foot(oneLeft));
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Two texts on a line never touch: in "Your position", the long name of a neighbour ends in
+    /// an ellipsis before it reaches his ELO, at the narrowest the side column gets.
+    /// </summary>
+    [Fact]
+    public void ALongNeighbourNameTrimsBeforeItReachesTheElo()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            var card = tab.BuildYouCard(new YourStanding
+            {
+                Ranked = true, Place = 5, Of = 9, Age = RankAge.Fortress, Elo = 1402,
+                Neighbours = new[]
+                {
+                    new StandingNeighbour(4, "Comandante_Supremo_de_la_Gran_Armada_Libertadora_y_Protector", null, 1467, 65, false),
+                    new StandingNeighbour(5, "Gorgo", null, 1402, 0, true),
+                },
+                ToNextPlace = 66, NextPlace = 4,
+            }, team: false, climb: null, month: null, results: null);
+            card.Measure(new Size(340, double.PositiveInfinity));
+            card.Arrange(new Rect(0, 0, 340, card.DesiredSize.Height));
+            card.UpdateLayout();
+
+            var line = Walk(card).OfType<FrameworkElement>().First(e => e.Tag is StandingNeighbour { Place: 4 });
+            var texts = Walk(line).OfType<TextBlock>().Where(t => t.Text.Length > 0).ToList();
+            var name = texts.Single(t => t.Text.StartsWith("Comandante"));
+            var elo = texts.Single(t => t.Text == "1467");
+            Assert.Equal(TextTrimming.CharacterEllipsis, name.TextTrimming);
+            var nameRight = name.TranslatePoint(new Point(name.ActualWidth, 0), line).X;
+            var eloLeft = elo.TranslatePoint(new Point(0, 0), line).X;
+            Assert.True(eloLeft - nameRight >= 8, $"the name ends {eloLeft - nameRight:0.#} px from the ELO.");
+            Assert.True(line.ActualWidth <= 340);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: going back to the subtab draws nothing when nothing the page shows
+    /// moved - the rows on screen are the SAME objects - and draws again for each thing that did:
+    /// the mode, the language, a new answer from the server. Without the first half a tab switch
+    /// rebuilt the podium, the plates and the side column every time (63 ms against the old
+    /// table's 27, measured); without the second the page would show a stale ladder.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_GoingBackDrawsOnlyWhatChanged()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                var tab = new MultiplayerTab();
+                tab.ShowDemoElo("ranking");
+                object FirstRow() => tab.RankingBody.Children.OfType<Border>().First(b => b.Tag is LeaderboardRow);
+
+                var drawn = FirstRow();
+                Assert.False(tab.RenderRankingIfChanged());
+                Assert.False(tab.RenderRankingIfChanged());
+                Assert.Same(drawn, FirstRow());
+
+                // The language.
+                Strings.SetLanguage(Strings.Language == Strings.LangEs ? Strings.LangEn : Strings.LangEs);
+                Assert.True(tab.RenderRankingIfChanged());
+                Assert.NotSame(drawn, FirstRow());
+                Assert.False(tab.RenderRankingIfChanged());
+
+                // A new answer from the server: a new object, even with the same figures.
+                drawn = FirstRow();
+                typeof(MultiplayerTab).GetField("_communityStats",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .SetValue(tab, EloDemoData.Community(null, null, nobodyRanked: false));
+                Assert.True(tab.RenderRankingIfChanged());
+                Assert.NotSame(drawn, FirstRow());
+                Assert.False(tab.RenderRankingIfChanged());
+
+                // The mode: a mode button draws by itself, and the page is then settled again.
+                tab.RankingModeTeam.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert.Equal("active", tab.RankingModeTeam.Tag);
+                Assert.False(tab.RenderRankingIfChanged());
+
+                // Highlights keeps its own rules: it always draws.
+                tab.RankingModeHighlights.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert.True(tab.RenderRankingIfChanged());
+                Assert.True(tab.RenderRankingIfChanged());
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>Every piece of text under an element: a TextBlock's own, or its runs'.</summary>
+    private static IEnumerable<string> TextsOf(DependencyObject root)
+        => Walk(root).OfType<TextBlock>().Select(t => t.Inlines.Count > 0
+            ? string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text))
+            : t.Text);
 
     private static IEnumerable<DependencyObject> Walk(DependencyObject root)
     {
