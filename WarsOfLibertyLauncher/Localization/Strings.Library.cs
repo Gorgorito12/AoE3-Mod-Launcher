@@ -1076,6 +1076,12 @@ public static partial class Strings
         },
         ["LibMenuPlay"] = new() { [LangEn] = "Play", [LangEs] = "Jugar" },
         ["LibMenuRetry"] = new() { [LangEn] = "Retry download", [LangEs] = "Reintentar descarga" },
+        // The progress card's own buttons, in sentence case like the prototype; BtnPause / BtnResume
+        // stay uppercase because the legacy panel reads its state back from them.
+        ["LibProgressBytes"] = new() { [LangEn] = "{0} of {1}", [LangEs] = "{0} de {1}" },
+        ["LibProgressLeft"] = new() { [LangEn] = "{0} left", [LangEs] = "quedan {0}" },
+        ["LibCardPause"] = new() { [LangEn] = "Pause", [LangEs] = "Pausar" },
+        ["LibCardResume"] = new() { [LangEn] = "Resume", [LangEs] = "Reanudar" },
         ["LibMenuPause"] = new() { [LangEn] = "Pause download", [LangEs] = "Pausar descarga" },
         ["LibMenuResume"] = new() { [LangEn] = "Resume download", [LangEs] = "Reanudar descarga" },
         ["LibMenuCancel"] = new() { [LangEn] = "Cancel download", [LangEs] = "Cancelar descarga" },

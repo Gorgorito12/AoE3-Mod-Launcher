@@ -546,7 +546,13 @@ Screen 68 (Biblioteca unificada):
 - **The chevron of the brand menu and the bell stay in the bar.** Both lead somewhere nothing else
   does; screen 73 covers the bell.
 - **68b needs the catalog repository:** the proposed `accentColor`s are data in `mod.json`. The
-  normalisation (`ModAccent.Normalize`) is here and runs on whatever the catalog says.
+  normalisation (`ModAccent.Normalize`) is here and runs on whatever the catalog says. The five
+  proposed colours (Age of Dynasties teal, AoE1 blue, Hundred Days olive, King's Return violet,
+  The Ancient Age green) were written into the catalog on 2026-11-10; Age of Empires III stays gold.
+- **The pictures under the buttons are the mod's screenshots, else its cover and banner**, which is
+  what the prototype shows. No mod in the catalog declares screenshots yet; one picture alone (Wars
+  of Liberty has no banner) is no gallery. Up to eight, and a GIF animates in the viewer.
+- **The ⋯ beside the gear stays** (103n): a right click may not be the only way to anything.
 
 Screen 69 (Ajustes › Interfaz):
 
@@ -572,6 +578,9 @@ Screen 77 (Actualización del launcher):
   because nothing proves a file left beside the exe is the one that was checked. After a restart the
   pill says "Update" again and the download runs again.
 - **The pill keeps pulsing:** the handoff does not ask for that to stop.
+- **The pill sits in the title bar, beside the bell**, not in the tab row beside "Conectado" as 77k
+  draws it: the maintainer's call (2026-11-10), where it always was before 68a. It keeps 77k's blue
+  look, 26 px tall for the 40-px bar.
 
 Screen 78 (Asistente de Radmin):
 

@@ -116,6 +116,35 @@
     </Style>
 
     <!-- 34 high, radius 8: the sort and refresh. -->
+    <!-- The picture viewer's round buttons (68a): close 40 px on white .08, arrows 48 px on .1.
+         Glyphs, so their sizes are geometry and do not follow the text size. -->
+    <Style x:Key="LibraryViewerButton" TargetType="Button">
+        <Setter Property="Width" Value="48"/>
+        <Setter Property="Height" Value="48"/>
+        <Setter Property="Background" Value="#1AFFFFFF"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
+        <Setter Property="FontSize" Value="26"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid Background="Transparent">
+                        <Ellipse Fill="{TemplateBinding Background}"/>
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="0,0,0,3"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#33FFFFFF"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <Style x:Key="LibraryBarButton" TargetType="Button">
         <Setter Property="Height" Value="34"/>
         <Setter Property="Padding" Value="12,0"/>

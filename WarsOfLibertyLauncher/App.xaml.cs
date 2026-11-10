@@ -715,6 +715,10 @@ public partial class App : System.Windows.Application
             setting, TextScaleDiagonalInches, screen.Width, screen.Height, screen.DpiScale);
         _textScaleSetting = setting ?? Services.TextScale.Auto;
         Services.TextScale.Apply(TextScaleFactor);
+        // The Library's four type sizes come from its own clamp()s, not from tokens. Only from the
+        // application's thread: Application.MainWindow refuses any other (a test's STA thread).
+        if (Current is { } app && app.Dispatcher.CheckAccess())
+            (app.MainWindow as WarsOfLibertyLauncher.MainWindow)?.ApplyLibraryLayout();
     }
 
     /// <summary>True when this launch was an auto-start (Windows login) that

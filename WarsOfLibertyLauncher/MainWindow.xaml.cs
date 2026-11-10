@@ -105,6 +105,19 @@ public partial class MainWindow : Window
     // action forces a fresh check next time the user lands on that mod.
     private readonly Dictionary<string, UpdateService.CheckResult> _checkResultCache =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Counts every invalidation of <see cref="_checkResultCache"/>. A check made ahead
+    /// of time (<see cref="PrefetchInstalledChecksAsync"/>) keeps its answer only when this did
+    /// not move while it ran: an install, update or uninstall in between would otherwise leave
+    /// the answer from before it in the cache.</summary>
+    private int _checkCacheEpoch;
+    private bool _checkPrefetchStarted;
+
+    private void ForgetCheckResult(string modId)
+    {
+        _checkResultCache.Remove(modId);
+        _checkCacheEpoch++;
+    }
     private bool _isPaused;
     private bool _warnedAboutBrokenInstall;
     private bool _isGameRunning;
@@ -1606,6 +1619,8 @@ public partial class MainWindow : Window
     {
         if (string.Equals(_updateService.Profile.Id, target.Id, StringComparison.OrdinalIgnoreCase))
             return;
+        var clickedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        var fromId = _updateService.Profile.Id;
 
         // Pre-flight: only real operations (install / update / uninstall /
         // verify) block a mod switch. The read-only CheckAsync that refreshes
@@ -1635,14 +1650,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Cancel any in-flight background check so the previous profile's
-        // CheckAsync exits quickly. The result-writeback inside CheckAsync
-        // also re-checks the active profile so even if the old call wins
-        // the race, it won't trample the new mod's UI.
-        if (_isCheckOnly)
-        {
-            try { _cts?.Cancel(); } catch { /* already disposed — ignore */ }
-        }
+        // An in-flight check of the previous mod is left to finish: its writeback already refuses to
+        // touch the new mod's UI, and its answer is kept for that mod, so going back to it does not
+        // wait for the network again. Cancelling it threw that answer away on every quick switch.
 
         DiagnosticLog.Write(
             $"Switching active mod profile in place: '{_updateService.Profile.Id}' -> '{target.Id}'");
@@ -1672,6 +1682,7 @@ public partial class MainWindow : Window
 
         // Rebuild the active service + refresh all UI for the now-active profile.
         // (Shared with the install-switch path below.)
+        Services.ScreenTrace.ModSwitch(fromId, target.Id, clickedAt);
         await ReloadActiveServiceAsync(isModSwitch: true);
     }
 
@@ -1692,13 +1703,25 @@ public partial class MainWindow : Window
     private async Task ReloadActiveServiceAsync(bool isModSwitch)
     {
         var target = _config.GetActiveProfile();
+        // Where a slow switch spent its time (MODSWITCH-PHASES), written only when it was slow.
+        var phaseClock = System.Diagnostics.Stopwatch.StartNew();
+        var phases = new List<string>();
+        long phaseTotal = 0;
+        void Mark(string name)
+        {
+            phases.Add($"{name} {phaseClock.ElapsedMilliseconds}");
+            phaseTotal += phaseClock.ElapsedMilliseconds;
+            phaseClock.Restart();
+        }
 
         // Fresh service bound to the active profile + install. The constructor
         // does a synchronous fast-path lookup of the cached install path, so
         // _updateService.InstallPath is already populated for installs seen in a
         // previous session.
         _updateService = new UpdateService(_config, target);
+        Mark("service");
         UpdateAccentResources(target);
+        Mark("accent");
 
         // Reset session caches tied to the previous service.
         _pendingDownloads = new();
@@ -1716,11 +1739,13 @@ public partial class MainWindow : Window
             _cachedTranslationIndex = null;
 
         RefreshActiveModUi();
+        Mark("ui");
         // Don't wipe a live background op's progress bars on a mod/copy switch.
         MaybeResetProgressUI();
         UpdateGameUI();
         RefreshIdlePanel();
         RefreshOperationGate();   // the displayed mod may differ from the operating one now
+        Mark("panels");
 
         if (_operatingModId != null)
         {
@@ -1742,18 +1767,35 @@ public partial class MainWindow : Window
             // Re-detect install path + version + pending updates.
             await CheckAsync();
         }
+        Mark("check");
+        // Another switch took over while this one waited for its check: the rest belongs to the
+        // mod on screen now, and that switch does it. Carrying on would put this mod's translation
+        // index and language menu under the other one.
+        if (!string.Equals(_updateService.Profile.Id, target.Id, StringComparison.OrdinalIgnoreCase)) return;
         RefreshModCards();
+        Mark("cards");
 
         // Mod switch: re-fetch the per-mod translation index (gated like startup
         // so metered/offline users make no surprise network calls).
         if (isModSwitch && _config.CheckUpdatesOnStartup)
         {
-            try { await RefreshTranslationIndexAsync(); }
-            catch (Exception ex)
+            // A look at this mod's sources younger than TranslationIndexMaxAge is reused, the rule
+            // the Language tab already follows: going back and forth between mods asked every
+            // source again on each switch. An older one is fetched as before.
+            if (_translationFetches.TryGetValue(target.Id, out var lastLook)
+                && DateTime.UtcNow - lastLook.FetchedUtc < TranslationIndexMaxAge)
+                _cachedTranslationIndex = lastLook.Index;
+            else
             {
-                DiagnosticLog.Write($"Translation index refresh after switch failed: {ex.Message}");
+                try { await RefreshTranslationIndexAsync(); }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Translation index refresh after switch failed: {ex.Message}");
+                }
             }
         }
+
+        Mark("translations");
 
         // Repopulate the gear menu's translation list. The active-translation
         // indicator is per-INSTALL, so this runs for BOTH switch kinds.
@@ -1762,6 +1804,9 @@ public partial class MainWindow : Window
         {
             DiagnosticLog.Write($"PopulateGameLanguageMenu after switch failed: {ex.Message}");
         }
+        Mark("menu");
+        if (phaseTotal >= 200)
+            DiagnosticLog.Write($"MODSWITCH-PHASES  {target.Id}: {string.Join(", ", phases)} ms");
     }
 
     /// <summary>
@@ -1835,7 +1880,7 @@ public partial class MainWindow : Window
         // copy — a different install/version — and never re-detect the copy's real
         // version from its own data\ files (so a behind copy would never surface its
         // Update CTA). Dropping it forces a full re-detection on the new copy's path.
-        _checkResultCache.Remove(_config.ActiveModId);
+        ForgetCheckResult(_config.ActiveModId);
 
         await ReloadActiveServiceAsync(isModSwitch: false);
         // The active copy just changed — reflect the new folder in the hero's copy chip
@@ -2690,6 +2735,68 @@ public partial class MainWindow : Window
 
         _ = RefreshNewsAsync();
         EnsureBackgroundPollStarted();
+        _ = PrefetchInstalledChecksAsync();
+    }
+
+    /// <summary>
+    /// Checks every installed mod once, in the background, so the FIRST switch to each one
+    /// shows its version and state at once instead of after its network check (0.3-3.4 s
+    /// measured; the window itself redraws in ~40 ms either way). The answer goes into the
+    /// same <see cref="_checkResultCache"/> a second visit already reads.
+    ///
+    /// <para>Visible-window work only (started from <see cref="EnsureForegroundWorkStarted"/>):
+    /// a launcher in the tray has nobody switching mods. One mod at a time, after the startup
+    /// check has settled, never during an operation or a game, and under the same
+    /// <c>CheckUpdatesOnStartup</c> opt-out as every other check. The requests are the ones
+    /// the switch would have made anyway, only earlier.</para>
+    /// </summary>
+    private async Task PrefetchInstalledChecksAsync()
+    {
+        if (_checkPrefetchStarted || !_config.CheckUpdatesOnStartup) return;
+        _checkPrefetchStarted = true;
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(8));
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            int kept = 0;
+            foreach (var profile in ModRegistry.All.ToList())
+            {
+                if (profile.IsStockGame) continue;   // its check is local and already instant
+                if (!_config.Mods.TryGetValue(profile.Id, out var state)
+                    || string.IsNullOrEmpty(state.InstallPath)) continue;
+                if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)) continue;
+                if (_checkResultCache.ContainsKey(profile.Id)) continue;
+
+                // Wait out an operation or a game rather than compete with it for the disk.
+                while ((_isBusy && !_isCheckOnly) || _isGameRunning || MultiplayerView?.IsGameRunning == true)
+                    await Task.Delay(TimeSpan.FromSeconds(15));
+                if (ConnectivityState.IsOffline) return;
+
+                var pathAtStart = state.InstallPath;
+                int epoch = _checkCacheEpoch;
+                UpdateService.CheckResult result;
+                try
+                {
+                    result = await new UpdateService(_config, profile).CheckAsync();
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Check prefetch failed for '{profile.Id}': {ex.Message}");
+                    continue;
+                }
+
+                if (result.Degraded || epoch != _checkCacheEpoch) continue;
+                if (!ModState.PathEquals(state.InstallPath, pathAtStart)) continue;
+                if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)) continue;
+                if (_checkResultCache.TryAdd(profile.Id, result)) kept++;
+            }
+            if (kept > 0)
+                DiagnosticLog.Write($"Check prefetch: {kept} installed mod(s) ready in {watch.ElapsedMilliseconds} ms.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Check prefetch stopped: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -3925,7 +4032,7 @@ public partial class MainWindow : Window
         // nothing change. Every stock profile, not only the active one: the pick
         // can be made from another mod's page.
         foreach (var stock in ModRegistry.All.Where(p => p.IsStockGame))
-            _checkResultCache.Remove(stock.Id);
+            ForgetCheckResult(stock.Id);
         _config.Save();
         DiagnosticLog.Write($"User manually set AoE3 path: {resolvedExe} (root='{aoe3Root ?? "(none)"}')");
 
@@ -3985,7 +4092,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void InvalidateActiveModCheckCache()
     {
-        _checkResultCache.Remove(_updateService.Profile.Id);
+        ForgetCheckResult(_updateService.Profile.Id);
     }
 
     private void RefreshStatusCard()
@@ -4260,8 +4367,8 @@ public partial class MainWindow : Window
             DashboardPauseButtonIcon.Text = Strings.Get(string.Equals(
                 ProgressPanelControl.PauseButton.Content?.ToString(),
                 Strings.Get("BtnResume"), StringComparison.Ordinal)
-                ? "BtnResume"
-                : "BtnPause");
+                ? "LibCardResume"
+                : "LibCardPause");
         }
         RefreshLibraryProgress();
     }
@@ -4384,14 +4491,59 @@ public partial class MainWindow : Window
     {
         if (_heroBrush != null && string.Equals(uri, _heroBrushSource, StringComparison.Ordinal))
             return _heroBrush;
+
+        // Going back to a mod seen moments ago used to decode its cover again (~25 ms on a fast PC,
+        // far more on a slow one) and blur it again: only the cover on screen was kept. The last
+        // HeroCacheSize local covers are kept now, each with its blurred twin.
+        var cached = _heroCache.FindIndex(e => string.Equals(e.Uri, uri, StringComparison.Ordinal));
+        if (cached >= 0)
+        {
+            var hit = _heroCache[cached];
+            _heroCache.RemoveAt(cached);
+            _heroCache.Insert(0, hit);
+            _heroBrush = hit.Brush;
+            _heroBrushSource = uri;
+            _heroBlurBrush = hit.Blur;
+            return hit.Brush;
+        }
+
         var brush = BuildHeroFillBrush(uri);
-        // A remote one is not kept: its download can still fail, and WPF shares those by address.
-        bool local = !uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                     && !uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
-        _heroBrush = local ? brush : null;
-        _heroBrushSource = local ? uri : null;
+        _heroBrush = brush;
+        _heroBrushSource = brush != null ? uri : null;
         _heroBlurBrush = null;
+        if (brush != null)
+        {
+            _heroCache.Insert(0, (uri, brush, null));
+            if (_heroCache.Count > HeroCacheSize) _heroCache.RemoveAt(_heroCache.Count - 1);
+            // A remote cover (a mod not installed) is kept too, but only while its download has not
+            // failed: a failed one must be asked for again, not served blank from here.
+            if (brush.ImageSource is System.Windows.Media.Imaging.BitmapImage { IsDownloading: true } remote)
+                remote.DownloadFailed += (_, _) => ForgetHeroCover(brush);
+        }
         return brush;
+    }
+
+    /// <summary>The covers kept for going back to a recent mod. Each decode is up to ~15 MB outside
+    /// the managed heap (2560 px), so the list is short: the cover on screen and the three before it.</summary>
+    private const int HeroCacheSize = 4;
+
+    private void ForgetHeroCover(System.Windows.Media.ImageBrush brush)
+    {
+        _heroCache.RemoveAll(e => ReferenceEquals(e.Brush, brush));
+        if (ReferenceEquals(_heroBrush, brush))
+        {
+            _heroBrush = null;
+            _heroBrushSource = null;
+            _heroBlurBrush = null;
+        }
+    }
+    private readonly List<(string Uri, System.Windows.Media.ImageBrush Brush, System.Windows.Media.ImageBrush? Blur)> _heroCache = new();
+
+    /// <summary>The blurred twin of a kept cover, so going back does not blur it again.</summary>
+    private void RememberHeroBlur(System.Windows.Media.ImageBrush cover, System.Windows.Media.ImageBrush blur)
+    {
+        var i = _heroCache.FindIndex(e => ReferenceEquals(e.Brush, cover));
+        if (i >= 0) _heroCache[i] = (_heroCache[i].Uri, cover, blur);
     }
 
     /// <summary>A file replaced under the same name has to be read again.</summary>
@@ -4400,6 +4552,7 @@ public partial class MainWindow : Window
         _heroBrush = null;
         _heroBrushSource = null;
         _heroBlurBrush = null;
+        _heroCache.Clear();
     }
 
     /// <summary>Builds a Stretch.Fill hero brush with a decode cap (4K → bounded RAM, crisp downscale).</summary>
@@ -5131,8 +5284,7 @@ public partial class MainWindow : Window
             return;
         }
         profile.LocalScreenshotPaths = paths;
-        // RefreshGallery is a no-op unless this profile is still selected.
-        await Dispatcher.InvokeAsync(() => ModsBrowserView.RefreshGallery(profile));
+        await Dispatcher.InvokeAsync(() => RepaintGalleries(profile));
 
         // Phase 2: background revalidation — refresh the strip if any shot was
         // replaced (same name, new bytes — TryLoadBitmap now ignores WPF's
@@ -5145,13 +5297,24 @@ public partial class MainWindow : Window
             {
                 profile.LocalScreenshotPaths =
                     profile.LocalScreenshotPaths.Where(System.IO.File.Exists).ToList();
-                await Dispatcher.InvokeAsync(() => ModsBrowserView.RefreshGallery(profile));
+                await Dispatcher.InvokeAsync(() => RepaintGalleries(profile));
             }
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"EnsureScreenshots revalidate '{profile.Id}': {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// The cached shots landed: the Library's strip is the one on screen, so it is the one that has
+    /// to follow — it used to wait for some unrelated refresh while only the hidden Workshop panel
+    /// was told. Each is a no-op unless this profile is still the one shown.
+    /// </summary>
+    private void RepaintGalleries(ModProfile profile)
+    {
+        ModsBrowserView.RefreshGallery(profile);
+        if (_updateService?.Profile.Id == profile.Id) RefreshLibrary();
     }
 
     /// <summary>
@@ -9987,11 +10150,12 @@ public partial class MainWindow : Window
             }
             DiagnosticLog.Write(
                 $"CheckAsync cache evicted for '{profileAtStart}': install path missing on disk.");
-            _checkResultCache.Remove(profileAtStart);
+            ForgetCheckResult(profileAtStart);
         }
 
         SetBusy(true, checkOnly: true);
         _cts = new CancellationTokenSource();
+        int epochAtStart = _checkCacheEpoch;
 
         try
         {
@@ -10000,9 +10164,13 @@ public partial class MainWindow : Window
 
             if (!string.Equals(_updateService.Profile.Id, profileAtStart, StringComparison.OrdinalIgnoreCase))
             {
+                // The answer still describes that mod: keep it, so going back to it does not wait
+                // for the network again (a quick switch away used to throw a 3-s check away).
+                if (!result.Degraded && epochAtStart == _checkCacheEpoch)
+                    _checkResultCache.TryAdd(profileAtStart, result);
                 DiagnosticLog.Write(
                     $"CheckAsync stale: started for '{profileAtStart}', " +
-                    $"active is now '{_updateService.Profile.Id}'. Skipping result writeback.");
+                    $"active is now '{_updateService.Profile.Id}'. Result kept for later, not shown.");
                 return;
             }
 
@@ -12529,7 +12697,7 @@ public partial class MainWindow : Window
         {
             if (installSucceeded)
             {
-                _checkResultCache.Remove(service.Profile.Id);
+                ForgetCheckResult(service.Profile.Id);
                 RaiseInstalledBell(service, installContext == InstallCompletion.Copy,
                     service.CurrentVersion?.Ver ?? "");
             }
@@ -12789,7 +12957,7 @@ public partial class MainWindow : Window
             }
             else
             {
-                _checkResultCache.Remove(svc.Profile.Id);
+                ForgetCheckResult(svc.Profile.Id);
             }
         }
     }

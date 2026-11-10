@@ -52,6 +52,37 @@ internal static class ScreenTrace
     /// changes without one (a notification, a deep link while hidden) gets no SWITCH line.</summary>
     internal static void Clicked() => s_clickedAt = Stopwatch.GetTimestamp();
 
+    /// <summary>
+    /// A mod picked in the Library: <c>MODSWITCH a -> b  N ms</c>, from the click to the frame that
+    /// shows the new mod, the same measure as a tab's SWITCH. First time or repeat, per mod.
+    /// </summary>
+    internal static void ModSwitch(string from, string to, long clickedAt)
+    {
+        var firstTime = s_modsShown.Add(to);
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        long firstFrame = -1;
+        // Two numbers: the first frame after the click, and the frame after the dispatcher ran out
+        // of work (the list and the detail are redrawn at Background priority, after that first
+        // frame, so the first number alone can miss the part of a switch a person sees).
+        void OnFirst(object? sender, System.EventArgs e)
+        {
+            CompositionTarget.Rendering -= OnFirst;
+            firstFrame = (long)Stopwatch.GetElapsedTime(clickedAt).TotalMilliseconds;
+            dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new System.Action(() =>
+                CompositionTarget.Rendering += OnSettled));
+        }
+        void OnSettled(object? sender, System.EventArgs e)
+        {
+            CompositionTarget.Rendering -= OnSettled;
+            var settled = (long)Stopwatch.GetElapsedTime(clickedAt).TotalMilliseconds;
+            dispatcher.BeginInvoke(DispatcherPriority.Loaded, new System.Action(() =>
+                DiagnosticLog.Write($"MODSWITCH  {from} -> {to}  {firstFrame} ms, settled {settled} ms ({(firstTime ? "first time" : "repeat")})")));
+        }
+        CompositionTarget.Rendering += OnFirst;
+    }
+
+    private static readonly HashSet<string> s_modsShown = new(System.StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Called when the top tab changes.</summary>
     internal static void TopTab(string tab)
     {

@@ -49,6 +49,7 @@ public sealed class ModRail : UserControl
     private Border? _fill, _track;
     private TextBlock? _percent;
     private readonly List<(Button Row, TextBlock Name)> _rows = new();
+    private readonly List<(string Id, Button Button, TextBlock? Name)> _selectable = new();
 
     public ModRail()
     {
@@ -87,8 +88,26 @@ public sealed class ModRail : UserControl
         _rowHeight = metrics.RowHeight;
         _nameSize = metrics.RowNameSize;
         _rows.Clear();
+        _selectable.Clear();
         _shell.Child = open ? BuildOpen() : BuildFolded();
         _scroll?.ScrollToVerticalOffset(offset);
+    }
+
+    /// <summary>Moves the selection to another row without building the list again. Choosing a
+    /// mod changes nothing else the list draws, and a rebuild is every row, icon, star and menu
+    /// plus a layout pass of the whole list (6-20 ms measured, on every switch).</summary>
+    public void Select(string selectedId)
+    {
+        if (string.Equals(_selected, selectedId, StringComparison.OrdinalIgnoreCase)) return;
+        _selected = selectedId;
+        foreach (var (id, button, name) in _selectable)
+        {
+            var on = string.Equals(id, selectedId, StringComparison.OrdinalIgnoreCase);
+            button.Style = (Style)Application.Current.Resources[on ? "LibraryRowSelected" : "LibraryRow"];
+            name?.SetResourceReference(TextBlock.ForegroundProperty, on ? "LibraryWhite" : "UiBodyText");
+        }
+        // The scroll bar takes the mod's colour; it was copied when the list was built.
+        if (_scroll != null) _scroll.Resources["BgNeutral"] = Application.Current.Resources["ModAccentThumb"];
     }
 
     /// <summary>A window being resized moves the row height on every tick: the rows are resized
@@ -118,6 +137,7 @@ public sealed class ModRail : UserControl
             _fill = _track = null;
             _percent = null;
             _rows.Clear();
+            _selectable.Clear();
             _shell.Child = _open ? BuildOpen() : BuildFolded();
             _scroll?.ScrollToVerticalOffset(offset);
         }
@@ -329,6 +349,7 @@ public sealed class ModRail : UserControl
         AutomationProperties.SetName(button, mod.DisplayName ?? mod.Id);
         button.Click += (_, _) => Selected?.Invoke(this, mod);
         _rows.Add((button, name));
+        _selectable.Add((mod.Id, button, name));
 
         var host = new Grid { Margin = new Thickness(0, 0, 0, 2) };
         host.Children.Add(button);
@@ -444,6 +465,7 @@ public sealed class ModRail : UserControl
         AutomationProperties.SetAutomationId(button, "ModRow_" + mod.Id);
         AutomationProperties.SetName(button, mod.DisplayName ?? mod.Id);
         button.Click += (_, _) => Selected?.Invoke(this, mod);
+        _selectable.Add((mod.Id, button, null));
         return button;
     }
 

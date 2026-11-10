@@ -19,6 +19,11 @@ public static class ModTheme
         if (resources == null) return;
 
         var accent = AccentOf(accentHex, useModColor);
+        // A switch asks for this two or three times with the same colour, and each write of an
+        // application resource makes every element bound to it look it up again (3-15 ms measured).
+        if (ReferenceEquals(s_appliedTo, resources) && s_applied == accent) return;
+        s_appliedTo = resources;
+        s_applied = accent;
 
         Set(resources, "ModAccent", accent);
         Set(resources, "ModAccentText", ModAccent.TextOn(accent));
@@ -49,6 +54,9 @@ public static class ModTheme
         bar.Freeze();
         resources["ModTitleBar"] = bar;
     }
+
+    private static ResourceDictionary? s_appliedTo;
+    private static Color s_applied;
 
     public static Color AccentOf(string? accentHex, bool useModColor)
         => useModColor && ModAccent.TryParse(accentHex, out var parsed) ? ModAccent.Normalize(parsed) : LauncherBlue;

@@ -153,4 +153,41 @@ public class ModProfileResolverTests : IDisposable
         var p = new ModProfile { Id = "m", BannerImage = Pack };
         Assert.Equal(Pack, p.ResolveIconSource());
     }
+    // ---------------------------------------------------------------------------------------
+    // The Library's gallery (design 68a): screenshots when declared, else cover + banner.
+
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_AModWithACoverAndABannerHasAGallery()
+    {
+        // No mod in the catalog declares screenshots, so this is the shape that makes the strip
+        // appear at all — the prototype shows exactly these two pictures.
+        var gallery = ModProfile.GalleryFrom(Array.Empty<string>(), new[] { "hero.jpg" }, "banner.jpg");
+        Assert.Equal(new[] { "hero.jpg", "banner.jpg" }, gallery);
+    }
+
+    [Fact]
+    public void DeclaredScreenshotsWinAndTheCoverIsNotAdded()
+    {
+        var gallery = ModProfile.GalleryFrom(new[] { "s1.png", "s2.gif" }, new[] { "hero.jpg" }, "banner.jpg");
+        Assert.Equal(new[] { "s1.png", "s2.gif" }, gallery);
+    }
+
+    [Fact]
+    public void OnePictureIsNoGallery()
+    {
+        // Wars of Liberty has a cover and no banner: one thumbnail would only repeat the background.
+        Assert.Empty(ModProfile.GalleryFrom(Array.Empty<string>(), new[] { "hero.jpg" }, null));
+        Assert.Empty(ModProfile.GalleryFrom(new[] { "only.png" }, Array.Empty<string>(), null));
+        Assert.Empty(ModProfile.GalleryFrom(Array.Empty<string>(), Array.Empty<string>(), null));
+    }
+
+    [Fact]
+    public void TheSamePictureIsNotShownTwiceAndTheStripIsCapped()
+    {
+        // A mod whose banner IS its cover has one picture, not two.
+        Assert.Empty(ModProfile.GalleryFrom(Array.Empty<string>(), new[] { "Hero.jpg" }, "hero.jpg"));
+        var many = new List<string>();
+        for (var i = 0; i < 12; i++) many.Add($"s{i}.png");
+        Assert.Equal(ModProfile.MaxGalleryImages, ModProfile.GalleryFrom(many, Array.Empty<string>(), null).Count);
+    }
 }

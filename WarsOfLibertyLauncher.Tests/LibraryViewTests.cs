@@ -104,6 +104,26 @@ public class LibraryViewTests
         Assert.Same(Application.Current.FindResource("LibraryRow"), Named(rail, "ModRow_a").Style);
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void THE_ONE_THAT_MATTERS_ChoosingAnotherModMovesTheHighlightWithoutRebuilding(bool open) => Run(() =>
+    {
+        var rail = Rail(new[] { Group(LibraryGroupKind.Mine, "a", "b"), Group(LibraryGroupKind.Catalog, "c") }, open: open);
+        var a = Named(rail, "ModRow_a");
+        var c = Named(rail, "ModRow_c");
+
+        rail.Select("c");
+        rail.UpdateLayout();
+
+        // The same buttons, not new ones: a rebuild is the cost a switch used to pay.
+        Assert.Same(a, Named(rail, "ModRow_a"));
+        Assert.Same(c, Named(rail, "ModRow_c"));
+        Assert.Same(Application.Current.FindResource("LibraryRowSelected"), c.Style);
+        Assert.Same(Application.Current.FindResource("LibraryRow"), a.Style);
+        Assert.Same(Application.Current.FindResource("LibraryRow"), Named(rail, "ModRow_b").Style);
+    });
+
     [Fact]
     public void FoldedRowsKeepTheirNameForTheScreenReader() => Run(() =>
     {

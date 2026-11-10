@@ -844,6 +844,44 @@ public class ModProfile
         => ResolveImageSources(LocalScreenshotPaths, ScreenshotUrls,
             allowRemote: !Services.ConnectivityState.IsOffline);
 
+    /// <summary>The most images the Library's strip shows: the catalog's own cap on screenshots.</summary>
+    public const int MaxGalleryImages = 8;
+
+    /// <summary>
+    /// The pictures under the Library's buttons (design 68a). The mod's screenshots when it
+    /// declares any; otherwise its cover and banner, which is what the prototype shows — no mod in
+    /// the catalog declares screenshots yet, so without this the strip never appeared. Fewer than
+    /// two pictures is no gallery: one would only repeat the cover behind it.
+    /// </summary>
+    public IReadOnlyList<string> ResolveGallerySources()
+    {
+        bool allowRemote = !Services.ConnectivityState.IsOffline;
+        var heroes = new List<string>(ResolveImageSources(LocalHeroImagePaths, HeroImageUrls, allowRemote));
+        if (ResolveImageSource(LocalHeroImagePath, HeroImageUrl, null, allowRemote) is { } hero) heroes.Add(hero);
+        return GalleryFrom(ResolveScreenshotSources(), heroes, ResolveBannerSource());
+    }
+
+    /// <summary>The rule behind <see cref="ResolveGallerySources"/>, pure for the tests.</summary>
+    internal static IReadOnlyList<string> GalleryFrom(
+        IReadOnlyList<string> screenshots, IReadOnlyList<string> heroes, string? banner)
+    {
+        var picked = new List<string>();
+        void Add(string? source)
+        {
+            if (string.IsNullOrWhiteSpace(source) || picked.Count >= MaxGalleryImages) return;
+            if (!picked.Contains(source, StringComparer.OrdinalIgnoreCase)) picked.Add(source);
+        }
+
+        if (screenshots.Count > 0)
+            foreach (var shot in screenshots) Add(shot);
+        else
+        {
+            foreach (var hero in heroes) Add(hero);
+            Add(banner);
+        }
+        return picked.Count >= 2 ? picked : System.Array.Empty<string>();
+    }
+
     /// <summary>
     /// Core fallback chain, static with an explicit <paramref name="allowRemote"/>
     /// so it stays unit-testable without touching the observed connectivity state.

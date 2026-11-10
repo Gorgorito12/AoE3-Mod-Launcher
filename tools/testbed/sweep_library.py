@@ -121,7 +121,21 @@ def main():
     check("not installed offers its folder", "DashboardSearchInstallButton" in now)
     check("not installed hides settings", "DashboardSettingsButton" not in now)
     press_and_log("choose folder stays in the harness", "DashboardSearchInstallButton", "HARNESS BLOCKED folder picker")
+
+    # The pictures under the buttons (68a): a mod with a cover and a banner shows both, one with
+    # only a cover shows none, and a thumbnail opens the viewer, which steps and closes.
+    press("ModRow_hundred-days", 2.5)
+    now = controls()
+    check("cover and banner make a gallery", "LibraryShot_0" in now and "LibraryShot_1" in now)
+    press("LibraryShot_0", 1.0)
+    now = controls()
+    check("a thumbnail opens the viewer", "LibraryShotClose" in now and "LibraryShotNext" in now)
+    press("LibraryShotNext", .6)
+    check("the viewer steps", "LibraryShotClose" in controls())
+    press("LibraryShotClose", .6)
+    check("the viewer closes", "LibraryShotClose" not in controls())
     press("ModRow_wol", 2.0)
+    check("a cover alone is no gallery", "LibraryShot_0" not in controls())
 
     press_and_log("a link leaves through SafeUrl", "LibraryLink_0", "HARNESS BLOCKED")
     press_and_log("Play is the real launch", "DashboardPlayButton", "HARNESS BLOCKED")
