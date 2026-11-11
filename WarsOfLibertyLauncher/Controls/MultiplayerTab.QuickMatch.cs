@@ -340,7 +340,9 @@ public partial class MultiplayerTab
                 rooms, _qmLobbyId, _session.CurrentUser?.Id, _qmModId!, _qmModHash!, _qmKind);
             if (target == null || RoomPlayerCount() >= 2) return;
 
-            DiagnosticLog.Write($"QuickMatch: moving from own room {_qmLobbyId} to older room {target.Id}.");
+            // Older, or - searching Either from a rated room - a casual one of any age.
+            var why = _qmKind == QuickMatchKind.Either && !target.Competitive ? "a casual room" : "an older room";
+            DiagnosticLog.Write($"QuickMatch: moving from own room {_qmLobbyId} to {why} {target.Id}.");
             _qmStage = QuickMatchStage.Looking;
             _qmLobbyId = null;
             _qmConvergeTimer?.Stop();
@@ -350,7 +352,7 @@ public partial class MultiplayerTab
             if (await JoinLobbyCoreAsync(target, quietOnRaceLoss: true))
             {
                 RememberQuickMatchFound(target.Id, RoomHostName(target), hosting: false);
-                EndQuickMatch($"moved into older room {target.Id}");
+                EndQuickMatch($"moved into {why} {target.Id}");
                 await SayInRoomAsync(target.Id, Strings.Get("QmMovedToOlderRoom"));
                 return;
             }
