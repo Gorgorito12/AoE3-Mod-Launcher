@@ -568,6 +568,12 @@ rather than the reverse.
   remembers its answer for 60 s** per mod and path (`_installedMemo`): a rail repaint asked the disk
   for every mod each time. `ForgetCheckResult` forgets the entry, so installs, updates and
   uninstalls are seen at once.
+  **Folded, the list still says which mods are the catalog** (`ModRail.BuildFolded`): a rule parts
+  every two groups, its tooltip names the group below on a 12-px hover area (a tooltip on the 1-px
+  line could never be reached), and catalog icons sit at `CatalogTileOpacity` (.55) except on the
+  selected tile and under the pointer. The fold arrows are DRAWN (`ModRail.Chevrons`, a fixed 8x7
+  path), not the characters `«` `»`: as text they were reported sitting high in the button until the
+  window settled. Pinned in `LibraryViewTests`.
   (6) **Chrome.xaml gives every ScrollViewer `Padding="0,0,8,0"`**, and it silently crops anything laid
   out to a known width: the folded tiles lost 13 px until the padding was given back.
   (7) **Header:** title bar 40 and nav 56 in BOTH layouts; the old compact heights (34 / 42) and the

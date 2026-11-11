@@ -134,6 +134,45 @@ public class LibraryViewTests
         Assert.DoesNotContain(Find<Button>(rail), b => AutomationProperties.GetAutomationId(b) == "ModStar_a");
     });
 
+    /// <summary>Folded, nothing told "my mods" from the catalog (reported): a rule parts every two
+    /// groups now, with the group's name as its tooltip on an area big enough to hover, and the
+    /// catalog's icons are dimmed except on the selected tile.</summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_FoldedTheCatalogIsSetApart() => Run(() =>
+    {
+        var rail = Rail(new[] { Group(LibraryGroupKind.Mine, "a"), Group(LibraryGroupKind.Catalog, "b", "c") },
+            open: false, selected: "a");
+
+        var divider = Find<Border>(rail).Single(b => b.Tag is LibraryGroupKind.Catalog);
+        Assert.Equal(ModRail.FoldedDividerHeight, divider.ActualHeight);
+        Assert.NotNull(divider.ToolTip);
+        Assert.Single(Find<Border>(rail), b => b.Tag is LibraryGroupKind);
+
+        static double IconOpacity(Button tile) => ((FrameworkElement)((Grid)tile.Content).Children[0]).Opacity;
+        Assert.Equal(1, IconOpacity(Named(rail, "ModRow_a")));
+        Assert.Equal(ModRail.CatalogTileOpacity, IconOpacity(Named(rail, "ModRow_b")));
+
+        // Selecting a catalog mod gives its icon back in full; the other stays dim.
+        rail.Select("b");
+        Assert.Equal(1, IconOpacity(Named(rail, "ModRow_b")));
+        Assert.Equal(ModRail.CatalogTileOpacity, IconOpacity(Named(rail, "ModRow_c")));
+    });
+
+    /// <summary>The fold arrow is a drawing of fixed size, centred in its button: as a character it
+    /// was reported sitting high in the button now and then.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheFoldArrowIsDrawnAndCentred(bool open) => Run(() =>
+    {
+        var rail = Rail(new[] { Group(LibraryGroupKind.Mine, "a") }, open: open);
+        var button = Named(rail, "LibraryRailFold");
+        var arrow = Assert.IsType<System.Windows.Shapes.Path>(button.Content);
+        var at = arrow.TransformToAncestor(button).Transform(new Point(0, 0));
+        Assert.Equal((button.ActualHeight - arrow.ActualHeight) / 2, at.Y, 1);
+        Assert.Equal((button.ActualWidth - arrow.ActualWidth) / 2, at.X, 1);
+    });
+
     [Fact]
     public void AnEmptyListSaysSo() => Run(() =>
     {
