@@ -78,6 +78,19 @@ public class TitleBar : ContentControl
         set => SetValue(ShowMinimizeProperty, value);
     }
 
+    public static readonly DependencyProperty ShowBottomLineProperty =
+        DependencyProperty.Register(nameof(ShowBottomLine), typeof(bool), typeof(TitleBar),
+            new PropertyMetadata(true));
+
+    /// <summary>The 1-px line under the bar. Every secondary window keeps it (BASE.md); the main
+    /// window turns it off because the tab row sits right under its bar and design 68a draws no
+    /// line between the two — only under the tabs.</summary>
+    public bool ShowBottomLine
+    {
+        get => (bool)GetValue(ShowBottomLineProperty);
+        set => SetValue(ShowBottomLineProperty, value);
+    }
+
     public static readonly DependencyProperty ShowMaximizeProperty =
         DependencyProperty.Register(nameof(ShowMaximize), typeof(bool), typeof(TitleBar),
             new PropertyMetadata(false, OnChromeChanged));

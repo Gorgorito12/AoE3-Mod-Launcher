@@ -5641,6 +5641,48 @@ public class DialogXamlTests
         return border.Background;
     }
 
+    /// <summary>
+    /// The main window's title bar draws no line under it (design 68a: the tab row sits right
+    /// under it, and the only rule is under the tabs); every other window's bar keeps its line.
+    /// The shared template drew one everywhere while its comments said it drew none.
+    /// </summary>
+    [Fact]
+    public void TheMainTitleBarDrawsNoLineAndTheOthersDo()
+    {
+        var ex = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var style = Application.Current!.TryFindResource(typeof(TitleBar)) as Style;
+            Assert.True(style != null, "the implicit TitleBar style is missing from Styles/Chrome.xaml");
+            Thickness FrameOf(TitleBar bar)
+            {
+                bar.Style = style;
+                MeasureSharedControl(bar);
+                bar.ApplyTemplate();
+                var frame = bar.Template.FindName("PART_Frame", bar) as Border;
+                Assert.NotNull(frame);
+                return frame!.BorderThickness;
+            }
+
+            Assert.Equal(new Thickness(0, 0, 0, 1), FrameOf(new TitleBar()));
+            Assert.Equal(new Thickness(0), FrameOf(new TitleBar { ShowBottomLine = false }));
+
+            // And the main window really asks for it: MainWindow.xaml is parsed by no test.
+            var xaml = File.ReadAllText(Path.Combine(RepoRootForXaml(), "WarsOfLibertyLauncher", "MainWindow.xaml"));
+            var bar = xaml[xaml.IndexOf("x:Name=\"MainTitleBar\"")..];
+            Assert.Contains("ShowBottomLine=\"False\"", bar[..bar.IndexOf('>')]);
+        });
+        Assert.Null(ex);
+    }
+
+    private static string RepoRootForXaml()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "WarsOfLibertyLauncher.Tests")))
+            dir = dir.Parent;
+        return dir!.FullName;
+    }
+
     private static void MeasureSharedControl(FrameworkElement el)
     {
         el.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));

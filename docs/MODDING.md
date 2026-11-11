@@ -226,7 +226,7 @@ entry that slips past CI still can't reach a player.
 | `banner` | filename `.png/.jpg/.jpeg` | **4:1 aspect, width 1200–4800 px** (e.g. 1200×300, 2400×600, 4800×1200), **≤ 2 MB.** |
 | `heroImage` | filename `.png/.jpg/.jpeg` | **16:9 aspect, width 1920–3840 px (1080p up to 4K), ≤ 5 MB** (use JPEG for 4K — a 4K PNG can be 10 MB+). Dashboard background; keep the subject in the **right half** (left is covered by the title + PLAY button). |
 | `heroImages` | array of filenames | **Rotating dashboard heroes (2–6).** Each follows the `heroImage` spec. When 2+ are listed the dashboard cycles them with a crossfade (~7 s each); takes precedence over `heroImage`. |
-| `screenshots` | array of filenames `.png/.jpg/.jpeg/.gif` | **Workshop gallery (max 8). No fixed dimensions, ≤ 5 MB each.** Animated GIFs allowed **here only**. |
+| `screenshots` | array of filenames `.png/.jpg/.jpeg/.gif` | **The pictures under the Library's buttons (max 8). No fixed dimensions, ≤ 5 MB each.** Animated GIFs allowed **here only**. Without screenshots the Library shows your cover and banner there, if you ship both. |
 
 > Dimensions are validated by **aspect ratio + a width range**, not a single exact size — so any resolution up to 4K passes as long as the shape is right.
 

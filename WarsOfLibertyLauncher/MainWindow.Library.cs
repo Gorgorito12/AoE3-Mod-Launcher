@@ -139,7 +139,11 @@ public partial class MainWindow
                 PreviewInstallFolder(variant);
                 break;
             case "updatepill":
-                ApplyLauncherUpdatePillText(LauncherUpdateDemo.Result(false), staged: variant == "ready");
+                // A sample update is pending, so pressing the pill opens its dialog in preview mode
+                // (as "settingsupdate" does): nothing is downloaded.
+                _pendingLauncherUpdate = LauncherUpdateDemo.Result(false);
+                _previewPendingUpdate = true;
+                ApplyLauncherUpdatePillText(_pendingLauncherUpdate, staged: variant == "ready");
                 LauncherUpdatePill.Visibility = Visibility.Visible;
                 break;
         }
@@ -556,6 +560,7 @@ public partial class MainWindow
         ApplyLibraryShade();
         ApplyDashboardHero(_updateService.Profile);
         _libraryRailKey = "";
+        _libraryFiltersKey = null;
         ApplyLibraryLayout();
         RefreshLibrary();
     }
@@ -639,24 +644,26 @@ public partial class MainWindow
             _libraryFilter, _libraryQuery, _librarySort);
         var width = PlayView.ActualWidth;
         var open = LibraryMetrics.RailOpen(_config.ModListMode, width);
-        var metrics = LibraryMetrics.For(width);
+        var metrics = LibraryMetrics.For(width, TextScale.CurrentFactor);
 
         // A check, a switch and an operation each ask for a refresh, usually with nothing new. The
         // list is only rebuilt when something it draws changed: a rebuild is a full layout pass.
+        // The selected mod is NOT part of the key: choosing another mod only moves the highlight.
         var railKey = string.Join("|", groups.SelectMany(g => g.Mods.Select(m =>
         {
             var s = StateOf(m);
             return $"{g.Kind}:{m.Id}:{s.Status}:{s.CurrentVersion}:{_config.IsFavoriteMod(m.Id)}:{SubtitleFor(m)}:{m.ResolveIconSource()}";
-        }))) + $"|{profile.Id}|{open}|{metrics.RowHeight:0.0}|{Strings.Language}|{_libraryFilter}";
+        }))) + $"|{open}|{metrics.RowHeight:0.0}|{Strings.Language}|{_libraryFilter}";
         if (railKey != _libraryRailKey)
         {
             _libraryRailKey = railKey;
             LibraryRail.Show(groups, StateOf, _config.IsFavoriteMod, profile.Id, CurrentRailOperation(),
                 open, metrics, LibraryEmptyTitle(), LibraryEmptyBody(), SubtitleFor);
         }
+        else LibraryRail.Select(profile.Id);
 
         RefreshLibraryStatusChip(profile, StateOf(profile));
-        var coverKey = $"{profile.Id}|{Strings.Language}|{string.Join(",", profile.ResolveScreenshotSources())}";
+        var coverKey = $"{profile.Id}|{Strings.Language}|{string.Join(",", profile.ResolveGallerySources())}";
         if (coverKey != _libraryCoverKey)
         {
             _libraryCoverKey = coverKey;
@@ -667,6 +674,8 @@ public partial class MainWindow
         RefreshLibraryProgress();
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(RefreshLibraryDescriptionButton));
     }
+
+    private string? _libraryFiltersKey;
 
     private bool LibraryIsSearching => !string.IsNullOrWhiteSpace(_libraryQuery);
 
@@ -705,6 +714,12 @@ public partial class MainWindow
     private void RefreshLibraryFilters(List<ModProfile> all, Func<ModProfile, ModRowState> stateOf)
     {
         var searched = all.Where(p => LibraryList.Matches(p, _libraryQuery)).ToList();
+        // Rebuilt only when what the pills show changed: a mod switch changes none of it.
+        int CountOf(LibraryFilter f) => searched.Count(p => LibraryList.Passes(f, stateOf(p)));
+        var filtersKey = $"{_libraryFilter}|{Strings.Language}|{CountOf(LibraryFilter.All)}|{CountOf(LibraryFilter.Installed)}"
+            + $"|{CountOf(LibraryFilter.NotInstalled)}|{CountOf(LibraryFilter.Updates)}|{CountOf(LibraryFilter.Compatible)}";
+        if (filtersKey == _libraryFiltersKey && LibraryFilterRow.Children.Count > 1) return;
+        _libraryFiltersKey = filtersKey;
         while (LibraryFilterRow.Children.Count > 1) LibraryFilterRow.Children.RemoveAt(1);
 
         void Add(LibraryFilter filter, string key)
@@ -826,7 +841,7 @@ public partial class MainWindow
     {
         _ = EnsureScreenshotsAsync(profile);
         _libraryShots.Clear();
-        _libraryShots.AddRange(profile.ResolveScreenshotSources().Take(4));
+        _libraryShots.AddRange(profile.ResolveGallerySources());
         LibraryShots.Children.Clear();
         var width = LibraryMetrics.For(PlayView.ActualWidth).ShotWidth;
         for (var i = 0; i < _libraryShots.Count; i++)
@@ -865,10 +880,10 @@ public partial class MainWindow
             DashboardProgressLabel.Text = Strings.Format(
                 App.PreviewLibrary == "updating" ? "ProgressTitleUpdating" : "ProgressTitleInstalling",
                 _updateService.Profile.DisplayName);
-            DashboardProgressSubtitle.Text = "520 MB / 1,24 GB";
+            DashboardProgressSubtitle.Text = Strings.Format("LibProgressBytes", "520 MB", "1,24 GB");
             DashboardProgressBar.Value = percent;
             DashboardProgressActions.Visibility = Visibility.Visible;
-            DashboardPauseButtonIcon.Text = Strings.Get("BtnPause");
+            DashboardPauseButtonIcon.Text = Strings.Get("LibCardPause");
             DashboardCancelButton.Visibility = stopped ? Visibility.Collapsed : Visibility.Visible;
             DashboardPauseButton.Visibility = stopped ? Visibility.Collapsed : Visibility.Visible;
             DashboardRetryButton.Visibility = stopped ? Visibility.Visible : Visibility.Collapsed;
@@ -901,7 +916,12 @@ public partial class MainWindow
                 LibraryStatusDot.SetResourceReference(Shape.FillProperty, "UiInfo");
             }
             var bytes = ProgressPanelControl.OverallBytesText.Text ?? "";
-            if (!stopped && bytes.Contains('/')) DashboardProgressSubtitle.Text = bytes;
+            if (!stopped && bytes.Contains('/'))
+            {
+                // The legacy panel writes "520 MB / 1,24 GB"; the card says it in words (68a).
+                var halves = bytes.Split('/', 2);
+                DashboardProgressSubtitle.Text = Strings.Format("LibProgressBytes", halves[0].Trim(), halves[1].Trim());
+            }
             LibraryProgressFoot.Text = ProgressFoot();
             DashboardProgressContainer.SetResourceReference(Border.BorderBrushProperty, stopped ? "LibraryErrorRing" : "ModAccentLine");
             LibraryProgressDisc.SetResourceReference(Border.BackgroundProperty, stopped ? "LibraryErrorSoft" : "ModAccentSoft");
@@ -922,7 +942,7 @@ public partial class MainWindow
     /// name in front ("Descarga: 8,4 MB/s") that the design does not use.</summary>
     private string ProgressFoot()
     {
-        if (App.PreviewLibrary != null) return "8,4 MB/s · 2 min 14 s";
+        if (App.PreviewLibrary != null) return "8,4 MB/s · " + Strings.Format("LibProgressLeft", "2 min 14 s");
         static string Value(string? text)
         {
             text ??= "";
@@ -931,7 +951,11 @@ public partial class MainWindow
         }
         if (string.Equals(ProgressPanelControl.PauseButton.Content?.ToString(), Strings.Get("BtnResume"), StringComparison.Ordinal))
             return Strings.Get("LibPaused");
-        var parts = new[] { Value(ProgressPanelControl.SpeedText.Text), Value(ProgressPanelControl.EtaText.Text) }
+        var eta = Value(ProgressPanelControl.EtaText.Text);
+        // "calculating..." is not a time, so it is not "... left".
+        var calculating = string.Equals(eta, Strings.Get("ProgressEtaCalculating"), StringComparison.OrdinalIgnoreCase);
+        var parts = new[] { Value(ProgressPanelControl.SpeedText.Text),
+                            eta.Length == 0 ? "" : calculating ? eta : Strings.Format("LibProgressLeft", eta) }
             .Where(p => p.Length > 0);
         return string.Join(" · ", parts);
     }
@@ -1038,7 +1062,7 @@ public partial class MainWindow
         if (LibraryMoreButton == null) return;
         var width = DashboardDescText.MaxWidth;
         if (double.IsInfinity(width) || width <= 0) return;
-        var metrics = LibraryMetrics.For(PlayView.ActualWidth);
+        var metrics = LibraryMetrics.For(PlayView.ActualWidth, TextScale.CurrentFactor);
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var text = new FormattedText(
             DashboardDescText.Text ?? "",
@@ -1057,11 +1081,12 @@ public partial class MainWindow
         LibraryMoreButton.Content = Strings.Get(_libraryDescriptionOpen ? "LibLess" : "LibMore");
     }
 
-    private void ApplyLibraryLayout()
+    /// <summary>Also called when the text size changes in Settings (<see cref="App.RefreshTextScale"/>).</summary>
+    internal void ApplyLibraryLayout()
     {
         var width = PlayView.ActualWidth;
         if (width <= 0) return;
-        var m = LibraryMetrics.For(width);
+        var m = LibraryMetrics.For(width, TextScale.CurrentFactor);
         var open = LibraryMetrics.RailOpen(_config.ModListMode, width);
         LibraryRail.ApplyMetrics(m);
         if (_libraryRailOpen != open)
@@ -1164,7 +1189,11 @@ public partial class MainWindow
         var blurred = ReferenceEquals(cover, _heroBrush) ? _heroBlurBrush : null;
         blurred ??= BuildBlurredCover(cover.ImageSource);
         if (blurred == null) return;
-        if (ReferenceEquals(cover, _heroBrush)) _heroBlurBrush = blurred;
+        if (ReferenceEquals(cover, _heroBrush))
+        {
+            _heroBlurBrush = blurred;
+            RememberHeroBlur(cover, blurred);
+        }
         LibraryBlurLayer.Background = blurred;
         LibraryBlurLayer.Visibility = Visibility.Visible;
         _libraryCoverBrushes.Add(blurred);
@@ -1603,13 +1632,24 @@ public partial class MainWindow
         _libraryShotIndex = (index + _libraryShots.Count) % _libraryShots.Count;
         try
         {
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.DecodePixelWidth = 1920;
-            image.UriSource = new Uri(_libraryShots[_libraryShotIndex], UriKind.RelativeOrAbsolute);
-            image.EndInit();
-            LibraryShotImage.Source = image;
+            var source = _libraryShots[_libraryShotIndex];
+            // A GIF animates, as it did in the Workshop's viewer; anything else is one decode.
+            if (source.EndsWith(".gif", StringComparison.OrdinalIgnoreCase))
+            {
+                LibraryShotImage.Source = null;
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(LibraryShotImage, new Uri(source, UriKind.RelativeOrAbsolute));
+            }
+            else
+            {
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(LibraryShotImage, null);
+                var image = new BitmapImage();
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.DecodePixelWidth = 1920;
+                image.UriSource = new Uri(source, UriKind.RelativeOrAbsolute);
+                image.EndInit();
+                LibraryShotImage.Source = image;
+            }
         }
         catch (Exception ex)
         {
@@ -1625,10 +1665,17 @@ public partial class MainWindow
     }
 
     private void LibraryShotViewer_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        => LibraryShotViewer.Visibility = Visibility.Collapsed;
+        => CloseLibraryShot();
 
-    private void LibraryShotClose_Click(object sender, RoutedEventArgs e)
-        => LibraryShotViewer.Visibility = Visibility.Collapsed;
+    private void LibraryShotClose_Click(object sender, RoutedEventArgs e) => CloseLibraryShot();
+
+    /// <summary>Closing also stops a GIF, or its clock would keep drawing a hidden image.</summary>
+    private void CloseLibraryShot()
+    {
+        XamlAnimatedGif.AnimationBehavior.SetSourceUri(LibraryShotImage, null);
+        LibraryShotImage.Source = null;
+        LibraryShotViewer.Visibility = Visibility.Collapsed;
+    }
 
     private void LibraryShotPrev_Click(object sender, RoutedEventArgs e) => OpenLibraryShot(_libraryShotIndex - 1);
 

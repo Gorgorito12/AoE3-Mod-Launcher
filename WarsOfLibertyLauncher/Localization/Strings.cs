@@ -9026,8 +9026,8 @@ public static partial class Strings
         },
         ["StatusPaused"] = new()
         {
-            [LangEn] = "Download paused. Click RESUME to continue from where you left off.",
-            [LangEs] = "Descarga pausada. Haz clic en REANUDAR para continuar desde donde quedaste.",
+            [LangEn] = "Download paused. Click Resume to continue from where you left off.",
+            [LangEs] = "Descarga pausada. Haz clic en Reanudar para continuar desde donde quedaste.",
         },
 
         // -------- Status: idle / ready --------

@@ -318,9 +318,10 @@
 
 
         <!-- =============================================================
-             ROW 0 - TITLE BAR (36px). Deliberately almost empty: the brand,
-             the version chip, and the three chrome affordances that belong
-             beside the caption buttons. Every other pixel is window-drag.
+             ROW 0 - TITLE BAR (40px). Deliberately almost empty: the brand,
+             the version chip, and the chrome affordances that belong beside
+             the caption buttons (the launcher-update pill, the offline chip,
+             the bell). Every other pixel is window-drag.
 
              The three main tabs used to live in here (handoff 1a folded the
              nav strip into the bar); the header reference splits them back
@@ -329,9 +330,10 @@
              what makes the window feel native, and it gives the active tab a
              seam to underline.
 
-             NO bottom border, on purpose: the nav row below is a different
-             fill, so the two read as separate surfaces with no rule between
-             them, and the rule the CONTENT needs is the nav row's own.
+             NO bottom border (ShowBottomLine="False"), on purpose: design 68a
+             draws no line between this bar and the tab row, only under the
+             tabs. The shared TitleBar template draws one for every secondary
+             window, which is why this bar has to turn it off.
 
              Height is TitleBarHeightMain and nothing else may set it -
              App.ApplyWindowChrome derives WindowChrome.CaptionHeight from that
@@ -353,6 +355,7 @@
                            ButtonWidth="{StaticResource TitleBarButtonWidthMain}"
                            GlyphSize="10"
                            CloseGlyphSize="13"
+                           ShowBottomLine="False"
                            ShowMinimize="True"
                            ShowMaximize="True"
                            ShowClose="True">
@@ -618,6 +621,69 @@
                 </Border>
 
 
+                <!-- Persistent, non-invasive launcher self-update reminder.
+                     Replaces the old auto-modal that got permanently silenced
+                     on Cancel (SkippedLauncherTag). Shown whenever a newer
+                     launcher version exists; stays visible on EVERY launch until
+                     the user updates (no permanent dismiss). Click opens the
+                     existing download/restart dialog. Blue, the shape of the
+                     "Connected" chip (design 77k); says "restart" once downloaded.
+                     It sits in the TITLE BAR beside the bell, where it always was: design
+                     77k moved it to the tab row and the maintainer brought it back here
+                     (2026-11-10). 26 px tall for the 40-px bar, and hit-testable in the
+                     caption region, or a click would drag the window.
+                     Self-contained template so the global Button style doesn't
+                     flatten the pill look. Text + tooltip
+                     are localized from code-behind. -->
+                <Button x:Name="LauncherUpdatePill"
+                        Grid.Column="4"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                        Visibility="Collapsed"
+                        Cursor="Hand"
+                        VerticalAlignment="Center"
+                        Margin="0,0,8,0"
+                        FontFamily="{DynamicResource BodyFont}"
+                        FontSize="{DynamicResource SetRowDescSize}"
+                        Click="LauncherUpdatePill_Click"
+                        RenderTransformOrigin="0.5,0.5">
+                    <Button.RenderTransform>
+                        <ScaleTransform x:Name="LauncherUpdatePillScale" ScaleX="1" ScaleY="1"/>
+                    </Button.RenderTransform>
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <!-- The text comes from the Button's Content (set in
+                                 code-behind) via the ContentPresenter — x:Name'd
+                                 elements inside a ControlTemplate live in their own
+                                 namescope and aren't reachable from code-behind, so
+                                 we drive the label through Content instead. -->
+                            <Border x:Name="pillBorder"
+                                    Background="#2455ACEE"
+                                    BorderBrush="#7355ACEE"
+                                    BorderThickness="1"
+                                    Height="26"
+                                    CornerRadius="13"
+                                    Padding="12,0">
+                                <StackPanel Orientation="Horizontal"
+                                            VerticalAlignment="Center"
+                                            TextElement.Foreground="#9FD2F6"
+                                            TextElement.FontWeight="SemiBold">
+                                    <TextBlock Text="{TemplateBinding Tag}"
+                                               FontSize="12"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,7,0"/>
+                                    <ContentPresenter VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="pillBorder" Property="Opacity" Value="0.88"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
                 <Button x:Name="OfflineChip"
                         Grid.Column="5"
                         Margin="0,0,6,0"
@@ -743,8 +809,8 @@
              wrapper below, back when the bar it separated from was the title
              bar itself.)
              ============================================================= -->
-        <!-- Height and the inner grid's margin are WRITTEN by MainWindow.ApplyCompactHeader in
-             the compact layout (42 and 0,0,12,0); the values here are the wide layout's. -->
+        <!-- Height is WRITTEN by MainWindow.ApplyCompactHeader through MainNavHeightCompact; the
+             compact and wide tokens are both 56 today. -->
         <Border Grid.Row="1"
                 x:Name="MainNav"
                 Height="{StaticResource MainNavHeight}"
@@ -854,62 +920,6 @@
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource UiDimText}"/>
                         </StackPanel>
-                    </Button>
-                    <!-- Persistent, non-invasive launcher self-update reminder.
-                         Replaces the old auto-modal that got permanently silenced
-                         on Cancel (SkippedLauncherTag). Shown whenever a newer
-                         launcher version exists; stays visible on EVERY launch until
-                         the user updates (no permanent dismiss). Click opens the
-                         existing download/restart dialog. Blue, the shape of the
-                         "Connected" chip (design 77k); says "restart" once downloaded.
-                         Self-contained template so the global Button style doesn't
-                         flatten the pill look. Text + tooltip
-                         are localized from code-behind. -->
-                    <Button x:Name="LauncherUpdatePill"
-                            Visibility="Collapsed"
-                            Cursor="Hand"
-                            VerticalAlignment="Center"
-                            Margin="0,0,12,0"
-                            FontFamily="{DynamicResource BodyFont}"
-                            FontSize="{DynamicResource SetRowDescSize}"
-                            Click="LauncherUpdatePill_Click"
-                            RenderTransformOrigin="0.5,0.5">
-                        <Button.RenderTransform>
-                            <ScaleTransform x:Name="LauncherUpdatePillScale" ScaleX="1" ScaleY="1"/>
-                        </Button.RenderTransform>
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <!-- The text comes from the Button's Content (set in
-                                     code-behind) via the ContentPresenter — x:Name'd
-                                     elements inside a ControlTemplate live in their own
-                                     namescope and aren't reachable from code-behind, so
-                                     we drive the label through Content instead. -->
-                                <Border x:Name="pillBorder"
-                                        Background="#2455ACEE"
-                                        BorderBrush="#7355ACEE"
-                                        BorderThickness="1"
-                                        Height="28"
-                                        CornerRadius="14"
-                                        Padding="12,0">
-                                    <StackPanel Orientation="Horizontal"
-                                                VerticalAlignment="Center"
-                                                TextElement.Foreground="#9FD2F6"
-                                                TextElement.FontWeight="SemiBold">
-                                        <TextBlock Text="{TemplateBinding Tag}"
-                                                   FontSize="12"
-                                                   FontWeight="Bold"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0,0,7,0"/>
-                                        <ContentPresenter VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="pillBorder" Property="Opacity" Value="0.88"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
                     </Button>
 
                     <!-- Connection capsule. Radmin's full-width green banner used to sit
@@ -1099,11 +1109,8 @@
              the safety net for the maximized full-bleed image reading as if
              it bleeds into the bar; it does NOT touch the chrome itself.
 
-             The top border is what the deleted nav strip used to provide.
-             That strip carried the only chrome/content divider, and it was
-             shared by all three tabs — Multiplayer replaces it with its own
-             sub-tab bar, but Library and Workshop have nothing, so without
-             this line the title bar would bleed straight into their content.
+             The rule between the chrome and the content is MainNav's bottom
+             border, above; this wrapper draws none.
              ============================================================= -->
         <Border Grid.Row="2">
         <Grid x:Name="ContentHost" ClipToBounds="True">
@@ -1210,10 +1217,16 @@
                                   HorizontalScrollBarVisibility="Disabled"
                                   Padding="0"
                                   Focusable="False">
+                        <!-- The column is min(100 %, 1000) wide and left-aligned, as in 68a: a star column
+                             capped at 1000. Left-aligned on its own, the panel took the width of its widest
+                             child, the 72-ch description, so the progress card (MaxWidth 660, Stretch)
+                             came out ~540 wide instead of 660. -->
+                        <Grid VerticalAlignment="Bottom">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MaxWidth="1000"/>
+                            <ColumnDefinition Width="0"/>
+                        </Grid.ColumnDefinitions>
                         <StackPanel x:Name="HeroContentGrid"
-                                    VerticalAlignment="Bottom"
-                                    HorizontalAlignment="Left"
-                                    MaxWidth="1000"
                                     Margin="0,0,0,4">
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
@@ -1398,9 +1411,14 @@
                                        Foreground="{DynamicResource UiMutedText}"
                                        Visibility="Collapsed"/>
 
+                            <!-- min(100 %, 660), left-aligned: a Stretch element with a smaller MaxWidth is
+                                 centred in its slot by WPF, so the cap lives on a star column instead. -->
+                            <Grid x:Name="DashboardProgressHost">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" MaxWidth="660"/>
+                                <ColumnDefinition Width="0"/>
+                            </Grid.ColumnDefinitions>
                             <Border x:Name="DashboardProgressContainer"
-                                    MaxWidth="660"
-                                    HorizontalAlignment="Stretch"
                                     Margin="0,14,0,14"
                                     Padding="18,16"
                                     CornerRadius="12"
@@ -1485,6 +1503,7 @@
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
+                            </Grid>
 
                             <Border x:Name="LibraryFacts"
                                     HorizontalAlignment="Left"
@@ -1507,6 +1526,7 @@
                                            Foreground="{DynamicResource UiMutedText}"/>
                             </WrapPanel>
                         </StackPanel>
+                        </Grid>
                     </ScrollViewer>
                 </Grid>
 
@@ -1590,30 +1610,29 @@
             <TextBlock x:Name="LibraryShotTitle"
                        Grid.ColumnSpan="3"
                        HorizontalAlignment="Left" VerticalAlignment="Top"
-                       Margin="20,20,0,0"
-                       FontSize="13" FontWeight="SemiBold"
+                       Margin="28,20,0,0"
+                       FontSize="14" FontWeight="SemiBold"
                        Foreground="#F0F5FB"/>
             <Button x:Name="LibraryShotClose"
                     Grid.Column="2"
-                    Style="{StaticResource LibraryBarButton}"
-                    Width="34" Padding="0"
+                    Style="{StaticResource LibraryViewerButton}"
+                    Width="40" Height="40" FontSize="18"
+                    Background="#14FFFFFF" Foreground="#DCE7F5"
                     HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,20,20,0"
+                    Margin="0,12,16,0"
                     Content="&#x2715;"
                     Click="LibraryShotClose_Click"/>
             <Button x:Name="LibraryShotPrev"
-                    Style="{StaticResource LibraryBarButton}"
-                    Width="34" Padding="0"
+                    Style="{StaticResource LibraryViewerButton}"
                     HorizontalAlignment="Left" VerticalAlignment="Center"
-                    Margin="20,0,0,0"
+                    Margin="24,0,0,0"
                     Content="&#x2039;"
                     Click="LibraryShotPrev_Click"/>
             <Button x:Name="LibraryShotNext"
                     Grid.Column="2"
-                    Style="{StaticResource LibraryBarButton}"
-                    Width="34" Padding="0"
+                    Style="{StaticResource LibraryViewerButton}"
                     HorizontalAlignment="Right" VerticalAlignment="Center"
-                    Margin="0,0,20,0"
+                    Margin="0,0,24,0"
                     Content="&#x203A;"
                     Click="LibraryShotNext_Click"/>
         </Grid>

@@ -115,6 +115,26 @@ public class LibraryListTests
         Assert.Equal(title, metrics.TitleSize, 2);
     }
 
+    /// <summary>
+    /// The text-size setting scales the four type sizes and nothing that is geometry: the list,
+    /// the gaps, the rows and the thumbnails keep the prototype's clamps at any setting.
+    /// </summary>
+    [Fact]
+    public void TheTextSizeScalesTheTypeAndNothingElse()
+    {
+        var plain = LibraryMetrics.For(1920);
+        var larger = LibraryMetrics.For(1920, 1.1);
+        Assert.Equal(plain.TitleSize * 1.1, larger.TitleSize, 3);
+        Assert.Equal(plain.DescriptionSize * 1.1, larger.DescriptionSize, 3);
+        Assert.Equal(plain.AuthorSize * 1.1, larger.AuthorSize, 3);
+        Assert.Equal(plain.RowNameSize * 1.1, larger.RowNameSize, 3);
+        Assert.Equal(plain.RailWidth, larger.RailWidth);
+        Assert.Equal(plain.RowHeight, larger.RowHeight);
+        Assert.Equal(plain.ShotWidth, larger.ShotWidth);
+        Assert.Equal(plain.ColumnGap, larger.ColumnGap);
+        Assert.Equal(plain, LibraryMetrics.For(1920, 0));
+    }
+
     [Theory]
     [InlineData("auto", 1366, false)]
     [InlineData("auto", 1920, true)]

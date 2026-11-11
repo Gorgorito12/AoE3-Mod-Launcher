@@ -523,9 +523,10 @@ rather than the reverse.
   paragraph below explaining why, are gone. The hero brushes are therefore NOT frozen.
   **What a picture costs is a decode, and it is outside the managed heap.** An image left behind
   stays in memory until a collection a launcher at rest may not run for hours, so the cover is read
-  ONCE: `HeroBrushFor` keeps the brush of the local file on screen (`ForgetHeroBrush` when a
-  revalidation replaces the file) and `ModAssetCacheService.PrimeHeroPaths` finds the file on disk
-  before the first paint. Without those two every launch downloaded the picture it already had and
+  ONCE: `HeroBrushFor` keeps the last `HeroCacheSize` (4) covers with their blurred copies, so going
+  back to a recent mod decodes nothing (`ForgetHeroBrush` when a revalidation replaces a file; a
+  remote cover leaves the list if its download fails), and `ModAssetCacheService.PrimeHeroPaths`
+  finds the file on disk before the first paint. Without those two every launch downloaded the picture it already had and
   decoded it three times, 24 MB of the 230 at idle. `TryLoadTileImage` takes the width it is drawn
   at (`IconDecodeWidth`, `StripDecodeWidth`), because that cache lives as long as the process and a
   catalog icon is often 1024 px. `BitmapScalingMode` on the cover is NOT the lever: Linear measured
@@ -543,17 +544,36 @@ rather than the reverse.
   ones the chip above the title already says are filtered by `LibraryStatus.IsRoutine`
   (`RoutineStatusTemplates`). A new routine status must be added there or it appears under the
   buttons. `LibraryCaption` replaces the legacy text; Stop coercion in `SetPrimaryAction` still runs first.
+  **Switching mods is measured (`MODSWITCH  a -> b  N ms`, click to frame; `MODSWITCH-PHASES` only
+  when a switch took 200 ms or more).** What a first visit waited for was the mod's network check
+  (0.3-3.4 s), so `PrefetchInstalledChecksAsync` checks every installed mod once in the background
+  after the window is shown, into the same `_checkResultCache` a second visit reads; every
+  invalidation goes through `ForgetCheckResult`, whose counter makes a prefetch that overlapped an
+  install or update throw its answer away. Measured: 6-12 ms a switch afterwards, 40 ms when the
+  cover is not in the cache yet.
   (5) **A refresh is coalesced and keyed** (`ScheduleLibraryRefresh`, `_libraryRailKey`,
   `_libraryCoverKey`): a mod switch asks for several, and rebuilding the list each time was a
   three-second LAYOUT STORM. `ModRail.UpdateOperation` is what a progress tick calls; it never rebuilds.
+  **The selected mod is NOT in the rail key**: a switch calls `ModRail.Select`, which moves the highlight
+  on the rows already built; the filter pills are keyed too (`_libraryFiltersKey`) and `ModTheme.Apply`
+  returns at once for the colour already applied. Together they took a repeated switch from 53-81 ms
+  to 30-51 ms, click to settled frame (`MODSWITCH … settled`).
   (6) **Chrome.xaml gives every ScrollViewer `Padding="0,0,8,0"`**, and it silently crops anything laid
   out to a known width: the folded tiles lost 13 px until the padding was given back.
   (7) **Header:** title bar 40 and nav 56 in BOTH layouts; the old compact heights (34 / 42) and the
   `NavTabButtonCompact` swap below are history. The main bar carries the mod's tint (`ModTitleBar`);
-  secondary windows keep one uniform colour (BASE.md).
+  secondary windows keep one uniform colour (BASE.md). **No line between the title bar and the tabs**
+  (`TitleBar.ShowBottomLine="False"`; every other window keeps its bar's line), and the
+  launcher-update pill is in the title bar beside the bell (title-bar column 4, hit-testable in the
+  caption region), where the maintainer wants it rather than where 77k drew it.
   (8) **`--preview-library=updating|installing|stopped`** paints the download states with nothing
   downloading, in the harness only. `tools/testbed/sweep_library.py` presses every control of the
   screen on the real launcher.
+  (9) **The pictures under the buttons are `ModProfile.ResolveGallerySources`**: the screenshots, else
+  the cover and the banner (as 68a draws them), never a single picture; the viewer animates a GIF.
+  The hero column is a star column capped at 1000, so the progress card reaches its 660.
+  (10) **The four type sizes `LibraryMetrics` computes follow the text-size setting**
+  (`TextScale.CurrentFactor`); the geometry does not, as with every font token.
   **MainWindow's XAML is parsed by no unit test**, so a broken value there passes the whole suite and
   dies on launch (a `Margin="11%"` did exactly that): launch it with the testbed before calling a
   change to that file done.

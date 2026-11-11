@@ -90,9 +90,11 @@
          window's title bar uses. Implicit style (TargetType, no key) so it
          applies to every TitleBar instance app-wide. Geometry from the
          TitleBar* tokens; ContentPresenter hosts the per-window extra bar
-         content (brand button / version badge / subtitle). NO bottom border
-         (keeps MainWindow's bar fused with the nav strip). PART_* names are
-         contractually wired in TitleBar.OnApplyTemplate.
+         content (brand button / version badge / subtitle). A 1-px bottom line
+         (TitleBarLine), which the main window turns off with ShowBottomLine:
+         its tab row sits right under the bar and design 68a draws no line
+         between the two. PART_* names are contractually wired in
+         TitleBar.OnApplyTemplate.
          ============================================================ -->
     <Style TargetType="{x:Type controls:TitleBar}">
         <Setter Property="Background" Value="{DynamicResource GlassTitleBar}"/>
@@ -111,7 +113,8 @@
                          this the icon landed on a sub-pixel X at 125/150% DPI
                          (gutter 18 DIP × 1.25 = 22.5 px) and rendered blurry. No
                          transform / no text resize — pure pixel snapping. -->
-                    <Border Background="{TemplateBinding Background}"
+                    <Border x:Name="PART_Frame"
+                            Background="{TemplateBinding Background}"
                             BorderBrush="{DynamicResource TitleBarLine}"
                             BorderThickness="0,0,0,1"
                             Height="{TemplateBinding Height}"
@@ -193,6 +196,9 @@
                             <Setter TargetName="PART_Title" Property="FontFamily" Value="{DynamicResource BodyFont}"/>
                             <Setter TargetName="PART_Title" Property="FontWeight" Value="Medium"/>
                             <Setter TargetName="PART_Title" Property="Foreground" Value="{DynamicResource UiBodyText}"/>
+                        </Trigger>
+                        <Trigger Property="ShowBottomLine" Value="False">
+                            <Setter TargetName="PART_Frame" Property="BorderThickness" Value="0"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

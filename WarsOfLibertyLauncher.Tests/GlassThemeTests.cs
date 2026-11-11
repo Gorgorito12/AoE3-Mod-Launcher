@@ -1,3 +1,4 @@
+using System;
 using System.Windows.Media;
 using WarsOfLibertyLauncher.Services;
 using Xunit;
@@ -25,6 +26,26 @@ public class GlassThemeTests
         var spec = GlassTheme.For(level);
         Assert.Equal(panelAlpha, spec.Panel.A);
         Assert.Equal(barAlpha, spec.BarAlpha);
+    }
+
+    /// <summary>
+    /// The 68b palette, as the catalog now declares it, lands where the prototype's own
+    /// normalisation puts it ("igualada"): the five mods that used to share one gold now read as
+    /// five different colours.
+    /// </summary>
+    [Theory]
+    [InlineData("#1fa3a3", "#08a4a4")]   // Age of Dynasties (Remake)
+    [InlineData("#3b5bd6", "#4c6cd1")]   // AoE1 HD Edition
+    [InlineData("#8f9a2e", "#8f9a2e")]   // Hundred Days
+    [InlineData("#8b4fc9", "#8957c0")]   // King's Return
+    [InlineData("#3f9d5a", "#3f9d5a")]   // The Ancient Age
+    public void THE_ONE_THAT_MATTERS_The68bPaletteNormalisesAsThePrototypeDoes(string declared, string expected)
+    {
+        Assert.True(ModAccent.TryParse(declared, out var color));
+        Assert.True(ModAccent.TryParse(expected, out var want));
+        var got = ModAccent.Normalize(color);
+        Assert.True(Math.Abs(got.R - want.R) <= 2 && Math.Abs(got.G - want.G) <= 2 && Math.Abs(got.B - want.B) <= 2,
+            $"{declared} normalised to #{got.R:x2}{got.G:x2}{got.B:x2}, the prototype gives {expected}");
     }
 
     [Theory]

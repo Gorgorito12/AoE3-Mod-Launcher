@@ -155,19 +155,26 @@ public readonly record struct LibraryMetrics(
     /// <summary>72ch: the width of a Segoe UI zero is .539 of the font size.</summary>
     public const double DescriptionWidthEm = 72 * .539;
 
-    public static LibraryMetrics For(double width)
+    /// <summary>
+    /// The prototype's clamp()s at <paramref name="width"/>. <paramref name="textFactor"/> is the
+    /// launcher's text-size setting (<see cref="TextScale.CurrentFactor"/>): it scales the four
+    /// type sizes and nothing else, exactly as it scales every font token — without it the
+    /// title, author, description and list names stayed at 100 % beside a page at 110 %.
+    /// </summary>
+    public static LibraryMetrics For(double width, double textFactor = 1)
     {
         double Clamp(double min, double percent, double max) => Math.Clamp(width * percent / 100, min, max);
+        var type = textFactor > 0 ? textFactor : 1;
         return new LibraryMetrics(
             RailWidth: Clamp(320, 23, 460),
             ColumnGap: Clamp(20, 2.4, 72),
             SidePadding: Clamp(16, 1.4, 32),
             BottomPadding: Clamp(16, 1.2, 28),
             RowHeight: Clamp(56, 3.1, 68),
-            RowNameSize: Clamp(13.5, .6, 15.5),
-            TitleSize: Clamp(34, 2.7, 64),
-            AuthorSize: Clamp(13.5, .62, 16),
-            DescriptionSize: Clamp(14, .62, 16.5),
+            RowNameSize: Clamp(13.5, .6, 15.5) * type,
+            TitleSize: Clamp(34, 2.7, 64) * type,
+            AuthorSize: Clamp(13.5, .62, 16) * type,
+            DescriptionSize: Clamp(14, .62, 16.5) * type,
             ShotWidth: Clamp(120, 7, 176),
             DetailGap: Clamp(14, 1, 22));
     }
