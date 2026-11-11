@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -654,10 +655,29 @@ public partial class MultiplayerTab
 
     // ---------------------------------------------------------------- matchups and allies
 
+    /// <summary>What a pairs table is showing: one civilization's pairs, or all of them.</summary>
+    private sealed class PairTableState
+    {
+        public string? Civ;
+        public bool Expanded;
+    }
+
+    private readonly PairTableState _rivalsTable = new();
+    private readonly PairTableState _alliesTable = new();
+
+    /// <summary>A new mod or mode is a different set of civilizations: a kept choice would mean nothing.</summary>
+    private void ResetPairTables()
+    {
+        _rivalsTable.Civ = null;
+        _rivalsTable.Expanded = false;
+        _alliesTable.Civ = null;
+        _alliesTable.Expanded = false;
+    }
+
     private UIElement? BuildAlliesCard()
         => _matchups?.Allies is { Count: > 0 } rows
             ? BuildPairPanel(rows, "MpStatsAlliesTitle", "MpStatsAlliesScope",
-                             "MpStatsAlliesHint", "+")
+                             "MpStatsAlliesHint", "+", "MpStatsAlliesColPair", _alliesTable, sameSide: true)
             : null;
 
     private UIElement? BuildPairCard(List<Models.Multiplayer.MatchupEntry>? rows, string hintKey)
@@ -672,28 +692,143 @@ public partial class MultiplayerTab
 
         return rows is { Count: > 0 }
             ? BuildPairPanel(rows, "MpStatsMatchupsTitle", "MpStatsMatchupsScope", hintKey,
-                             Strings.Get("MpMatchupVs"))
+                             Strings.Get("MpMatchupVs"), "MpMatchupColPair", _rivalsTable, sameSide: false)
             : null;
     }
 
+    /// <summary>
+    /// A pairs table: the <see cref="MatchupListView.TopCount"/> most played, a civilization
+    /// picker, and the rest on request in a box that scrolls on its own, so the card is never
+    /// taller than <see cref="MatchupListView.BoxRows"/> rows. It used to draw every pair the
+    /// server sent (up to 600, ~25,000 px), which made the page endless and cost most of the
+    /// second a switch to the subtab took. The picker and the fold redraw this card only.
+    /// </summary>
     private Border BuildPairPanel(
         List<Models.Multiplayer.MatchupEntry> rows, string titleKey, string scopeKey,
-        string hintKey, string separator)
+        string hintKey, string separator, string columnKey, PairTableState state, bool sameSide)
     {
-        var stack = new StackPanel();
-        stack.Children.Add(StatsHead(Strings.Get(titleKey), Strings.Get(scopeKey), 10));
-        stack.Children.Add(BuildMatchupHeader("MpStatsAlliesColPair"));
+        var lines = MatchupListView.Merge(rows, sameSide);
+        var names = DeckCardNames.Peek(StatsModId());
+        // A civilization the data no longer mentions (another mode, a refresh) is forgotten.
+        if (state.Civ != null && !MatchupListView.Civs(lines).Contains(state.Civ, StringComparer.Ordinal))
+            state.Civ = null;
 
-        foreach (var row in rows)
+        var card = StatsPanel(new StackPanel(), 10);
+        void Fill()
         {
-            var names = DeckCardNames.Peek(StatsModId());
-            stack.Children.Add(BuildMatchupRow(
-                row, StatsCivLabel(row.CivA), StatsCivLabel(row.CivB), separator,
-                _statsLayout.RowHeight, names?.CivIconOf(row.CivA), names?.CivIconOf(row.CivB)));
+            var stack = new StackPanel();
+            stack.Children.Add(StatsHead(Strings.Get(titleKey), Strings.Get(scopeKey), 10));
+
+            // The picker only when there is more than the top to choose from.
+            if (lines.Count > MatchupListView.TopCount)
+                stack.Children.Add(BuildPairCivPicker(lines, state, Fill));
+
+            stack.Children.Add(BuildMatchupHeader(columnKey));
+
+            var shown = state.Civ != null
+                ? MatchupListView.For(lines, state.Civ, sameSide)
+                : state.Expanded ? lines : MatchupListView.Top(lines);
+            var list = new StackPanel();
+            foreach (var line in shown)
+            {
+                list.Children.Add(BuildMatchupRow(
+                    line.ToEntry(), StatsCivLabel(line.CivA), StatsCivLabel(line.CivB), separator,
+                    _statsLayout.RowHeight, names?.CivIconOf(line.CivA), names?.CivIconOf(line.CivB)));
+            }
+
+            if (shown.Count > MatchupListView.BoxRows)
+            {
+                var box = new ScrollViewer
+                {
+                    Content = list,
+                    // A row is its height plus the 1-px rule under it.
+                    MaxHeight = MatchupListView.BoxRows * (_statsLayout.RowHeight + 1),
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    Focusable = false,
+                };
+                AutomationProperties.SetAutomationId(box, "StatsPairsBox");
+                ChainWheelAtTheEnds(box);
+                stack.Children.Add(box);
+            }
+            else stack.Children.Add(list);
+
+            if (state.Civ == null && lines.Count > MatchupListView.TopCount)
+            {
+                stack.Children.Add(StatsFoldRow(
+                    state.Expanded
+                        ? Strings.Format("MpStatsPairsAllShown", lines.Count)
+                        : Strings.Format("MpStatsPairsTopShown", MatchupListView.TopCount, lines.Count),
+                    state.Expanded ? Strings.Get("MpStatsSeeLess") : Strings.Format("MpStatsPairsSeeAll", lines.Count),
+                    () =>
+                    {
+                        state.Expanded = !state.Expanded;
+                        Fill();
+                    }));
+            }
+
+            stack.Children.Add(StatsTableNote(Strings.Get(hintKey)));
+            card.Child = stack;
         }
 
-        stack.Children.Add(StatsTableNote(Strings.Get(hintKey)));
-        return StatsPanel(stack, 10);
+        Fill();
+        return card;
+    }
+
+    /// <summary>"All civilizations" or one of them, by the name the player reads.</summary>
+    private FrameworkElement BuildPairCivPicker(IReadOnlyList<MatchupLine> lines, PairTableState state, Action refill)
+    {
+        var combo = new ComboBox
+        {
+            MinWidth = 220,
+            MaxWidth = 320,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 10),
+        };
+        if (TryFindResource("SetCompactCombo") is Style style) combo.Style = style;
+        AutomationProperties.SetAutomationId(combo, "StatsPairsCiv");
+        AutomationProperties.SetName(combo, Strings.Get("MpStatsPairsAllCivs"));
+
+        combo.Items.Add(new ComboBoxItem { Content = Strings.Get("MpStatsPairsAllCivs"), Tag = null });
+        foreach (var civ in MatchupListView.Civs(lines)
+                     .Select(c => (Civ: c, Label: StatsCivLabel(c)))
+                     .OrderBy(c => c.Label, StringComparer.Create(Strings.Culture, ignoreCase: true)))
+        {
+            combo.Items.Add(new ComboBoxItem { Content = civ.Label, Tag = civ.Civ });
+        }
+        combo.SelectedIndex = 0;
+        for (int i = 1; i < combo.Items.Count; i++)
+            if (combo.Items[i] is ComboBoxItem { Tag: string tag } && tag == state.Civ) combo.SelectedIndex = i;
+
+        combo.SelectionChanged += (_, _) =>
+        {
+            state.Civ = (combo.SelectedItem as ComboBoxItem)?.Tag as string;
+            refill();
+        };
+        return combo;
+    }
+
+    /// <summary>
+    /// A box inside the scrolling page swallows the wheel at its ends, which strands the reader
+    /// inside it. At the top or the bottom the turn goes to the page instead.
+    /// </summary>
+    private static void ChainWheelAtTheEnds(ScrollViewer box)
+    {
+        box.PreviewMouseWheel += (_, e) =>
+        {
+            bool atTop = box.VerticalOffset <= 0 && e.Delta > 0;
+            bool atBottom = box.VerticalOffset >= box.ScrollableHeight && e.Delta < 0;
+            if (!atTop && !atBottom) return;
+            e.Handled = true;
+            if (box.Parent is UIElement parent)
+            {
+                parent.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
+                {
+                    RoutedEvent = UIElement.MouseWheelEvent,
+                    Source = box,
+                });
+            }
+        };
     }
 
     /// <summary>One pairing.</summary>

@@ -63,6 +63,7 @@ python -I tools/testbed/testbed.py sidebyside out.png tools/testbed/out/shot.png
 | Scenario | What it does |
 |---|---|
 | `coldstart` | five starts, for `window shown` |
+| `coldstart-checks` | three starts of 20 s WITH the update checks on (`launch --checks`), so the start's network work is in the measure |
 | `idle`, `tray` | 60 s doing nothing, visible and in the tray |
 | `workshop`, `multiplayer`, `settings`, `modsettings` | a screen left open |
 | `tabs`, `scroll`, `resize` | the launcher made to work |

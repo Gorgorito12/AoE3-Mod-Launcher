@@ -23,6 +23,53 @@ namespace WarsOfLibertyLauncher.Tests;
 /// </summary>
 public class UpdateVerdictTests
 {
+    private static ModProfile GitHubMod(bool followLatest = true) => new()
+    {
+        Id = "improvement-mod",
+        UpdateMechanism = ModUpdateMechanism.GitHubReleases,
+        GitHubReleases = new GitHubReleasesSettings
+        {
+            SourceRepo = "owner/mod",
+            ApprovedReleaseTag = "19.07.2026",
+            FollowLatest = followLatest,
+        },
+    };
+
+    /// <summary>
+    /// At start the Library drew every mod as up to date until the network answered, although
+    /// both tags were on disk. The badge comes from them now — and the refusals are the point:
+    /// a failed or missing piece says nothing rather than something false.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheLastChecksTagsGiveTheBadgeAtStart()
+    {
+        var state = new ModState { LastKnownVersion = "19.07.2026", LastKnownLatestVersion = "06.09.2026", LatestReleaseRepo = "owner/mod" };
+        Assert.True(UpdateVerdict.HasUpdateFromLastKnown(GitHubMod(), state));
+
+        // The same tag: nothing.
+        Assert.False(UpdateVerdict.HasUpdateFromLastKnown(GitHubMod(),
+            new ModState { LastKnownVersion = "06.09.2026", LastKnownLatestVersion = "06.09.2026", LatestReleaseRepo = "owner/mod" }));
+        // A version never stamped: left for the real check.
+        Assert.False(UpdateVerdict.HasUpdateFromLastKnown(GitHubMod(),
+            new ModState { LastKnownVersion = "", LastKnownLatestVersion = "06.09.2026", LatestReleaseRepo = "owner/mod" }));
+        // A cached latest from ANOTHER repository is not trusted, and nothing else stands in for it.
+        Assert.False(UpdateVerdict.HasUpdateFromLastKnown(GitHubMod(),
+            new ModState { LastKnownVersion = "24.07.2026", LastKnownLatestVersion = "06.09.2026", LatestReleaseRepo = "old/repo" }));
+        // Following the latest with nothing learned yet: the approved tag is an offline seed, and a
+        // player on a NEWER release must not read as out of date (found by the Library sweep).
+        Assert.False(UpdateVerdict.HasUpdateFromLastKnown(GitHubMod(),
+            new ModState { LastKnownVersion = "24.07.2026" }));
+        // Not following the latest: the approved tag IS the latest, no check needed.
+        Assert.True(UpdateVerdict.HasUpdateFromLastKnown(GitHubMod(followLatest: false),
+            new ModState { LastKnownVersion = "05.07.2026" }));
+        // Pinned to the installed version: no prompt.
+        Assert.False(UpdateVerdict.HasUpdateFromLastKnown(GitHubMod(),
+            new ModState { LastKnownVersion = "19.07.2026", LastKnownLatestVersion = "06.09.2026", LatestReleaseRepo = "owner/mod", PinnedVersion = "19.07.2026" }));
+        // The patcher's answer is a list nothing keeps: never guessed.
+        Assert.False(UpdateVerdict.HasUpdateFromLastKnown(
+            new ModProfile { Id = "wol", UpdateMechanism = ModUpdateMechanism.WolPatcher }, state));
+    }
+
     private static ModProfile Profile(ModUpdateMechanism mechanism) =>
         new() { Id = "improvement-mod", UpdateMechanism = mechanism };
 

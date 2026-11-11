@@ -162,6 +162,14 @@ public partial class MultiplayerTab
 
         if (rows.Count == 0)
         {
+            // "Nothing to list" only once the server has said so. Before its first answer the
+            // list is loading, and after a failed one it is unknown: neither is empty.
+            if (_tournaments == null && !_demoTournaments)
+            {
+                if (_tournamentsFetchedUtc == DateTime.MinValue) panel.Children.Add(StatsSkeletonRows(1));
+                else panel.Children.Add(Hint(Strings.Get("MpTournamentsLoadFailed")));
+                return;
+            }
             panel.Children.Add(Hint(Strings.Get("MpTournamentsEmpty")));
             return;
         }

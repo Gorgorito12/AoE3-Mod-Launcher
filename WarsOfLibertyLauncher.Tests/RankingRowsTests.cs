@@ -378,9 +378,10 @@ public class RankingRowsTests
     /// <summary>
     /// THE ONE THAT MATTERS: going back to the subtab draws nothing when nothing the page shows
     /// moved - the rows on screen are the SAME objects - and draws again for each thing that did:
-    /// the mode, the language, a new answer from the server. Without the first half a tab switch
-    /// rebuilt the podium, the plates and the side column every time (63 ms against the old
-    /// table's 27, measured); without the second the page would show a stale ladder.
+    /// the mode, the language, a new answer that SHOWS something new. Without the first half a
+    /// tab switch rebuilt the podium, the plates and the side column every time (282-393 ms in a
+    /// player's log, because the payload arrives once a minute as a new object whose only changes
+    /// are drawn nowhere); without the second the page would show a stale ladder.
     /// </summary>
     [Fact]
     public void THE_ONE_THAT_MATTERS_GoingBackDrawsOnlyWhatChanged()
@@ -405,11 +406,25 @@ public class RankingRowsTests
                 Assert.NotSame(drawn, FirstRow());
                 Assert.False(tab.RenderRankingIfChanged());
 
-                // A new answer from the server: a new object, even with the same figures.
+                // A new answer from the server with the same figures: only its stamp and every
+                // player's rd moved, and neither is drawn. Nothing is rebuilt.
                 drawn = FirstRow();
-                typeof(MultiplayerTab).GetField("_communityStats",
-                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                    .SetValue(tab, EloDemoData.Community(null, null, nobodyRanked: false));
+                var field = typeof(MultiplayerTab).GetField("_communityStats",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                var onScreen = (CommunityStats)field.GetValue(tab)!;
+                CommunityStats Copy() => System.Text.Json.JsonSerializer.Deserialize<CommunityStats>(
+                    System.Text.Json.JsonSerializer.Serialize(onScreen))!;
+                var same = Copy();
+                same.GeneratedAt = "2099-01-01T00:00:00Z";
+                foreach (var row in same.Leaderboard ?? new()) row.Rd += 0.5;
+                field.SetValue(tab, same);
+                Assert.False(tab.RenderRankingIfChanged());
+                Assert.Same(drawn, FirstRow());
+
+                // One rating moved: that is drawn, so the page is.
+                var moved = Copy();
+                moved.Leaderboard![0].Rating += 25;
+                field.SetValue(tab, moved);
                 Assert.True(tab.RenderRankingIfChanged());
                 Assert.NotSame(drawn, FirstRow());
                 Assert.False(tab.RenderRankingIfChanged());

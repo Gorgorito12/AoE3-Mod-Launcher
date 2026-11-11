@@ -116,6 +116,7 @@ public partial class MainWindow : Window
     private void ForgetCheckResult(string modId)
     {
         _checkResultCache.Remove(modId);
+        _installedMemo.Remove(modId);
         _checkCacheEpoch++;
     }
     private bool _isPaused;
@@ -1407,7 +1408,10 @@ public partial class MainWindow : Window
         else
         {
             installed = IsProfileInstalledLocally(profile);
-            current = _config.GetState(profile.Id).LastKnownVersion;
+            var state = _config.GetState(profile.Id);
+            current = state.LastKnownVersion;
+            // What the last session's check learned, until this session's answers.
+            hasUpdate = installed && Services.UpdateVerdict.HasUpdateFromLastKnown(profile, state);
         }
 
         Controls.ModRowStatus status = installed
@@ -1445,8 +1449,27 @@ public partial class MainWindow : Window
             profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
         var state = _config.GetState(profile.Id);
         string? path = isActive ? _updateService.InstallPath : state.InstallPath;
-        return InstalledOnDisk(profile, path);
+
+        // Remembered for a minute, keyed by the path it was asked about. The Library is redrawn
+        // several times while the launcher starts and each redraw asked the disk again for every
+        // mod; for an overlay mod with no saved path that is a search for AoE3 across every drive,
+        // the registry and Steam, which keeps its own answer only 3 s. Installing, updating or
+        // uninstalling a mod forgets its entry (ForgetCheckResult).
+        long now = DateTime.UtcNow.Ticks;
+        if (_installedMemo.TryGetValue(profile.Id, out var memo)
+            && string.Equals(memo.Path, path, StringComparison.OrdinalIgnoreCase)
+            && now - memo.At < InstalledMemoTicks)
+            return memo.Installed;
+
+        bool installed = InstalledOnDisk(profile, path);
+        _installedMemo[profile.Id] = (path, installed, now);
+        return installed;
     }
+
+    private readonly Dictionary<string, (string? Path, bool Installed, long At)> _installedMemo =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly long InstalledMemoTicks = TimeSpan.FromSeconds(60).Ticks;
 
     /// <summary>
     /// The disk half of <see cref="IsProfileInstalledLocally"/>: the saved path validated by
@@ -10034,26 +10057,33 @@ public partial class MainWindow : Window
     /// </summary>
     private void PulseLauncherUpdatePill()
     {
+        StopLauncherUpdatePillPulse();
+        // One breath now and one every 3.6 s, each a FINITE animation. It used to be a single
+        // forever clock whose cycle was a 0.7 s double pulse and a 2.9 s hold, and WPF draws every
+        // frame while a clock runs, held or not: ~60 redraws a second, four in five of them of a
+        // pill that was not moving. A finished breath asks for no frame until the next one.
+        BreatheLauncherUpdatePill();
+        _pillBreathTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(3600) };
+        _pillBreathTimer.Tick += (_, _) => BreatheLauncherUpdatePill();
+        _pillBreathTimer.Start();
+    }
+
+    private void BreatheLauncherUpdatePill()
+    {
+        StopPillBreathClocks();
         var pulse = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames
         {
-            // One cycle = a short double-pulse, then a long hold at rest.
-            Duration = TimeSpan.FromMilliseconds(3600),
-            // Breathe forever (gently) so it's visible whenever the user looks; the
-            // long idle gap below keeps each cycle mostly at rest. Stopped on hide.
-            RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+            Duration = TimeSpan.FromMilliseconds(680),
+            // Back to the pill's own 1.0 when the breath ends, and nothing left running.
+            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
         };
         void Key(double scale, double ms) => pulse.KeyFrames.Add(
             new System.Windows.Media.Animation.EasingDoubleKeyFrame(
                 scale, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms))));
         Key(1.0, 0); Key(1.08, 160); Key(1.0, 340); Key(1.05, 500); Key(1.0, 680);
-        Key(1.0, 3600); // long idle gap before the next breath
-        StopLauncherUpdatePillPulse();
-        // Owned clocks, not BeginAnimation: the Stop below has to STOP them. A detached
-        // forever clock keeps WPF drawing every frame until the garbage collector frees it —
-        // the same leak RankBadge.Stop documents, which kept the UI thread busy for hours.
-        // Same frame-rate cap as the rank badges: a breath that is mostly a hold does not need
-        // the monitor's refresh rate, and every frame it asks for is drawn.
+        // Same frame-rate cap as the rank badges.
         System.Windows.Media.Animation.Timeline.SetDesiredFrameRate(pulse, WarsOfLibertyLauncher.Controls.RankBadge.FrameRate);
+        // Owned clocks, stopped through their controller (the animation-clock rule in CLAUDE.md).
         _pillPulseClocks = new[] { pulse.CreateClock(), pulse.Clone().CreateClock() };
         LauncherUpdatePillScale.ApplyAnimationClock(
             System.Windows.Media.ScaleTransform.ScaleXProperty, _pillPulseClocks[0]);
@@ -10061,8 +10091,11 @@ public partial class MainWindow : Window
             System.Windows.Media.ScaleTransform.ScaleYProperty, _pillPulseClocks[1]);
     }
 
-    /// <summary>The pill's two running clocks, or null; see <see cref="StopLauncherUpdatePillPulse"/>.</summary>
+    /// <summary>The breath being drawn, or null.</summary>
     private System.Windows.Media.Animation.AnimationClock[]? _pillPulseClocks;
+
+    /// <summary>What starts each breath; null while the pill is not breathing.</summary>
+    private System.Windows.Threading.DispatcherTimer? _pillBreathTimer;
 
     private bool _pillPulseHooked;
 
@@ -10094,8 +10127,8 @@ public partial class MainWindow : Window
                   && !WarsOfLibertyLauncher.Controls.RankBadge.ReducedEffects
                   && WarsOfLibertyLauncher.Controls.RankBadge.ShouldRun(
                       WarsOfLibertyLauncher.Controls.RankBadge.AppActive, IsLoaded, IsVisible, WindowState);
-        if (run && _pillPulseClocks == null) PulseLauncherUpdatePill();
-        else if (!run && _pillPulseClocks != null) StopLauncherUpdatePillPulse();
+        if (run && _pillBreathTimer == null) PulseLauncherUpdatePill();
+        else if (!run && _pillBreathTimer != null) StopLauncherUpdatePillPulse();
     }
 
     /// <summary>
@@ -10104,6 +10137,13 @@ public partial class MainWindow : Window
     /// which only holds because the clocks are STOPPED here, not merely detached.
     /// </summary>
     private void StopLauncherUpdatePillPulse()
+    {
+        _pillBreathTimer?.Stop();
+        _pillBreathTimer = null;
+        StopPillBreathClocks();
+    }
+
+    private void StopPillBreathClocks()
     {
         foreach (var clock in _pillPulseClocks ?? Array.Empty<System.Windows.Media.Animation.AnimationClock>())
             clock.Controller?.Stop();

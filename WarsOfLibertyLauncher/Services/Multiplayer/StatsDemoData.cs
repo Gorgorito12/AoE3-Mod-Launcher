@@ -479,6 +479,39 @@ internal static class StatsDemoData
     }
 
     /// <summary>
+    /// A community the size of the real one: 45 civilizations and the server's cap of 600 pairs,
+    /// split across two versions of the mod as the server sends them (one row per pair AND per
+    /// version). It is what made the Statistics page slow and endless, so it is what the page is
+    /// measured and tested against (<c>--demo-stats=big</c>).
+    /// </summary>
+    internal static MatchupsResponse BigMatchups(string? modId = null)
+    {
+        var civs = Civs.Select(c => c.Civ)
+            .Concat(Enumerable.Range(1, 30).Select(i => "Civilization" + i))
+            .ToList();
+        var rows = new List<MatchupEntry>();
+        int n = 0;
+        for (int a = 0; a < civs.Count && rows.Count < 600; a++)
+        for (int b = a + 1; b < civs.Count && rows.Count < 600; b++)
+        {
+            n++;
+            int played = 1 + (n * 7919) % 23;
+            int wins = (n * 31) % (played + 1);
+            rows.Add(new MatchupEntry
+            {
+                ModId = modId ?? PrimaryModId,
+                ModVersion = n % 2 == 0 ? "demo-a" : "demo-b",
+                CivA = civs[a],
+                CivB = civs[b],
+                Played = played,
+                WinsA = wins,
+                LossesA = played - wins,
+            });
+        }
+        return new MatchupsResponse { GeneratedAt = "", Mode = "default", Matchups = rows, Allies = new List<MatchupEntry>() };
+    }
+
+    /// <summary>
     /// Which cards people BRING. Never "play": no recording carries the card that was played,
     /// and the launcher and the backend both say so in those words.
     /// </summary>

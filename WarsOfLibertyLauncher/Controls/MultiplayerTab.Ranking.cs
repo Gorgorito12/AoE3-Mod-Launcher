@@ -91,23 +91,42 @@ public partial class MultiplayerTab
 
     /// <summary>
     /// Everything the table page is drawn from, so going back to the subtab draws nothing when
-    /// none of it moved. The payload, the standing and the month's highlights by REFERENCE: each
-    /// answer from the server is a new object, so a new answer always repaints. The minute is
-    /// there for the match list's "3 h ago".
+    /// none of it moved. The payload by CONTENT: it arrives once a minute as a new object whose
+    /// only differences are drawn nowhere (<c>generated_at</c>, every player's <c>rd</c>), and
+    /// keying it by reference rebuilt the whole ladder on nearly every switch (282-393 ms in a
+    /// player's log). The standing and the month's highlights by reference. The minute is NOT
+    /// here: it only moves the match list's "3 h ago", which <see cref="RenderRankingIfChanged"/>
+    /// repaints on its own.
     /// </summary>
     private readonly record struct RankingPaintKey(
-        object? Stats, RankingMode Mode, string Language, string? Viewer, object? Standing, object? Leaders,
+        string? Stats, RankingMode Mode, string Language, string? Viewer, object? Standing, object? Leaders,
         RankingFluid Fluid, RankingPodiumFluid Podium, double Gap, bool Narrow, bool Effects,
-        string Art, int Catalog, long Minute);
+        string Art, int Catalog);
 
     private RankingPaintKey? _rankingPaintKey;
 
+    /// <summary>The minute the match list's relative times were drawn at.</summary>
+    private long _rankingHistoryMinute;
+
+    private static long CurrentMinute => DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute;
+
+    /// <summary>The payload's content, worked out once per answer.</summary>
+    private (object? Stats, string? Content) _rankingStatsContent;
+
+    private string? RankingStatsContent()
+    {
+        if (!ReferenceEquals(_rankingStatsContent.Stats, _communityStats))
+            _rankingStatsContent = (_communityStats,
+                Services.Multiplayer.ActivityPaintKey.Content(_communityStats));
+        return _rankingStatsContent.Content;
+    }
+
     private RankingPaintKey CurrentRankingPaintKey() => new(
-        _communityStats, _rankingMode, Strings.Language, RankingViewerId,
+        RankingStatsContent(), _rankingMode, Strings.Language, RankingViewerId,
         _eloPreview ? _eloPreviewProfile : _cachedStanding, _rankingLeaders,
         CurrentRankingFluid(), CurrentPodiumFluid(), PageGap,
         RankingTableLayout.IsNarrow(RankingTableWidth()), RankBadge.AnimationsEnabled,
-        ActivityArtStamp(), ModRegistry.Generation, DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute);
+        ActivityArtStamp(), ModRegistry.Generation);
 
     /// <summary>
     /// Draws the whole page from the one community payload — both ladders and both placement
@@ -118,6 +137,7 @@ public partial class MultiplayerTab
         if (RankingBody == null) return;
         _rankingPaintKey = null;
         RenderRankingCore();
+        _rankingHistoryMinute = CurrentMinute;
         // After the draw: it can change the mode (Teams on a server with no team ladder).
         if (_rankingMode is RankingMode.Solo or RankingMode.Team) _rankingPaintKey = CurrentRankingPaintKey();
     }
@@ -137,6 +157,12 @@ public partial class MultiplayerTab
             && _rankingPaintKey is { } drawn && drawn == CurrentRankingPaintKey())
         {
             Services.PerfCounters.Increment("Ranking.Unchanged");
+            // Only the match list's "3 h ago" moves with the clock: that list alone.
+            if (_rankingHistoryMinute != CurrentMinute)
+            {
+                _rankingHistoryMinute = CurrentMinute;
+                RenderRankingHistory();
+            }
             return false;
         }
         RenderRanking();
@@ -214,6 +240,27 @@ public partial class MultiplayerTab
         RankingFootBand.Visibility = hasRows ? Visibility.Visible : Visibility.Collapsed;
         // The empty state sits in the middle of the card (93e); rows start at its top.
         RankingBody.VerticalAlignment = nobodyAtAll ? VerticalAlignment.Center : VerticalAlignment.Stretch;
+
+        // Nothing has ARRIVED yet: that is not "nobody is ranked", which is what the empty state
+        // below says. Rows in the table's shape while it loads, and a sentence if it failed.
+        if (_communityStats == null && !_eloPreview && !_demoStats)
+        {
+            RankingFootBand.Visibility = Visibility.Collapsed;
+            RankingBody.VerticalAlignment = VerticalAlignment.Top;
+            if (_activityError == ActivityFailure.None)
+            {
+                var skeleton = StatsSkeletonRows(4);
+                if (skeleton is FrameworkElement fe) fe.Margin = new Thickness(8, 12, 8, 12);
+                RankingBody.Children.Add(skeleton);
+            }
+            else
+            {
+                var failed = StatsProse(Strings.Get("RkLoadFailed"), "StatsProseSize", "StatsNote");
+                failed.Margin = new Thickness(8, 16, 8, 16);
+                RankingBody.Children.Add(failed);
+            }
+            return;
+        }
 
         // Nobody at all: the table says so and offers a way to make the first match happen.
         if (nobodyAtAll)

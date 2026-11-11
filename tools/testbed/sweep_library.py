@@ -102,9 +102,15 @@ def main():
     press("ModStar_improvement-mod")
 
     # Fold and unfold.
+    # Relative, not absolute: the window opens on whichever monitor the testbed picks (the
+    # CORSAIR sits far to the right), so a fixed screen x says nothing. Folding narrows the
+    # list, so its button moves left.
+    unfolded = controls().get("LibraryRailFold")
     press("LibraryRailFold", 1.0)
     rail = controls().get("LibraryRailFold")
-    check("fold narrows the list", rail is not None and rail["rect"][0] < 200)
+    check("fold narrows the list",
+          unfolded is not None and rail is not None and rail["rect"][0] < unfolded["rect"][0] - 200,
+          f"{unfolded and unfolded['rect'][0]} -> {rail and rail['rect'][0]}")
     press("LibraryRailFold", 1.0)
 
     # The sort is a menu.

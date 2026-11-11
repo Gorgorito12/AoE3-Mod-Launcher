@@ -1975,10 +1975,15 @@
             <!-- Named so a repaint can put the page back where the reader left it. Four
                  payloads land in the background and the card names land after them, and every
                  one of them rebuilds this whole panel. -->
+            <!-- The gutter goes AROUND the scroller, never inside it. Inside, the bar sat in the
+                 last 6 px of the window, which Windows keeps for resizing it: the thumb could
+                 not be grabbed and dragged, only the wheel worked. Every other page has its
+                 scroller inside the gutter; DialogXamlTests checks all four. -->
             <ScrollViewer x:Name="StatsScroll"
+                          Margin="{DynamicResource MpPageGutter}"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <StackPanel x:Name="StatsPage" Margin="{DynamicResource MpPageGutter}" HorizontalAlignment="Stretch">
+                <StackPanel x:Name="StatsPage" HorizontalAlignment="Stretch">
                     <TextBlock x:Name="StatsDemoBanner"
                                Visibility="Collapsed"
                                Margin="0,0,0,12"
