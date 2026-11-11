@@ -24,7 +24,7 @@ namespace WarsOfLibertyLauncher.Controls;
 public partial class MultiplayerTab
 {
     /// <summary>The prototype's 12-px gap between columns, carried by every cell after the first.</summary>
-    private const double RoomColumnGap = 12;
+    private const double RoomColumnGap = 16;
 
     /// <summary>The icon (36) and the gap after it (12): what the ROOM heading is pushed right by,
     /// since the icon has no heading of its own.</summary>
@@ -111,20 +111,74 @@ public partial class MultiplayerTab
 
     // ---- The row ----
 
-    /// <summary>A heading over one of the three groups (PUEDES ENTRAR / EN PARTIDA / NO DISPONIBLES).</summary>
-    private static TextBlock BuildRoomGroupHeading(RoomGroup group)
+    /// <summary>One column of the rooms table, the same for the headings' bar and for every row.</summary>
+    private static ColumnDefinition RoomColumnDefinition(Services.RoomColumnSpec spec)
     {
-        var tb = new TextBlock
+        // A fixed width, or a share of what the fixed ones leave. A share's MinWidth is the
+        // design's `minmax`; Room's stays 0 so its text ellipsises rather than pushing the
+        // fixed columns off the edge of a list that does not scroll sideways.
+        var column = new ColumnDefinition
         {
-            Text = Strings.Get(RoomActionRule.GroupKey(group)),
-            Foreground = Rm("RmHeading"),
-            FontWeight = FontWeights.Bold,
-            Margin = new Thickness(4, 8, 4, 6),
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            Width = spec.FixedWidth is double w ? new GridLength(w) : new GridLength(spec.Star, GridUnitType.Star),
+        };
+        if (spec.FixedWidth == null && spec.MinWidth > 0) column.MinWidth = spec.MinWidth;
+        return column;
+    }
+
+    /// <summary>The brush keys of a group (design 104a): its colour, its text, a row's rim and tint.</summary>
+    internal static (string Dot, string Text, string Rim, string Tint) RoomGroupBrushes(RoomGroup group) => group switch
+    {
+        RoomGroup.CanEnter => ("RmGroupOpen", "RmGroupOpenText", "RmGroupOpenRim", "RmRowTintOpen"),
+        RoomGroup.InGame => ("RmGroupLive", "RmGroupLiveText", "RmGroupLiveRim", "RmRowTintLive"),
+        _ => ("RmGroupOff", "RmGroupOffText", "RmGroupOffRim", "RmRowTintOff"),
+    };
+
+    /// <summary>
+    /// A heading over one of the three groups (PUEDES ENTRAR / EN PARTIDA / NO DISPONIBLES): a dot
+    /// and the name in the group's colour, how many rooms it holds, and a rule to the edge.
+    /// </summary>
+    private static FrameworkElement BuildRoomGroupHeading(RoomGroup group, int count, bool first)
+    {
+        var keys = RoomGroupBrushes(group);
+        var line = new Grid
+        {
+            // The rows are 6 apart; the design pads the first heading 2 and the others 10 above.
+            Margin = new Thickness(6, first ? 2 : 10, 6, 8),
             Tag = "RoomGroup:" + group,
         };
-        tb.SetResourceReference(TextBlock.FontSizeProperty, "RmChipSize");
-        return tb;
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        line.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = Rm(keys.Dot), VerticalAlignment = VerticalAlignment.Center });
+        var name = new TextBlock
+        {
+            Text = Strings.Get(RoomActionRule.GroupKey(group)),
+            Foreground = Rm(keys.Text),
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        name.SetResourceReference(TextBlock.FontSizeProperty, "RmCountSize");
+        Grid.SetColumn(name, 1);
+        line.Children.Add(name);
+        var number = new TextBlock
+        {
+            Text = count.ToString(Strings.Culture),
+            Foreground = Rm("RmGroupCount"),
+            FontFamily = MonoFont,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        number.SetResourceReference(TextBlock.FontSizeProperty, "RmCountSize");
+        Grid.SetColumn(number, 2);
+        line.Children.Add(number);
+        var rule = new Border { Height = 1, Background = Rm("RmGroupRule"), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(rule, 3);
+        line.Children.Add(rule);
+        return line;
     }
 
     /// <summary>One room. The name is kept for the tests that reach it by reflection.</summary>
@@ -133,33 +187,50 @@ public partial class MultiplayerTab
         var facts = RoomFactsOf(lobby);
         var action = RoomActionRule.Decide(facts);
         var mine = action == RoomAction.OpenMine;
+        var group = RoomGroupBrushes(RoomActionRule.GroupOf(action));
 
+        // Design 104a: the card's face comes from the style; the group's colour is its rim and
+        // a tint that fades out to the right. The viewer's own room keeps its group's tint and
+        // swaps the rim for a white ring, half a pixel thicker - which the content's margin
+        // gives back, so nothing in the row moves.
         var card = new Border
         {
-            Style = (Style)FindResource(mine ? "RmRowCardMine" : "RmRowCard"),
+            Style = (Style)FindResource("RmRowCard"),
+            BorderBrush = Rm(mine ? "RmRowMineRing" : group.Rim),
+            BorderThickness = new Thickness(mine ? 1.5 : 1),
             Tag = lobby,
         };
         AutomationProperties.SetAutomationId(card, "RoomRow:" + lobby.Id);
+        var inner = mine ? 10.5 : 11;
+        var layers = new Grid();
+        layers.Children.Add(new Border { CornerRadius = new CornerRadius(inner), Background = Rm(group.Tint), IsHitTestVisible = false, Tag = "RoomTint" });
+        // The light along the top edge, kept clear of the rounded corners.
+        layers.Children.Add(new Border { Height = 1, Margin = new Thickness(inner, 0, inner, 0), VerticalAlignment = VerticalAlignment.Top, Background = Rm("RmRowEdgeLight"), IsHitTestVisible = false });
+        var wash = new Border { CornerRadius = new CornerRadius(inner), Background = Rm("RmRowHoverWash"), Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+        layers.Children.Add(wash);
+        var flashWash = new Border { CornerRadius = new CornerRadius(inner), Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+        layers.Children.Add(flashWash);
+        card.MouseEnter += (_, _) => wash.Visibility = Visibility.Visible;
+        card.MouseLeave += (_, _) => wash.Visibility = Visibility.Collapsed;
 
-        var grid = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        // The design's 12 / 14 of padding, less the rim.
+        var grid = new Grid { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(mine ? 12.5 : 13, mine ? 10.5 : 11, mine ? 12.5 : 13, mine ? 10.5 : 11) };
         foreach (var spec in _roomColumns)
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = spec.FixedWidth is double w ? new GridLength(w) : new GridLength(1, GridUnitType.Star),
-            });
+            grid.ColumnDefinitions.Add(RoomColumnDefinition(spec));
 
         var profile = ModRegistry.Find(lobby.ModId);
 
         // === ROOM: icon, then the name over its chips ===
         var room = new Grid();
-        room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RoomIconSize) });
         room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var icon = new Border
         {
-            Width = 36,
-            Height = 36,
-            CornerRadius = new CornerRadius(8),
-            BorderBrush = Rm("RmChipRim"),
+            Width = RoomIconSize,
+            Height = RoomIconSize,
+            CornerRadius = new CornerRadius(10),
+            BorderBrush = Rm("RmIconRim"),
+            ToolTip = profile == null ? null : TooltipHelper.Wrap(profile.DisplayName),
             BorderThickness = new Thickness(1),
             Background = ResolveRoomModIcon(profile) ?? Rm("MpField"),
             VerticalAlignment = VerticalAlignment.Center,
@@ -298,14 +369,18 @@ public partial class MultiplayerTab
         };
 
         if (_roomIdsSeeded && !string.IsNullOrEmpty(lobby.Id) && !_knownRoomIds.Contains(lobby.Id))
-            FlashNewRoom(card);
+            FlashNewRoom(flashWash);
         if (!string.IsNullOrEmpty(lobby.Id)) _knownRoomIds.Add(lobby.Id);
 
-        card.Child = grid;
+        layers.Children.Add(grid);
+        card.Child = layers;
         return card;
     }
 
     private static readonly FontFamily MonoFont = new("Consolas, Courier New, monospace");
+
+    /// <summary>The mod's icon at the head of a row (design 104a: 48, radius 10).</summary>
+    internal const double RoomIconSize = 48;
 
     /// <summary>The host's Discord photo in the rooms row (the maintainer asked for it back over 86).</summary>
     internal const double HostAvatarSize = 28;
@@ -535,17 +610,14 @@ public partial class MultiplayerTab
         };
         // Not hit-testable: a placeholder that lit up on hover would read as a room.
         var row = new Border { Style = (Style)FindResource("RmRowCard"), IsHitTestVisible = false };
-        var grid = new Grid();
+        var grid = new Grid { Margin = new Thickness(13, 11, 13, 11) };
         foreach (var spec in _roomColumns)
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = spec.FixedWidth is double w ? new GridLength(w) : new GridLength(1, GridUnitType.Star),
-            });
+            grid.ColumnDefinitions.Add(RoomColumnDefinition(spec));
 
         var room = new Grid();
-        room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RoomIconSize) });
         room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        room.Children.Add(new Border { Width = 36, Height = 36, CornerRadius = new CornerRadius(8), Background = A(0x12) });
+        room.Children.Add(new Border { Width = RoomIconSize, Height = RoomIconSize, CornerRadius = new CornerRadius(10), Background = A(0x12) });
         var share = SkeletonNameShare[_skeletonIndex++ % SkeletonNameShare.Length];
         var nameLine = new Grid { Height = 12 };
         nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(share, GridUnitType.Star) });

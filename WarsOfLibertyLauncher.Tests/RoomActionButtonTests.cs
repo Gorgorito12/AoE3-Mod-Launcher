@@ -172,4 +172,33 @@ public class RoomActionButtonTests
         });
         Assert.Null(error);
     }
+
+    /// <summary>
+    /// Design 104a: a row wears the colour of its GROUP - green if you can enter, blue in a match,
+    /// amber if not available - as its rim and as a tint, and no row is left grey.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_EveryRowWearsItsGroupsColour()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithModInstalled();
+            var cases = new (LobbySummary Room, string Rim, string Tint)[]
+            {
+                (Room("OPEN0001", max: 4, current: 2), "RmGroupOpenRim", "RmRowTintOpen"),
+                (Room("GAME0001", max: 2, current: 2, status: "in_game"), "RmGroupLiveRim", "RmRowTintLive"),
+                (Room("FULL0001", max: 4, current: 4), "RmGroupOffRim", "RmRowTintOff"),
+            };
+            foreach (var (room, rim, tint) in cases)
+            {
+                var card = Card(tab, room);
+                Assert.Same(tab.FindResource("RmRowCard"), card.Style);
+                Assert.Same(Res(rim), card.BorderBrush);
+                Assert.Equal(new Thickness(1), card.BorderThickness);
+                var layer = Descendants(card).OfType<Border>().Single(b => Equals(b.Tag, "RoomTint"));
+                Assert.Same(Res(tint), layer.Background);
+            }
+        });
+        Assert.Null(error);
+    }
 }

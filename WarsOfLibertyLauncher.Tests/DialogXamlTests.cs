@@ -3865,12 +3865,12 @@ public class DialogXamlTests
             Assert.Same(tab.ActivityBlockGrid, LogicalTreeHelper.GetParent(tab.ActivityStrip));
 
             // The rows sit on the panel's 16-px padding with no inset of their own (one margin,
-            // one gap, one panel padding); the header is inset by the row's 1 + 11 (design 86's
-            // 12 of padding), so each heading stays over its column.
+            // one gap, one panel padding); the header strip is inset by 13 inside its bar's 1 of rim, the row's own 1 + 13 (design 104a's
+            // 14 of padding), so each heading stays over its column.
             Assert.Equal(new Thickness(16), tab.RoomsBlock.Padding);
             Assert.Equal(0, tab.RoomsListPanel.Margin.Left);
             Assert.Equal(0, tab.RoomsListPanel.Margin.Right);
-            Assert.Equal(tab.RoomsListPanel.Margin.Left + 12, tab.RoomsHeaderStrip.Margin.Left);
+            Assert.Equal(tab.RoomsListPanel.Margin.Left + 13, tab.RoomsHeaderStrip.Margin.Left);
         });
 
         Assert.Null(error);
@@ -3904,7 +3904,7 @@ public class DialogXamlTests
             var ten = RowWidth(10);
             Assert.True(tab.RoomsListScroll.ScrollableHeight > 0, "ten rows in 420 px did not scroll");
             Assert.Equal(one, ten, 1);
-            Assert.Equal(tab.RoomsListPanel.Margin.Right + 12, tab.RoomsHeaderStrip.Margin.Right);
+            Assert.Equal(tab.RoomsListPanel.Margin.Right + 13, tab.RoomsHeaderStrip.Margin.Right);
         });
 
         Assert.Null(error);

@@ -83,12 +83,12 @@ public class CompactRoomsLayoutTests
             }
 
             // The compact geometry: a 44-px sub-bar and the column header inset exactly over the
-            // rows' content (the row's 1 of border + 11). The chat column is 280 px on a
+            // rows' content (13 inside the bar's rim: the row's 1 of border + 13). The chat column is 280 px on a
             // page that has not been measured (and under 1600 px).
             Assert.Equal(280, tab.RoomsSideColumn.Width.Value);
             Assert.True(tab.RoomsSideColumn.Width.IsAbsolute);
             Assert.Equal(44, tab.SubBar.Height);
-            Assert.Equal(tab.RoomsListPanel.Margin.Left + 12, tab.RoomsHeaderStrip.Margin.Left);
+            Assert.Equal(tab.RoomsListPanel.Margin.Left + 13, tab.RoomsHeaderStrip.Margin.Left);
 
             tab.SetCompactLayout(false);
             // The list is a card in both layouts (57a) and the rows sit on its 16-px padding, so

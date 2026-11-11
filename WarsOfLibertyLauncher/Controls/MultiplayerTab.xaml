@@ -446,26 +446,26 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Design 86's room row: 62 high, radius 10, a faint white fill that lifts on hover. The
-             1-px border is always there (transparent unless the row is mine) so the ring never
-             moves the content; padding 11,7 + 1 is the design's 12,8. -->
+        <!-- Design 104a's room row: a raised card, 72 high, radius 12. The face is a faint white
+             gradient; the tint of the row's GROUP, the light along the top, the hover wash and the
+             content are layers INSIDE it (BuildRoomCard), which is why the padding is 0 here: the
+             content carries the design's 12 / 14 as its own margin. The rim is always 1 px in the
+             group's colour, set by the builder. -->
         <Style x:Key="RmRowCard" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource RmRowBg}"/>
+            <Setter Property="Background" Value="{DynamicResource RmRowFace}"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="MinHeight" Value="{StaticResource MpRoomRowHeight}"/>
-            <Setter Property="Padding" Value="11,7"/>
+            <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource RmRowHover}"/>
-                </Trigger>
-            </Style.Triggers>
         </Style>
+        <!-- A row that is not a room (the "join by code" row): the same card with its own padding
+             and the white ring of the viewer's own room. -->
         <Style x:Key="RmRowCardMine" TargetType="Border" BasedOn="{StaticResource RmRowCard}">
-            <Setter Property="Background" Value="{DynamicResource RmRowMineBg}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource RmRowMineRim}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource RmRowMineRing}"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
+            <Setter Property="Padding" Value="12.5,10.5"/>
         </Style>
 
         <!-- Quick-reply pill above the chat composer (design handoff 1a). Clicking one
@@ -1137,16 +1137,23 @@
                                  labels. Widths come from RoomsTableLayout: fixed pixels for
                                  every column except ROOM, which is the reference's `1fr` and
                                  absorbs the slack. -->
+                            <!-- Design 104a: the headings are a BAR (32 high, radius 8, a faint fill
+                                 and rim), not loose text over a rule, so they stop reading as a
+                                 second group heading. Its 1 of rim + the strip's 13 is the rows'
+                                 own 1 + 13, which is what puts each heading over its column. -->
                             <Border Grid.Row="1"
                                     x:Name="RoomsHeaderBand"
-                                    Background="Transparent"
-                                    BorderBrush="{DynamicResource MpRimFaint}"
-                                    BorderThickness="0,0,0,1">
+                                    Height="32"
+                                    Margin="0,0,0,6"
+                                    CornerRadius="8"
+                                    Background="{DynamicResource RmHeaderBarBg}"
+                                    BorderBrush="{DynamicResource RmHeaderBarRim}"
+                                    BorderThickness="1">
                             <!-- ClipToBounds: a Grid cell does NOT clip, so without this a
                                  header that outgrows its share draws straight over the next
                                  column instead of being cut. Belt and braces behind the
                                  bounded layouts below. -->
-                            <Grid x:Name="RoomsHeaderStrip" Margin="12,4,12,6" ClipToBounds="True">
+                            <Grid x:Name="RoomsHeaderStrip" Margin="13,0,13,0" ClipToBounds="True">
                                 <!-- Design-time placeholder ONLY — ApplyRoomColumns rebuilds
                                      these from Services/RoomsTableLayout at the first layout
                                      pass, and re-indexes the labels below with them.
@@ -1159,10 +1166,10 @@
                                      ~500px right of its own heading. A placeholder that
                                      matches reality cannot cause that again. -->
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="250"/>
-                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="1.6*"/>
+                                    <ColumnDefinition Width="0.8*" MinWidth="236"/>
                                     <ColumnDefinition Width="148"/>
+                                    <ColumnDefinition Width="176"/>
                                 </Grid.ColumnDefinitions>
                                 <!-- Design 86: plain headings, 11 bold, no sorting. The list is
                                      ordered by what the viewer can do (RoomActionRule.Rank), so a
@@ -1170,19 +1177,19 @@
                                      ROOM is pushed right by the icon's 36 + 12, which has no
                                      heading; the others carry the 12-px gap that opens each
                                      column, like their cells (PlaceRoomCell). -->
-                                <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Margin="48,0,0,0"
-                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Margin="0"
+                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmCountSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" x:Name="ColHeaderHost" Margin="12,0,0,0"
-                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                <TextBlock Grid.Column="1" x:Name="ColHeaderHost" Margin="16,0,0,0"
+                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmCountSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="2" x:Name="ColHeaderPlayers" Margin="12,0,0,0"
-                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                <TextBlock Grid.Column="2" x:Name="ColHeaderPlayers" Margin="16,0,0,0"
+                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmCountSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 <!-- PING: only with a server that publishes the hosts' Radmin
                                      addresses; ApplyRoomColumns places it and shows it then. -->
-                                <TextBlock Grid.Column="2" x:Name="ColHeaderPing" Margin="12,0,0,0" Visibility="Collapsed"
-                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                <TextBlock Grid.Column="2" x:Name="ColHeaderPing" Margin="16,0,0,0" Visibility="Collapsed"
+                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmCountSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="3" x:Name="ColHeaderAction"/>
                             </Grid>
@@ -1209,7 +1216,7 @@
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                 <Grid MinHeight="72">
-                    <StackPanel x:Name="RoomsListPanel" Margin="0,8,0,0"/>
+                    <StackPanel x:Name="RoomsListPanel" Margin="0"/>
 
                 </Grid>
                 </ScrollViewer>

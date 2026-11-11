@@ -26,7 +26,9 @@ public enum RoomColumn
 public readonly record struct RoomColumnSpec(
     RoomColumn Column,
     double? FixedWidth,
-    double ComfortWidth);
+    double ComfortWidth,
+    double Star = 1,
+    double MinWidth = 0);
 
 /// <summary>
 /// The one definition of the rooms table's columns, and the rule for which of them survive at a
@@ -56,27 +58,27 @@ public readonly record struct RoomColumnSpec(
 public static class RoomsTableLayout
 {
     /// <summary>
-    /// Every column, in display order. Fixed widths are the reference's
-    /// (<c>minmax(0,1fr) 152px 88px 66px 96px</c>); Room takes what is left. Comfort widths are
+    /// Every column, in display order. Fixed widths are the reference's; Room and Host share
+    /// what those leave, 1.6 to 0.8. Comfort widths are
     /// measured from the widest shipped label plus the adornment beside it (icon disc, capacity
     /// segments, avatar).
     /// </summary>
     public static readonly IReadOnlyList<RoomColumnSpec> All = new[]
     {
-        // Design 86: `36px minmax(0,1fr) minmax(130px,190px) 74px 64px 136px` with a 12-px gap.
-        // PING is NOT in this set: it is the ping to each host over Radmin, which only a server
-        // that publishes the hosts' addresses makes possible, so it is added by WithPing.
-        // The 36-px icon lives INSIDE the Room cell (with its gap, 48 px) because it has no
-        // heading; every fixed width below carries the 12-px gap that opens its column, which
-        // the row builder applies as a left margin. Room's comfort is the icon plus a name.
-        new RoomColumnSpec(RoomColumn.Room,    null, 230),
-        // The host's photo (28) and badge (22) beside his NAME over his rating: the reference's 190
-        // + its gap + what the photo and badge take (the maintainer asked for both back over 86).
-        new RoomColumnSpec(RoomColumn.Host,    250,  250),
-        // "1/2" with the people icon in front.
-        new RoomColumnSpec(RoomColumn.Players, 100,  100),
-        // Wide enough for "Revisar mi copia" / "Entrar a mirar" at 12.5 semibold.
-        new RoomColumnSpec(RoomColumn.Action,  148,  148),
+        // Design 104a: `48px minmax(0,1.6fr) minmax(190px,.8fr) 132px 104px 160px` with a 16-px
+        // gap. PING is NOT in this set: it is the ping to each host over Radmin, which only a
+        // server that publishes the hosts' addresses makes possible, so it is added by WithPing.
+        // The 48-px icon lives INSIDE the Room cell (with its gap, 64 px): the design's ROOM
+        // heading spans the icon and the name. Every width after Room carries the 16-px gap that
+        // opens its column, which the row builder applies as a left margin.
+        new RoomColumnSpec(RoomColumn.Room,    null, 250, Star: 1.6),
+        // The design's 190 minimum, its gap, and the 30 the host's badge takes beside his photo
+        // (the maintainer asked for the badge back over 86; 104a does not draw it).
+        new RoomColumnSpec(RoomColumn.Host,    null, 236, Star: 0.8, MinWidth: 236),
+        // "1/2" over a dot per seat.
+        new RoomColumnSpec(RoomColumn.Players, 148,  148),
+        // Wide enough for "Revisar mi copia" at 13 semibold with 16 of padding each side.
+        new RoomColumnSpec(RoomColumn.Action,  176,  176),
     };
 
     /// <summary>
@@ -104,8 +106,8 @@ public static class RoomsTableLayout
     /// </summary>
     public static readonly IReadOnlyList<RoomColumnSpec> WithPing = All
         .Take(All.Count - 1)
-        // Three signal bars in front of "38 ms".
-        .Append(new RoomColumnSpec(RoomColumn.Ping, 100, 100))
+        // Four signal bars in front of "38 ms".
+        .Append(new RoomColumnSpec(RoomColumn.Ping, 120, 120))
         .Append(All[All.Count - 1])
         .ToArray();
 

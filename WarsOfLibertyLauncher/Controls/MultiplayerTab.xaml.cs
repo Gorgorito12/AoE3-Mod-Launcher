@@ -11132,16 +11132,7 @@ public partial class MultiplayerTab : UserControl
 
         RoomsHeaderStrip.ColumnDefinitions.Clear();
         foreach (var spec in resolved)
-            RoomsHeaderStrip.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                // A null FixedWidth is the reference's `1fr`: the Room column absorbs
-                // whatever the fixed ones leave. MinWidth stays 0 so it can shrink and
-                // let its text ellipsise, rather than pushing the fixed columns off the
-                // edge of a list that does not scroll horizontally.
-                Width = spec.FixedWidth is double w
-                    ? new GridLength(w, GridUnitType.Pixel)
-                    : new GridLength(1, GridUnitType.Star),
-            });
+            RoomsHeaderStrip.ColumnDefinitions.Add(RoomColumnDefinition(spec));
 
         for (var i = 0; i < resolved.Count; i++)
         {
@@ -12888,31 +12879,27 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// One-second blue wash over a row that has just appeared.
     ///
-    /// <para>The animated brush is a fresh local <see cref="SolidColorBrush"/>, never the
-    /// row's own: the palette brushes are frozen DynamicResources and animating one
-    /// throws — the bug that once froze the countdown line. The animation restores the
-    /// row's normal fill by animating back to whatever colour it started with.</para>
+    /// <para>It is a layer of its own over the row's tint, faded out: the row's fill is a shared
+    /// frozen gradient (design 104a), and animating a palette brush throws — the bug that once
+    /// froze the countdown line.</para>
     /// </summary>
-    private static void FlashNewRoom(Border card)
+    private static void FlashNewRoom(Border wash)
     {
-        var resting = (card.Background as SolidColorBrush)?.Color
-            ?? ((SolidColorBrush)Application.Current.FindResource("MpPanel")).Color;
         var flash = ((SolidColorBrush)Application.Current.FindResource("MpEventBg")).Color;
-
-        var brush = new SolidColorBrush(resting);
-        card.Background = brush;
-        brush.BeginAnimation(SolidColorBrush.ColorProperty, new System.Windows.Media.Animation.ColorAnimation
+        wash.Background = new SolidColorBrush(flash);
+        wash.Visibility = Visibility.Visible;
+        // FINITE, so it needs no clock kept: it ends on its own with the wash at 0.
+        wash.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation
         {
-            From = flash,
-            To = resting,
+            From = 1,
+            To = 0,
             Duration = new Duration(TimeSpan.FromMilliseconds(1000)),
-            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
         });
     }
 
     private void PlaceRoomCell(Grid grid, Services.RoomColumn column, UIElement cell, bool gap = false)
     {
-        // Every column after the first opens with the design's 12-px gap. RoomsTableLayout's
+        // Every column after the first opens with the design's 16-px gap. RoomsTableLayout's
         // widths include it, so the header and the rows still line up.
         if (gap && cell is FrameworkElement fe)
             fe.Margin = new Thickness(fe.Margin.Left + RoomColumnGap, fe.Margin.Top, fe.Margin.Right, fe.Margin.Bottom);

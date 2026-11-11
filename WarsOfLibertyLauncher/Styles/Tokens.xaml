@@ -241,12 +241,12 @@
     <sys:Double x:Key="MpSubBarHeight">44</sys:Double>
     <!-- The same strip in the compact layout (design handoff turns 38-39). -->
     <sys:Double x:Key="MpSubBarHeightCompact">44</sys:Double>
-    <!-- Room row (design 86): a MINIMUM of 62 in both layouts, which RmRowCard binds to
+    <!-- Room row (design 104a, 72; it was 86's 62): a MINIMUM in both layouts, which RmRowCard binds to
          MinHeight. The name is one line with an ellipsis and the chips one line that drops a
          chip whole, so a row measures exactly this at 100 % text and grows instead of clipping
          at 125 %. The compact key stays for its reader (ApplyActivityLayout) and now agrees. -->
-    <sys:Double x:Key="MpRoomRowHeight">62</sys:Double>
-    <sys:Double x:Key="MpRoomRowHeightCompact">62</sys:Double>
+    <sys:Double x:Key="MpRoomRowHeight">72</sys:Double>
+    <sys:Double x:Key="MpRoomRowHeightCompact">72</sys:Double>
     <!-- (The chat / players panel's width is no longer a token: design 57 makes it 280 below
          1600 px of page width, 320 above and a 44-px rail folded — RoomsActivityLayout.ChatWidth.) -->
     <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main

@@ -601,7 +601,8 @@ public partial class MultiplayerTab
                 var g = RoomActionRule.GroupOf(action);
                 if (g != group)
                 {
-                    RoomsListPanel.Children.Add(BuildRoomGroupHeading(g));
+                    RoomsListPanel.Children.Add(BuildRoomGroupHeading(g,
+                        ordered.Count(o => RoomActionRule.GroupOf(o.Action) == g), first: group == null));
                     group = g;
                 }
                 RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
