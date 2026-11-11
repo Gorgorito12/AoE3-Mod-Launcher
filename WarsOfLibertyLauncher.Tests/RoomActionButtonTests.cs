@@ -243,10 +243,10 @@ public class RoomActionButtonTests
         Assert.Null(error);
     }
 
-    /// <summary>A row MEASURES 60 high (the maintainer found 104a's 72 too big) with a 40-px icon:
+    /// <summary>A row MEASURES 52 high (the maintainer found 104a's 72 too big) with a 36-px icon:
     /// the minimum alone would not show a row that grows past it.</summary>
     [Fact]
-    public void ARowMeasuresSixtyHigh()
+    public void ARowMeasuresFiftyTwoHigh()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -255,10 +255,10 @@ public class RoomActionButtonTests
             {
                 var card = Card(tab, room);
                 card.Measure(new Size(1200, double.PositiveInfinity));
-                Assert.InRange(card.DesiredSize.Height, 59.5, 60.5 + 6);
-                Assert.Equal(60, card.DesiredSize.Height - card.Margin.Bottom, 0.5);
+                Assert.InRange(card.DesiredSize.Height, 51.5, 52.5 + 6);
+                Assert.Equal(52, card.DesiredSize.Height - card.Margin.Bottom, 0.5);
                 var icon = Descendants(card).OfType<Border>().First(b => b.Width == MultiplayerTab.RoomIconSize);
-                Assert.Equal(40, icon.Height);
+                Assert.Equal(36, icon.Height);
             }
         });
         Assert.Null(error);

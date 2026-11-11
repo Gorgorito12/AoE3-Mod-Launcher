@@ -446,7 +446,7 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Design 104a's room row: a raised card, 60 high (104a draws 72; lowered at the maintainer's
+        <!-- Design 104a's room row: a raised card, 52 high (104a draws 72; lowered at the maintainer's
              request), radius 12. The face is a faint white
              gradient; the tint of the row's GROUP, the light along the top, the hover wash and the
              content are layers INSIDE it (BuildRoomCard), which is why the padding is 0 here: the
@@ -1138,15 +1138,15 @@
                                  labels. Widths come from RoomsTableLayout: fixed pixels for
                                  every column except ROOM, which is the reference's `1fr` and
                                  absorbs the slack. -->
-                            <!-- Design 104a: the headings are a BAR (32 high, radius 8, a faint fill
+                            <!-- Design 104a: the headings are a BAR (28 high, radius 7 - 104a draws 32/8, a faint fill
                                  and rim), not loose text over a rule, so they stop reading as a
                                  second group heading. Its 1 of rim + the strip's 13 is the rows'
                                  own 1 + 13, which is what puts each heading over its column. -->
                             <Border Grid.Row="1"
                                     x:Name="RoomsHeaderBand"
-                                    Height="32"
+                                    Height="28"
                                     Margin="0,0,0,6"
-                                    CornerRadius="8"
+                                    CornerRadius="7"
                                     Background="{DynamicResource RmHeaderBarBg}"
                                     BorderBrush="{DynamicResource RmHeaderBarRim}"
                                     BorderThickness="1">

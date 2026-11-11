@@ -200,8 +200,8 @@ public partial class MultiplayerTab
             BorderThickness = new Thickness(mine ? 1.5 : 1),
             Tag = lobby,
         };
-        // 60 high in every layout (the maintainer's call over 104a's 72): 6 of padding above and
-        // below, a 40-px icon, and 4 between the name and its chips.
+        // 52 high in every layout (the maintainer's call over 104a's 72): 3 of padding above and
+        // below, a 36-px icon, and 3 between the name (14) and its chips.
         var padY = RowPaddingY - (mine ? 1.5 : 1);
         AutomationProperties.SetAutomationId(card, "RoomRow:" + lobby.Id);
         var inner = mine ? 10.5 : 11;
@@ -231,7 +231,7 @@ public partial class MultiplayerTab
         {
             Width = RoomIconSize,
             Height = RoomIconSize,
-            CornerRadius = new CornerRadius(9),
+            CornerRadius = new CornerRadius(8),
             BorderBrush = Rm("RmIconRim"),
             ToolTip = profile == null ? null : TooltipHelper.Wrap(profile.DisplayName),
             BorderThickness = new Thickness(1),
@@ -255,7 +255,7 @@ public partial class MultiplayerTab
         // line nobody sees, so it leaves WHOLE rather than cut in half.
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var chip in RoomChipsOf(lobby, facts)) chips.Children.Add(chip);
-        var chipLine = new Grid { ClipToBounds = true, Height = 22, Margin = new Thickness(0, 4, 0, 0) };
+        var chipLine = new Grid { ClipToBounds = true, Height = 22, Margin = new Thickness(0, 3, 0, 0) };
         chipLine.Children.Add(chips);
         roomText.Children.Add(chipLine);
         Grid.SetColumn(roomText, 1);
@@ -381,11 +381,11 @@ public partial class MultiplayerTab
     private static readonly FontFamily MonoFont = new("Consolas, Courier New, monospace");
 
     /// <summary>The mod's icon at the head of a row (design 104a: 48, radius 10).</summary>
-    internal const double RoomIconSize = 40;
+    internal const double RoomIconSize = 36;
 
     /// <summary>A row's padding above and below its content. With the name (15) over the chip line
-    /// (22, 4 apart) and the 1-px rim, the row measures the 60 of <c>MpRoomRowHeight</c>.</summary>
-    internal const double RowPaddingY = 6;
+    /// (22, 3 apart) and the 1-px rim, the row measures the 52 of <c>MpRoomRowHeight</c>.</summary>
+    internal const double RowPaddingY = 3;
 
     /// <summary>The host's Discord photo in the rooms row (the maintainer asked for it back over 86).</summary>
     internal const double HostAvatarSize = 30;
@@ -708,7 +708,7 @@ public partial class MultiplayerTab
         var room = new Grid();
         room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RoomIconSize) });
         room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        room.Children.Add(new Border { Width = RoomIconSize, Height = RoomIconSize, CornerRadius = new CornerRadius(9), Background = A(0x12) });
+        room.Children.Add(new Border { Width = RoomIconSize, Height = RoomIconSize, CornerRadius = new CornerRadius(8), Background = A(0x12) });
         var share = SkeletonNameShare[_skeletonIndex++ % SkeletonNameShare.Length];
         var nameLine = new Grid { Height = 12 };
         nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(share, GridUnitType.Star) });
