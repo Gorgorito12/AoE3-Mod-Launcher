@@ -472,9 +472,14 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <Border x:Name="AccentSwatch" Width="34" Height="34" CornerRadius="7" Margin="0,0,8,0" BorderBrush="#2EFFFFFF" BorderThickness="1"/>
                                 <TextBox x:Name="FieldAccent" Grid.Column="1" Style="{StaticResource WzInputMono}"/>
+                                <!-- The colour of the icon, worked out the way the launcher would (ModAccentResolver),
+                                     so it reaches the catalog DECLARED instead of being guessed on every PC. -->
+                                <Button x:Name="AccentFromImageButton" Grid.Column="2" Style="{StaticResource WindowSecondaryButton}"
+                                        Padding="12,0" Margin="8,0,0,0" MinWidth="0" Click="AccentFromImageButton_Click"/>
                             </Grid>
                             <TextBlock x:Name="ErrorAccent" Style="{StaticResource WzError}" Visibility="Collapsed"/>
                         </StackPanel>
@@ -1206,7 +1211,7 @@
             </ScrollViewer>
         </Grid>
 
-        <Border Grid.Row="2" Height="56" Padding="16,0" Background="#B8080F1B"
+        <Border Grid.Row="2" Height="56" Padding="16,0" Background="{DynamicResource WindowFooter}"
                 BorderBrush="#14FFFFFF" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>

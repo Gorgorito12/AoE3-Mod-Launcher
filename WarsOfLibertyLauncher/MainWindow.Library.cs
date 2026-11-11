@@ -514,9 +514,14 @@ public partial class MainWindow
         PopupGlass.Source = target =>
             LibraryBlurLayer.IsVisible && LibraryBlurLayer.Background is ImageBrush blur
             && target != null && ReferenceEquals(Window.GetWindow(target), this)
-                ? (blur, LibraryBackdrop, GlassTheme.For(_config.GlassLevel).Menu)
+                ? (blur, LibraryBackdrop, LibraryOverlays(), GlassTheme.For(_config.GlassLevel).Panel)
                 : null;
-        LibraryRail.IconFor = p => TryLoadTileImage(p.ResolveIconSource());
+        LibraryRail.IconFor = p =>
+        {
+            var icon = TryLoadTileImage(p.ResolveIconSource());
+            LearnAccentFromArt(p, icon);
+            return icon;
+        };
         LibraryRail.ContextMenuFor = BuildLibraryContextMenu;
         LibraryRail.Selected += (_, profile) => SelectLibraryMod(profile);
         LibraryRail.FavoriteToggled += (_, profile) => ToggleLibraryFavorite(profile);
@@ -553,12 +558,13 @@ public partial class MainWindow
     /// <summary>Settings › Interface: everything it changes applies at once, cover included.</summary>
     private void ApplyLibraryAppearance()
     {
-        GlassTheme.Apply(_config.GlassLevel);
+        GlassTheme.Apply(_config.GlassLevel, LibraryReducedEffects);
         // "Reduced" turns the multiplayer lights off too (rank badges, the update pill, the quick
         // match card's marks), not only the Library's.
         Controls.RankBadge.SetUserReducedEffects(_config.EffectsMode == "low");
         ApplyLibraryShade();
         ApplyDashboardHero(_updateService.Profile);
+        UpdateTournamentBackdrop();
         _libraryRailKey = "";
         _libraryFiltersKey = null;
         ApplyLibraryLayout();
@@ -614,12 +620,7 @@ public partial class MainWindow
         }));
     }
 
-    private bool LibraryReducedEffects => _config.EffectsMode switch
-    {
-        "low" => true,
-        "full" => false,
-        _ => !SystemParameters.ClientAreaAnimation || RenderCapability.Tier >> 16 < 2,
-    };
+    private bool LibraryReducedEffects => GlassTheme.IsReduced(_config.EffectsMode);
 
     private void RefreshLibrary()
     {
@@ -1130,6 +1131,58 @@ public partial class MainWindow
             thumb.Height = m.ShotWidth * 9 / 16;
         }
         UpdateLibraryBlurClip();
+    }
+
+    private readonly HashSet<string> _accentTried = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A mod whose author declared no colour takes the dominant colour of its icon, once the icon is
+    /// decoded (the rail already decodes it, so this costs no download). Kept in the accent cache, so
+    /// the next session opens in it; a declared colour is never touched.
+    /// </summary>
+    private void LearnAccentFromArt(ModProfile profile, ImageBrush? icon)
+    {
+        if (profile.AccentDeclared || icon?.ImageSource is not BitmapSource bitmap) return;
+        if (ModAccentCache.ImageKeyOf(profile) is not { } key) return;
+        if (!_accentTried.Add(profile.Id + "|" + key)) return;
+
+        void Take()
+        {
+            try
+            {
+                var taken = ModRegistry.TakenAccents(ModRegistry.All, except: profile);
+                if (ModAccentResolver.Pick(ModAccentResolver.FromBitmap(bitmap), taken) is not { } color) return;
+                var hex = ModAccentResolver.Hex(color);
+                _ = System.Threading.Tasks.Task.Run(() => ModAccentCache.Put(key, hex));
+                profile.AccentLearned = true;
+                if (string.Equals(profile.AccentColor, hex, StringComparison.OrdinalIgnoreCase)) return;
+                profile.AccentColor = hex;
+                DiagnosticLog.Write($"Accent: '{profile.Id}' declares no colour; took {hex} from its icon.");
+                _libraryRailKey = "";
+                ScheduleLibraryRefresh();
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Accent from art failed for '{profile.Id}': {ex.Message}");
+            }
+        }
+
+        if (bitmap.IsDownloading) bitmap.DownloadCompleted += (_, _) => Take();
+        else Take();
+    }
+
+    /// <summary>The layers drawn over the blurred cover and under every panel, in order: a menu
+    /// lays the same ones under its tint so it is the same glass as the panel it opens over.</summary>
+    private Brush[] LibraryOverlays()
+    {
+        var overlays = new List<Brush>();
+        bool afterBlur = false;
+        foreach (UIElement child in LibraryBackdrop.Children)
+        {
+            if (ReferenceEquals(child, LibraryBlurLayer)) { afterBlur = true; continue; }
+            if (afterBlur && child is Shape { Fill: { } fill, Visibility: Visibility.Visible }) overlays.Add(fill);
+        }
+        return overlays.ToArray();
     }
 
     private void ApplyLibraryShade()

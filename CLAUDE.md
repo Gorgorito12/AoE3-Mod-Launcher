@@ -571,8 +571,9 @@ rather than the reverse.
   (6) **Chrome.xaml gives every ScrollViewer `Padding="0,0,8,0"`**, and it silently crops anything laid
   out to a known width: the folded tiles lost 13 px until the padding was given back.
   (7) **Header:** title bar 40 and nav 56 in BOTH layouts; the old compact heights (34 / 42) and the
-  `NavTabButtonCompact` swap below are history. The main bar carries the mod's tint (`ModTitleBar`);
-  secondary windows keep one uniform colour (BASE.md). **No line between the title bar and the tabs**
+  `NavTabButtonCompact` swap below are history. The main bar carries the mod's tint (`ModTitleBar`)
+  **in the Library only**: `SwitchTopTab` points it back at `GlassTitleBar` on every other tab, where
+  the tint used to stay behind; secondary windows keep one uniform colour (BASE.md). **No line between the title bar and the tabs**
   (`TitleBar.ShowBottomLine="False"`; every other window keeps its bar's line), and the
   launcher-update pill is in the title bar beside the bell (title-bar column 4, hit-testable in the
   caption region), where the maintainer wants it rather than where 77k drew it.
@@ -658,9 +659,51 @@ rather than the reverse.
   `RankBadge.RunConditionsChanged`. The rules are in `.claude/rules/multiplayer.md` (RANKING PAGE).
 
 - **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the
-  piece of the blurred cover under it plus the level's tint (`GlassTheme.Spec.Menu`), which supersedes
-  the "denser than the design" note below while a cover is on screen; with none, `Spec.Floating`
-  stays. `ChromePopups.Track` also gives a shadowed popup room for its shadow: Placement already
+  piece of the blurred cover under it, then the SAME layers a panel has between the cover and itself
+  (`LibraryOverlays()`: the side shade, the two gradients, the mod's wash, each sampled at the menu's
+  place), then the panel's tint (`Spec.Panel`) and `PopupGlass.Denser` on top — the panel's glass,
+  only more opaque. With the cover and its own tint alone it read lighter and warmer than the list it
+  opened over (reported); `PopupGlassTests.THE_ONE_THAT_MATTERS_AMenuIsThePanelsGlassOnlyDenser`
+  renders both over a warm picture at all three levels. This supersedes the "denser than the design"
+  note below while a cover is on screen; with none, `Spec.Floating` stays.
+
+- **ONE transparency logic for the whole launcher (2026-11-11) — `GlassTheme.Apply(level,
+  reducedEffects)`.** Seven brushes followed the level and ~15 more surfaces of the same kind had an
+  alpha of their own, so changing the level moved the list and left the tab bar, the search box and
+  the chips beside it as they were. Every translucent surface that is not a panel/tile/menu/footer/
+  title bar is now in `GlassTheme.Followers` (key, base navy, its alpha at Media, inset or not): at
+  Media each keeps exactly the value the XAML declares (pinned), Solid lifts it to the panel's .86
+  (an INSET — a dark well inside a card — keeps its own, or a search box turns black), Maximum lowers
+  it as the panel is lowered. **"Effects: reduced" makes every glass opaque** (`GlassTheme.Settle`:
+  the colour it would show over the page's navy, solid), as BASE.md asks; `GlassTheme.IsReduced` is
+  the one rule for "reduced", read by the Library and by App before the first window. The tooltip,
+  the toned toast and the alert card wear the floating glass (`GlassMenu` / `LibraryMenuBg`) — the
+  tooltip was a warm grey of its own. **`GlassConsistencyTests` fails on any translucent navy fill
+  written by hand in XAML** (veils behind an overlay are listed by name): that is how a surface stops
+  following, and nothing on screen says so until somebody changes the level. Adding a translucent
+  surface means adding its key to `Followers`.
+  **Outside the Library the window has a page behind its three rows** (`NeutralBackdrop` in
+  `MainWindow.xaml`: `MpAppBg` and design 86's two glows, `MpPageGlowTop`/`MpPageGlowBottom`, which
+  Solid and reduced effects leave out). The window's own background is the near-black `BgBase`, and
+  with the Library's cover collapsed the bars showed it through, so they read as solid. `TabRootGrid`
+  is transparent and the sub-bar keeps `RmSubBarBg` with or without a tournament cover
+  (`SetCoverBehind` used to switch it to solid `MpPanel`); the Multiplayer page panels (quick match,
+  rooms, activity, chat, the Matches filter bar, the profile cards) wear `GlassPanel`, as design 86's
+  `gBg` does.
+
+- **A mod with no `accentColor` gets a colour of its own — `Services/ModAccentResolver`.** It used to
+  be one fixed `#3a8cd9` for all of them. Declared stays declared (`ModProfile.AccentDeclared`, never
+  replaced). Otherwise the colour of its icon, once the rail has decoded it (`LearnAccentFromArt`, no
+  extra download): `Candidates` gives up to three peaks of the image's hues weighted by saturation, and
+  `Pick` takes the first no other mod already wears — AoE3 icons are mostly GOLD, so the first peak is
+  gold for nearly every mod; measured on the catalog's icons, the second one is often the mod's own
+  (Age of Dynasties' teal, Hundred Days' olive, King's Return's red). It is kept in
+  `AppPaths.DataDir\accent-cache.json` keyed by the image's address, so the next session opens in it.
+  Until then, and for an icon with no colour, `AssignFallbackAccents` gives each such mod a hue by the
+  golden angle in id order, skipping hues a declared colour holds. The *Publish my mod* wizard has
+  "From an image…" beside the colour field, so the colour can reach the catalog declared. Pinned by
+  `ModAccentResolverTests`, where the black-and-white and declared cases are the point. Today every
+  catalog mod declares its colour, so none of this shows until one does not. `ChromePopups.Track` also gives a shadowed popup room for its shadow: Placement already
   leaves a child's Margin out, so nothing moves and no offset compensates it.
 
 - **Tab lag is measured: every click that changes the page writes `SWITCH  a -> b  N ms (first

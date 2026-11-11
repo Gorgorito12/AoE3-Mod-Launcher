@@ -619,18 +619,22 @@ public partial class App : System.Windows.Application
     private static void ApplyGlassLevel()
     {
         string? level = null;
+        string? effects = null;
         try
         {
             using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Services.AppPaths.ConfigFile));
             if (document.RootElement.TryGetProperty("glassLevel", out var value)
                 && value.ValueKind == System.Text.Json.JsonValueKind.String)
                 level = value.GetString();
+            if (document.RootElement.TryGetProperty("effectsMode", out var mode)
+                && mode.ValueKind == System.Text.Json.JsonValueKind.String)
+                effects = mode.GetString();
         }
         catch (Exception)
         {
             // No config yet, or an unreadable one: the default level.
         }
-        Services.GlassTheme.Apply(level);
+        Services.GlassTheme.Apply(level, Services.GlassTheme.IsReduced(effects));
     }
 
     private static void ApplyTextScale()

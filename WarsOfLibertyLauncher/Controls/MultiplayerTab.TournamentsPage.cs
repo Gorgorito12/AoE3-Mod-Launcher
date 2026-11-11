@@ -477,18 +477,13 @@ public partial class MultiplayerTab
         _setTournamentBackdrop?.Invoke(_activeSubtab != Subtab.Tournaments || string.IsNullOrEmpty(t.ModId) ? null : ModRegistry.Find(t.ModId));
     }
 
-    /// <summary>The image runs behind this tab only on the Tournaments page: every other subtab
-    /// keeps its flat colour, and the bar over it turns to glass.</summary>
+    /// <summary>The tab is transparent and its sub-bar glass whether a cover runs behind it or the
+    /// MainWindow's own page colour does (NeutralBackdrop). It used to turn the sub-bar into solid
+    /// MpPanel without a cover, which is what made Multiplayer's bars read as opaque.</summary>
     internal void SetCoverBehind(bool cover)
     {
-        if (cover)
-        {
-            TabRootGrid.Background = Brushes.Transparent;
-            SubBar.Background = Frozen(0x52, 0x0A, 0x13, 0x21);
-            return;
-        }
-        TabRootGrid.SetResourceReference(Panel.BackgroundProperty, "MpAppBg");
-        SubBar.SetResourceReference(Border.BackgroundProperty, "MpPanel");
+        TabRootGrid.Background = Brushes.Transparent;
+        SubBar.SetResourceReference(Border.BackgroundProperty, "RmSubBarBg");
     }
 
     /// <summary>Title size, steps and the card's subtitle follow the window: under 900 tall the

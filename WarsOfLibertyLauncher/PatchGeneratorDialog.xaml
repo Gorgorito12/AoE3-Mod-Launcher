@@ -62,7 +62,7 @@
         <Style x:Key="DiagramNode" TargetType="Border">
             <Setter Property="Padding" Value="12,10"/>
             <Setter Property="CornerRadius" Value="9"/>
-            <Setter Property="Background" Value="#66050A12"/>
+            <Setter Property="Background" Value="{DynamicResource GlassWell}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource WindowCardRim}"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>

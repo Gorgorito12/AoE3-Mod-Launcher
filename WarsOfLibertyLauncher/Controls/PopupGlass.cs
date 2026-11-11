@@ -11,7 +11,10 @@ namespace WarsOfLibertyLauncher.Controls;
 /// What gives a menu its glass over the cover. A popup is a window of its own and WPF cannot blur
 /// what lies behind one, so the design's .95 / .74 / .6 are not reachable by making it transparent:
 /// the text behind reads through the menu's. Instead the menu is painted with the piece of the
-/// already blurred cover that lies under it, and the level's tint over that.
+/// already blurred cover that lies under it, then the SAME layers a panel has over it (the side
+/// shade, the two gradients, the mod's wash), then the panel's tint, then a denser layer: the same
+/// glass as the list it opens over, only more opaque. With the blurred cover and the tint alone it
+/// read lighter and warmer than the panel (reported): the layers between were missing.
 ///
 /// <para>It reuses the bitmap the panels use, so opening a menu decodes nothing. With no cover to
 /// show (another tab, another window, images off, reduced effects, the Solid level, or a menu that
@@ -21,7 +24,11 @@ internal static class PopupGlass
 {
     /// <summary>The blurred cover, the element it is laid over and the level's tint, when a cover
     /// is on screen in the window of <c>target</c>. Set by the main window; null means no glass.</summary>
-    internal static Func<UIElement?, (ImageBrush Blur, FrameworkElement Layer, Color Tint)?>? Source { get; set; }
+    internal static Func<UIElement?, (ImageBrush Blur, FrameworkElement Layer, Brush[] Overlays, Color Tint)?>? Source { get; set; }
+
+    /// <summary>What a menu adds over the panel's tint: the same navy, so the hue does not move,
+    /// at an alpha that takes Media's .5 panel to about the design's .74.</summary>
+    internal static readonly Color Denser = Color.FromArgb(89, 10, 19, 33);
 
     private static bool s_registered;
 
@@ -86,7 +93,7 @@ internal static class PopupGlass
             var rect = new Rect(topLeft, bottomRight);
             if (!LiesWithin(source.Layer.RenderSize, rect)) return;
 
-            found.Surface.Background = Compose(source.Blur, source.Tint,
+            found.Surface.Background = Compose(source.Blur, source.Overlays, source.Layer.RenderSize, rect, source.Tint,
                 ViewboxFor(source.Blur.Viewbox, source.Layer.RenderSize, rect));
             found.Surface.Tag = new Painted(found.Key, found.Surface.Tag);
         }
@@ -105,18 +112,37 @@ internal static class PopupGlass
         surface.SetResourceReference(Border.BackgroundProperty, painted.Key);
     }
 
-    private static Brush Compose(ImageBrush blur, Color tint, Rect viewbox)
+    /// <summary>The layers, bottom to top, with no image: what a test can check without a window.
+    /// Each overlay is sampled at the menu's own place in the layer.</summary>
+    internal static DrawingGroup Layers(Brush? piece, Brush[] overlays, Size layer, Rect surface, Color tint)
     {
         var box = new RectangleGeometry(new Rect(0, 0, 1, 1));
+        var layers = new DrawingGroup();
+        if (piece != null) layers.Children.Add(new GeometryDrawing(piece, null, box));
+        foreach (var overlay in overlays)
+        {
+            var whole = new DrawingBrush(new GeometryDrawing(overlay.IsFrozen ? overlay : overlay.CloneCurrentValue(), null, new RectangleGeometry(new Rect(layer))))
+            {
+                Stretch = Stretch.Fill,
+                ViewboxUnits = BrushMappingMode.Absolute,
+                Viewbox = surface,
+            };
+            layers.Children.Add(new GeometryDrawing(whole, null, box));
+        }
+        layers.Children.Add(new GeometryDrawing(new SolidColorBrush(tint), null, box));
+        layers.Children.Add(new GeometryDrawing(new SolidColorBrush(Denser), null, box));
+        return layers;
+    }
+
+    private static Brush Compose(ImageBrush blur, Brush[] overlays, Size layer, Rect surface, Color tint, Rect viewbox)
+    {
         var piece = new ImageBrush(blur.ImageSource)
         {
             Stretch = Stretch.Fill,
             ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
             Viewbox = viewbox,
         };
-        var layers = new DrawingGroup();
-        layers.Children.Add(new GeometryDrawing(piece, null, box));
-        layers.Children.Add(new GeometryDrawing(new SolidColorBrush(tint), null, box));
+        var layers = Layers(piece, overlays, layer, surface, tint);
         var brush = new DrawingBrush(layers) { Stretch = Stretch.Fill };
         brush.Freeze();
         return brush;

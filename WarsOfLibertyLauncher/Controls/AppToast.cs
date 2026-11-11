@@ -324,7 +324,7 @@ public static class AppToast
         });
         var card = new Border
         {
-            Background = Res("MpPanel"),
+            Background = Res("LibraryMenuBg"),
             BorderBrush = Res("MpToastRim"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),

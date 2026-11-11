@@ -915,7 +915,7 @@ public partial class MultiplayerTab
             Child = stack,
             Padding = new Thickness(20, 46, 20, 46),
             CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusLg"),
-            Background = (Brush)Application.Current.FindResource("MpPanel"),
+            Background = (Brush)Application.Current.FindResource("GlassPanel"),
         };
     }
 

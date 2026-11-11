@@ -265,6 +265,14 @@
         <!-- The Tournaments page's cover: its own layer, because it follows the tournament and the
              Library's follows the active mod. Same shape: one image, its blurred twin clipped to the
              panels, and the design's two gradients on top. -->
+        <!-- Outside the Library and without a tournament cover: the page's own navy and its two
+             glows, behind all three rows. Without it the window's near-black BgBase showed through
+             the bars, which then read as solid (reported). Solid glass or reduced effects keep the
+             navy and drop the glows. -->
+        <Grid x:Name="NeutralBackdrop" Grid.RowSpan="3" IsHitTestVisible="False" Background="{DynamicResource MpAppBg}" Visibility="Collapsed">
+            <Rectangle x:Name="NeutralGlowTop" Fill="{DynamicResource MpPageGlowTop}"/>
+            <Rectangle x:Name="NeutralGlowBottom" Fill="{DynamicResource MpPageGlowBottom}"/>
+        </Grid>
         <Grid x:Name="TournamentBackdrop" Grid.RowSpan="3" IsHitTestVisible="False" ClipToBounds="True" Visibility="Collapsed">
             <Border x:Name="TournamentCover" RenderOptions.BitmapScalingMode="HighQuality" Background="{DynamicResource MpAppBg}"/>
             <Border x:Name="TournamentBlur" RenderOptions.BitmapScalingMode="Linear" Visibility="Collapsed"/>

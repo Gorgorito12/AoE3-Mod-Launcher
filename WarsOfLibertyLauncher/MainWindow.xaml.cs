@@ -5974,6 +5974,9 @@ public partial class MainWindow : Window
         if (IsVisible) ScreenTrace.Clicked();
         _activeTopTab = tab;
         LibraryBackdrop.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
+        // The mod's colour on the bar belongs to the Library (design 68a); every other tab wears
+        // the plain glass bar every other window has.
+        MainTitleBar.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, tab == TopTab.Play ? "ModTitleBar" : GlassTheme.TitleBarKey);
         UpdateTournamentBackdrop();
         PlayView.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
         ModsBrowserView.Visibility = tab == TopTab.Mods ? Visibility.Visible : Visibility.Collapsed;

@@ -126,7 +126,7 @@
                             <TextBlock x:Name="LblAoE3Folder" Style="{StaticResource InLabel}"
                                        Margin="0,0,10,0"/>
                             <Border Grid.Column="1" Height="24" CornerRadius="12" Padding="10,0"
-                                    Background="#8C0A1321" BorderThickness="1"
+                                    Background="{DynamicResource LibraryControl}" BorderThickness="1"
                                     BorderBrush="{DynamicResource WindowCardRim}">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse x:Name="Aoe3StatusDot" Width="7" Height="7"

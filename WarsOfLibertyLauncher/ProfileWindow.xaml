@@ -71,7 +71,7 @@
 
             <controls:TitleBar Grid.Row="0"
                                x:Name="TitleBarControl"
-                               Background="{DynamicResource MpTitleBar}"
+                               Background="{DynamicResource GlassTitleBar}"
                                ShowMinimize="True"
                                ShowMaximize="True"
                                ShowClose="True"/>

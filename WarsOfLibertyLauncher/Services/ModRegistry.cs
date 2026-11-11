@@ -451,6 +451,7 @@ public static class ModRegistry
         // Before publishing: a former-id claim against a mod that is still live in this
         // same merge is not a rename, it is one mod reaching for another's install.
         StripLivePreviousIds(merged);
+        AssignFallbackAccents(merged);
 
         List<ModProfile>? previous;
         lock (_runtimeLock)
@@ -774,7 +775,10 @@ public static class ModRegistry
             LocalManifestPath = entry.LocalPath ?? "",
             DisplayName = string.IsNullOrEmpty(m.DisplayName) ? m.Id : m.DisplayName,
             Subtitle = m.Subtitle ?? "",
-            AccentColor = string.IsNullOrEmpty(m.AccentColor) ? "#3a8cd9" : m.AccentColor,
+            // Without a declared colour: the one learned from its art in an earlier session, else
+            // a placeholder that ApplyMerged replaces with a hue of its own (ModAccentResolver).
+            AccentColor = ModAccent.TryParse(m.AccentColor, out _) ? m.AccentColor : ModAccentResolver.Hex(ModAccentResolver.Fallback(0)),
+            AccentDeclared = ModAccent.TryParse(m.AccentColor, out _),
             Author = m.Author ?? "",
             OfficialWebsite = m.OfficialWebsite ?? "",
             // Sanitised HERE, not at render time, so every consumer can treat
@@ -876,8 +880,35 @@ public static class ModRegistry
             };
         }
 
+        if (!profile.AccentDeclared && ModAccentCache.Get(ModAccentCache.ImageKeyOf(profile)) is { } learned)
+        {
+            profile.AccentColor = learned;
+            profile.AccentLearned = true;
+        }
+
         return profile;
     }
+
+    /// <summary>Every undeclared mod with no colour learned from its art yet gets a hue of its own,
+    /// spread by the golden angle in id order: the same on every PC with the same catalog, and no two
+    /// alike (a fixed blue made all of them look like one).</summary>
+    internal static void AssignFallbackAccents(IEnumerable<ModProfile> profiles)
+    {
+        var all = profiles.ToList();
+        var taken = TakenAccents(all, except: null);
+        var index = 0;
+        foreach (var profile in all.Where(p => !p.AccentDeclared && !p.AccentLearned)
+                     .OrderBy(p => p.Id, StringComparer.OrdinalIgnoreCase))
+            profile.AccentColor = ModAccentResolver.Hex(ModAccentResolver.FallbackAvoiding(index++, taken));
+    }
+
+    /// <summary>The colours declared or learned from art, normalised as they are painted.</summary>
+    internal static IReadOnlyCollection<System.Windows.Media.Color> TakenAccents(IEnumerable<ModProfile> profiles, ModProfile? except)
+        => profiles.Where(p => !ReferenceEquals(p, except) && (p.AccentDeclared || p.AccentLearned))
+            .Select(p => ModAccent.TryParse(p.AccentColor, out var c) ? ModAccent.Normalize(c) : (System.Windows.Media.Color?)null)
+            .Where(c => c.HasValue)
+            .Select(c => c!.Value)
+            .ToList();
 
     /// <summary>
     /// The most previous ids one manifest may declare. A rename is a rare event and
