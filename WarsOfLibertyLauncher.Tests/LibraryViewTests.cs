@@ -226,4 +226,31 @@ public class LibraryViewTests
     [InlineData("Up to date with a twist", false)]
     public void OnlyAMessageWorthReadingGetsTheLine(string? message, bool routine)
         => Assert.Equal(routine, LibraryStatus.IsRoutine(message, new[] { "Up to date ({0})", "Game closed." }));
+
+    /// <summary>The selected filter is read over the mod's own cover, so its fill is opaque and its
+    /// caption white. It was the mod's colour at 16 % with text in that colour: over a cover of the
+    /// same hue ("Not installed" on the orange AoE3 art) the caption could not be read.</summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheSelectedFilterIsOpaqueAndReadable() => Run(() =>
+    {
+        var pill = new Button { Style = (Style)Application.Current.FindResource("LibraryPillOn") };
+        var fill = Assert.IsType<SolidColorBrush>(pill.Background).Color;
+        Assert.Equal(255, fill.A);
+        var text = Assert.IsType<SolidColorBrush>(pill.Foreground).Color;
+
+        // Every colour the catalog declares, and a sweep of the wheel for the ones it will.
+        var accents = new[] { "#1fa3a3", "#3b5bd6", "#caa14a", "#6598b6", "#b5651d", "#b34728", "#8f9a2e", "#3a8cd9",
+                              "#8b4fc9", "#8c6b3a", "#5a6b8c", "#CE1126", "#3f9d5a", "#b83932", "#c8102e", "#c04444" }
+            .Select(hex => { Assert.True(ModAccent.TryParse(hex, out var c)); return c; }).ToList();
+        for (var hue = 0; hue < 360; hue += 15)
+        {
+            var r = hue * Math.PI / 180;
+            accents.Add(Color.FromRgb((byte)(128 + 110 * Math.Cos(r)), (byte)(128 + 110 * Math.Cos(r - 2.094)), (byte)(128 + 110 * Math.Cos(r + 2.094))));
+        }
+        foreach (var raw in accents)
+        {
+            var selected = ModAccent.SelectionFill(ModAccent.Normalize(raw));
+            Assert.True(ModAccent.Contrast(text, selected) >= 4.5, $"{raw}: caption {ModAccent.Contrast(text, selected):0.00}:1 on the selected filter");
+        }
+    });
 }

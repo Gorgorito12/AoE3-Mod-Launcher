@@ -241,9 +241,13 @@
     </Style>
 
     <Style x:Key="LibraryPillOn" TargetType="Button" BasedOn="{StaticResource LibraryPill}">
-        <Setter Property="Background" Value="{DynamicResource ModAccentSoft}"/>
+        <!-- An OPAQUE fill and white text. It used to be the mod's colour at 16 % with text in that
+             same colour: over a cover of the mod's own hue the caption was the colour of what
+             showed through it. -->
+        <Setter Property="Background" Value="{DynamicResource ModAccentFill}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource ModAccentLine}"/>
-        <Setter Property="Foreground" Value="{DynamicResource ModAccentText}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 
     <!-- A community link: the same pill, without the margin of a filter. -->
