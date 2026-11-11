@@ -219,6 +219,27 @@ public partial class MultiplayerTab
         await RunTournamentActionAsync(() => TournamentApi.CancelTournamentAsync(t.Id));
     }
 
+    /// <summary>Deleting takes it away for everybody and cannot be undone, so it asks first, as a
+    /// destructive confirmation. The refresh that follows finds it gone and clears the selection.</summary>
+    private async Task ConfirmDeleteTournamentAsync(TournamentDetail t)
+    {
+        bool ok = await MpAlertOverlay.ConfirmAsync(
+            TabRootGrid,
+            Strings.Get("TpDeleteTitle"),
+            Strings.Format("TpDeleteBody", t.Name),
+            Strings.Get("TpDeleteTournament"),
+            Strings.Get("MpAlertCancel"));
+        if (!ok) return;
+
+        await RunTournamentActionAsync(() => TournamentApi.DeleteTournamentAsync(t.Id));
+        // The refresh found it gone and cleared the selection; open the first one left rather than
+        // leave an empty page.
+        if (_selectedTournamentId == null
+            && TournamentPage.Rows(_tournaments, _session?.CurrentUser?.Id ?? (_demoTournaments ? TournamentDemoData.MeUserId : null), null, "all")
+                .FirstOrDefault() is { } next)
+            await SelectTournamentAsync(next.Summary.Id);
+    }
+
     /// <summary>What a button holding a panel says to a screen reader: without it, nothing.</summary>
     private static void Spoken(FrameworkElement element, string id, string name)
     {
@@ -229,7 +250,7 @@ public partial class MultiplayerTab
     private void RenderTournamentFilters()
     {
         TournamentsFilters.Children.Clear();
-        var all = (_tournaments?.Drafts ?? new()).Concat(_tournaments?.Tournaments ?? new()).ToList();
+        var all = TournamentPage.Listed(_tournaments).ToList();
         foreach (var (key, caption) in new[]
                  {
                      ("all", "TpFilterAll"), ("registration", "TpFilterRegistration"),
@@ -380,6 +401,7 @@ public partial class MultiplayerTab
     {
         "registration" or "ready" => "#55ACEE",
         "running" => "#4FD68A",
+        "cancelled" => "#C84A4A",
         _ => "#8C9CB1",
     });
 
@@ -387,6 +409,7 @@ public partial class MultiplayerTab
     {
         "registration" or "ready" => "#9FD2F6",
         "running" => "#8FE0B0",
+        "cancelled" => "#F0A6A6",
         _ => "#C3D2E5",
     };
 
@@ -685,6 +708,13 @@ public partial class MultiplayerTab
                 BorderBrush = Solid(_pageAccent),
                 Tag = 10d,
             };
+            // Deleting is destructive: red, never the mod's colour, which says "go ahead".
+            if (call.Primary == TournamentPrimary.Delete)
+            {
+                primary.Foreground = Brushes.White;
+                primary.Background = Ink("#C84A4A");
+                primary.BorderBrush = Ink("#C84A4A");
+            }
             primary.SetResourceReference(StyleProperty, "TournamentChip");
             primary.Click += (_, _) => RunCall(t, call.Primary, call.Match);
             buttons.Children.Add(primary);
@@ -695,6 +725,13 @@ public partial class MultiplayerTab
             var secondary = Secondary(caption, () => RunCall(t, call.Secondary, null));
             secondary.Margin = new Thickness(0, 6, 0, 0);
             buttons.Children.Add(secondary);
+        }
+        else if (call.Secondary == TournamentPrimary.Delete)
+        {
+            var delete = Secondary(Strings.Get("TpDeleteTournament"), () => RunCall(t, TournamentPrimary.Delete, null),
+                ink: Ink("#F0A6A6"), rim: Frozen(0x99, 0xC8, 0x4A, 0x4A));
+            delete.Margin = new Thickness(0, 6, 0, 0);
+            buttons.Children.Add(delete);
         }
         if (!string.IsNullOrEmpty(call.Note))
         {
@@ -768,6 +805,7 @@ public partial class MultiplayerTab
             case TournamentPrimary.Seed: _ = RunTournamentActionAsync(() => TournamentApi.SeedTournamentAsync(t.Id)); break;
             case TournamentPrimary.Start: _ = RunTournamentActionAsync(() => TournamentApi.StartTournamentAsync(t.Id)); break;
             case TournamentPrimary.Enter or TournamentPrimary.MyEntry: _ = RunTournamentActionAsync(() => OpenEnrollAsync(t)); break;
+            case TournamentPrimary.Delete: _ = ConfirmDeleteTournamentAsync(t); break;
         }
     }
 
@@ -788,6 +826,8 @@ public partial class MultiplayerTab
             if (right) { name.TextAlignment = TextAlignment.Right; seed.TextAlignment = TextAlignment.Right; name.HorizontalAlignment = HorizontalAlignment.Right; seed.HorizontalAlignment = HorizontalAlignment.Right; }
             words.Children.Add(name);
             words.Children.Add(seed);
+            var discLetter = Say(team ? EnrollView.CrestOf(e?.DisplayName) : Initial(e?.DisplayName), "SetRowDescSize", "#FFFFFF", FontWeights.Bold);
+            discLetter.Foreground = ink;
             var disc = new Border
             {
                 Width = 32,
@@ -796,10 +836,8 @@ public partial class MultiplayerTab
                 Background = fill,
                 BorderBrush = Frozen(0x2E, 0xFF, 0xFF, 0xFF),
                 BorderThickness = new Thickness(2),
-                Child = Say(team ? EnrollView.CrestOf(e?.DisplayName) : Initial(e?.DisplayName), "SetRowDescSize", "#FFFFFF", FontWeights.Bold),
+                Child = LetterWithPhoto(discLetter, PhotoOf(e, team), 28, Math.Max(0, radius - 2)),
             };
-            ((TextBlock)disc.Child).HorizontalAlignment = HorizontalAlignment.Center;
-            ((TextBlock)disc.Child).Foreground = ink;
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = right ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = right ? GridLength.Auto : new GridLength(1, GridUnitType.Star) });
@@ -858,6 +896,48 @@ public partial class MultiplayerTab
 
     private static string Initial(string? name) => string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
 
+    /// <summary>The Discord picture of a SOLO entrant (its one player), or null for a team - a team
+    /// keeps its crest - and for a server that sends no picture.</summary>
+    internal static string? PhotoOf(TournamentEntrant? e, bool team)
+        => team ? null : e?.Members?.FirstOrDefault()?.AvatarUrl is { Length: > 0 } url ? url : null;
+
+    /// <summary>
+    /// A disc's letter, with the player's photo over it when there is one (2026-11-11). The letter
+    /// stays underneath, so a photo that fails to load leaves the disc as it always was.
+    /// </summary>
+    internal static UIElement LetterWithPhoto(TextBlock letter, string? photoUrl, double size, double radius)
+    {
+        letter.HorizontalAlignment = HorizontalAlignment.Center;
+        letter.VerticalAlignment = VerticalAlignment.Center;
+        if (string.IsNullOrEmpty(photoUrl) || AvatarBrush(photoUrl, size) is not { } photo) return letter;
+        var host = new Grid { Width = size, Height = size };
+        host.Children.Add(letter);
+        host.Children.Add(new System.Windows.Shapes.Rectangle
+        {
+            Width = size, Height = size, RadiusX = radius, RadiusY = radius, Fill = photo,
+            Tag = "tournament-photo",
+        });
+        return host;
+    }
+
+    /// <summary>The ladder a tournament's players are ranked on: 1v1, or the team one.</summary>
+    private static RoomFormat TournamentLadder(TournamentSummary t)
+        => t.Format switch { "2v2" => RoomFormat.TwoVTwo, "3v3" => RoomFormat.ThreeVThree, _ => RoomFormat.OneVOne };
+
+    /// <summary>
+    /// A SOLO entrant's rank badge, STILL, on the tournament's ladder - or null for a team, a
+    /// player still being placed (the server sends no place) and a server that sends none.
+    /// </summary>
+    private FrameworkElement? EntrantBadge(TournamentDetail t, TournamentEntrant? e, double width)
+    {
+        if (TournamentPage.IsTeam(t) || e?.Members?.FirstOrDefault() is not { } m) return null;
+        if (m.LadderRank is not > 0) return null;
+        if (BadgeOf(TournamentLadder(t), null, m.LadderRank, null) is not { } shown) return null;
+        var badge = BuildShownBadge(shown, width, "tournament-" + t.Id + "-" + m.UserId);
+        badge.VerticalAlignment = VerticalAlignment.Center;
+        return badge;
+    }
+
     private UIElement BuildChampionBlock(TournamentDetail t)
     {
         var name = TournamentPage.NameOf(t, t.WinnerEntrantId);
@@ -873,7 +953,37 @@ public partial class MultiplayerTab
         var title = Say(name, "FontSizeHeading", "#FFFFFF", FontWeights.Bold, new Thickness(0, 5, 0, 0));
         title.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
         title.TextTrimming = TextTrimming.CharacterEllipsis;
-        words.Children.Add(title);
+        // A solo champion's face and badge beside the name (2026-11-11). The shield stays the trophy.
+        var champion = t.Entrants?.FirstOrDefault(x => x.Id == t.WinnerEntrantId);
+        var photo = PhotoOf(champion, TournamentPage.IsTeam(t));
+        var badge = EntrantBadge(t, champion, 26);
+        if (photo != null || badge != null)
+        {
+            var who = new Grid { Margin = new Thickness(0, 5, 0, 0) };
+            who.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            who.ColumnDefinitions.Add(new ColumnDefinition());
+            who.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            int col = 0;
+            if (photo != null)
+            {
+                var face = BuildAvatarDisc(champion?.DisplayName ?? name, photo, 30);
+                face.Margin = new Thickness(0, 0, 10, 0);
+                Grid.SetColumn(face, col);
+                who.Children.Add(face);
+            }
+            title.Margin = new Thickness(0);
+            title.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(title, 1);
+            who.Children.Add(title);
+            if (badge != null)
+            {
+                badge.Margin = new Thickness(10, 0, 0, 0);
+                Grid.SetColumn(badge, 2);
+                who.Children.Add(badge);
+            }
+            words.Children.Add(who);
+        }
+        else words.Children.Add(title);
         if (!string.IsNullOrEmpty(rival))
             words.Children.Add(Say(Strings.Format("TpBeatInFinal", TournamentPage.NameOf(t, rival)), "SetRowDescSize", "#DCE7F5", margin: new Thickness(0, 5, 0, 0)));
         Grid.SetColumn(words, 1);
@@ -1455,8 +1565,8 @@ public partial class MultiplayerTab
         if (known)
         {
             var letter = Say(team ? EnrollView.CrestOf(e?.DisplayName) : Initial(e?.DisplayName), "SetTinySize", "#FFFFFF", FontWeights.Bold);
-            letter.HorizontalAlignment = HorizontalAlignment.Center;
-            disc.Child = letter;
+            // 18 inside the 1-px rim: at 20 px only the photo, a badge there could not be read.
+            disc.Child = LetterWithPhoto(letter, PhotoOf(e, team), 18, 9);
         }
         Grid.SetColumn(disc, 1);
         grid.Children.Add(disc);
@@ -1481,9 +1591,9 @@ public partial class MultiplayerTab
             foreach (var member in members)
             {
                 bool captain = member.UserId == e.CaptainUserId;
-                var letter = Say(Initial(member.DisplayName), "SetTinySize", "#DCE7F5", FontWeights.Bold);
-                letter.FontSize = 9;
-                letter.HorizontalAlignment = HorizontalAlignment.Center;
+                var memberLetter = Say(Initial(member.DisplayName), "SetTinySize", "#DCE7F5", FontWeights.Bold);
+                memberLetter.FontSize = 9;
+                var letter = LetterWithPhoto(memberLetter, member.AvatarUrl, 18, 9);
                 roster.Children.Add(new Border
                 {
                     Width = 18,
@@ -1728,9 +1838,9 @@ public partial class MultiplayerTab
             Height = 30,
             CornerRadius = new CornerRadius(team ? 8 : 15),
             Background = !known ? Ink("#2C3E55") : isMe ? Solid(_pageAccent) : EntrantDisc(e, team),
-            Child = Say(!known ? "?" : team ? EnrollView.CrestOf(e?.DisplayName) : Initial(e?.DisplayName), "SetDescSize", "#FFFFFF", FontWeights.Bold),
+            Child = LetterWithPhoto(Say(!known ? "?" : team ? EnrollView.CrestOf(e?.DisplayName) : Initial(e?.DisplayName), "SetDescSize", "#FFFFFF", FontWeights.Bold),
+                known ? PhotoOf(e, team) : null, 30, team ? 8 : 15),
         };
-        ((TextBlock)disc.Child).HorizontalAlignment = HorizontalAlignment.Center;
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
@@ -1962,9 +2072,9 @@ public partial class MultiplayerTab
             Height = 30,
             CornerRadius = new CornerRadius(team ? 8 : 15),
             Background = isOut ? Ink("#2C3E55") : isMine ? Solid(_pageAccent) : EntrantDisc(e, team),
-            Child = Say(team ? EnrollView.CrestOf(e.DisplayName) : Initial(e.DisplayName), "SetDescSize", "#FFFFFF", FontWeights.Bold),
+            Child = LetterWithPhoto(Say(team ? EnrollView.CrestOf(e.DisplayName) : Initial(e.DisplayName), "SetDescSize", "#FFFFFF", FontWeights.Bold),
+                PhotoOf(e, team), 30, team ? 8 : 15),
         };
-        ((TextBlock)disc.Child).HorizontalAlignment = HorizontalAlignment.Center;
         Grid.SetColumn(disc, 1);
 
         var nameLine = new Grid();
@@ -1979,6 +2089,14 @@ public partial class MultiplayerTab
             var you = Say(Strings.Get("TpYouTag"), "MpTagSize", ToHex(ModAccent.TextOn(_pageAccent)), FontWeights.Bold, new Thickness(7, 0, 0, 0));
             Grid.SetColumn(you, 1);
             nameLine.Children.Add(you);
+        }
+        // The badge after the name and its tag, 8 px clear of them (2026-11-11).
+        if (EntrantBadge(t, e, 20) is { } entrantBadge)
+        {
+            nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            entrantBadge.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(entrantBadge, 2);
+            nameLine.Children.Add(entrantBadge);
         }
         var words = new StackPanel { Margin = new Thickness(0), VerticalAlignment = VerticalAlignment.Center };
         words.Children.Add(nameLine);
@@ -2173,10 +2291,19 @@ public partial class MultiplayerTab
                 buttons.Add(Secondary(Strings.Get("MpTournamentSeed"), () => _ = RunTournamentActionAsync(() => TournamentApi.SeedTournamentAsync(t.Id))));
             Tile(Strings.Get("TpOrgSeeds"), "#A8BCD2", Strings.Get("TpOrgSeedsBody"), rim, null, buttons.ToArray());
         }
-        if (TournamentPermissions.CanCancel(t, me))
-            Tile(Strings.Get("TpOrgDanger"), "#F0A6A6", Strings.Get("TpOrgDangerBody"), Frozen(0x73, 0xC8, 0x4A, 0x4A), null,
-                Secondary(Strings.Get("MpTournamentCancel"), () => _ = ConfirmCancelTournamentAsync(t),
+        if (TournamentPermissions.CanCancel(t, me) || TournamentPermissions.CanDelete(t, me))
+        {
+            var danger = new List<Button>();
+            if (TournamentPermissions.CanCancel(t, me))
+                danger.Add(Secondary(Strings.Get("MpTournamentCancel"), () => _ = ConfirmCancelTournamentAsync(t),
                     ink: Ink("#F0A6A6"), rim: Frozen(0x99, 0xC8, 0x4A, 0x4A)));
+            if (TournamentPermissions.CanDelete(t, me))
+                danger.Add(Secondary(Strings.Get("TpDeleteTournament"), () => _ = ConfirmDeleteTournamentAsync(t),
+                    ink: Ink("#F0A6A6"), rim: Frozen(0x99, 0xC8, 0x4A, 0x4A)));
+            Tile(Strings.Get("TpOrgDanger"), "#F0A6A6",
+                Strings.Get(TournamentPermissions.CanCancel(t, me) ? "TpOrgDangerBody" : "TpOrgDangerDeleteBody"),
+                Frozen(0x73, 0xC8, 0x4A, 0x4A), null, danger.ToArray());
+        }
 
         return new ScrollViewer { Padding = new Thickness(0), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = tiles };
     }
@@ -2189,8 +2316,7 @@ public partial class MultiplayerTab
         foreach (var manager in managers)
         {
             var line = new StackPanel { Orientation = Orientation.Horizontal };
-            var letter = Say(Initial(manager.DisplayName), "SetTinySize", "#FFFFFF", FontWeights.Bold);
-            letter.HorizontalAlignment = HorizontalAlignment.Center;
+            var letter = LetterWithPhoto(Say(Initial(manager.DisplayName), "SetTinySize", "#FFFFFF", FontWeights.Bold), manager.AvatarUrl, 20, 10);
             line.Children.Add(new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = Ink("#3F6A8A"), Margin = new Thickness(0, 0, 7, 0), Child = letter });
             line.Children.Add(Say(manager.DisplayName ?? "", "SetControlSize", "#DCE7F5", FontWeights.Medium));
             if (canRemove)

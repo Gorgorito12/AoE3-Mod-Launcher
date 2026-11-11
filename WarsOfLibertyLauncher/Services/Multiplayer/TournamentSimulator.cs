@@ -217,6 +217,8 @@ internal sealed class TournamentSimulator
                             && string.Equals(t.OwnerUserId, viewer, StringComparison.Ordinal))
                 .Select(Summary)
                 .ToList(),
+            // Present, as a server that can delete sends it; the samples keep everything public.
+            Mine = new List<TournamentSummary>(),
         };
     }
 
@@ -235,6 +237,7 @@ internal sealed class TournamentSimulator
         var copy = Clone(t);
         copy.Name = DisplayNameOf(t);
         copy.RosterSize = TournamentRules.RosterSizeFor(t.Format);
+        copy.HasGames = HasGames(t);
         // The server's own order: seeds first, then the order people signed up in.
         copy.Entrants = (copy.Entrants ?? new List<TournamentEntrant>())
             .OrderBy(e => e.Seed ?? 9999)
@@ -439,6 +442,21 @@ internal sealed class TournamentSimulator
         foreach (var m in Matches(t)) m.Lobby = null;
         return PreviewOutcome.Nothing;
     }
+
+    /// <summary><c>POST /tournaments/:id/delete</c>: refused for a live one and for one with a game.</summary>
+    internal PreviewOutcome Delete(string id)
+    {
+        var t = AsOwner(id);
+        if (HasGames(t)) throw Conflict("A game of this tournament was played; it stays as history.");
+        if (t.Status is not ("draft" or "cancelled" or "abandoned"))
+            throw Conflict("Cancel this tournament before deleting it.");
+        _store.Remove(t);
+        return PreviewOutcome.Nothing;
+    }
+
+    /// <summary>The server's <c>has_games</c>: a slot decided by a game.</summary>
+    private static bool HasGames(TournamentDetail t)
+        => (t.Matches ?? new List<TournamentMatch>()).Any(m => m.Status == "done" && m.Outcome == "played");
 
     /// <summary>
     /// <c>POST /tournaments/:id/entrants</c>, with the body the tab sends: nothing for a 1v1 or a
@@ -1298,6 +1316,7 @@ internal sealed class TournamentSimulator
         t.ManagerUserIds ??= new List<string>();
         t.Managers ??= new List<TournamentEntrantMember>();
         t.ConfirmedCount ??= t.Entrants.Count(e => e.Status == "confirmed");
+        TournamentDemoData.DressPlayers(t);
 
         // The order the samples list people in is the order they signed up in.
         foreach (var e in t.Entrants)
@@ -1328,6 +1347,7 @@ internal sealed class TournamentSimulator
         EntrantCount = Entrants(t).Count(e => TournamentRules.OccupiesTournament(e.Status)),
         PendingCount = Entrants(t).Count(e => e.Status == "pending"),
         RosterSize = TournamentRules.RosterSizeFor(t.Format),
+        HasGames = HasGames(t),
         CreatedAt = t.CreatedAt,
         LastActivityAt = t.LastActivityAt,
     };

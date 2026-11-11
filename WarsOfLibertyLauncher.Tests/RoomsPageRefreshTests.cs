@@ -123,4 +123,13 @@ public class RoomsPageRefreshTests
         Assert.True(b > a, $"'{end}' not found after '{start}'");
         return src.Substring(a, b - a);
     }
+
+    /// <summary>With the live channel announcing every change the poll is a fallback and slows to 15 s;
+    /// without it (an older server, a dropped socket) it stays the 5 s it always was.</summary>
+    [Fact]
+    public void ThePollSlowsOnlyWhileChangesArriveLive()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(5), Services.Multiplayer.RoomsPageRefresh.PollInterval(liveChangesSeen: false));
+        Assert.Equal(TimeSpan.FromSeconds(15), Services.Multiplayer.RoomsPageRefresh.PollInterval(liveChangesSeen: true));
+    }
 }

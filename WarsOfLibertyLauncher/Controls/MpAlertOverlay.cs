@@ -332,6 +332,7 @@ internal static class MpAlertOverlay
                 Margin = new Thickness(0, 0, 8, 0),
             };
             cancelBtn.Click += (_, _) => Close(false);
+            System.Windows.Automation.AutomationProperties.SetAutomationId(cancelBtn, "MpAlertCancel");
             buttonRow.Children.Add(cancelBtn);
         }
 
@@ -346,6 +347,9 @@ internal static class MpAlertOverlay
         // A notice's single button resolves true (acknowledged); a confirm's
         // primary also resolves true (the "do it" answer).
         primaryBtn.Click += (_, _) => Close(true);
+        // The confirm's answer often carries the same words as the button that asked (Cancel the
+        // tournament / Cancel the tournament), so a screen reader or the testbed tells them apart here.
+        System.Windows.Automation.AutomationProperties.SetAutomationId(primaryBtn, "MpAlertPrimary");
         buttonRow.Children.Add(primaryBtn);
 
         stack.Children.Add(buttonRow);

@@ -530,6 +530,11 @@ public class LobbyApiClient : IDisposable
     public Task<object> CancelTournamentAsync(string id, CancellationToken ct = default)
         => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/cancel", null, true, ct);
 
+    /// <summary><c>POST /tournaments/:id/delete</c> (2026-11-11): the owner's, only a draft, cancelled
+    /// or abandoned tournament with no game played.</summary>
+    public Task<object> DeleteTournamentAsync(string id, CancellationToken ct = default)
+        => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/delete", null, true, ct);
+
     public Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default)
         => PostAsync<object>(
             $"tournaments/{Uri.EscapeDataString(id)}/entrants/{Uri.EscapeDataString(entrantId)}/accept",

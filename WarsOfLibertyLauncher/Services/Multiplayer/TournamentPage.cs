@@ -18,7 +18,7 @@ internal sealed record TournamentStep(string Text, TournamentStepState State);
 
 internal enum TournamentTab { Bracket, People, Organise }
 
-internal enum TournamentPrimary { None, OpenRoom, CloseRegistration, OpenRegistration, Seed, Start, Enter, MyEntry }
+internal enum TournamentPrimary { None, OpenRoom, CloseRegistration, OpenRegistration, Seed, Start, Enter, MyEntry, Delete }
 
 /// <summary>What the card above the bracket says, and its one primary button.</summary>
 internal sealed record TournamentCall(
@@ -87,9 +87,8 @@ internal static class TournamentPage
         var entries = (list?.MyEntries ?? new List<MyTournamentEntry>())
             .Where(e => !string.IsNullOrEmpty(e.TournamentId))
             .ToDictionary(e => e.TournamentId, StringComparer.Ordinal);
-        var all = (list?.Drafts ?? new()).Concat(list?.Tournaments ?? new());
         var rows = new List<TournamentListRow>();
-        foreach (var t in all)
+        foreach (var t in Listed(list))
         {
             if (filter != "all" && t.Status != filter) continue;
             bool mine = TournamentPermissions.IsOwner(t, me);
@@ -120,7 +119,8 @@ internal static class TournamentPage
                 _ => null,
             };
             bool requests = false;
-            if (text == null && manages && t.PendingCount is > 0 and var pending)
+            // Requests matter only while the list is open: a cancelled tournament keeps its count.
+            if (text == null && manages && t.Status is "registration" or "ready" && t.PendingCount is > 0 and var pending)
             {
                 text = Strings.Format(pending == 1 ? "TpAlertRequest" : "TpAlertRequests", pending);
                 requests = true;
@@ -132,6 +132,15 @@ internal static class TournamentPage
             rows.Add(new TournamentListRow(t, group, SubLine(t, detail), text, requests, mine));
         }
         return rows.OrderBy(r => r.Group).ThenBy(r => r.Alert == null).ToList();
+    }
+
+    /// <summary>Every tournament the list shows: the caller's drafts, the public ones, and the ended
+    /// ones only the caller still sees (<c>mine</c>), each once.</summary>
+    internal static IEnumerable<TournamentSummary> Listed(TournamentListResponse? list)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var t in (list?.Drafts ?? new()).Concat(list?.Tournaments ?? new()).Concat(list?.Mine ?? new()))
+            if (seen.Add(t.Id)) yield return t;
     }
 
     private static string SubLine(TournamentSummary t, TournamentDetail? detail)
@@ -149,6 +158,9 @@ internal static class TournamentPage
                 => Strings.Format("TpSubFinishedWinner", NameOf(detail, winner)),
             "finished" => Strings.Get("TpStepDone"),
             "draft" => Strings.Get("TpSubDraft"),
+            // They used to say nothing at all: the row read "· 1v1".
+            "cancelled" => Strings.Get("MpTournamentStatusCancelled"),
+            "abandoned" => Strings.Get("MpTournamentStatusAbandoned"),
             _ => "",
         };
         return string.IsNullOrEmpty(t.Format) ? state : state + " · " + t.Format;
@@ -218,6 +230,7 @@ internal static class TournamentPage
     internal static TournamentCall Call(TournamentDetail t, string? me)
     {
         if (t.Status == "finished" && !string.IsNullOrEmpty(t.WinnerEntrantId)) return new TournamentCall(Champion: true);
+        if (t.Status is "cancelled" or "abandoned") return EndedCall(t, me);
 
         var matches = t.Matches ?? new List<TournamentMatch>();
         var mine = matches.Select(m => (Match: m, State: MatchCards.For(m, me, t.Entrants)))
@@ -248,7 +261,8 @@ internal static class TournamentPage
         if (TournamentPermissions.CanOpenRegistration(t, me))
             return new TournamentCall(Strings.Get("TpCallDraftKicker"), Strings.Get("TpCallDraftTitle"),
                 Strings.Get(IsTeam(t) ? "TpCallDraftSubTeams" : "TpCallDraftSubPlayers"),
-                TournamentPrimary.OpenRegistration, Strings.Get("MpTournamentOpenRegistration"), secondary);
+                TournamentPrimary.OpenRegistration, Strings.Get("MpTournamentOpenRegistration"),
+                secondary == TournamentPrimary.None && TournamentPermissions.CanDelete(t, me) ? TournamentPrimary.Delete : secondary);
         if (t.Status == "running" && TournamentPermissions.IsOwnerOrManager(t, me))
             return new TournamentCall(Strings.Get("TpCallOrganiserKicker"),
                 CurrentRound(t) is int round ? Strings.Format("TpCallRoundOn", RoundName(t, round)) : null,
@@ -263,6 +277,23 @@ internal static class TournamentPage
         if (secondary == TournamentPrimary.MyEntry)
             return new TournamentCall(places, Strings.Get("TpCallInTitle"), null, TournamentPrimary.MyEntry, Strings.Get("EnMyEntry"));
         return new TournamentCall();
+    }
+
+    /// <summary>
+    /// A cancelled or abandoned tournament (2026-11-11). Its owner, with no game played, is offered
+    /// Delete - the server deletes it on its own a week later anyway. With a game it stays as
+    /// history; a server that does not say (<c>has_games</c> absent) gets the plain line.
+    /// </summary>
+    private static TournamentCall EndedCall(TournamentDetail t, string? me)
+    {
+        bool cancelled = t.Status == "cancelled";
+        var kicker = Strings.Get(cancelled ? "TpCallCancelledKicker" : "TpCallAbandonedKicker");
+        if (TournamentPermissions.CanDelete(t, me))
+            return new TournamentCall(kicker, Strings.Get("TpCallEndedNoGamesTitle"), Strings.Get("TpCallEndedNoGamesSub"),
+                TournamentPrimary.Delete, Strings.Get("TpDeleteTournament"));
+        if (t.HasGames == true)
+            return new TournamentCall(kicker, Strings.Get("TpCallEndedGamesTitle"), Strings.Get("TpCallEndedGamesSub"));
+        return new TournamentCall(kicker, Strings.Get(cancelled ? "TpCallCancelledTitle" : "TpCallAbandonedTitle"));
     }
 
     private static TournamentCall MatchCall(TournamentDetail t, string? me, TournamentMatch m, MatchCardState state)

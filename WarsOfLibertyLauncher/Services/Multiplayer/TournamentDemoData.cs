@@ -881,6 +881,42 @@ internal static class TournamentDemoData
         ResultAt: "21:35");
 
     /// <summary>Every scenario, for tests and for anything that wants to walk them all.</summary>
+    /// <summary>
+    /// Faces and places for the samples (2026-11-11), the way a server that sends them does: a
+    /// solo entrant's one player, a Discord default picture for two players in three, and a
+    /// ladder place for four in five - the fifth is still being placed and wears no badge.
+    /// Stable per player id, so a repaint never shuffles them.
+    /// </summary>
+    internal static void DressPlayers(TournamentDetail t)
+    {
+        bool team = t.Format is "2v2" or "3v3";
+        foreach (var e in t.Entrants ?? new List<TournamentEntrant>())
+        {
+            if (e.Members is not { Count: > 0 } && e.MemberIds is { Count: > 0 } ids)
+                e.Members = ids.Select(id => new TournamentEntrantMember { UserId = id, DisplayName = team ? id : e.DisplayName }).ToList();
+            foreach (var m in e.Members ?? new List<TournamentEntrantMember>())
+            {
+                int h = Math.Abs(StableHash(m.UserId));
+                if (h % 3 != 0) m.AvatarUrl ??= $"https://cdn.discordapp.com/embed/avatars/{h % 6}.png";
+                if (h % 5 == 0) continue;
+                int place = 1 + h % 40;
+                if (team) m.LadderRankTeam ??= place;
+                else m.LadderRank ??= place;
+            }
+        }
+    }
+
+    /// <summary>The string's own hash, not .NET's per-process randomised one.</summary>
+    private static int StableHash(string s)
+    {
+        unchecked
+        {
+            int h = 17;
+            foreach (var c in s) h = h * 31 + c;
+            return h == int.MinValue ? 0 : h;
+        }
+    }
+
     internal static IReadOnlyList<TournamentDetail> All() =>
         new[]
         {

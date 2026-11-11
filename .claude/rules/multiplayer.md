@@ -671,6 +671,24 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   tournament asks first (`CancellingATournamentAsksFirst`) — the rewrite had lost that confirmation
   and only the dead-strings sweep found it. A tile never overflows its card, in Spanish, by arranged
   positions (`THE_ONE_THAT_MATTERS_AnEntrantTileStaysInsideItsCard`).
+  (5) **Ended tournaments are cleaned up, and only the owner of one with NO GAME may delete it
+  (2026-11-11).** The server decides who sees what (`lifecycle.ts`, `publicWhereClause`): a draft
+  only its owner, a cancelled/abandoned one without games only its owner for 7 days (then the
+  startup sweep deletes it), one with games everybody for 7 days and then it stays in the database,
+  a finished one everybody for 30 days and then only who took part (`GET /tournaments` → `mine`,
+  which `TournamentPage.Listed` folds into the list once). `POST /tournaments/:id/delete` is the
+  owner's, refused for a live one and for one with a game (`has_games`, a game decided OR merely
+  reported from one of its rooms). `TournamentPermissions.CanDelete` needs `HasGames == false`, so a
+  server that does not send it offers no Delete. Delete is the red primary of the ended card, the
+  secondary beside "Open registration" on a draft, and a button in Organise's danger zone; it asks
+  first and then opens the first tournament left. The list row of a cancelled/abandoned one says so
+  (it read "· 1v1"), and requests are counted on a row only while registration is open.
+  (6) **Faces and badges**: the detail carries each player's `avatar_url` and his place on the
+  tournament's ladder (`ladder_rank` / `ladder_rank_team`, absent while being placed). A solo entrant's
+  disc shows the photo over its letter (`LetterWithPhoto`; a team keeps its crest, its members' dots
+  get theirs); the badge, still, only in Participants and beside the champion's name — at 20 px in
+  the bracket it could not be read. `TournamentDemoData.DressPlayers` gives the samples Discord's
+  default pictures and places, one player in five being placed. Pinned by `TournamentCleanupTests`.
   Seeing it: `--demo-tournaments=big32` is a 32-place draw with a mod cover (the only sample with a
   `ModId`); the other samples as before. Buttons whose content is a panel carry an AutomationId
   (`TournamentFilter:*`, `TournamentTab:*`, `TournamentRound:*`, `TournamentZoomIn/Out`), which is
@@ -730,7 +748,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   (`lobby_created`, or `lobbies_changed` from a server that sends it) is fetched at once while the list
   is on screen** (`QueueRoomsRefreshFromAnnouncement`, 300 ms debounce,
   `RoomsPageRefresh.ShouldRefreshOnAnnouncement`), so a new room shows in about a second; the 5-s poll
-  stays as the fallback.
+  stays as the fallback. The server sends `lobbies_changed` (batched per second) on every change a
+  room list shows; once one arrives the poll slows to 15 s until the global socket drops
+  (`RoomsPageRefresh.PollInterval`).
   (5b) **Observer seats are inside `max_players`, as on the server (`playingSeatsOf`).**
   `RoomPlayingSeats()` subtracts them; it used not to, so a room of four with two watching seats showed
   "2 / 4", a free seat nobody could play in and "4 players · 2 observers", and auto-start waited for the

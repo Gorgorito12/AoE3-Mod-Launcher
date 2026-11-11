@@ -48,6 +48,9 @@ internal interface ITournamentApi
 
     Task<object> CancelTournamentAsync(string id, CancellationToken ct = default);
 
+    /// <summary>Delete a draft, cancelled or abandoned tournament with no game played.</summary>
+    Task<object> DeleteTournamentAsync(string id, CancellationToken ct = default);
+
     Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default);
 
     Task<object> RejectEntrantAsync(string id, string entrantId, CancellationToken ct = default);
@@ -131,6 +134,9 @@ internal sealed class LiveTournamentApi : ITournamentApi
 
     public Task<object> CancelTournamentAsync(string id, CancellationToken ct = default)
         => Client.CancelTournamentAsync(id, ct);
+
+    public Task<object> DeleteTournamentAsync(string id, CancellationToken ct = default)
+        => Client.DeleteTournamentAsync(id, ct);
 
     public Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default)
         => Client.AcceptEntrantAsync(id, entrantId, ct);
@@ -270,6 +276,9 @@ internal sealed class PreviewTournamentApi : ITournamentApi
 
     public Task<object> CancelTournamentAsync(string id, CancellationToken ct = default)
         => Route(s => s.Cancel(id));
+
+    public Task<object> DeleteTournamentAsync(string id, CancellationToken ct = default)
+        => Route(s => s.Delete(id));
 
     public Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default)
         => Route(s => s.Accept(id, entrantId));

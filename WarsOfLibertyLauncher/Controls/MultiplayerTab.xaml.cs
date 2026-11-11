@@ -1522,7 +1522,7 @@ public partial class MultiplayerTab : UserControl
         _roomsListTimer?.Stop();
         _roomsListTimer = new System.Windows.Threading.DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(5),
+            Interval = Services.Multiplayer.RoomsPageRefresh.PollInterval(_lobbiesChangedSeen),
         };
         _roomsListTimer.Tick += (_, _) => DiagnosticLog.Time("MP rooms-list tick", () =>
         {
@@ -11264,8 +11264,22 @@ public partial class MultiplayerTab : UserControl
     /// with <c>4007 replaced</c> — which also explains a chat that keeps reconnecting. Raised on the
     /// socket's pump thread; it only logs.
     /// </summary>
+    /// <summary>Whether this session's live channel has carried <c>lobbies_changed</c>: the rooms
+    /// poll slows to its fallback cadence while it has (<c>RoomsPageRefresh.PollInterval</c>).</summary>
+    private bool _lobbiesChangedSeen;
+
+    private void SetLobbiesChangedSeen(bool seen)
+    {
+        _lobbiesChangedSeen = seen;
+        if (_roomsListTimer != null)
+            _roomsListTimer.Interval = Services.Multiplayer.RoomsPageRefresh.PollInterval(seen);
+    }
+
     private void OnGlobalChatDisconnected(object? sender, string reason)
     {
+        // Without the live channel nothing announces a change: back to the 5-s poll.
+        if (ReferenceEquals(sender, _globalChatSocket))
+            Dispatcher.InvokeAsync(() => { if (_lobbiesChangedSeen) SetLobbiesChangedSeen(false); });
         var description = (sender as LobbyWebSocket)?.LastCloseDescription;
         var replaced = reason == "server_close:4007"
             ? " — another launcher or PC signed in with this account took over the presence socket"
@@ -11325,6 +11339,7 @@ public partial class MultiplayerTab : UserControl
                         QueueRoomsRefreshFromAnnouncement();
                         break;
                     case "lobbies_changed":
+                        if (!_lobbiesChangedSeen) SetLobbiesChangedSeen(true);
                         QueueRoomsRefreshFromAnnouncement();
                         break;
                     case "match_rated":
