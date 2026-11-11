@@ -130,11 +130,14 @@
                  (a Wrap+MaxWidth TextBlock) since TextWrapping can't be forced on
                  a ContentPresenter; rich-content tooltips (BuildMenuTooltip) cap
                  their own TextBlocks' MaxWidth. This style just themes + bounds.
-                 Uses literal colors (no {StaticResource}) so it's safe inline. -->
+                 DynamicResource only (never StaticResource) so it's safe inline. Its fill is
+                 the floating glass every menu and popover wears (GlassTheme.FloatingKeys): it
+                 used to be a warm grey of its own, the one floating surface that ignored the
+                 level and read as another application's. -->
             <Style TargetType="ToolTip">
-                <Setter Property="Background" Value="#22252c"/>
+                <Setter Property="Background" Value="{DynamicResource GlassMenu}"/>
                 <Setter Property="Foreground" Value="White"/>
-                <Setter Property="BorderBrush" Value="#3a3d44"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MpRimSoft}"/>
                 <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Padding" Value="14,10"/>
                 <Setter Property="HasDropShadow" Value="True"/>

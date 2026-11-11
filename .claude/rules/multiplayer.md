@@ -740,6 +740,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   stays. Verified live against a local server: an answering host, a silent one, a password room and
   a host without Radmin.
 
+- **THE TAB IS TRANSPARENT; THE PAGE COLOUR IS THE MAIN WINDOW'S (2026-11-11).** `TabRootGrid` has no
+  background and the sub-bar is always `RmSubBarBg`: `MainWindow.NeutralBackdrop` paints `MpAppBg` with
+  design 86's two glows behind the title bar, the tabs and the whole tab, so every bar is glass over the
+  same page. A page card is `GlassPanel` (it follows the transparency level), never solid `MpPanel`; a
+  control inside a card is not a page card and keeps its own fill. See the transparency bullet in
+  `CLAUDE.md`.
+
 - **THE RANKING PAGE IS DESIGN 93 (`Controls/MultiplayerTab.Ranking.cs`, `.RankingPodium.cs`,
   `.RankingHighlights.cs`; the pure rules in `Services/Multiplayer/RankingView.cs`). This SUPERSEDES
   the paragraphs further down about the pinned "YOU" row, the plain rows and the uppercase Highlights

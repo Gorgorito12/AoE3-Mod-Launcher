@@ -400,6 +400,44 @@ public partial class PublishModDialog : Window
         RefreshBlock();
     }
 
+    /// <summary>Proposes the colour of an image the modder picks: the icon's first colour that no
+    /// mod in the catalog already wears, else its strongest. The modder can still type another.</summary>
+    private void AccentFromImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "PNG, JPEG, GIF|*.png;*.jpg;*.jpeg;*.gif",
+            Title = Strings.Get("PublishAccentFromImage"),
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            var image = new System.Windows.Media.Imaging.BitmapImage();
+            image.BeginInit();
+            image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            image.DecodePixelWidth = 64;
+            image.UriSource = new System.Uri(dialog.FileName);
+            image.EndInit();
+            var candidates = ModAccentResolver.FromBitmap(image);
+            var taken = ModRegistry.TakenAccents(ModRegistry.All, except: null);
+            var color = ModAccentResolver.Pick(candidates, taken) ?? candidates.Cast<Color?>().FirstOrDefault();
+            if (color is not { } chosen)
+            {
+                ErrorAccent.Text = Strings.Get("PublishAccentFromImageNone");
+                ErrorAccent.Visibility = Visibility.Visible;
+                return;
+            }
+            FieldAccent.Text = ModAccentResolver.Hex(chosen);
+            ErrorAccent.Visibility = Visibility.Collapsed;
+        }
+        catch (System.Exception ex)
+        {
+            DiagnosticLog.Write($"Publish: no colour from '{dialog.FileName}': {ex.Message}");
+            ErrorAccent.Text = Strings.Get("PublishAccentFromImageNone");
+            ErrorAccent.Visibility = Visibility.Visible;
+        }
+    }
+
     private Color? TryAccent()
     {
         var text = FieldAccent.Text.Trim();
@@ -1299,6 +1337,8 @@ public partial class PublishModDialog : Window
         // --- Step 2 ---
         LblAccent.Text = Strings.Get("PublishFieldAccent");
         HintAccent.Text = Strings.Get("PublishFieldAccentHint");
+        AccentFromImageButton.Content = Strings.Get("PublishAccentFromImage");
+        AccentFromImageButton.ToolTip = TooltipHelper.Wrap(Strings.Get("PublishAccentFromImageTip"));
         LblIcon.Text = Strings.Get("PublishFieldIcon");
         HintIcon.Text = Strings.Get("PublishFieldIconHint");
         LblBanner.Text = Strings.Get("PublishFieldBanner");

@@ -696,8 +696,10 @@
          gradient predates the design handoff and bottomed out darker than the room
          window's own background, so the tab and the room read as two different shades
          of the same idea. The reference is one flat colour across every multiplayer
-         surface, which is what makes them look like one screen. -->
-    <Grid x:Name="TabRootGrid" Background="{DynamicResource MpAppBg}">
+         surface, which is what makes them look like one screen.
+         Transparent now: the MainWindow paints that colour, with design 86's two glows, behind
+         all three rows, so the bars above are glass over the same page (NeutralBackdrop). -->
+    <Grid x:Name="TabRootGrid" Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>     <!-- Header (subtabs + status bar) -->
             <RowDefinition Height="*"/>        <!-- Active view -->
@@ -874,7 +876,7 @@
                         x:Name="RadminBanner"
                         x:FieldModifier="private"
                         Visibility="Collapsed"
-                        Background="{DynamicResource MpPanel}"
+                        Background="{DynamicResource GlassPanel}"
                         BorderBrush="{DynamicResource MpRimSoft}"
                         BorderThickness="1"
                         CornerRadius="{StaticResource RadiusMd}"
@@ -1030,13 +1032,13 @@
                          taken off the column before the rooms/activity split (ApplyActivityLayout). -->
                     <Border x:Name="QuickCardHost" Grid.Row="0"
                             Visibility="Collapsed"
-                            Background="{DynamicResource MpPanel}"
+                            Background="{DynamicResource GlassPanel}"
                             BorderBrush="{DynamicResource MpRimFaint}"
                             BorderThickness="1"
                             CornerRadius="14"
                             Margin="{DynamicResource MpPanelGapBottom}"/>
                     <Border x:Name="RoomsBlock" Grid.Row="1"
-                            Background="{DynamicResource MpPanel}"
+                            Background="{DynamicResource GlassPanel}"
                             BorderBrush="{DynamicResource MpRimFaint}"
                             BorderThickness="1"
                             Padding="{DynamicResource MpPanelPadding}"
@@ -1338,7 +1340,7 @@
                     <Border x:Name="ActivityBlock"
                             Padding="{DynamicResource MpPanelPadding}"
                             CornerRadius="{StaticResource RadiusLg}"
-                            Background="{DynamicResource MpPanel}"
+                            Background="{DynamicResource GlassPanel}"
                             BorderBrush="{DynamicResource MpRimFaint}"
                             BorderThickness="1">
                         <Grid x:Name="ActivityBlockGrid">
@@ -1593,7 +1595,7 @@
                          the glow gone the trick goes too, and one Border does the job. -->
                     <Border Grid.Row="0"
                             x:Name="ChatPanelCard"
-                            Background="{DynamicResource MpPanel}"
+                            Background="{DynamicResource GlassPanel}"
                             BorderBrush="{DynamicResource MpRimSoft}"
                             BorderThickness="1"
                             Padding="{DynamicResource MpPanelPadding}"
@@ -1805,7 +1807,7 @@
                     <Border x:Name="ChatRail"
                             Grid.Row="0"
                             Visibility="Collapsed"
-                            Background="{DynamicResource MpPanel}"
+                            Background="{DynamicResource GlassPanel}"
                             BorderBrush="{DynamicResource MpRimSoft}"
                             BorderThickness="1"
                             CornerRadius="{StaticResource RadiusLg}">
@@ -2379,7 +2381,7 @@
                                 Margin="0,0,0,12"
                                 Padding="12,10"
                                 CornerRadius="{StaticResource RadiusLg}"
-                                Background="{DynamicResource MpPanel}"
+                                Background="{DynamicResource GlassPanel}"
                                 BorderBrush="{DynamicResource MpRimFaint}"
                                 BorderThickness="1">
                             <Grid>

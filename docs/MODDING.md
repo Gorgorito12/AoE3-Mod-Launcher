@@ -221,7 +221,7 @@ entry that slips past CI still can't reach a player.
 
 | Field | Constraints | Physical specs |
 |---|---|---|
-| `accentColor` | `^#[0-9a-fA-F]{6}$` | Card border, badges, and the synthetic banner gradient when no banner is supplied. |
+| `accentColor` | `^#[0-9a-fA-F]{6}$` | Card border, badges, and the synthetic banner gradient when no banner is supplied. Optional: left out, the launcher takes the colour of your icon (preferring one no other mod in the catalog wears, since AoE3 icons are mostly gold) and, until it has the icon, a hue of its own. Declaring it is still best — it is then the same on every PC from the first frame. The *Publish my mod* wizard can read it off your icon for you ("From an image…"). |
 | `icon` | filename ending in `.png` | **Square (1:1), width 256–1024 px, PNG with alpha, ≤ 1 MB.** Validated in CI by aspect + width range (a non-square fails). |
 | `banner` | filename `.png/.jpg/.jpeg` | **4:1 aspect, width 1200–4800 px** (e.g. 1200×300, 2400×600, 4800×1200), **≤ 2 MB.** |
 | `heroImage` | filename `.png/.jpg/.jpeg` | **16:9 aspect, width 1920–3840 px (1080p up to 4K), ≤ 5 MB** (use JPEG for 4K — a 4K PNG can be 10 MB+). Dashboard background; keep the subject in the **right half** (left is covered by the title + PLAY button). |

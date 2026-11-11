@@ -143,7 +143,7 @@ internal static class MpAlertOverlay
 
         var card = new Border
         {
-            Background = Res("MpSurface"),
+            Background = Res("GlassMenu"),
             BorderBrush = Res("MpDivider"),
             BorderThickness = new Thickness(2),
             CornerRadius = new CornerRadius(8),

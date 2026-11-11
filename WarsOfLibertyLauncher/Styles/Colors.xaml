@@ -881,6 +881,8 @@
     <SolidColorBrush x:Key="GlassMenu"      Color="#BD0C1626"/>
     <SolidColorBrush x:Key="GlassFooter"    Color="#9E0A1321"/>
     <SolidColorBrush x:Key="GlassTitleBar"  Color="#6B0B1422"/>
+    <!-- A dark well inside a card (search boxes, tab trays): follows the level like the rest. -->
+    <SolidColorBrush x:Key="GlassWell"      Color="#66050A12"/>
     <SolidColorBrush x:Key="GlassRim"       Color="#1AFFFFFF"/>   <!-- .10 -->
     <SolidColorBrush x:Key="GlassRimStrong" Color="#29FFFFFF"/>   <!-- .16 -->
     <SolidColorBrush x:Key="TitleBarLine"   Color="#0FFFFFFF"/>   <!-- .06 -->

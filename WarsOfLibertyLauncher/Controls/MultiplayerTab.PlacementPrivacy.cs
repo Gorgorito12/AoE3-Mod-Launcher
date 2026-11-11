@@ -150,7 +150,7 @@ public partial class MultiplayerTab
             Margin = new Thickness(0, 8, 0, 0),
             Padding = new Thickness(14, 12, 14, 12),
             CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusPanel"),
-            Background = (Brush)Application.Current.FindResource("MpPanel"),
+            Background = (Brush)Application.Current.FindResource("GlassPanel"),
             BorderBrush = (Brush)Application.Current.FindResource("MpRimMedium"),
             BorderThickness = new Thickness(1),
         };

@@ -32,11 +32,25 @@ public partial class MainWindow
         UpdateTournamentBackdrop();
     }
 
+    /// <summary>The page colour behind the three rows, wherever neither the Library's image nor a
+    /// tournament's cover runs behind them. Solid glass and reduced effects keep it flat.</summary>
+    private void UpdateNeutralBackdrop(bool tournamentCover)
+    {
+        bool show = _activeTopTab != TopTab.Play && !tournamentCover;
+        NeutralBackdrop.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        var glows = GlassTheme.Normalize(_config.GlassLevel) != GlassTheme.Solid && !LibraryReducedEffects
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        NeutralGlowTop.Visibility = glows;
+        NeutralGlowBottom.Visibility = glows;
+    }
+
     private void UpdateTournamentBackdrop()
     {
         var mod = _tournamentCoverMod;
         bool show = mod != null && _activeTopTab == TopTab.Multiplayer;
         TournamentBackdrop.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        UpdateNeutralBackdrop(show);
         MultiplayerView.SetCoverBehind(show);
         if (!show) return;
 

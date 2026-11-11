@@ -230,7 +230,7 @@ public partial class MultiplayerTab
             Margin = new Thickness(0, 12, 0, 0),
             Padding = new Thickness(15, 14, 15, 14),
             CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusLg"),
-            Background = (Brush)Application.Current.FindResource("MpPanel"),
+            Background = (Brush)Application.Current.FindResource("GlassPanel"),
             BorderBrush = (Brush)Application.Current.FindResource("MpRimSoft"),
             BorderThickness = new Thickness(1),
             Tag = "BadgeModeCard",

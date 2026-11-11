@@ -360,6 +360,14 @@ public class ModProfile
     /// <summary>Hex accent color used for primary buttons and highlights.</summary>
     public string AccentColor { get; set; } = "#c8102e";
 
+    /// <summary>The author declared <see cref="AccentColor"/>. When not, it comes from the mod's art
+    /// (<see cref="AccentLearned"/>) or a hue of its own, and the art may replace it later
+    /// (<see cref="Services.ModAccentResolver"/>). A declared colour is never replaced.</summary>
+    public bool AccentDeclared { get; set; } = true;
+
+    /// <summary><see cref="AccentColor"/> was taken from the mod's art (now or in an earlier session).</summary>
+    public bool AccentLearned { get; set; }
+
     /// <summary>
     /// Author / team that maintains the mod. Empty for built-in profiles
     /// (the launcher's own UI doesn't surface an author for them) and

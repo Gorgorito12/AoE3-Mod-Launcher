@@ -19,7 +19,7 @@
             <Setter Property="Height" Value="24"/>
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="9,0"/>
-            <Setter Property="Background" Value="#8C0A1321"/>
+            <Setter Property="Background" Value="{DynamicResource LibraryControl}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource WindowCardRim}"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>

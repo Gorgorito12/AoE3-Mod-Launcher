@@ -56,16 +56,77 @@ public static class GlassTheme
         return Color.FromArgb((byte)System.Math.Round(For(level).BarAlpha * 255), mixed.R, mixed.G, mixed.B);
     }
 
-    public static void Apply(string? level)
+    /// <summary>
+    /// The glass that is not a panel: bars, controls, chips and footers that the launcher painted
+    /// with an alpha of their own, so they stayed put while the panels beside them followed the
+    /// level (reported: the list changed and the tab bar, the search box and the chips did not).
+    /// Each keeps the value it already had at Media, which is the handoff's; the other two levels
+    /// move it the way the panel moves (<see cref="Follow"/>). Adding a translucent surface means
+    /// adding its key here, or it will not follow.
+    /// </summary>
+    public static readonly (string Key, Color Base, double MediumAlpha, bool Inset)[] Followers =
+    {
+        ("LibraryNavBg", Color.FromRgb(10, 19, 33), .45, false),
+        ("RmSubBarBg", Color.FromRgb(10, 19, 33), .32, false),
+        ("LibraryControl", Color.FromRgb(10, 19, 33), .55, false),
+        ("LibraryGhost", Color.FromRgb(10, 19, 33), .5, false),
+        ("LibraryCard", Color.FromRgb(10, 19, 33), .66, false),
+        ("ModChipFill", Color.FromRgb(10, 19, 33), .55, false),
+        ("ModDeckDetailFill", Color.FromRgb(10, 19, 33), .55, false),
+        ("ModDeckTileFill", Color.FromRgb(10, 19, 33), .45, false),
+        ("GlassWell", Color.FromRgb(5, 10, 18), .4, true),
+        ("RmSearchBg", Color.FromRgb(5, 10, 18), .4, true),
+        ("ProfilePillFill", Color.FromRgb(5, 10, 18), .4, true),
+        ("ProfileTabsFill", Color.FromRgb(5, 10, 18), .4, true),
+        ("WindowFooter", Color.FromRgb(8, 15, 27), .72, false),
+    };
+
+    /// <summary>The navy everything sits on when nothing shows through (BASE.md's #0f1c2e).</summary>
+    public static readonly Color PageNavy = Color.FromRgb(15, 28, 46);
+
+    /// <summary>A follower's alpha at a level: Solid never lets less through than the panel does
+    /// (.86), Maximum lets through as much more as the panel does (.28 / .5). An INSET (a dark well
+    /// inside a card) keeps its own alpha at Solid: there it darkens an opaque card, and at .86 it
+    /// would turn the search box black.</summary>
+    public static double Follow(double mediumAlpha, string? level, bool inset = false) => Normalize(level) switch
+    {
+        Solid => inset ? mediumAlpha : Math.Max(mediumAlpha, .86),
+        Maximum => mediumAlpha * .56,
+        _ => mediumAlpha,
+    };
+
+    /// <summary>
+    /// "Effects: reduced" (or a machine that cannot draw them) asks for solid backgrounds
+    /// (BASE.md): every glass colour becomes what it would look like over the page's navy, opaque.
+    /// </summary>
+    public static Color Settle(Color glass, bool reducedEffects)
+    {
+        if (!reducedEffects || glass.A == 255) return glass;
+        var mixed = ModAccent.Mix(PageNavy, Color.FromRgb(glass.R, glass.G, glass.B), glass.A / 255.0);
+        return Color.FromRgb(mixed.R, mixed.G, mixed.B);
+    }
+
+    /// <summary>The one rule for "reduced effects": the setting, or Automatic on a machine that
+    /// has turned animations off or renders below tier 2.</summary>
+    public static bool IsReduced(string? effectsMode) => effectsMode switch
+    {
+        "low" => true,
+        "full" => false,
+        _ => !SystemParameters.ClientAreaAnimation || RenderCapability.Tier >> 16 < 2,
+    };
+
+    public static void Apply(string? level, bool reducedEffects = false)
     {
         var resources = Application.Current?.Resources;
         if (resources == null) return;
         var spec = For(level);
-        Set(resources, PanelKey, spec.Panel);
-        Set(resources, TileKey, spec.Tile);
-        foreach (var key in FloatingKeys) Set(resources, key, spec.Floating);
-        Set(resources, FooterKey, spec.Footer);
-        Set(resources, TitleBarKey, Rgba(11, 20, 34, spec.BarAlpha));
+        Set(resources, PanelKey, Settle(spec.Panel, reducedEffects));
+        Set(resources, TileKey, Settle(spec.Tile, reducedEffects));
+        foreach (var key in FloatingKeys) Set(resources, key, Settle(spec.Floating, reducedEffects));
+        Set(resources, FooterKey, Settle(spec.Footer, reducedEffects));
+        Set(resources, TitleBarKey, Settle(Rgba(11, 20, 34, spec.BarAlpha), reducedEffects));
+        foreach (var (key, color, alpha, inset) in Followers)
+            Set(resources, key, Settle(Color.FromArgb((byte)Math.Round(Follow(alpha, level, inset) * 255), color.R, color.G, color.B), reducedEffects));
     }
 
     private static void Set(ResourceDictionary resources, string key, Color color)

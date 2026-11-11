@@ -29,6 +29,19 @@
         <GradientStop Color="#142F7FE0" Offset="0"/>
         <GradientStop Color="#002F7FE0" Offset=".7"/>
     </RadialGradientBrush>
+    <!-- Multiplayer's page (design 86, the same in 98 and 80 without a cover): navy lit at the top
+         right by the action blue and at the bottom left by a lighter one. CSS draws these as
+         1400x800 and 1000x700 px ellipses ending at 70 %; these are the same shapes relative to a
+         1920x1000 page. The MainWindow paints them behind its three rows outside the Library, so
+         the title bar, the tabs and the subtab bar are glass over the page's own colour. -->
+    <RadialGradientBrush x:Key="MpPageGlowTop" Center=".85,-.15" GradientOrigin=".85,-.15" RadiusX=".73" RadiusY=".8">
+        <GradientStop Color="#212F7FE0" Offset="0"/>
+        <GradientStop Color="#002F7FE0" Offset=".7"/>
+    </RadialGradientBrush>
+    <RadialGradientBrush x:Key="MpPageGlowBottom" Center="-.05,1.15" GradientOrigin="-.05,1.15" RadiusX=".52" RadiusY=".7">
+        <GradientStop Color="#1255ACEE" Offset="0"/>
+        <GradientStop Color="#0055ACEE" Offset=".7"/>
+    </RadialGradientBrush>
     <SolidColorBrush x:Key="WindowFooter" Color="#B8080F1B"/>
     <SolidColorBrush x:Key="WindowFooterRule" Color="#14FFFFFF"/>
 
@@ -690,12 +703,13 @@
 
     <SolidColorBrush x:Key="ModChipFill" Color="#8C0A1321"/> <!-- .55 -->
     <SolidColorBrush x:Key="ModDeckDetailFill" Color="#8C0A1321"/>
+    <SolidColorBrush x:Key="ModDeckTileFill" Color="#730A1321"/>   <!-- .45; follows the glass level (GlassTheme.Followers) -->
 
     <Style x:Key="ModDeckPill" TargetType="Button">
         <Setter Property="Height" Value="30"/>
         <Setter Property="Margin" Value="0,0,6,6"/>
         <Setter Property="Padding" Value="12,0"/>
-        <Setter Property="Background" Value="#800A1321"/>
+        <Setter Property="Background" Value="{DynamicResource LibraryGhost}"/>
         <Setter Property="BorderBrush" Value="#1FFFFFFF"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Foreground" Value="#C3D2E5"/>
@@ -732,7 +746,7 @@
         <Setter Property="Height" Value="46"/>
         <Setter Property="Margin" Value="0,0,6,6"/>
         <Setter Property="Padding" Value="10,0"/>
-        <Setter Property="Background" Value="#730A1321"/>
+        <Setter Property="Background" Value="{DynamicResource ModDeckTileFill}"/>
         <Setter Property="BorderBrush" Value="#14FFFFFF"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Foreground" Value="#DCE7F5"/>

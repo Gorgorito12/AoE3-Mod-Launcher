@@ -3078,8 +3078,23 @@ public static partial class Strings
         },
         ["PublishFieldAccentHint"] = new()
         {
-            [LangEn] = "Hex format, e.g. #c8102e. It's the mod's brand colour in the launcher.",
-            [LangEs] = "Formato hex, ej. #c8102e. Es el color de marca del mod en el launcher.",
+            [LangEn] = "Hex format, e.g. #c8102e. It's the mod's brand colour in the launcher. Left empty, the launcher takes one from your icon.",
+            [LangEs] = "Formato hex, ej. #c8102e. Es el color de marca del mod en el launcher. Si lo dejas vacío, el launcher toma uno de tu icono.",
+        },
+        ["PublishAccentFromImage"] = new()
+        {
+            [LangEn] = "From an image…",
+            [LangEs] = "Sacar de una imagen…",
+        },
+        ["PublishAccentFromImageTip"] = new()
+        {
+            [LangEn] = "Pick your icon and the launcher proposes its colour, preferring one no other mod in the catalog uses.",
+            [LangEs] = "Elige tu icono y el launcher propone su color, mejor uno que no use otro mod del catálogo.",
+        },
+        ["PublishAccentFromImageNone"] = new()
+        {
+            [LangEn] = "That image has no colour to take (it is black and white or nearly empty). Type one instead.",
+            [LangEs] = "Esa imagen no tiene un color que tomar (es en blanco y negro o casi vacía). Escribe uno.",
         },
         ["PublishFieldIcon"] = new()
         {
