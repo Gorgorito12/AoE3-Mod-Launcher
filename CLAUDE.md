@@ -4420,6 +4420,17 @@ rather than the reverse.
   the new item for everyone who saw the old. Pinned by the announcement cases in
   `NotificationCenterTests`.
 
+- **Last month's HIGHLIGHTS ride the bell once a month (2026-11-10) — the one multiplayer item the
+  bell carries** (`NotificationKind.MonthlyHighlights`, `NotificationView.BelongsInTheBell`; the
+  maintainer asked for it "para que todos lo vean"). The notification sweep asks the public
+  `GET /stats/highlights` only in the first `HighlightsNotice.DaysToSay` (7) days of a month and only
+  until that month has been said (`LauncherConfig.NotifiedHighlightsMonth`); a month with no rated
+  match is marked seen silently, an older "previous" month is never said, and a failed request marks
+  nothing so the next sweep tries again. The text is pure (`HighlightsNotice`, `HighlightsNoticeTests`):
+  who climbed most, who played most, the best streak, a category with nobody left out. Clicking opens
+  Ranking › Highlights on that month (`MultiplayerTab.ShowHighlightsOfLastMonth`). It is news, so "Do
+  not disturb" keeps it in the bell without a pop-up.
+
 - **The project's Discord has ONE owner on each side — `LauncherConfig.SupportDiscordUrl`
   (a `const`, like `PrivacyPolicyUrl`) and `Controls/SupportLink` — and WHERE it appears is
   the whole design.** Before this there was no route from the app to the project at all: no

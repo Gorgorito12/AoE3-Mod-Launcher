@@ -86,6 +86,18 @@ internal static class EloDemoData
                 Civ = "Bulgarians", CityName = "Sof\u00eda",
                 Decks = { Deck("Deck 1", "HCShipSettlers3") },
             },
+            // What a real folder is mostly made of: the game's ready-made decks (shown folded), a
+            // second city of a civilization already listed, and an empty deck (only counted).
+            new Models.HomeCityProfile
+            {
+                Civ = "Chinese", CityName = "Shanghai", Level = 10,
+                Decks = { Deck("Static Deck", "HCShipSettlers3", "HCShipWood2"), Deck("") },
+            },
+            new Models.HomeCityProfile
+            {
+                Civ = "British", CityName = "Manchester", Level = 4,
+                Decks = { Deck("Static Deck", "HCShipSettlers3", "HCShipWood2", "HCUnlockFort") },
+            },
         };
     }
 

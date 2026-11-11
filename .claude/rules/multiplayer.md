@@ -2865,6 +2865,21 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   and it is what is there now: picker, grid, and a detail panel showing one card with its
   description and what it changes.
 
+  **THE DECKS SECTION WAS REBUILT ON 2026-11-10 ("por civilización + tablero de cartas"), and this
+  SUPERSEDES the paragraphs around it about pills, chips and age blocks.** Measured on the
+  maintainer's own folder: of 50 decks, ~40 were the game's "Static Deck", 5 were empty, every one
+  had a tile of its own in file order, and the cards were text pills under AGE headings with an
+  "OTHER CARDS" group. Now `OwnDeckView.Organize` (pure, `OwnDeckViewTests`) groups the player's decks
+  by civilization (by name, cities in order), files the "Static Deck"s in a group the page shows
+  FOLDED with its count, and only COUNTS empty decks; a generic name ("My Deck") is still the
+  player's, shown under its city. The page is a mod picker (`ModSearchPopup`, as the quick match
+  bar), a civilization search that refills the LIST alone (so the box keeps its focus), the list on
+  the left (290 px, scrolls past 560) and the chosen deck on the right as a `DeckTiles` board at 40 px
+  in deck order with the chosen card read below (name, "can be sent from Age N" when known,
+  description, the community share). Choosing a deck or a card repaints its own part, never the
+  page (`FillDeckList`, `FillDeckDetail`). Stacked below 604 px of content.
+  `--demo-elo=profile:decks` opens on it.
+
   **Same engine as the mod window, one builder**: `Controls/DeckTiles` at 40 px with `MpRimFaint`,
   `CardArtService` for the pictures, `CardNameResolver.ResolveDetails` and `CardEffectRenderer`
   for the text. See the card-art and effect-text bullets in `CLAUDE.md`; ⚠ each tile carries its

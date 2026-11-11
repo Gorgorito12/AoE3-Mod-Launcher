@@ -32,9 +32,15 @@ public class NotificationViewTests
         Assert.Equal(0, NotificationView.Unread(new[] { Item(kind) }));
     }
 
+    /// <summary>Ten of fourteen: the month's highlights joined the bell on the maintainer's request
+    /// (2026-11-10, "para que todos lo vean"), under Launcher, like the project's announcements.</summary>
     [Fact]
-    public void NineOfTheThirteenKindsRemain()
-        => Assert.Equal(9, Enum.GetValues<NotificationKind>().Count(NotificationView.BelongsInTheBell));
+    public void TenOfTheFourteenKindsRemain()
+    {
+        Assert.Equal(10, Enum.GetValues<NotificationKind>().Count(NotificationView.BelongsInTheBell));
+        Assert.True(NotificationView.BelongsInTheBell(NotificationKind.MonthlyHighlights));
+        Assert.True(NotificationView.Passes(NotificationFilter.Launcher, NotificationKind.MonthlyHighlights));
+    }
 
     [Fact]
     public void EveryBellKindFallsInExactlyOneFilter()

@@ -3326,6 +3326,13 @@ public partial class MultiplayerTab : UserControl
     /// "Open ranking". <paramref name="mode"/> picks the ladder (the Teams tab's "Open team
     /// ranking" opens TEAMS); null leaves the Ranking's own choice alone. A TEAMS request on a
     /// server with no team ladder lands on 1v1, which RenderRanking already enforces.</summary>
+    /// <summary>Ranking › Highlights on LAST month: where the bell's monthly notice leads.</summary>
+    internal void ShowHighlightsOfLastMonth()
+    {
+        _rankingLeadersPrevious = true;
+        ShowRanking(RankingMode.Highlights);
+    }
+
     internal void ShowRanking(RankingMode? mode)
     {
         if (mode is { } m) _rankingMode = m;

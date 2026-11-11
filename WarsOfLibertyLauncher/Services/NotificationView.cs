@@ -23,7 +23,9 @@ public sealed record NotificationDayGroup(NotificationDay Day, IReadOnlyList<Not
 public static class NotificationView
 {
     /// <summary>The four multiplayer kinds stay out so they cannot bury the rest; each has a place
-    /// of its own in the Multiplayer tab (70c). An item is still kept in the history.</summary>
+    /// of its own in the Multiplayer tab (70c). An item is still kept in the history. The month's
+    /// highlights are the one multiplayer item that IS in the bell (the maintainer's call,
+    /// 2026-11-10): once a month, news for everybody, under Launcher like an announcement.</summary>
     public static bool BelongsInTheBell(NotificationKind kind) => kind is not (
         NotificationKind.RoomCreated or NotificationKind.MatchRated
         or NotificationKind.SeasonEnded or NotificationKind.RatingRefund);

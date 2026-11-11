@@ -251,6 +251,7 @@ public sealed class NotificationPanel : Border
             NotificationKind.NewTranslation => "A",
             NotificationKind.NewMod => "+",
             NotificationKind.Announcement => "i",
+            NotificationKind.MonthlyHighlights => "★",
             _ => tone == NotificationTone.Error ? "!" : "✓",
         };
         return (brush, Color.FromArgb(0x24, r, g, b), Color.FromArgb(0x66, r, g, b), glyph);

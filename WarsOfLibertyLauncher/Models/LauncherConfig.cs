@@ -648,6 +648,13 @@ public enum NotificationKind
     MatchRated,
 
     /// <summary>
+    /// Last month's highlights (2026-11-10): the Discord gets them on the first of the month, the bell
+    /// carries them to everybody else, once, in the month's first week. Mod-less; clicking opens
+    /// Ranking › Highlights on that month. <c>TargetId</c> is the month ("2026-10").
+    /// </summary>
+    MonthlyHighlights,
+
+    /// <summary>
     /// News from the project itself, published through the notification feed.
     ///
     /// <para>Mod-less, like <see cref="LauncherUpdate"/> and <see cref="Connectivity"/>. It
@@ -2470,6 +2477,11 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("notifiedRefundIds")]
     public List<string> NotifiedRefundIds { get; set; } = new();
+
+    /// <summary>The last month whose highlights the bell has announced ("2026-10"), or marked as seen
+    /// with nothing to say. One notice per month and PC: see <c>HighlightsNotice</c>.</summary>
+    [JsonPropertyName("notifiedHighlightsMonth")]
+    public string NotifiedHighlightsMonth { get; set; } = "";
 
     /// <summary>
     /// The rating season this launcher last saw. <b>OBSOLETE</b>: rating seasons were removed

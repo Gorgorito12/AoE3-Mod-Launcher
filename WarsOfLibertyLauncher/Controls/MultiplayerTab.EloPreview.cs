@@ -136,6 +136,8 @@ public partial class MultiplayerTab
         _previewHistoryState = state is "history-loading" or "history-error" ? state : null;
         _previewRatingState = state is "loading" or "error" ? state : null;
         if (_previewHistoryState != null) _profileSection = ProfileSection.History;
+        // --demo-elo=profile:decks opens straight on the decks (2026-11-10).
+        if (state == "decks") _profileSection = ProfileSection.Decks;
         ShowDemoEloProfile(state switch
         {
             "nogames" => EloDemoData.ProfileNoGames(),

@@ -123,4 +123,83 @@ public class OwnDeckViewTests
     [InlineData(null)]
     public void AnAgeThatCannotBeNamedIsNull(int? age)
         => Assert.Null(OwnDeckView.AgeNumeral(age));
+    // ---- the list (2026-11-10): by civilization, defaults folded, empty only counted ----------
+
+    private static HomeCityProfile WithCards(string civ, string city, int level, params (string Name, int Cards)[] decks) => new()
+    {
+        Civ = civ,
+        CityName = city,
+        Level = level,
+        Decks = decks.Select(d => new HomeCityDeckEntry
+        {
+            Name = d.Name,
+            Cards = Enumerable.Range(0, d.Cards).Select(i => new HomeCityCard { Slot = i, InternalName = "C" + i }).ToList(),
+        }).ToList(),
+    };
+
+    private static string Name(HomeCityProfile p) => p.Civ switch { "Chinese" => "Chinos", "British" => "Británicos", _ => p.Civ };
+
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheThreeBucketsAreKeptApart()
+    {
+        var book = OwnDeckView.Organize(new[]
+        {
+            WithCards("Chinese", "Beijing", 13, ("Rush", 25), ("Static Deck", 25)),
+            WithCards("British", "Londres", 10, ("Static Deck", 25), ("", 0)),
+        }, Name);
+
+        Assert.Equal(new[] { "Rush" }, book.Mine.SelectMany(g => g.Decks).Select(d => d.Name));
+        Assert.Equal(2, book.DefaultCount);
+        Assert.All(book.Defaults.SelectMany(g => g.Decks), d => Assert.True(d.Default));
+        Assert.Equal(1, book.Empty);
+        Assert.DoesNotContain(book.All, d => d.Deck.Cards.Count == 0);
+    }
+
+    [Fact]
+    public void TwoCitiesOfOneCivilizationAreOneHeading()
+    {
+        var book = OwnDeckView.Organize(new[]
+        {
+            WithCards("Chinese", "Nankín", 10, ("Defensa", 25)),
+            WithCards("British", "Londres", 10, ("Rush", 25)),
+            WithCards("Chinese", "Beijing", 13, ("Rush", 25)),
+        }, Name);
+
+        // By civilization name, then by city inside it.
+        Assert.Equal(new[] { "Británicos", "Chinos" }, book.Mine.Select(g => g.CivName));
+        Assert.Equal(new[] { "Beijing", "Nankín" }, book.Mine[1].Decks.Select(d => d.Profile.CityName));
+    }
+
+    /// <summary>A generic name ("My Deck") is the player's own deck with no name of its own: listed
+    /// under the city, not filed with the game's ready-made ones.</summary>
+    [Fact]
+    public void AGenericNameIsStillTheirsAndShowsNoName()
+    {
+        var book = OwnDeckView.Organize(new[] { WithCards("British", "Londres", 10, ("My Deck", 25)) }, Name);
+        var entry = Assert.Single(book.Mine.SelectMany(g => g.Decks));
+        Assert.Null(entry.Name);
+        Assert.False(entry.Default);
+    }
+
+    [Fact]
+    public void TheCardsAreNeverReordered()
+    {
+        var profile = WithCards("British", "Londres", 10, ("Rush", 5));
+        profile.Decks[0].Cards.Reverse();
+        var entry = OwnDeckView.Organize(new[] { profile }, Name).All.Single();
+        Assert.Same(profile.Decks[0], entry.Deck);
+        Assert.Equal(new[] { "C4", "C3", "C2", "C1", "C0" }, entry.Deck.Cards.Select(c => c.InternalName));
+    }
+
+    [Theory]
+    [InlineData("chin", 1)]
+    [InlineData("BRITANICOS", 1)]   // no accent typed, none needed
+    [InlineData("zulu", 0)]
+    [InlineData("", 2)]
+    public void TheSearchFindsCivilizationsIgnoringCaseAndAccents(string query, int groups)
+        => Assert.Equal(groups, OwnDeckView.Organize(new[]
+        {
+            WithCards("Chinese", "Beijing", 13, ("Rush", 25)),
+            WithCards("British", "Londres", 10, ("Rush", 25)),
+        }, Name, query).Mine.Count);
 }
