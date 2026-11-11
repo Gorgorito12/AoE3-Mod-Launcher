@@ -906,19 +906,19 @@
     </Style>
 
     <!-- Outline blue (empty-state Create button under the illustration). -->
-    <!-- The rooms list's row button (design 86): 32 high, radius 7, 0 14 padding, 12.5 semibold.
-         Secondary is a faint fill with a rim; primary is the action blue. State lives in each
-         Style's own triggers on Background, which the template TemplateBinds, so the primary
-         derived from it keeps its own hover (the TargetName trap in CLAUDE.md). -->
+    <!-- The rooms list's row button (design 104a): 34 high, radius 8, 0 16 padding, 13 semibold.
+         Secondary is a faint fill with a rim; Join is the green of "you can enter"; primary is the
+         action blue. State lives in each Style's own triggers on Background, which the template
+         TemplateBinds, so a derived style keeps its own hover (the TargetName trap in CLAUDE.md). -->
     <Style x:Key="RmRowButton" TargetType="Button">
         <Setter Property="Background" Value="{DynamicResource RmButtonBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource RmButtonRim}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Foreground" Value="{DynamicResource RmTextHost}"/>
-        <Setter Property="Height" Value="32"/>
-        <Setter Property="Padding" Value="13,0"/>
+        <Setter Property="Height" Value="34"/>
+        <Setter Property="Padding" Value="15,0"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FontSize" Value="{DynamicResource RmButtonSize}"/>
+        <Setter Property="FontSize" Value="{DynamicResource RmRowButtonSize}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="HorizontalAlignment" Value="Right"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
@@ -928,7 +928,7 @@
                     <Border Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="7"
+                            CornerRadius="8"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
@@ -938,6 +938,19 @@
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource RmButtonHover}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- "Unirse" on a room you can enter: the dark green of that group with its rim, so the rooms
+         you can join stand out at a glance. "Ver sala" stays the only solid blue one. -->
+    <Style x:Key="RmRowButtonJoin" TargetType="Button" BasedOn="{StaticResource RmRowButton}">
+        <Setter Property="Background" Value="{DynamicResource RmJoinBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource RmJoinRim}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource RmJoinHover}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -1033,10 +1046,39 @@
         </Style.Triggers>
     </Style>
 
+    <!-- "Ver sala": the one solid blue of the list, with a glow under it (104a: 0 4 14, the blue at
+         35 %). The glow is a sibling behind the face, blurred once and cached; an Effect on the face
+         would blur the caption. -->
     <Style x:Key="RmRowButtonPrimary" TargetType="Button" BasedOn="{StaticResource RmRowButton}">
         <Setter Property="Background" Value="{DynamicResource MpAction}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Padding" Value="16,0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border CornerRadius="8"
+                                Margin="0,4,0,-4"
+                                Background="{DynamicResource RmPrimaryGlow}"
+                                IsHitTestVisible="False">
+                            <Border.Effect>
+                                <BlurEffect Radius="14"/>
+                            </Border.Effect>
+                            <Border.CacheMode>
+                                <BitmapCache/>
+                            </Border.CacheMode>
+                        </Border>
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
         <Setter Property="Foreground" Value="#FFFFFF"/>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">

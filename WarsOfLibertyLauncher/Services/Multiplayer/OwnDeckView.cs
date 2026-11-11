@@ -7,6 +7,20 @@ using WarsOfLibertyLauncher.Models.Multiplayer;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
+/// <summary>One deck in the Profile's list: the city, the level and the card count say which deck it
+/// is, and its own name only when it has a real one.</summary>
+internal sealed record DeckListEntry(HomeCityProfile Profile, HomeCityDeckEntry Deck, string? Name, bool Default);
+
+/// <summary>The decks of one civilization, under one heading however many cities hold them.</summary>
+internal sealed record OwnDeckCivGroup(string Civ, string CivName, IReadOnlyList<DeckListEntry> Decks);
+
+/// <summary>The whole list: the player's own decks, the game's default ones (shown folded), and
+/// how many empty decks were left out.</summary>
+internal sealed record DeckBook(IReadOnlyList<OwnDeckCivGroup> Mine, IReadOnlyList<OwnDeckCivGroup> Defaults, int DefaultCount, int Empty)
+{
+    public IEnumerable<DeckListEntry> All => Mine.Concat(Defaults).SelectMany(g => g.Decks);
+}
+
 /// <summary>
 /// The rules the Profile's DECKS section applies to the player's OWN decks before drawing them.
 /// Pure and WPF-free, so every refusal here is pinned by a test rather than by a screenshot.
@@ -141,4 +155,55 @@ internal static class OwnDeckView
         1 => "I", 2 => "II", 3 => "III", 4 => "IV", 5 => "V",
         _ => null,
     };
+
+    /// <summary>The name the game gives every civilization's ready-made deck.</summary>
+    private static readonly HashSet<string> DefaultDeckNames = new(StringComparer.OrdinalIgnoreCase) { "Static Deck" };
+
+    /// <summary>
+    /// The Profile's deck list (2026-11-10). On a real profile 40 of 50 decks were the game's
+    /// "Static Deck", five were empty and every one had a card of its own, in file order. Now:
+    /// the player's decks grouped by civilization (by name), each civilization's cities in order; the
+    /// game's ready-made decks in a group of their own, which the page shows folded with its count;
+    /// and empty decks not listed at all, only counted. The cards inside a deck are never reordered —
+    /// the order of the file is the slot. <paramref name="civFilter"/> keeps the civilizations whose
+    /// name contains it, ignoring case and accents.
+    /// </summary>
+    internal static DeckBook Organize(
+        IEnumerable<HomeCityProfile> profiles, Func<HomeCityProfile, string> civName, string? civFilter = null)
+    {
+        var compare = System.Globalization.CultureInfo.CurrentCulture.CompareInfo;
+        var filter = (civFilter ?? "").Trim();
+        var mine = new List<DeckListEntry>();
+        var defaults = new List<DeckListEntry>();
+        var empty = 0;
+        foreach (var profile in profiles)
+        {
+            var name = civName(profile);
+            if (filter.Length > 0 && compare.IndexOf(name, filter,
+                    System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) < 0)
+                continue;
+            foreach (var deck in profile.Decks)
+            {
+                if (deck.Cards.Count == 0)
+                {
+                    empty++;
+                    continue;
+                }
+                var isDefault = DefaultDeckNames.Contains((deck.Name ?? "").Trim());
+                var own = IsGenericName(deck.Name) ? null : deck.Name.Trim();
+                (isDefault ? defaults : mine).Add(new DeckListEntry(profile, deck, own, isDefault));
+            }
+        }
+
+        IReadOnlyList<OwnDeckCivGroup> Group(List<DeckListEntry> entries) => entries
+            .GroupBy(e => e.Profile.Civ, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new OwnDeckCivGroup(g.Key, civName(g.First().Profile), g
+                .OrderBy(e => e.Profile.CityName, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(e => e.Name ?? "", StringComparer.CurrentCultureIgnoreCase)
+                .ToList()))
+            .OrderBy(g => g.CivName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        return new DeckBook(Group(mine), Group(defaults), defaults.Count, empty);
+    }
 }

@@ -2984,6 +2984,7 @@ public partial class MainWindow : Window
         NotificationKind.RoomCreated => _bellBlue,
         NotificationKind.MatchRated => _bellGold,
         NotificationKind.RatingRefund => _bellGreen,
+        NotificationKind.MonthlyHighlights => _bellGold,
 #pragma warning disable CS0618 // an item saved while seasons existed
         NotificationKind.SeasonEnded => _bellGold,
 #pragma warning restore CS0618
@@ -3150,6 +3151,19 @@ public partial class MainWindow : Window
                 MultiplayerView.ShowRanking();
             }
             catch (Exception ex) { DiagnosticLog.Write($"Notification → ranking failed: {ex.Message}"); }
+            return;
+        }
+
+        // Last month's highlights: Ranking › Highlights, on that month. Before the profile guard —
+        // the ladder has no mod.
+        if (item.Kind == NotificationKind.MonthlyHighlights)
+        {
+            try
+            {
+                SwitchTopTab(TopTab.Multiplayer);
+                MultiplayerView.ShowHighlightsOfLastMonth();
+            }
+            catch (Exception ex) { DiagnosticLog.Write($"Notification → highlights failed: {ex.Message}"); }
             return;
         }
 
@@ -15467,6 +15481,45 @@ public partial class MainWindow : Window
     /// API budget; gated by the same <c>CheckUpdatesOnStartup</c> opt-out as the
     /// rest of the launcher's outbound checks.
     /// </summary>
+    /// <summary>
+    /// The month's highlights in the bell (2026-11-10). Asks <c>GET /stats/highlights</c> (public)
+    /// at most once per sweep, and not at all outside the month's first week or once the month has
+    /// been said. A failure marks nothing, so the next sweep tries again.
+    /// </summary>
+    private async Task MaybeNotifyMonthlyHighlightsAsync()
+    {
+        var now = DateTime.Now;
+        var justEnded = now.AddMonths(-1).ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture);
+        if (now.Day > Services.Multiplayer.HighlightsNotice.DaysToSay
+            || string.Equals(_config.NotifiedHighlightsMonth, justEnded, StringComparison.Ordinal))
+            return;
+        var api = _multiplayerSession?.Api;
+        if (api == null) return;
+        try
+        {
+            var highlights = await api.GetHighlightsAsync();
+            await Dispatcher.InvokeAsync(() =>
+            {
+                var decision = Services.Multiplayer.HighlightsNotice.Decide(highlights, DateTime.Now, _config.NotifiedHighlightsMonth);
+                if (decision.Notify && decision.Month != null)
+                {
+                    _notifications.RaiseMonthlyHighlights(decision.Month, decision.Title!, decision.Body!);
+                    DiagnosticLog.Write($"Notif: the {decision.Month} highlights are in the bell.");
+                }
+                else if (decision.MarkSeen && decision.Month != null)
+                {
+                    _config.NotifiedHighlightsMonth = decision.Month;
+                    DiagnosticLog.Write($"Notif: {decision.Month} had no rated match; nothing to say.");
+                }
+                if (decision.MarkSeen) PersistConfigInBackground();
+            });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Notif: the month's highlights could not be read: {ex.Message}");
+        }
+    }
+
     private async Task SweepInstalledModsForNotificationsAsync()
     {
         if (!_config.CheckUpdatesOnStartup) return;
@@ -15507,6 +15560,10 @@ public partial class MainWindow : Window
         // Likewise independent of the per-mod loop below, which only visits mods that are
         // INSTALLED: a patch published for a mod you do not have is still news.
         if (feed != null) MaybeNotifyCatalogPatches(feed);
+
+        // Last month's highlights: a public route, asked only in the month's first week and only
+        // until the month has been said (or found empty).
+        await MaybeNotifyMonthlyHighlightsAsync();
 
         var activeId = _updateService.Profile.Id;
         foreach (var profile in ModRegistry.All)

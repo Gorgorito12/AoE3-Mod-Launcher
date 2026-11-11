@@ -134,6 +134,45 @@ public class LibraryViewTests
         Assert.DoesNotContain(Find<Button>(rail), b => AutomationProperties.GetAutomationId(b) == "ModStar_a");
     });
 
+    /// <summary>Folded, nothing told "my mods" from the catalog (reported): a rule parts every two
+    /// groups now, with the group's name as its tooltip on an area big enough to hover, and the
+    /// catalog's icons are dimmed except on the selected tile.</summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_FoldedTheCatalogIsSetApart() => Run(() =>
+    {
+        var rail = Rail(new[] { Group(LibraryGroupKind.Mine, "a"), Group(LibraryGroupKind.Catalog, "b", "c") },
+            open: false, selected: "a");
+
+        var divider = Find<Border>(rail).Single(b => b.Tag is LibraryGroupKind.Catalog);
+        Assert.Equal(ModRail.FoldedDividerHeight, divider.ActualHeight);
+        Assert.NotNull(divider.ToolTip);
+        Assert.Single(Find<Border>(rail), b => b.Tag is LibraryGroupKind);
+
+        static double IconOpacity(Button tile) => ((FrameworkElement)((Grid)tile.Content).Children[0]).Opacity;
+        Assert.Equal(1, IconOpacity(Named(rail, "ModRow_a")));
+        Assert.Equal(ModRail.CatalogTileOpacity, IconOpacity(Named(rail, "ModRow_b")));
+
+        // Selecting a catalog mod gives its icon back in full; the other stays dim.
+        rail.Select("b");
+        Assert.Equal(1, IconOpacity(Named(rail, "ModRow_b")));
+        Assert.Equal(ModRail.CatalogTileOpacity, IconOpacity(Named(rail, "ModRow_c")));
+    });
+
+    /// <summary>The fold arrow is a drawing of fixed size, centred in its button: as a character it
+    /// was reported sitting high in the button now and then.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheFoldArrowIsDrawnAndCentred(bool open) => Run(() =>
+    {
+        var rail = Rail(new[] { Group(LibraryGroupKind.Mine, "a") }, open: open);
+        var button = Named(rail, "LibraryRailFold");
+        var arrow = Assert.IsType<System.Windows.Shapes.Path>(button.Content);
+        var at = arrow.TransformToAncestor(button).Transform(new Point(0, 0));
+        Assert.Equal((button.ActualHeight - arrow.ActualHeight) / 2, at.Y, 1);
+        Assert.Equal((button.ActualWidth - arrow.ActualWidth) / 2, at.X, 1);
+    });
+
     [Fact]
     public void AnEmptyListSaysSo() => Run(() =>
     {
@@ -187,4 +226,31 @@ public class LibraryViewTests
     [InlineData("Up to date with a twist", false)]
     public void OnlyAMessageWorthReadingGetsTheLine(string? message, bool routine)
         => Assert.Equal(routine, LibraryStatus.IsRoutine(message, new[] { "Up to date ({0})", "Game closed." }));
+
+    /// <summary>The selected filter is read over the mod's own cover, so its fill is opaque and its
+    /// caption white. It was the mod's colour at 16 % with text in that colour: over a cover of the
+    /// same hue ("Not installed" on the orange AoE3 art) the caption could not be read.</summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheSelectedFilterIsOpaqueAndReadable() => Run(() =>
+    {
+        var pill = new Button { Style = (Style)Application.Current.FindResource("LibraryPillOn") };
+        var fill = Assert.IsType<SolidColorBrush>(pill.Background).Color;
+        Assert.Equal(255, fill.A);
+        var text = Assert.IsType<SolidColorBrush>(pill.Foreground).Color;
+
+        // Every colour the catalog declares, and a sweep of the wheel for the ones it will.
+        var accents = new[] { "#1fa3a3", "#3b5bd6", "#caa14a", "#6598b6", "#b5651d", "#b34728", "#8f9a2e", "#3a8cd9",
+                              "#8b4fc9", "#8c6b3a", "#5a6b8c", "#CE1126", "#3f9d5a", "#b83932", "#c8102e", "#c04444" }
+            .Select(hex => { Assert.True(ModAccent.TryParse(hex, out var c)); return c; }).ToList();
+        for (var hue = 0; hue < 360; hue += 15)
+        {
+            var r = hue * Math.PI / 180;
+            accents.Add(Color.FromRgb((byte)(128 + 110 * Math.Cos(r)), (byte)(128 + 110 * Math.Cos(r - 2.094)), (byte)(128 + 110 * Math.Cos(r + 2.094))));
+        }
+        foreach (var raw in accents)
+        {
+            var selected = ModAccent.SelectionFill(ModAccent.Normalize(raw));
+            Assert.True(ModAccent.Contrast(text, selected) >= 4.5, $"{raw}: caption {ModAccent.Contrast(text, selected):0.00}:1 on the selected filter");
+        }
+    });
 }

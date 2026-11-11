@@ -169,6 +169,46 @@ public partial class MultiplayerTab
         AddSpaced(StatsRightColumn, BuildMapCard(), gap);
     }
 
+    // ---------------------------------------------------------------- answers
+
+    /// <summary>
+    /// How long the page waits for the next answer before drawing, and the longest it ever waits.
+    /// Opening Statistics sends six requests, and each answer used to rebuild the whole page as it
+    /// landed: five or six full builds in the first second, measured (SETTLE). Answers that land
+    /// close together now make ONE build, and an answer identical to the one on screen none.
+    /// </summary>
+    internal const int StatsRenderQuietMs = 90, StatsRenderMaxWaitMs = 350;
+
+    private System.Windows.Threading.DispatcherTimer? _statsRenderTimer;
+    private DateTime _statsRenderFirst, _statsRenderLast;
+
+    /// <summary>A server answer changed what the page may show: draw it soon, once, and only if
+    /// something it draws moved (<see cref="RenderStatsTabIfChanged"/>).</summary>
+    private void QueueStatsRender()
+    {
+        if (_activeSubtab != Subtab.Stats) return;
+        var now = DateTime.UtcNow;
+        _statsRenderLast = now;
+        if (_statsRenderTimer is { IsEnabled: true }) return;
+        _statsRenderFirst = now;
+        if (_statsRenderTimer == null)
+        {
+            _statsRenderTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(30),
+            };
+            _statsRenderTimer.Tick += (_, _) =>
+            {
+                var t = DateTime.UtcNow;
+                if ((t - _statsRenderLast).TotalMilliseconds < StatsRenderQuietMs
+                    && (t - _statsRenderFirst).TotalMilliseconds < StatsRenderMaxWaitMs) return;
+                _statsRenderTimer!.Stop();
+                if (_activeSubtab == Subtab.Stats) RenderStatsTabIfChanged();
+            };
+        }
+        _statsRenderTimer.Start();
+    }
+
     /// <summary>Adds a card with the gap above it, or nothing when the card has nothing.</summary>
     private static void AddSpaced(Panel host, UIElement? card, double gap)
     {

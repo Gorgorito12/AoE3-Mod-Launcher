@@ -671,10 +671,56 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   tournament asks first (`CancellingATournamentAsksFirst`) — the rewrite had lost that confirmation
   and only the dead-strings sweep found it. A tile never overflows its card, in Spanish, by arranged
   positions (`THE_ONE_THAT_MATTERS_AnEntrantTileStaysInsideItsCard`).
+  (5) **Ended tournaments are cleaned up, and only the owner of one with NO GAME may delete it
+  (2026-11-11).** The server decides who sees what (`lifecycle.ts`, `publicWhereClause`): a draft
+  only its owner, a cancelled/abandoned one without games only its owner for 7 days (then the
+  startup sweep deletes it), one with games everybody for 7 days and then it stays in the database,
+  a finished one everybody for 30 days and then only who took part (`GET /tournaments` → `mine`,
+  which `TournamentPage.Listed` folds into the list once). `POST /tournaments/:id/delete` is the
+  owner's, refused for a live one and for one with a game (`has_games`, a game decided OR merely
+  reported from one of its rooms). `TournamentPermissions.CanDelete` needs `HasGames == false`, so a
+  server that does not send it offers no Delete. Delete is the red primary of the ended card, the
+  secondary beside "Open registration" on a draft, and a button in Organise's danger zone; it asks
+  first and then opens the first tournament left. The list row of a cancelled/abandoned one says so
+  (it read "· 1v1"), and requests are counted on a row only while registration is open.
+  (6) **Faces and badges**: the detail carries each player's `avatar_url` and his place on the
+  tournament's ladder (`ladder_rank` / `ladder_rank_team`, absent while being placed). A solo entrant's
+  disc shows the photo over its letter (`LetterWithPhoto`; a team keeps its crest, its members' dots
+  get theirs); the badge, still, only in Participants and beside the champion's name — at 20 px in
+  the bracket it could not be read. `TournamentDemoData.DressPlayers` gives the samples Discord's
+  default pictures and places, one player in five being placed. Pinned by `TournamentCleanupTests`.
   Seeing it: `--demo-tournaments=big32` is a 32-place draw with a mod cover (the only sample with a
   `ModId`); the other samples as before. Buttons whose content is a panel carry an AutomationId
   (`TournamentFilter:*`, `TournamentTab:*`, `TournamentRound:*`, `TournamentZoomIn/Out`), which is
   also how the testbed presses them.
+
+- **THE ROOMS LIST'S ROWS ARE DESIGN 104a (`docs/design_salas_filas`, 2026-11-11), which SUPERSEDES
+  what rule (4) of the ROOMS PAGE bullet below says about the row's LOOK** (the faint row, the blue
+  "mine" fill, the people icon, three signal bars, the blue-rimmed Join, "Full" as text). What a row
+  shows and does is unchanged. A row is `RmRowCard`, 52 high with a 36-px icon and a 14-px name in every layout (104a
+  draws 72, 48 and 15; lowered twice at the maintainer's request the same day, `RowPaddingY` 3, 3 between name and chips; the headings' bar is 28),
+  with a 1-px rim and a tint in the colour of its GROUP (`RoomGroupBrushes`: enter green, in a match
+  blue at 1.3x, unavailable amber), declared once in `Colors.xaml` as `RmGroup*` / `RmRowTint*`; the
+  tint, the top light, the hover wash, the new-room flash and the content are LAYERS inside the card
+  (its padding is 0), because the fill is a shared frozen gradient that nothing may animate. The
+  viewer's own room keeps its group's tint and wears a white 1.5-px ring. The headings are a bar
+  (`RoomsHeaderBand`) whose 1 of rim + 13 equals the row's, and `RoomColumnDefinition` is the ONE
+  place a column becomes a `ColumnDefinition` for both. Columns: icon 36 inside Room (1.6*), Host
+  0.8* with a minimum of 236 (the design's 190, its gap and the badge), Players 148, Ping 120, Action
+  176, each fixed width carrying its 16-px gap. Cells: host photo 30 and his badge (kept over 104a,
+  the maintainer's call of 2026-11-10); "1/2" over a dot per seat, at most `MaxSeatDots` (8), still
+  clickable for the peek; FOUR signal bars (`LitBars`: up to 60 ms four, under 100 three, up to 150
+  two, slower one). The "in a match" chip is blue and its dot breathes through `AttachChipPulse`,
+  whose clocks start on Loaded and are STOPPED through their controller on Unloaded and whenever
+  `RankBadge.MayRunOn` says no. Join is `RmJoinBg` green, "Ver sala" the one solid blue, and Full an
+  amber plate that is a `Border`, not a button. **The coloured shadow under each row and the glow under
+  "Ver sala" are SIBLINGS, never an `Effect` on the row or the button face** (that would cost the text
+  ClearType): `WithRowShadow` puts a blurred, `BitmapCache`d border behind the card, inside a host
+  CLIPPED to everything but the card's rounded rectangle - the card is translucent, and unclipped the
+  shadow showed through it as a glowing band across the whole row (the first try). None with the
+  effects reduced. Measured scrolling the list (`perf roomsscroll`): 22.0 vs 20.3 % CPU with hardware
+  rendering, 31.7 vs 24.2 % in software, frame p95 under 1 ms either way. Pinned in
+  `RoomActionButtonTests` (`THE_ONE_THAT_MATTERS_EveryRowWearsItsGroupsColour`, the bars, the dots).
 
 - **THE ROOMS PAGE IS DESIGN 86 (`Controls/MultiplayerTab.RoomRows.cs`, `.QuickCard.cs`,
   `.RoomsDemo.cs`; the pure rules in `Services/Multiplayer/RoomActionRule`, `QuickCardView`,
@@ -693,21 +739,46 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   ONCE per mod and install path (`KnownModHash`, off the UI thread through `_computeModFingerprint`),
   never per row, and the list repaints when it lands; an unknown hash, or a room without
   `mod_combined_hash`, is "same version".
-  (4) **No badge in the row and no capacity bars** (the maintainer chose the prototype): the host's
-  name over his rating on the ROOM's ladder (team for a ranked 2v2/3v3). A host still being placed
-  shows "En posicionamiento 3/10" and never a number, even if an older server sends one
-  (`HiddenPlacementTag`, pinned by `PlacementPrivacyTests`).
-  (5) **The quick match card** replaces the "Find a 1v1 match" button: states Ready (who waits, nobody,
-  another version, unknown), Looking, Waiting (clock), Found, Outdated, NoMod, NotRanked, InOtherRoom;
-  hidden offline and signed out, and repainted by every session pass (entering or leaving a room
-  changes it). **NotRanked is learned, not known:** the server says a mod has no ladder only by making
-  the search's room casual, so the first search costs one room opened and closed (and the notice), and
-  the mod is then remembered for the session (`_qmUnrankedMods`) and the card says so before the next
-  click. **Found survives the search ending**: `RememberQuickMatchFound` keeps the room and the rival,
+  (4) **The host cell is his Discord photo (28 px), his badge STILL and his name over his rating, all on
+  the ROOM's ladder** (team for a ranked 2v2/3v3; a casual room defers to his own choice). The photo
+  and badge came BACK on 2026-11-10 at the maintainer's request, over design 86, which had removed
+  them; there are still no capacity bars. A host still being placed shows "En posicionamiento 3/10",
+  NO badge and never a number, even if an older server sends one (`HiddenPlacementTag`,
+  `BuildRoomHostBadge`, pinned by `PlacementPrivacyTests` and
+  `RankBadgeContextTests.THE_ONE_THAT_MATTERS_TheRoomsRowWearsTheRoomsBadge`). The badge's 30 px are
+  kept on every row so the names line up. The headings are `RmTextLabel` over a 1-px rule; PLAYERS has
+  a people icon, PING three signal bars lit by the ping's colour (`LitBars`: 3 under 100 ms, 2 to 150,
+  1 slower, none unmeasured); "Unirse" is `RmRowButtonJoin`, the faint button with a blue rim, and
+  "Ver sala" stays the only solid one.
+  (5) **The quick match is a BAR of about 56 px (2026-11-10, the maintainer's call over design 86's tall
+  card)**: icon 36, "Quick match" + the MOD picker + the KIND segment on the first line, one line of
+  state under it, the button on the right (`QuickCardView`, `MultiplayerTab.QuickCard.cs`). States
+  Ready (who waits, nobody, another version, unknown), Looking, Waiting (clock), Found, Outdated,
+  NoMod, NotRanked, InOtherRoom; hidden offline and signed out, and repainted by every session pass.
+  **The kind** is Rated / Casual / Either (`QuickMatchKind`, always a 1v1): Casual joins a casual room
+  of exactly two playing seats; **Either OPENS a rated room** (what older launchers and rated-only
+  searchers can join) and, waiting in it, moves to ANY casual candidate whatever the ages, because a
+  casual room's host searches Casual and will never come to a rated one (`PickToMoveTo`;
+  `THE_ONE_THAT_MATTERS_CasualAndEitherEndUpInOneRoom`). **The mod** is the one chosen in the bar
+  while it is installed, else the Library's (`QuickMatchProfile`; choosing the Library's mod saves
+  empty, so it keeps following); choosing never moves the Library. Both are kept in
+  `LauncherConfig.QuickMatchKind` / `QuickMatchModId`. Nobody waiting in the chosen mod but somebody in
+  another installed one: the line says so with a "Change" link inline (`WaitingElsewhere`, only on
+  fingerprints already read). The casual room's title is the network value `Casual quick match 1v1`;
+  the rated marker is unchanged. **NotRanked is learned, not known:** the server says a mod has no
+  ladder only by making the search's room casual; the mod is then remembered for the session
+  (`_qmUnrankedMods`), the bar offers Casual alone and a Rated search there closes its room with the
+  notice, while Casual and Either simply wait in it. **Found survives the search ending**: `RememberQuickMatchFound` keeps the room and the rival,
   or the card read "you are in another room" the moment the rival arrived (found live). Its spinner and
   pulse are clocks stopped through their controller, paused while hidden or minimised, and built still
   under reduced effects — the SETTING too, not only the governor (`RankBadge.SetUserReducedEffects`).
-  Compact (one line, 40-px icon) below a 900-px window.
+  There is no compact form any more: the bar is already small. **A room announced on the live channel
+  (`lobby_created`, or `lobbies_changed` from a server that sends it) is fetched at once while the list
+  is on screen** (`QueueRoomsRefreshFromAnnouncement`, 300 ms debounce,
+  `RoomsPageRefresh.ShouldRefreshOnAnnouncement`), so a new room shows in about a second; the 5-s poll
+  stays as the fallback. The server sends `lobbies_changed` (batched per second) on every change a
+  room list shows; once one arrives the poll slows to 15 s until the global socket drops
+  (`RoomsPageRefresh.PollInterval`).
   (5b) **Observer seats are inside `max_players`, as on the server (`playingSeatsOf`).**
   `RoomPlayingSeats()` subtracts them; it used not to, so a room of four with two watching seats showed
   "2 / 4", a free seat nobody could play in and "4 players · 2 observers", and auto-start waited for the
@@ -739,6 +810,26 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   once a minute `Host ping: N of M probes answered`, and that number decides whether the column
   stays. Verified live against a local server: an answering host, a silent one, a password room and
   a host without Radmin.
+
+- **STATISTICS, RANKING AND MATCHES OPEN WITH ONE BUILD; AN ANSWER REBUILDS ONLY WHAT MOVED
+  (2026-11-11).** Measured against a local server (`SETTLE`, see CLAUDE.md): opening Statistics
+  rebuilt the whole page 5 times (six requests, each answer calling `RenderStatsTab`), Matches 3,
+  and going back rebuilt again. Five rules now: (1) **an answer identical to the one held keeps the
+  held object** (`ActivityPaintKey.KeepIfSame`, content without `generated_at`/`rd`, serialized ONCE
+  per object by `ContentOf`), so the by-reference paint keys see nothing changed; (2) **Statistics'
+  answers go through `QueueStatsRender`** (90 ms of quiet, 350 ms at most, then
+  `RenderStatsTabIfChanged`), and its key no longer carries the minute; (3) **the community answer
+  goes through `RenderRankingIfChanged`** and leaves the Matches view alone; (4) **Matches has a
+  paint key** (`MatchesPaintKey`, set on EVERY branch of `PaintMatches`, the loading one included),
+  a refresh whose first page equals the top of the list changes nothing (`refresh: true`), duplicates
+  are found with a set, and **a page's flags are learned before it is drawn**
+  (`PrepareMatchesArtAsync`, 600 ms at most); (5) **the data is fetched ahead of the click**
+  (`QueueSubpagePrefetch`: at `ApplicationIdle` when the tab is shown, once a minute, signed in,
+  never with "check for updates at startup" off), so a first open draws real data in its first
+  frame. JSON is parsed on the thread pool (`LobbyApiClient.ParseResponseAsync`, `Task.Run` around
+  the parse only; the await still returns to the caller and the error path never moves). Measured
+  after: one build per first open (Statistics 30 ms, Ranking 6-33 ms, Matches 17-26 ms with the big
+  sample, the same in software rendering), zero on going back.
 
 - **THE TAB IS TRANSPARENT; THE PAGE COLOUR IS THE MAIN WINDOW'S (2026-11-11).** `TabRootGrid` has no
   background and the sub-bar is always `RmSubBarBg`: `MainWindow.NeutralBackdrop` paints `MpAppBg` with
@@ -2841,6 +2932,21 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   margin come off — so the full design fits,
   and it is what is there now: picker, grid, and a detail panel showing one card with its
   description and what it changes.
+
+  **THE DECKS SECTION WAS REBUILT ON 2026-11-10 ("por civilización + tablero de cartas"), and this
+  SUPERSEDES the paragraphs around it about pills, chips and age blocks.** Measured on the
+  maintainer's own folder: of 50 decks, ~40 were the game's "Static Deck", 5 were empty, every one
+  had a tile of its own in file order, and the cards were text pills under AGE headings with an
+  "OTHER CARDS" group. Now `OwnDeckView.Organize` (pure, `OwnDeckViewTests`) groups the player's decks
+  by civilization (by name, cities in order), files the "Static Deck"s in a group the page shows
+  FOLDED with its count, and only COUNTS empty decks; a generic name ("My Deck") is still the
+  player's, shown under its city. The page is a mod picker (`ModSearchPopup`, as the quick match
+  bar), a civilization search that refills the LIST alone (so the box keeps its focus), the list on
+  the left (290 px, scrolls past 560) and the chosen deck on the right as a `DeckTiles` board at 40 px
+  in deck order with the chosen card read below (name, "can be sent from Age N" when known,
+  description, the community share). Choosing a deck or a card repaints its own part, never the
+  page (`FillDeckList`, `FillDeckDetail`). Stacked below 604 px of content.
+  `--demo-elo=profile:decks` opens on it.
 
   **Same engine as the mod window, one builder**: `Controls/DeckTiles` at 40 px with `MpRimFaint`,
   `CardArtService` for the pictures, `CardNameResolver.ResolveDetails` and `CardEffectRenderer`

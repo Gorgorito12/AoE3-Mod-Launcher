@@ -530,6 +530,11 @@ public class LobbyApiClient : IDisposable
     public Task<object> CancelTournamentAsync(string id, CancellationToken ct = default)
         => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/cancel", null, true, ct);
 
+    /// <summary><c>POST /tournaments/:id/delete</c> (2026-11-11): the owner's, only a draft, cancelled
+    /// or abandoned tournament with no game played.</summary>
+    public Task<object> DeleteTournamentAsync(string id, CancellationToken ct = default)
+        => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/delete", null, true, ct);
+
     public Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default)
         => PostAsync<object>(
             $"tournaments/{Uri.EscapeDataString(id)}/entrants/{Uri.EscapeDataString(entrantId)}/accept",
@@ -681,8 +686,13 @@ public class LobbyApiClient : IDisposable
         if (resp.Content.Headers.ContentLength == 0)
             return default!;
 
-        var stream = await resp.Content.ReadAsStreamAsync(ct);
-        return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, ct)
+        // Parsed on the THREAD POOL. The body is already buffered, so DeserializeAsync used to run
+        // synchronously on whoever awaited it - the UI thread - and a statistics page asks for six
+        // payloads at once, one of them up to 600 pairs. Only the parse moves: the await still
+        // returns to the caller's thread, so nothing that handles the answer changes threads, and
+        // the error path above (which raises SessionRejected) never left it.
+        var body = await resp.Content.ReadAsByteArrayAsync(ct);
+        return await Task.Run(() => JsonSerializer.Deserialize<T>(body, _jsonOptions), ct)
             ?? throw new LobbyApiException(500, "internal", "Empty success response.", null);
     }
 

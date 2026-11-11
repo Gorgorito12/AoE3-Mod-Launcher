@@ -736,7 +736,7 @@ public partial class MainWindow
                 Margin = new Thickness(7, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            if (!on) number.SetResourceReference(TextBlock.ForegroundProperty, "UiDimText");
+            number.SetResourceReference(TextBlock.ForegroundProperty, on ? "UiSoftText" : "UiDimText");
             words.Children.Add(number);
 
             var pill = new Button

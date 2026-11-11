@@ -159,5 +159,17 @@ public static partial class Strings
         ["TpOrgSeedsBody"] = new() { [LangEn] = "The list is closed. If somebody arrived late you can open it again, or deal the seeds once more.", [LangEs] = "La lista está cerrada. Si alguien llegó tarde puedes abrirla otra vez, o repartir las semillas de nuevo." },
         ["TpOrgDanger"] = new() { [LangEn] = "DANGER ZONE", [LangEs] = "ZONA DE PELIGRO" },
         ["TpOrgDangerBody"] = new() { [LangEn] = "Cancelling the tournament can't be undone.", [LangEs] = "Cancelar el torneo no se puede deshacer." },
+        ["TpOrgDangerDeleteBody"] = new() { [LangEn] = "No game was played, so you can delete it. It can't be undone.", [LangEs] = "No se jugó ninguna partida, así que puedes eliminarlo. No se puede deshacer." },
+        ["TpCallCancelledKicker"] = new() { [LangEn] = "CANCELLED", [LangEs] = "CANCELADO" },
+        ["TpCallAbandonedKicker"] = new() { [LangEn] = "ARCHIVED FOR INACTIVITY", [LangEs] = "ARCHIVADO POR INACTIVIDAD" },
+        ["TpCallEndedNoGamesTitle"] = new() { [LangEn] = "No game was played", [LangEs] = "No se jugó ninguna partida" },
+        ["TpCallEndedNoGamesSub"] = new() { [LangEn] = "Only you see it now. Delete it, or it disappears on its own in a week.", [LangEs] = "Ahora solo lo ves tú. Elimínalo, o desaparecerá solo en una semana." },
+        ["TpCallEndedGamesTitle"] = new() { [LangEn] = "It stays as history", [LangEs] = "Queda como historial" },
+        ["TpCallEndedGamesSub"] = new() { [LangEn] = "Its games count, ratings included. It leaves the list a week after it ended.", [LangEs] = "Sus partidas cuentan, con su ELO. Sale de la lista una semana después de terminar." },
+        ["TpCallCancelledTitle"] = new() { [LangEn] = "This tournament was cancelled", [LangEs] = "Este torneo se canceló" },
+        ["TpCallAbandonedTitle"] = new() { [LangEn] = "Nobody touched this tournament for a long time", [LangEs] = "Nadie tocó este torneo en mucho tiempo" },
+        ["TpDeleteTournament"] = new() { [LangEn] = "Delete tournament", [LangEs] = "Eliminar torneo" },
+        ["TpDeleteTitle"] = new() { [LangEn] = "Delete this tournament?", [LangEs] = "¿Eliminar este torneo?" },
+        ["TpDeleteBody"] = new() { [LangEn] = "{0} disappears for everybody, with its entrants and its bracket. It can't be undone.", [LangEs] = "{0} desaparece para todos, con sus inscritos y su cuadro. No se puede deshacer." },
     };
 }

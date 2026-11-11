@@ -97,7 +97,7 @@ public static class TextScale
         "MpSectionLabelSize", "MpStatValueSize", "MpRoomNameSize", "MpResultTitleSize",
         "MpRatingSize", "MpActivityTitleSize", "MpActivityBodySize", "MpActivityHeadlineSize",
         "MpPageTitleSize", "MpRankNameSize", "MpRankSmallSize", "MpProfileNameSize", "MpProfileRatingSize",
-        "MpProfileRecordSize", "MpHistoryDeltaSize", "RmListTitleSize", "RmNameSize", "RmHostSize", "RmButtonSize", "RmSmallSize", "RmCountSize", "RmChipSize", "QcTitleSize", "RmEmptyTitleSize", "QcTitleSizeCompact", "QcClockSize", "QcLineSize", "QcButtonSize", "QcButtonSizeCompact", "QcButton2Size", "QcButton2SizeCompact",
+        "MpProfileRecordSize", "MpHistoryDeltaSize", "RmListTitleSize", "RmNameSize", "RmHostSize", "RmButtonSize", "RmSmallSize", "RmCountSize", "RmChipSize", "RmRowNameSize", "RmRowHostSize", "RmRowSeatsSize", "RmRowButtonSize", "RmEmptyTitleSize", "QcTitleSizeCompact", "QcClockSize", "QcLineSize", "QcButtonSizeCompact", "QcButton2SizeCompact",
         "MpHistoryTitleSize", "MpHistoryMetaSize", "MpHistoryTrailSize",
         "MpToastTitleSize", "MpMatchesEmptyTitleSize",
         "MpHlTitleSize", "MpHlMetaSize", "MpHlNameSize", "MpHlFigureSize", "MpRefundGlyphSize",

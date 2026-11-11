@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><style>@keyframes qmspin{to{transform:rotate(360deg)}}@keyframes qmpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}</style></helmet>
+<div style="container-type:inline-size;box-sizing:border-box;border-radius:14px;background:{{ cristal }};backdrop-filter:blur({{ difuminado }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)">
+  <div style="display:grid;grid-template-columns:{{ cols }};gap:{{ gx }};align-items:center;padding:{{ pad }}">
+    <span style="width:{{ ic }};height:{{ ic }};border-radius:{{ icr }};background:{{ icono }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)"></span>
+    <div style="min-width:0;display:flex;flex-direction:column;gap:{{ gy }}">
+      <sc-if value="{{ showKick }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:8px;min-height:14px">{{ marca }}<span style="font:700 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:{{ kc }}">{{ kicker }}</span></div></sc-if>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">{{ marcaC }}<span style="font:700 {{ tf }}/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb;text-wrap:pretty">{{ titulo }}</span><sc-if value="{{ hayReloj }}" hint-placeholder-val="{{ false }}"><span style="font:600 clamp(17px,1.8cqw,22px)/1 Consolas,ui-monospace,monospace;color:{{ acentoTexto }}">{{ reloj }}</span></sc-if></div>
+      <span title="{{ linea }}" style="max-width:88ch;font:400 {{ lf }}/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty;white-space:{{ lws }};overflow:hidden;text-overflow:ellipsis">{{ linea }}</span>
+      <sc-if value="{{ hayPie }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:2px"><sc-if value="{{ hayVersion }}" hint-placeholder-val="{{ true }}"><span style="height:24px;box-sizing:border-box;padding:0 10px;border-radius:12px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font:600 11px/1 Consolas,ui-monospace,monospace;color:#dce7f5"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1 1h5l5 5-5 5-5-5z" fill="#7ee08b"></path><circle cx="3.6" cy="3.6" r="1" fill="#0f1c2e"></circle></svg>{{ version }}</span></sc-if><span style="font:400 12.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;text-wrap:pretty">{{ pie }}</span></div></sc-if>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <sc-for list="{{ botones }}" as="b" hint-placeholder-count="1">
+        <sc-if value="{{ b.prim }}" hint-placeholder-val="{{ true }}"><span onClick="{{ b.go }}" style-hover="filter:brightness(1.1)" style="cursor:pointer;height:{{ bh }};box-sizing:border-box;padding:0 {{ bpx }};border-radius:{{ br }};display:flex;align-items:center;justify-content:center;background:{{ acento }};box-shadow:{{ sombra }};font:600 {{ bfs }}/1 'Segoe UI',system-ui,sans-serif;color:{{ acentoSobre }};white-space:nowrap;opacity:{{ b.op }};pointer-events:{{ b.pe }}">{{ b.t }}</span></sc-if>
+        <sc-if value="{{ b.sec }}" hint-placeholder-val="{{ false }}"><span onClick="{{ b.go }}" style-hover="background:rgba(255,255,255,.12)" style="cursor:pointer;height:{{ bh }};box-sizing:border-box;padding:0 {{ bpx2 }};border-radius:{{ br }};display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);font:600 {{ bfs2 }}/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">{{ b.t }}</span></sc-if>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:150},&quot;estado&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;listo&quot;,&quot;buscando&quot;,&quot;esperando&quot;,&quot;dentro&quot;,&quot;sinSesion&quot;,&quot;desactualizado&quot;,&quot;sinConexion&quot;,&quot;sinMod&quot;,&quot;sinClasificacion&quot;,&quot;enOtraSala&quot;],&quot;default&quot;:&quot;listo&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;espera&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;sala&quot;,&quot;nadie&quot;,&quot;version&quot;,&quot;desconocido&quot;],&quot;default&quot;:&quot;nadie&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;compacta&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;mod&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Wars of Liberty&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;icono&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;version&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;1.6.2&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;reloj&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;00:00&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;rival&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Cuzco&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;anfitrion&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Cuzco&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;minutos&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;4&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sala&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Partida de la noche&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;pico&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;18:00 y 21:00&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;otras&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;},&quot;hospedas&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;acento&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#b42a3c&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;acentoTexto&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#f08a95&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;acentoSobre&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#ffffff&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sombra&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;cristal&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;difuminado&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;onAccion&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(k: string) =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, e = p.estado ?? 'listo', mod = p.mod ?? 'Wars of Liberty', cmp = !!p.compacta;
+    const accT = p.acentoTexto ?? '#f08a95', acc = p.acento ?? '#b42a3c';
+    const host = p.anfitrion ?? 'Cuzco', rival = p.rival ?? 'Cuzco', n = Number(p.otras ?? 1);
+    const peak = p.pico ? ' Suele haber más gente entre ' + p.pico + '.' : '';
+    const el = st => React.createElement('span', { style: st });
+    const none = el({ display: 'none' });
+    let kicker = 'PARTIDA RÁPIDA', kc = accT, titulo = mod + ' · 1v1 competitiva', linea = '', pie = '', marca = none, verChip = true, reloj = false, B = [];
+    if (e === 'listo') {
+      const w = p.espera ?? 'nadie';
+      linea = w === 'sala' ? host + ' espera rival desde hace ' + (p.minutos ?? '4') + ' min. Entras en su sala al momento.'
+        : w === 'version' ? 'Nadie espera con tu versión. ' + (n === 1 ? 'Hay 1 sala esperando' : 'Hay ' + n + ' salas esperando') + ' con otra versión de ' + mod + ': actualiza o repara la tuya para jugar en ' + (n === 1 ? 'ella.' : 'ellas.')
+        : w === 'desconocido' ? 'Si alguien espera rival, entras en su sala; si no, abres una y te avisamos cuando alguien entre.'
+        : 'Nadie espera rival ahora. Abres una sala y te avisamos cuando alguien entre, aunque estés en otra pestaña o con la ventana minimizada.';
+      pie = 'Cuenta para tu ELO.' + peak;
+      B = [{ k: 'buscar', t: 'Buscar partida 1v1', prim: true }];
+    } else if (e === 'buscando') {
+      marca = el({ width: 12, height: 12, boxSizing: 'border-box', borderRadius: 6, border: '2px solid rgba(255,255,255,.18)', borderTopColor: accT, animation: 'qmspin .9s linear infinite', flex: 'none' });
+      titulo = 'Mirando las salas de ' + mod + '…';
+      linea = 'Si alguien espera rival, entras en su sala; si no, abres una y esperas en ella.';
+      verChip = false; B = [{ k: 'cancelar', t: 'Cancelar' }];
+    } else if (e === 'esperando') {
+      marca = el({ width: 8, height: 8, borderRadius: 4, background: accT, animation: 'qmpulse 1.6s ease-in-out infinite', flex: 'none' });
+      kicker = 'BUSCANDO RIVAL'; titulo = 'Esperando rival'; reloj = true;
+      linea = 'Tu sala está anunciada en esta lista, en Discord y con un aviso a quien tiene ' + mod + '. Puedes cambiar de pestaña o minimizar: te avisamos cuando alguien entre.';
+      pie = 'Si nadie entra en 30 minutos, la búsqueda se detiene y tu sala se cierra.';
+      verChip = false; B = [{ k: 'verSala', t: 'Ver sala' }, { k: 'dejar', t: 'Dejar de buscar' }];
+    } else if (e === 'dentro') {
+      marca = el({ width: 8, height: 8, borderRadius: 4, background: '#4fd68a', flex: 'none' });
+      kicker = 'RIVAL ENCONTRADO'; kc = '#7fe0a8'; titulo = 'Juegas contra ' + rival;
+      linea = 'Márcate como listo en la sala para empezar. ' + (p.hospedas ? 'Hospedas tú: creas la partida en AoE3 → Multijugador → LAN y ' + rival + ' entra desde ahí.' : 'Hospeda ' + rival + ': crea la partida en AoE3 y tú entras desde Multijugador → LAN.');
+      verChip = false; B = [{ k: 'verSala', t: 'Ver sala', prim: true }];
+    } else if (e === 'sinSesion') {
+      linea = 'Inicia sesión con Discord para buscar partida: el ELO va con tu cuenta.';
+      B = [{ k: 'sesion', t: 'Iniciar sesión', prim: true }];
+    } else if (e === 'desactualizado') {
+      linea = 'Hay que actualizar el launcher para jugar en línea.';
+      B = [{ k: 'actualizar', t: 'Actualizar launcher', prim: true }];
+    } else if (e === 'sinConexion') {
+      linea = 'Sin conexión con el servidor. La partida rápida necesita internet para ver las salas.';
+      B = [{ k: 'buscar', t: 'Buscar partida 1v1', prim: true, off: true }];
+    } else if (e === 'sinMod') {
+      linea = 'La partida rápida juega con tu mod activo, y ' + mod + ' no está instalado.';
+      verChip = false; B = [{ k: 'biblioteca', t: 'Ir a la Biblioteca', prim: true }];
+    } else if (e === 'sinClasificacion') {
+      titulo = mod + ' · 1v1';
+      linea = mod + ' no tiene clasificación, así que no tiene partida rápida. Cambia de mod activo en la Biblioteca para buscar una.';
+      verChip = false; B = [{ k: 'biblioteca', t: 'Ir a la Biblioteca' }];
+    } else if (e === 'enOtraSala') {
+      linea = 'Estás en la sala «' + (p.sala ?? 'Partida de la noche') + '». Para buscar partida, primero sales de ella.';
+      verChip = false; B = [{ k: 'verSala', t: 'Ver sala' }, { k: 'salirYBuscar', t: 'Salir y buscar', prim: true }];
+    }
+    const go = k => () => { if (typeof p.onAccion === 'function') p.onAccion(k); };
+    return {
+      cristal: p.cristal ?? 'rgba(10,19,33,.5)', difuminado: p.difuminado ?? '16px', icono: p.icono ?? '#1a2c48',
+      acento: acc, acentoTexto: accT, acentoSobre: p.acentoSobre ?? '#ffffff', sombra: p.sombra ?? 'none',
+      marca, marcaC: cmp ? marca : none, kicker, kc, titulo: cmp && kicker === 'PARTIDA RÁPIDA' ? 'Partida rápida · ' + mod + ' 1v1' : titulo, linea, showKick: !cmp,
+      cols: cmp ? '40px minmax(0,1fr) auto' : '56px minmax(0,1fr) auto', gx: cmp ? '14px' : '20px', pad: cmp ? '10px 12px 10px 14px' : '18px 22px', ic: cmp ? '40px' : '56px', icr: cmp ? '10px' : '12px', gy: cmp ? '4px' : '6px', tf: cmp ? 'clamp(16px,1.3cqw,19px)' : 'clamp(19px,2cqw,24px)', lf: cmp ? '13px' : '13.5px', lws: cmp ? 'nowrap' : 'normal', bh: cmp ? '40px' : '52px', bpx: cmp ? '18px' : '24px', bpx2: cmp ? '16px' : '20px', br: cmp ? '9px' : '10px', bfs: cmp ? '14px' : '16px', bfs2: cmp ? '13.5px' : '15px', hayReloj: reloj, reloj: p.reloj ?? '00:00',
+      hayPie: !cmp && (!!pie || verChip), hayVersion: verChip, version: p.version ?? '1.6.2', pie,
+      botones: B.map(b => ({ t: b.t, prim: !!b.prim, sec: !b.prim, go: go(b.k), op: b.off ? '.45' : '1', pe: b.off ? 'none' : 'auto' }))
+    };
+  }
+}
+</script>
+</body>
+</html>

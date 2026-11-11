@@ -1114,64 +1114,29 @@ public partial class MultiplayerTab
            ?? _getActiveProfile?.Invoke();
 
     /// <summary>
-    /// The player's own decks (95g): which mod, the decks as a list, and the open one by age with
-    /// what the community brings beside it. These are the cards the player BRINGS: a deck holds 25
-    /// and a match may use five, and nobody else's deck can be read at all.
+    /// The player's own decks (2026-11-10, over 95g): which mod, the decks listed by civilization with
+    /// the game's ready-made ones folded and the empty ones only counted, and the chosen deck as a
+    /// board of its cards with the game's art, in deck order, the chosen card read below it. These
+    /// are the cards the player BRINGS: a deck holds 25 and a match may use five, and nobody else's
+    /// deck can be read at all.
     /// </summary>
     private UIElement BuildProfileDecks()
     {
         var page = new StackPanel();
 
-        var head = new WrapPanel();
-        head.Children.Add(ProfileSectionTitle(Strings.Get("MpProfileSectionDecks")));
-
+        var head = new WrapPanel { Orientation = Orientation.Horizontal };
+        var heading = ProfileSectionTitle(Strings.Get("MpProfileSectionDecks"));
+        heading.Margin = new Thickness(0, 0, 14, 0);
+        heading.VerticalAlignment = VerticalAlignment.Center;
+        head.Children.Add(heading);
         var current = ProfileDeckMod();
-        foreach (var mod in StatsModOptions())
+        if (current != null)
         {
-            bool open = string.Equals(mod.Id, current?.Id, StringComparison.OrdinalIgnoreCase);
-            var inner = new StackPanel { Orientation = Orientation.Horizontal };
-            inner.Children.Add(new Border
-            {
-                Width = 20,
-                Height = 20,
-                CornerRadius = new CornerRadius(10),
-                Margin = new Thickness(0, 0, 7, 0),
-                Background = ResolveRoomModIcon(mod),
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-            inner.Children.Add(new TextBlock
-            {
-                Text = ResolveModDisplayName(mod.Id),
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-            if (open && _mpDecksLoaded)
-            {
-                var count = StatsMono(_mpDeckProfiles.Sum(p => p.Decks.Count).ToString(),
-                                      "StatsDeckCountSize", "StatsNote", FontWeights.Medium);
-                count.Margin = new Thickness(7, 0, 0, 0);
-                inner.Children.Add(count);
-            }
-
-            var chip = new Button
-            {
-                Content = inner,
-                Tag = open ? "active" : null,
-                Margin = new Thickness(0, 0, 8, 0),
-                Padding = new Thickness(6, 0, 12, 0),
-            };
-            chip.SetResourceReference(FrameworkElement.StyleProperty, "ProfileFilterChip");
-            System.Windows.Automation.AutomationProperties.SetName(chip, ResolveModDisplayName(mod.Id));
-            var chosen = mod.Id;
-            chip.Click += (_, _) =>
-            {
-                if (string.Equals(ProfileDeckMod()?.Id, chosen, StringComparison.OrdinalIgnoreCase)) return;
-                _profileDeckModId = chosen;
-                _mpDecksLoaded = false;
-                _mpSelectedDeck = null;
-                RenderProfileTab();
-            };
-            head.Children.Add(chip);
+            var picker = BuildDeckModPicker(current);
+            picker.Margin = new Thickness(0, 2, 10, 2);
+            head.Children.Add(picker);
         }
+        if (_mpDecksLoaded && _mpDeckProfiles.Count > 0) head.Children.Add(BuildDeckCivSearch());
         page.Children.Add(head);
 
         if (!_mpDecksLoaded)
@@ -1180,118 +1145,273 @@ public partial class MultiplayerTab
             return page;
         }
 
-        var decks = _mpDeckProfiles
-            .SelectMany(p => p.Decks.Select(d => (Profile: p, Deck: d)))
-            .ToList();
-
         // Decks of ANOTHER mod left in this one's folder are not drawn, and the page says how many
         // and why: silently dropping them would read as decks going missing.
         if (_mpDeckForeignCount > 0)
             page.Children.Add(ProfileNote(Strings.Format("MpProfileDecksForeignHidden", _mpDeckForeignCount)));
 
-        if (decks.Count == 0)
+        var book = OwnDeckView.Organize(_mpDeckProfiles, CivDisplayName);
+        if (!book.All.Any())
         {
             page.Children.Add(ProfileNote(Strings.Get("MpStatsDecksEmpty")));
             return page;
         }
-
-        if (_mpSelectedDeck == null || decks.All(d => !ReferenceEquals(d.Deck, _mpSelectedDeck)))
-            _mpSelectedDeck = decks[0].Deck;
-
-        var chosenDeck = decks.First(d => ReferenceEquals(d.Deck, _mpSelectedDeck));
-        _mpSelectedDeckCiv = chosenDeck.Profile.Civ;
-
-        var labels = OwnDeckView.Labels(decks
-            .Select(d => (CivDisplayName(d.Profile), (string?)d.Profile.CityName, (string?)d.Deck.Name))
-            .ToList());
-
-        var list = new System.Windows.Controls.Primitives.UniformGrid
+        if (_mpSelectedDeck == null || book.All.All(e => !ReferenceEquals(e.Deck, _mpSelectedDeck)))
         {
-            Columns = Math.Max(1, (int)((ProfileContentWidth / (ProfileContentWidth < 640 ? 1 : 2.1) + 8) / 178)),
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 0, 0, -8),
-        };
-        for (int i = 0; i < decks.Count; i++)
-            list.Children.Add(BuildProfileDeckTile(decks[i].Profile, decks[i].Deck, labels[i]));
+            var first = book.Mine.SelectMany(g => g.Decks).FirstOrDefault() ?? book.All.First();
+            _mpSelectedDeck = first.Deck;
+            _deckSelectedCard = null;
+        }
 
-        var detail = BuildProfileDeckDetail(chosenDeck.Profile, chosenDeck.Deck);
+        _deckListHost = new Border();
+        _deckDetailHost = new Border();
+        FillDeckList();
+        FillDeckDetail();
 
+        // Side by side as long as the list and a board of five cards fit (290 + 14 + 300).
+        var stacked = ProfileContentWidth < DeckListWidth + 14 + 300;
         var body = new Grid { Margin = new Thickness(0, 14, 0, 0) };
-        if (ProfileContentWidth < 640)
+        if (stacked)
         {
-            var stacked = new StackPanel();
-            stacked.Children.Add(list);
-            detail.Margin = new Thickness(0, 20, 0, 0);
-            stacked.Children.Add(detail);
-            body.Children.Add(stacked);
+            var column = new StackPanel();
+            column.Children.Add(_deckListHost);
+            _deckDetailHost.Margin = new Thickness(0, 16, 0, 0);
+            column.Children.Add(_deckDetailHost);
+            body.Children.Add(column);
         }
         else
         {
-            body.ColumnDefinitions.Add(new ColumnDefinition());
-            // 4 and not the design's 12: each tile keeps 8 at its right for the gap between tiles.
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4) });
-            body.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = new GridLength(1.1, GridUnitType.Star),
-                MinWidth = 260,
-            });
-            body.Children.Add(list);
-            detail.VerticalAlignment = VerticalAlignment.Top;
-            body.Children.Add(WithColumn(detail, 2));
+            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(DeckListWidth) });
+            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 300 });
+            _deckListHost.VerticalAlignment = VerticalAlignment.Top;
+            _deckDetailHost.VerticalAlignment = VerticalAlignment.Top;
+            body.Children.Add(_deckListHost);
+            body.Children.Add(WithColumn(_deckDetailHost, 2));
         }
         page.Children.Add(body);
         return page;
     }
 
-    private static TextBlock ProfileNote(string text)
+    /// <summary>The list's width beside the board, and the most it grows before it scrolls.</summary>
+    internal const double DeckListWidth = 290;
+    internal const double DeckListMaxHeight = 560;
+
+    private Border? _deckListHost;
+    private Border? _deckDetailHost;
+    private string _deckCivFilter = "";
+    private bool _deckDefaultsOpen;
+    private string? _deckSelectedCard;
+    private readonly Dictionary<HomeCityDeckEntry, Button> _deckRows = new();
+
+    /// <summary>"[icon] Wars of Liberty ▾": the mods to read decks from, as in the quick match bar.</summary>
+    private Button BuildDeckModPicker(ModProfile current)
     {
-        var note = StatsProse(text, "StatsProseSize", "StatsNote");
-        note.Margin = new Thickness(0, 10, 0, 0);
-        return note;
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(new Border
+        {
+            Width = 18,
+            Height = 18,
+            CornerRadius = new CornerRadius(9),
+            Margin = new Thickness(0, 0, 7, 0),
+            Background = ResolveRoomModIcon(current),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        var name = new TextBlock { Text = ResolveModDisplayName(current.Id), VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold };
+        row.Children.Add(name);
+        if (_mpDecksLoaded)
+        {
+            var count = StatsMono(_mpDeckProfiles.Sum(p => p.Decks.Count(d => d.Cards.Count > 0)).ToString(),
+                                  "StatsDeckCountSize", "StatsNote", FontWeights.Medium);
+            count.Margin = new Thickness(8, 0, 0, 0);
+            count.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(count);
+        }
+        row.Children.Add(new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M0,0 L4,4 L8,0"),
+            Stroke = (Brush)Application.Current.FindResource("RmTextLabel"),
+            StrokeThickness = 1.4,
+            Width = 8,
+            Height = 5,
+            Margin = new Thickness(9, 1, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        var button = new Button { Content = row, Height = 30, Padding = new Thickness(10, 0, 10, 0), HorizontalAlignment = HorizontalAlignment.Left };
+        button.SetResourceReference(FrameworkElement.StyleProperty, "RmRowButton");
+        System.Windows.Automation.AutomationProperties.SetAutomationId(button, "ProfileDecks:Mod");
+        System.Windows.Automation.AutomationProperties.SetName(button, ResolveModDisplayName(current.Id));
+        button.Click += (_, _) =>
+        {
+            var mods = StatsModOptions().ToList();
+            var popup = ModSearchPopup.Build(button, mods, _ => true, current,
+                p => ResolveRoomModIcon(p),
+                p => ModTheme.AccentOf(p.AccentColor, _config?.UseModColor ?? true),
+                picked =>
+                {
+                    if (string.Equals(ProfileDeckMod()?.Id, picked.Id, StringComparison.OrdinalIgnoreCase)) return;
+                    _profileDeckModId = picked.Id;
+                    _mpDecksLoaded = false;
+                    _mpSelectedDeck = null;
+                    _deckSelectedCard = null;
+                    _deckCivFilter = "";
+                    RenderProfileTab();
+                });
+            if (popup.Child is Border { Child: FrameworkElement body }) body.Width = Math.Max(body.Width, 300);
+            ChromePopups.Track(popup, button);
+            popup.IsOpen = true;
+        };
+        return button;
     }
 
-    private FrameworkElement BuildProfileDeckTile(HomeCityProfile profile, HomeCityDeckEntry deck, string label)
+    /// <summary>The civilization search: refills the list alone, so the box keeps its focus.</summary>
+    private FrameworkElement BuildDeckCivSearch()
     {
-        string civ = CivDisplayName(profile);
-        string second = label.StartsWith(civ + " \u00b7 ", StringComparison.Ordinal)
-            ? label[(civ.Length + 3)..]
-            : Strings.Get("MpProfileDeckNoName");
-
-        var stack = new StackPanel();
-        var name = StatsText(civ, "StatsSubtitleSize", "StatsStrong", FontWeights.SemiBold);
-        name.TextTrimming = TextTrimming.CharacterEllipsis;
-        if (!string.IsNullOrWhiteSpace(profile.Civ) && _mpDeckCivFlags.TryGetValue(profile.Civ, out var flag))
+        var box = new TextBox { Text = _deckCivFilter, Width = 220, VerticalContentAlignment = VerticalAlignment.Center };
+        box.SetResourceReference(FrameworkElement.StyleProperty, "DialogBareText");
+        box.SetResourceReference(Control.FontSizeProperty, "StatsProseSize");
+        var hint = new TextBlock
         {
-            var line = new Grid();
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            line.ColumnDefinitions.Add(new ColumnDefinition());
+            Text = Strings.Get("MpProfileDeckSearch"),
+            IsHitTestVisible = false,
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = string.IsNullOrEmpty(_deckCivFilter) ? Visibility.Visible : Visibility.Collapsed,
+        };
+        hint.SetResourceReference(TextBlock.FontSizeProperty, "StatsProseSize");
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "WindowFineText");
+        var field = new Grid();
+        field.Children.Add(box);
+        field.Children.Add(hint);
+        box.TextChanged += (_, _) =>
+        {
+            hint.Visibility = string.IsNullOrEmpty(box.Text) ? Visibility.Visible : Visibility.Collapsed;
+            _deckCivFilter = box.Text;
+            FillDeckList();
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(box, "ProfileDecks:Search");
+        var shell = new Border
+        {
+            Height = 30,
+            Padding = new Thickness(10, 0, 10, 0),
+            CornerRadius = new CornerRadius(7),
+            BorderThickness = new Thickness(1),
+            Child = field,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        shell.SetResourceReference(Border.BackgroundProperty, "GlassWell");
+        shell.SetResourceReference(Border.BorderBrushProperty, "MpRimSoft");
+        return shell;
+    }
+
+    /// <summary>The list: one heading per civilization, its decks under it, the game's ready-made
+    /// decks folded at the end and the empty ones only counted.</summary>
+    private void FillDeckList()
+    {
+        if (_deckListHost == null) return;
+        _deckRows.Clear();
+        var book = OwnDeckView.Organize(_mpDeckProfiles, CivDisplayName, _deckCivFilter);
+        var list = new StackPanel();
+        foreach (var group in book.Mine) AddDeckGroup(list, group);
+        if (book.Mine.Count == 0 && book.DefaultCount == 0)
+            list.Children.Add(ProfileNote(Strings.Get("MpProfileDeckNoMatch")));
+
+        if (book.DefaultCount > 0)
+        {
+            var toggle = new Button
+            {
+                Content = Strings.Format(_deckDefaultsOpen ? "MpProfileDeckDefaultsOpen" : "MpProfileDeckDefaults", book.DefaultCount),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 12, 0, 4),
+            };
+            toggle.SetResourceReference(FrameworkElement.StyleProperty, "MpLinkButton");
+            System.Windows.Automation.AutomationProperties.SetAutomationId(toggle, "ProfileDecks:Defaults");
+            toggle.Click += (_, _) =>
+            {
+                _deckDefaultsOpen = !_deckDefaultsOpen;
+                FillDeckList();
+            };
+            list.Children.Add(toggle);
+            if (_deckDefaultsOpen)
+                foreach (var group in book.Defaults) AddDeckGroup(list, group);
+        }
+        if (book.Empty > 0)
+            list.Children.Add(ProfileNote(Strings.Format("MpProfileDeckEmptyHidden", book.Empty)));
+
+        _deckListHost.Child = new ScrollViewer
+        {
+            Content = list,
+            MaxHeight = DeckListMaxHeight,
+            Padding = new Thickness(0, 0, 8, 0),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        };
+    }
+
+    private void AddDeckGroup(Panel list, OwnDeckCivGroup group)
+    {
+        var header = new Grid { Margin = new Thickness(0, list.Children.Count == 0 ? 0 : 10, 0, 4) };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.ColumnDefinitions.Add(new ColumnDefinition());
+        if (!string.IsNullOrWhiteSpace(group.Civ) && _mpDeckCivFlags.TryGetValue(group.Civ, out var flag))
+        {
             var picture = ArtImage(flag, CivFlagSize);
             picture.Margin = new Thickness(0, 0, 8, 0);
-            line.Children.Add(picture);
-            Grid.SetColumn(name, 1);
-            line.Children.Add(name);
-            stack.Children.Add(line);
+            header.Children.Add(picture);
         }
-        else stack.Children.Add(name);
-        var sub = StatsText(second, "StatsProseSize", "StatsProse", FontWeights.Normal);
-        sub.TextTrimming = TextTrimming.CharacterEllipsis;
-        sub.Margin = new Thickness(0, 4, 0, 0);
-        stack.Children.Add(sub);
+        var civName = StatsText(group.CivName, "StatsSubtitleSize", "StatsStrong", FontWeights.SemiBold);
+        civName.TextTrimming = TextTrimming.CharacterEllipsis;
+        civName.VerticalAlignment = VerticalAlignment.Center;
+        header.Children.Add(WithColumn(civName, 1));
+        list.Children.Add(header);
+        foreach (var entry in group.Decks) list.Children.Add(BuildProfileDeckRow(entry));
+    }
 
-        var tile = new Button
+    private Button BuildProfileDeckRow(DeckListEntry entry)
+    {
+        var stack = new StackPanel();
+        var first = StatsText(entry.Name ?? entry.Profile.CityName, "StatsProseSize", "StatsStrong", FontWeights.Medium);
+        first.TextTrimming = TextTrimming.CharacterEllipsis;
+        stack.Children.Add(first);
+        var facts = new List<string>();
+        if (entry.Name != null && !string.IsNullOrWhiteSpace(entry.Profile.CityName)) facts.Add(entry.Profile.CityName);
+        if (entry.Profile.Level > 0) facts.Add(Strings.Format("MpProfileDeckLevel", entry.Profile.Level));
+        facts.Add(Strings.Format("MpProfileDeckCards", entry.Deck.Cards.Count));
+        var second = StatsText(string.Join(" · ", facts), "StatsNoteSize", "StatsNote", FontWeights.Normal);
+        second.TextTrimming = TextTrimming.CharacterEllipsis;
+        second.Margin = new Thickness(0, 2, 0, 0);
+        stack.Children.Add(second);
+
+        var row = new Button
         {
             Content = stack,
-            Tag = ReferenceEquals(deck, _mpSelectedDeck) ? "active" : null,
+            Tag = ReferenceEquals(entry.Deck, _mpSelectedDeck) ? "active" : null,
+            Margin = new Thickness(0, 0, 0, 4),
+            Padding = new Thickness(11, 7, 11, 7),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
-        tile.SetResourceReference(FrameworkElement.StyleProperty, "ProfileDeckTile");
-        System.Windows.Automation.AutomationProperties.SetName(tile, label);
-        tile.Click += (_, _) =>
+        row.SetResourceReference(FrameworkElement.StyleProperty, "ProfileDeckTile");
+        System.Windows.Automation.AutomationProperties.SetName(row, CivDisplayName(entry.Profile) + " · " + (entry.Name ?? entry.Profile.CityName));
+        _deckRows[entry.Deck] = row;
+        row.Click += (_, _) =>
         {
-            if (ReferenceEquals(_mpSelectedDeck, deck)) return;
-            _mpSelectedDeck = deck;
-            RenderProfileTab();
+            if (ReferenceEquals(_mpSelectedDeck, entry.Deck)) return;
+            if (_mpSelectedDeck != null && _deckRows.TryGetValue(_mpSelectedDeck, out var before)) before.Tag = null;
+            _mpSelectedDeck = entry.Deck;
+            _deckSelectedCard = null;
+            row.Tag = "active";
+            FillDeckDetail();
         };
-        return tile;
+        return row;
+    }
+
+    /// <summary>The chosen deck: its board of cards in deck order, and the chosen card read below.</summary>
+    private void FillDeckDetail()
+    {
+        if (_deckDetailHost == null || _mpSelectedDeck == null) return;
+        var profile = _mpDeckProfiles.FirstOrDefault(p => p.Decks.Contains(_mpSelectedDeck));
+        if (profile == null) return;
+        _mpSelectedDeckCiv = profile.Civ;
+        _deckDetailHost.Child = BuildProfileDeckDetail(profile, _mpSelectedDeck);
     }
 
     private Border BuildProfileDeckDetail(HomeCityProfile profile, HomeCityDeckEntry deck)
@@ -1300,19 +1420,17 @@ public partial class MultiplayerTab
         string name = OwnDeckView.IsGenericName(deck.Name) ? civ : civ + " \u00b7 " + deck.Name.Trim();
 
         var stack = new StackPanel();
-        var title = new TextBlock
-        {
-            Text = name,
-            FontWeight = FontWeights.Bold,
-            TextWrapping = TextWrapping.Wrap,
-        };
+        var title = new TextBlock { Text = name, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap };
         title.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
         title.SetResourceReference(TextBlock.FontSizeProperty, "ProfileDeckTitleSize");
         title.SetResourceReference(TextBlock.ForegroundProperty, "StatsStrong");
         stack.Children.Add(title);
 
-        var sub = StatsProse(Strings.Format("MpProfileDeckCity", profile.CityName,
-                                            ResolveModDisplayName(ProfileDeckMod()?.Id ?? "")));
+        var facts = new List<string> { profile.CityName };
+        if (profile.Level > 0) facts.Add(Strings.Format("MpProfileDeckLevel", profile.Level));
+        facts.Add(Strings.Format("MpProfileDeckCards", deck.Cards.Count));
+        facts.Add(ResolveModDisplayName(ProfileDeckMod()?.Id ?? ""));
+        var sub = StatsProse(string.Join(" · ", facts.Where(f => !string.IsNullOrWhiteSpace(f))));
         sub.Margin = new Thickness(0, 4, 0, 0);
         stack.Children.Add(sub);
 
@@ -1322,32 +1440,31 @@ public partial class MultiplayerTab
         var compared = OwnDeckView.CompareWithCommunity(
             deck.Cards.Select(c => c.InternalName), profile.Civ, sameMod ? _deckStats?.Cards : null);
 
-        var byAge = deck.Cards
-            .GroupBy(c => _mpDeckFacts.TryGetValue(HomeCityCardFacts.Key(profile.Civ, c.InternalName), out var fact)
-                ? fact.Age ?? 0 : 0)
-            .OrderBy(g => g.Key == 0 ? int.MaxValue : g.Key);
-
-        foreach (var age in byAge)
+        // The board: the game's art, in deck order (the order IS the slot), never sorted.
+        var board = new WrapPanel { Margin = new Thickness(0, 12, -6, -6) };
+        var tiles = DeckTiles.Build(deck, _mpCardDetails, _mpCardIcons, ProfileDeckTileSize, "MpRimSoft");
+        var cardInfo = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
+        Border? selectedFace = null;
+        void Show(Button tile, string card)
         {
-            string heading = OwnDeckView.AgeNumeral(age.Key) is { } numeral
-                ? Strings.Format("MpProfileDeckAge", numeral)
-                : Strings.Get("MpProfileDeckAgeUnknown");
-
-            var cards = new WrapPanel { Margin = new Thickness(0, 6, -5, -5) };
-            foreach (var card in age)
-            {
-                _mpCardDetails.TryGetValue(card.InternalName, out var detail);
-                compared.Shares.TryGetValue(card.InternalName, out var share);
-                cards.Children.Add(BuildDeckChip(
-                    detail?.Name ?? card.InternalName,
-                    detail?.IconPath != null && _mpCardIcons.TryGetValue(detail.IconPath, out var art) ? art : null,
-                    compared.Shares.ContainsKey(card.InternalName) ? share : null,
-                    community: false,
-                    CardTip(card.InternalName, detail, compared.Shares.ContainsKey(card.InternalName) ? share : null, civ)));
-            }
-
-            stack.Children.Add(DeckAgeBlock(heading, cards));
+            _deckSelectedCard = card;
+            selectedFace = DeckTiles.Select(tile, selectedFace);
+            FillCardInfo(cardInfo, profile, card, compared.Shares.TryGetValue(card, out var s) ? s : null, civ);
         }
+        foreach (var tile in tiles)
+        {
+            tile.Margin = new Thickness(0, 0, 6, 6);
+            var card = tile.Tag as string ?? "";
+            _mpCardDetails.TryGetValue(card, out var detail);
+            tile.ToolTip = TooltipHelper.Wrap(detail?.Name ?? card);
+            tile.Click += (_, _) => Show(tile, card);
+            board.Children.Add(tile);
+        }
+        stack.Children.Add(board);
+
+        var chosen = tiles.FirstOrDefault(t => string.Equals(t.Tag as string, _deckSelectedCard, StringComparison.Ordinal)) ?? tiles.FirstOrDefault();
+        if (chosen != null) Show(chosen, chosen.Tag as string ?? "");
+        stack.Children.Add(cardInfo);
 
         if (compared.Others.Count > 0)
         {
@@ -1373,6 +1490,48 @@ public partial class MultiplayerTab
         }
 
         return ProfileGlass(stack, new Thickness(16, 14, 16, 14));
+    }
+
+    /// <summary>A card on the board: 40 px, the prototype's size, five to a row in the narrowest column.</summary>
+    internal const int ProfileDeckTileSize = 40;
+
+    /// <summary>The chosen card: its name, its age when known, what it does, and how many of the
+    /// community's decks bring it. A card whose age is not known simply does not say one.</summary>
+    private void FillCardInfo(Panel info, HomeCityProfile profile, string card, int? share, string civ)
+    {
+        info.Children.Clear();
+        _mpCardDetails.TryGetValue(card, out var detail);
+        var line = new WrapPanel();
+        var cardName = StatsText(detail?.Name ?? card, "StatsSubtitleSize", "StatsStrong", FontWeights.SemiBold);
+        cardName.Margin = new Thickness(0, 0, 10, 0);
+        line.Children.Add(cardName);
+        if (_mpDeckFacts.TryGetValue(HomeCityCardFacts.Key(profile.Civ, card), out var fact)
+            && OwnDeckView.AgeNumeral(fact.Age) is { } numeral)
+        {
+            var age = StatsText(Strings.Format("MpProfileDeckCardAge", numeral), "StatsNoteSize", "StatsLabel", FontWeights.SemiBold);
+            age.VerticalAlignment = VerticalAlignment.Center;
+            line.Children.Add(age);
+        }
+        info.Children.Add(line);
+        if (!string.IsNullOrWhiteSpace(detail?.Description))
+        {
+            var text = StatsProse(detail!.Description);
+            text.Margin = new Thickness(0, 6, 0, 0);
+            info.Children.Add(text);
+        }
+        if (share != null)
+        {
+            var note = StatsProse(Strings.Format("MpProfileDeckCardTip", share.Value, civ), "StatsNoteSize", "StatsNote");
+            note.Margin = new Thickness(0, 6, 0, 0);
+            info.Children.Add(note);
+        }
+    }
+
+    private static TextBlock ProfileNote(string text)
+    {
+        var note = StatsProse(text, "StatsProseSize", "StatsNote");
+        note.Margin = new Thickness(0, 10, 0, 0);
+        return note;
     }
 
     private static FrameworkElement DeckAgeBlock(string heading, UIElement cards)

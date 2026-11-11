@@ -458,6 +458,16 @@ internal static class TournamentPermissions
            && !string.Equals(t.Status, "cancelled", StringComparison.Ordinal)
            && !string.Equals(t.Status, "abandoned", StringComparison.Ordinal);
 
+    /// <summary>
+    /// Deleting (2026-11-11): the OWNER's, and only a draft, cancelled or abandoned tournament in
+    /// which no game was played - one with a game keeps its history. The server's answer is
+    /// <c>has_games</c>; a server that does not send it cannot delete, so nothing is offered.
+    /// </summary>
+    internal static bool CanDelete(TournamentSummary? t, string? myUserId)
+        => IsOwner(t, myUserId)
+           && t!.HasGames == false
+           && t.Status is "draft" or "cancelled" or "abandoned";
+
     /// <summary>Applications only exist in approval mode, and only while pending.</summary>
     internal static bool CanDecideEntrant(TournamentDetail? t, string? myUserId, TournamentEntrant? e)
         => IsOwnerOrManager(t, myUserId)

@@ -157,6 +157,8 @@ public partial class App : System.Windows.Application
             typeof(Window),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(OnAnyWindowLoaded));
+        // A context menu opened from the keyboard opens under its element, not centred on it.
+        Controls.KeyboardContextMenu.Register();
 
         // (The wol-launcher:// scheme registration lives in MainWindow's ctor,
         // gated on the EnableJoinLinks config flag — App.OnStartup has no config

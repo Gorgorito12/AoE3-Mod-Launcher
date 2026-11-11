@@ -7,7 +7,8 @@ namespace WarsOfLibertyLauncher.Services;
 
 public enum NotificationFilter { All, Mods, Launcher }
 
-public enum NotificationTone { Ok, Info, Error }
+/// <summary><c>Highlight</c> is gold: last month's highlights, the community's own news, not an alert.</summary>
+public enum NotificationTone { Ok, Info, Error, Highlight }
 
 public enum NotificationDay { Today, Yesterday, ThisWeek, Earlier }
 
@@ -23,7 +24,9 @@ public sealed record NotificationDayGroup(NotificationDay Day, IReadOnlyList<Not
 public static class NotificationView
 {
     /// <summary>The four multiplayer kinds stay out so they cannot bury the rest; each has a place
-    /// of its own in the Multiplayer tab (70c). An item is still kept in the history.</summary>
+    /// of its own in the Multiplayer tab (70c). An item is still kept in the history. The month's
+    /// highlights are the one multiplayer item that IS in the bell (the maintainer's call,
+    /// 2026-11-10): once a month, news for everybody, under Launcher like an announcement.</summary>
     public static bool BelongsInTheBell(NotificationKind kind) => kind is not (
         NotificationKind.RoomCreated or NotificationKind.MatchRated
         or NotificationKind.SeasonEnded or NotificationKind.RatingRefund);
@@ -43,6 +46,7 @@ public static class NotificationView
     {
         NotificationKind.UpdateFinished or NotificationKind.Installed => NotificationTone.Ok,
         NotificationKind.Connectivity => item.TargetId == "offline" ? NotificationTone.Error : NotificationTone.Ok,
+        NotificationKind.MonthlyHighlights => NotificationTone.Highlight,
         _ => NotificationTone.Info,
     };
 

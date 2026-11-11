@@ -79,6 +79,9 @@ public partial class MultiplayerTab
     private AnimationClock? _qmSeatDotClock;
     private string? _qmModId;
 
+    /// <summary>What the running search looks for, fixed when it starts.</summary>
+    private QuickMatchKind _qmKind = QuickMatchKind.Ranked;
+
     /// <summary>Mods the server refused a competitive room for this session: they have no ladder.</summary>
     private readonly HashSet<string> _qmUnrankedMods = new(StringComparer.Ordinal);
     private string? _qmModHash;
@@ -125,7 +128,8 @@ public partial class MultiplayerTab
         if (_session == null || _session.Status != MultiplayerSession.SessionStatus.SignedIn
             || _getActiveProfile == null || _computeModFingerprint == null) return;
 
-        var profile = _getActiveProfile();
+        // The mod chosen in the bar (the Library's active one unless the player picked another).
+        var profile = QuickMatchProfile();
         if (profile == null || string.IsNullOrEmpty(GetInstallPath(profile)))
         {
             await MpAlertOverlay.NoticeAsync(
@@ -157,11 +161,12 @@ public partial class MultiplayerTab
         _qmModId = profile.Id;
         _qmModHash = hash;
         _qmModName = profile.DisplayName;
+        _qmKind = QuickMatchKindNow(profile);
         _qmStartedUtc = DateTime.UtcNow;
         _qmRadminNotReady = false;
         StartQuickMatchClock();
         RefreshQuickMatchUi();
-        DiagnosticLog.Write($"QuickMatch: searching a 1v1 in '{profile.Id}'.");
+        DiagnosticLog.Write($"QuickMatch: searching a {_qmKind} 1v1 in '{profile.Id}'.");
 
         // Informational, and never in the way: Radmin is needed to PLAY, not to find a rival.
         _ = WarnIfRadminNotReadyAsync();
@@ -189,7 +194,7 @@ public partial class MultiplayerTab
         if (_qmStage != QuickMatchStage.Looking) return;
 
         var myId = _session.CurrentUser?.Id;
-        var toJoin = QuickMatchPlanner.RoomsToJoin(rooms, myId, _qmModId!, _qmModHash!, _cachedStanding?.Rating);
+        var toJoin = QuickMatchPlanner.RoomsToJoin(rooms, myId, _qmModId!, _qmModHash!, _cachedStanding?.Rating, _qmKind);
         foreach (var room in toJoin.Take(QuickMatchJoinAttempts))
         {
             DiagnosticLog.Write($"QuickMatch: trying waiting room {room.Id}.");
@@ -212,7 +217,7 @@ public partial class MultiplayerTab
         }
 
         // Nothing to join. A player on another version learns why there was nothing for him.
-        var otherVersions = QuickMatchPlanner.OtherVersionCount(rooms, myId, _qmModId!, _qmModHash!);
+        var otherVersions = QuickMatchPlanner.OtherVersionCount(rooms, myId, _qmModId!, _qmModHash!, _qmKind);
         if (otherVersions > 0)
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
@@ -239,7 +244,8 @@ public partial class MultiplayerTab
         }
         if (_qmStage != QuickMatchStage.Looking) return;
 
-        var title = RoomTitleProposal.QuickMatch(_qmModName ?? _qmModId ?? "", QuickMatchTitleMax);
+        var opens = QuickMatchPlanner.KindToCreate(_qmKind, modHasLadder: !_qmUnrankedMods.Contains(_qmModId ?? ""));
+        var title = RoomTitleProposal.QuickMatch(_qmModName ?? _qmModId ?? "", QuickMatchTitleMax, casual: opens == QuickMatchKind.Casual);
         CreateLobbyResponse created;
         try
         {
@@ -251,7 +257,7 @@ public partial class MultiplayerTab
                 MaxPlayers = 2,
                 SpectatorSlots = 0,
                 Password = null,
-                Competitive = true,
+                Competitive = opens == QuickMatchKind.Ranked,
             });
         }
         catch (LobbyApiException ex) when (CreateLobbyDialog.IsLauncherTooOld(ex))
@@ -288,11 +294,16 @@ public partial class MultiplayerTab
             return;
         }
 
-        if (!created.Competitive)
+        if (opens == QuickMatchKind.Ranked && !created.Competitive)
         {
             // Remembered for the session, so the card says it before the next click instead of
-            // opening and closing another room to learn it again.
+            // opening and closing another room to learn it again; the bar then searches casual.
             if (_qmModId is { } unranked) _qmUnrankedMods.Add(unranked);
+        }
+        if (_qmKind == QuickMatchKind.Ranked && !created.Competitive)
+        {
+            // Only "rated" was asked for, and a casual room is not that. Either and Casual stay and
+            // wait in it: a casual 1v1 is what they accept.
             EndQuickMatch("the server would not make the room competitive (no ladder for this mod)");
             await LeaveRoomQuietlyAsync("quick match: the mod has no ladder");
             await MpAlertOverlay.NoticeAsync(
@@ -326,10 +337,12 @@ public partial class MultiplayerTab
             if (_qmStage != QuickMatchStage.Waiting || _qmLobbyId == null) return;
 
             var target = QuickMatchPlanner.PickToMoveTo(
-                rooms, _qmLobbyId, _session.CurrentUser?.Id, _qmModId!, _qmModHash!);
+                rooms, _qmLobbyId, _session.CurrentUser?.Id, _qmModId!, _qmModHash!, _qmKind);
             if (target == null || RoomPlayerCount() >= 2) return;
 
-            DiagnosticLog.Write($"QuickMatch: moving from own room {_qmLobbyId} to older room {target.Id}.");
+            // Older, or - searching Either from a rated room - a casual one of any age.
+            var why = _qmKind == QuickMatchKind.Either && !target.Competitive ? "a casual room" : "an older room";
+            DiagnosticLog.Write($"QuickMatch: moving from own room {_qmLobbyId} to {why} {target.Id}.");
             _qmStage = QuickMatchStage.Looking;
             _qmLobbyId = null;
             _qmConvergeTimer?.Stop();
@@ -339,7 +352,7 @@ public partial class MultiplayerTab
             if (await JoinLobbyCoreAsync(target, quietOnRaceLoss: true))
             {
                 RememberQuickMatchFound(target.Id, RoomHostName(target), hosting: false);
-                EndQuickMatch($"moved into older room {target.Id}");
+                EndQuickMatch($"moved into {why} {target.Id}");
                 await SayInRoomAsync(target.Id, Strings.Get("QmMovedToOlderRoom"));
                 return;
             }

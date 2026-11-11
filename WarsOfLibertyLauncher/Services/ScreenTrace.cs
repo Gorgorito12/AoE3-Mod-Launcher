@@ -107,7 +107,77 @@ internal static class ScreenTrace
         s_last = current;
         DiagnosticLog.Write(line);
         var firstTime = s_shown.Add(current);
-        if (clickedAt != 0) MeasurePaint(from, current, clickedAt, firstTime);
+        if (clickedAt != 0)
+        {
+            MeasurePaint(from, current, clickedAt, firstTime);
+            StartSettle(current, clickedAt);
+        }
+    }
+
+    // ---- SETTLE: what happens AFTER the first frame ----
+    //
+    // SWITCH stops at the first frame, and the lag a player feels on Statistics, Ranking and
+    // Matches came later: every server answer that lands rebuilt the whole page. SETTLE counts
+    // those rebuilds for a few seconds after a click and says when the page stopped changing.
+
+    /// <summary>How long a page must go without a rebuild to count as settled, and the most a
+    /// settle window lasts.</summary>
+    internal const int QuietMs = 1500, MaxSettleMs = 10_000;
+
+    private static string? s_settlePage;
+    private static long s_settleClickedAt;
+    private static int s_settleBuilds;
+    private static double s_settleBuildMs, s_settleWorstMs;
+    private static long s_settleLastAt;
+    private static DispatcherTimer? s_settleTimer;
+
+    /// <summary>The <c>SETTLE</c> line, pure, for the tests.</summary>
+    internal static string SettleLine(string page, long settledMs, int builds, double buildMs, double worstMs)
+        => $"SETTLE  {page}  {settledMs} ms after the click, {builds} build{(builds == 1 ? "" : "s")} ({buildMs:0} ms, worst {worstMs:0} ms)";
+
+    /// <summary>A page builder finished: <paramref name="page"/> is the subtab name it draws
+    /// ("Stats", "Ranking", "Ranking/Matches"). Counted only inside a settle window for that page.</summary>
+    internal static void PageBuilt(string page, double ms)
+    {
+        PerfCounters.Increment("Build." + page);
+        if (s_settlePage == null || !s_settlePage.EndsWith(page, System.StringComparison.Ordinal)) return;
+        s_settleBuilds++;
+        s_settleBuildMs += ms;
+        if (ms > s_settleWorstMs) s_settleWorstMs = ms;
+        s_settleLastAt = Stopwatch.GetTimestamp();
+    }
+
+    private static void StartSettle(string page, long clickedAt)
+    {
+        FinishSettle();
+        if (!page.StartsWith("Multiplayer/", System.StringComparison.Ordinal)) return;
+        s_settlePage = page;
+        s_settleClickedAt = clickedAt;
+        s_settleBuilds = 0;
+        s_settleBuildMs = s_settleWorstMs = 0;
+        s_settleLastAt = clickedAt;
+        s_settleTimer ??= new DispatcherTimer(DispatcherPriority.Background) { Interval = System.TimeSpan.FromMilliseconds(250) };
+        s_settleTimer.Tick -= OnSettleTick;
+        s_settleTimer.Tick += OnSettleTick;
+        s_settleTimer.Start();
+    }
+
+    private static void OnSettleTick(object? sender, System.EventArgs e)
+    {
+        var sinceClick = Stopwatch.GetElapsedTime(s_settleClickedAt).TotalMilliseconds;
+        var quiet = Stopwatch.GetElapsedTime(s_settleLastAt).TotalMilliseconds;
+        if (quiet < QuietMs && sinceClick < MaxSettleMs) return;
+        FinishSettle();
+    }
+
+    private static void FinishSettle()
+    {
+        s_settleTimer?.Stop();
+        if (s_settlePage is not { } page) return;
+        s_settlePage = null;
+        var settled = (long)(Stopwatch.GetElapsedTime(s_settleClickedAt).TotalMilliseconds
+                             - Stopwatch.GetElapsedTime(s_settleLastAt).TotalMilliseconds);
+        DiagnosticLog.Write(SettleLine(page, settled, s_settleBuilds, s_settleBuildMs, s_settleWorstMs));
     }
 
     /// <summary>

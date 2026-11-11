@@ -243,6 +243,7 @@ public sealed class NotificationPanel : Border
         {
             NotificationTone.Ok => ("UiOk", (byte)0x4F, (byte)0xD6, (byte)0x8A),
             NotificationTone.Error => ("UiError", (byte)0xF4, (byte)0x90, (byte)0x0C),
+            NotificationTone.Highlight => ("AccentBrush", (byte)0xD8, (byte)0xB6, (byte)0x6A),
             _ => ("UiInfo", (byte)0x55, (byte)0xAC, (byte)0xEE),
         };
         var glyph = item.Kind switch
@@ -251,6 +252,7 @@ public sealed class NotificationPanel : Border
             NotificationKind.NewTranslation => "A",
             NotificationKind.NewMod => "+",
             NotificationKind.Announcement => "i",
+            NotificationKind.MonthlyHighlights => "★",
             _ => tone == NotificationTone.Error ? "!" : "✓",
         };
         return (brush, Color.FromArgb(0x24, r, g, b), Color.FromArgb(0x66, r, g, b), glyph);

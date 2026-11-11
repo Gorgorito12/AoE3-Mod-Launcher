@@ -123,6 +123,7 @@ public partial class MultiplayerTab
     private void RankingModeMatches_Click(object sender, RoutedEventArgs e)
     {
         _rankingMode = RankingMode.Matches;
+        TraceRankingModeChange();
         RenderRanking();
         MaybeRefreshMatchesOnEntry();
     }
@@ -131,6 +132,7 @@ public partial class MultiplayerTab
     private void RankingAllMatchesLink_Click(object sender, RoutedEventArgs e)
     {
         _rankingMode = RankingMode.Matches;
+        TraceRankingModeChange();
         RenderRanking();
         MaybeRefreshMatchesOnEntry();
     }
@@ -165,8 +167,32 @@ public partial class MultiplayerTab
             if (_eloPreview || _demoStats) LoadDemoMatches(reset: true);
             else _ = LoadMatchesAsync(reset: true);
         }
+        // Going back to the view draws nothing when what it shows did not move: every entry used
+        // to rebuild every tile of every page loaded.
+        if (MatchesBody != null && MatchesBody.Children.Count > 0
+            && _matchesPaintKey is { } drawn && drawn == CurrentMatchesPaintKey())
+        {
+            Services.PerfCounters.Increment("Matches.Unchanged");
+            return;
+        }
         PaintMatches();
     }
+
+    /// <summary>Everything the Matches view is drawn from, so an entry with none of it moved draws
+    /// nothing. The list by its length and its two ends, with the query that produced it.</summary>
+    private readonly record struct MatchesPaintKey(
+        int Count, string? First, string? Last, string? Cursor, int? Total,
+        bool Loading, bool Loaded, int? Failure, MatchBrowseQuery Query, string Language,
+        int Columns, MatchRowLook Look, string Art, double Scale, DateTime Day, bool Demo, int Catalog);
+
+    private MatchesPaintKey? _matchesPaintKey;
+
+    private MatchesPaintKey CurrentMatchesPaintKey() => new(
+        _matchesItems.Count, _matchesItems.Count > 0 ? _matchesItems[0].Id : null,
+        _matchesItems.Count > 0 ? _matchesItems[^1].Id : null, _matchesCursor, _matchesTotal,
+        _matchesLoading, _matchesLoaded, _matchesFailure, MatchesQuery, Strings.Language,
+        ReplayBrowse.Columns(MatchesWidth()), MatchesLook(), ActivityArtStamp(), TextScale.CurrentFactor,
+        DateTime.Now.Date, _eloPreview || _demoStats, ModRegistry.Generation);
 
     /// <summary>The fixed words of the filter bar, re-read on a language change.</summary>
     private void ApplyMatchesLabels()
@@ -429,6 +455,8 @@ public partial class MultiplayerTab
         {
             var page = await api.BrowseMatchesAsync(reset ? null : _matchesCursor, MatchesPageSize, MatchesQuery);
             if (generation != _matchesGeneration) return;
+            await PrepareMatchesArtAsync(page.Items);
+            if (generation != _matchesGeneration) return;
             if (reset)
             {
                 // What entering the view measures its age against (MaybeRefreshMatchesOnEntry).
@@ -467,17 +495,30 @@ public partial class MultiplayerTab
     }
 
     /// <summary>Add a page and remember where the next one starts. Also the tests' way in.</summary>
-    internal void ApplyMatchesPage(MatchBrowsePage page, bool reset)
+    internal void ApplyMatchesPage(MatchBrowsePage page, bool reset, bool refresh = false)
     {
+        // A refresh whose first page is what is already at the top of the list changes nothing a
+        // reader can see: the list (and any pages loaded under it) stays as it is.
+        if (reset && refresh && SameAsTheTop(page))
+        {
+            if (page.Total is int same) _matchesTotal = same;
+            _matchesLoaded = true;
+            _matchesLoading = false;
+            _matchesFailure = null;
+            Services.PerfCounters.Increment("Matches.RefreshUnchanged");
+            return;
+        }
         if (reset)
         {
             _matchesItems.Clear();
             _matchesTotal = null;
         }
-        // The same match twice would mean a page boundary moved; keep the first.
+        // The same match twice would mean a page boundary moved; keep the first. A set, not a
+        // scan of the list per match: the list grows by a page at a time.
+        var known = new HashSet<string>(_matchesItems.Select(x => x.Id ?? ""), StringComparer.Ordinal);
         var added = new List<CommunityMatch>();
         foreach (var m in page.Items)
-            if (!_matchesItems.Any(x => string.Equals(x.Id, m.Id, StringComparison.Ordinal)))
+            if (known.Add(m.Id ?? ""))
             {
                 _matchesItems.Add(m);
                 added.Add(m);
@@ -496,6 +537,18 @@ public partial class MultiplayerTab
         if (!MatchesShowing) return;
         if (CanAppendMatches(added.Count)) AppendMatchesPage(added);
         else PaintMatches();
+    }
+
+    /// <summary>Whether <paramref name="page"/> holds exactly the matches already at the top of the
+    /// list, in order and with the same content.</summary>
+    private bool SameAsTheTop(MatchBrowsePage page)
+    {
+        if (!_matchesLoaded || page.Items.Count == 0 || page.Items.Count > _matchesItems.Count) return false;
+        for (var i = 0; i < page.Items.Count; i++)
+            if (!string.Equals(Services.Multiplayer.ActivityPaintKey.ContentOf(page.Items[i]),
+                    Services.Multiplayer.ActivityPaintKey.ContentOf(_matchesItems[i]), StringComparison.Ordinal))
+                return false;
+        return true;
     }
 
     /// <summary>
@@ -589,6 +642,19 @@ public partial class MultiplayerTab
     private void PaintMatches()
     {
         if (MatchesBody == null) return;
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            PaintMatchesCore();
+            // Every branch, the empty and loading ones included: a key left unset there made the
+            // render right after a first load draw the "loading" notice a second time.
+            _matchesPaintKey = CurrentMatchesPaintKey();
+        }
+        finally { Services.ScreenTrace.PageBuilt("Ranking/Matches", System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds); }
+    }
+
+    private void PaintMatchesCore()
+    {
         MatchesBody.Children.Clear();
         _matchesDrawn.Clear();
         _matchesLastDrawnKey = null;
@@ -660,6 +726,7 @@ public partial class MultiplayerTab
         _matchesFooter = BuildMatchesFooter();
         MatchesBody.Children.Add(_matchesFooter);
         PaintMatchesCount();
+        _matchesPaintKey = CurrentMatchesPaintKey();
         _ = EnsureMatchesCivArtAsync();
     }
 
@@ -676,6 +743,7 @@ public partial class MultiplayerTab
         MatchesBody.Children.RemoveAt(index);
         _matchesFooter = BuildMatchesFooter();
         MatchesBody.Children.Insert(index, _matchesFooter);
+        _matchesPaintKey = CurrentMatchesPaintKey();
     }
 
     private void PaintMatchesCount()
@@ -920,6 +988,33 @@ public partial class MultiplayerTab
     }
 
     /// <summary>The flags of the shown matches, read off each mod's files; repaint when something was learned.</summary>
+    /// <summary>The longest a page waits for its flags before it is drawn without them.</summary>
+    internal const int MatchesArtWaitMs = 600;
+
+    /// <summary>
+    /// The flags of a page that just arrived, learned BEFORE it is drawn: drawn first, the page was
+    /// drawn again whole the moment its flags were known (three builds to open Matches, measured).
+    /// Bounded: a slow install read draws the page without them, and the repaint below follows.
+    /// </summary>
+    private async Task PrepareMatchesArtAsync(IReadOnlyList<CommunityMatch> items)
+    {
+        try
+        {
+            var work = Task.WhenAll(items
+                .Where(m => !string.IsNullOrWhiteSpace(m.ModId))
+                .GroupBy(m => m.ModId, StringComparer.OrdinalIgnoreCase)
+                .Select(g => (Mod: g.Key, Civs: g.SelectMany(m => m.Participants).Select(p => p.Civ)
+                    .Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!).Distinct(StringComparer.Ordinal).ToList()))
+                .Where(x => x.Civs.Count > 0)
+                .Select(x => DeckCardNames.ResolveAsync(x.Mod, GetInstallPath, Array.Empty<string>(), x.Civs)));
+            await Task.WhenAny(work, Task.Delay(MatchesArtWaitMs));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Ranking matches civ art (before drawing): {ex.Message}");
+        }
+    }
+
     private async Task EnsureMatchesCivArtAsync()
     {
         try

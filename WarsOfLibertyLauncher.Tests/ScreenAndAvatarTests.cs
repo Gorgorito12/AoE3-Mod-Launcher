@@ -42,6 +42,17 @@ public class ScreenAndAvatarTests
         string? from, string to, long ms, bool first, string expected)
         => Assert.Equal(expected, ScreenTrace.SwitchLine(from, to, ms, first));
 
+    /// <summary>SETTLE says how long after the click the page stopped being rebuilt and how many
+    /// builds that took: the lag on Statistics came after the first frame, where SWITCH stops.</summary>
+    [Fact]
+    public void TheSettleLineCountsTheBuildsAfterTheClick()
+    {
+        Assert.Equal("SETTLE  Multiplayer/Stats  176 ms after the click, 2 builds (33 ms, worst 18 ms)",
+            ScreenTrace.SettleLine("Multiplayer/Stats", 176, 2, 33.4, 18.2));
+        Assert.Equal("SETTLE  Multiplayer/Ranking  6 ms after the click, 1 build (6 ms, worst 6 ms)",
+            ScreenTrace.SettleLine("Multiplayer/Ranking", 6, 1, 6, 6));
+    }
+
     /// <summary>
     /// THE ONE THAT MATTERS for the avatars: the same face at the same size is ONE decoded
     /// photo, decoded at the size it is shown rather than the size it was uploaded.

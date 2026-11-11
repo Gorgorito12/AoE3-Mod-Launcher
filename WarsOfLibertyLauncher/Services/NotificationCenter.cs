@@ -183,6 +183,23 @@ public sealed class NotificationCenter
     /// arrives every session until the profile banner is dismissed — and persisted, so a restart
     /// does not ring it again.
     /// </summary>
+    /// <summary>Last month's highlights, once per month (the caller decides when, through
+    /// <c>HighlightsNotice</c>; this only refuses a month already said).</summary>
+    public bool RaiseMonthlyHighlights(string month, string title, string body)
+    {
+        if (string.IsNullOrWhiteSpace(month)) return false;
+        if (string.Equals(_config.NotifiedHighlightsMonth, month, StringComparison.Ordinal)) return false;
+        _config.NotifiedHighlightsMonth = month;
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.MonthlyHighlights,
+            ModId = "",
+            Title = title,
+            Body = body,
+            TargetId = month,
+        });
+    }
+
     public bool RaiseRatingRefund(string refundId, string title, string body)
     {
         if (string.IsNullOrWhiteSpace(refundId)) return false;

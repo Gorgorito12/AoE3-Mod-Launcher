@@ -24,7 +24,7 @@ namespace WarsOfLibertyLauncher.Controls;
 public partial class MultiplayerTab
 {
     /// <summary>The prototype's 12-px gap between columns, carried by every cell after the first.</summary>
-    private const double RoomColumnGap = 12;
+    private const double RoomColumnGap = 16;
 
     /// <summary>The icon (36) and the gap after it (12): what the ROOM heading is pushed right by,
     /// since the icon has no heading of its own.</summary>
@@ -111,20 +111,131 @@ public partial class MultiplayerTab
 
     // ---- The row ----
 
-    /// <summary>A heading over one of the three groups (PUEDES ENTRAR / EN PARTIDA / NO DISPONIBLES).</summary>
-    private static TextBlock BuildRoomGroupHeading(RoomGroup group)
+    /// <summary>One column of the rooms table, the same for the headings' bar and for every row.</summary>
+    private static ColumnDefinition RoomColumnDefinition(Services.RoomColumnSpec spec)
     {
-        var tb = new TextBlock
+        // A fixed width, or a share of what the fixed ones leave. A share's MinWidth is the
+        // design's `minmax`; Room's stays 0 so its text ellipsises rather than pushing the
+        // fixed columns off the edge of a list that does not scroll sideways.
+        var column = new ColumnDefinition
         {
-            Text = Strings.Get(RoomActionRule.GroupKey(group)),
-            Foreground = Rm("RmHeading"),
-            FontWeight = FontWeights.Bold,
-            Margin = new Thickness(4, 8, 4, 6),
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            Width = spec.FixedWidth is double w ? new GridLength(w) : new GridLength(spec.Star, GridUnitType.Star),
+        };
+        if (spec.FixedWidth == null && spec.MinWidth > 0) column.MinWidth = spec.MinWidth;
+        return column;
+    }
+
+    /// <summary>
+    /// The row with its coloured shadow under it (design 104a: 0 10 22, spread -12, the group's
+    /// colour at 40 %). The shadow is a SIBLING behind the card, never an Effect on it: an Effect on
+    /// the card would rasterise its text and cost it ClearType. It is blurred once and cached
+    /// (<see cref="BitmapCache"/>), so scrolling moves a bitmap instead of blurring again. With the
+    /// effects reduced (the setting, or a PC measured as slow) the card goes in alone.
+    /// </summary>
+    /// <summary>How far past the card its shadow's blur can reach: the 22 of blur and some.</summary>
+    private const double ShadowReach = 48;
+
+    private static FrameworkElement WithRowShadow(Border card, RoomGroup group)
+    {
+        if (RankBadge.ReducedEffects) return card;
+        var key = group switch
+        {
+            RoomGroup.CanEnter => "RmRowShadowOpen",
+            RoomGroup.InGame => "RmRowShadowLive",
+            _ => "RmRowShadowOff",
+        };
+        var stack = new Grid();
+        // The card's rectangle inset by the spread (12) and moved down 10: only the blur shows,
+        // under the bottom edge.
+        var shadow = new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Margin = new Thickness(12, 22, 12, 2),
+            Background = Rm(key),
+            Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 22 },
+            CacheMode = new BitmapCache(),
+            IsHitTestVisible = false,
+            Tag = "RoomShadow",
+        };
+        // The card is translucent, so a shadow behind it would show THROUGH it as a glowing band
+        // across the whole row (seen on the first try). A CSS box-shadow is never drawn under its
+        // box, so the host is clipped to everything but the card's own rounded rectangle. Clip
+        // writes no layout, so setting it from SizeChanged cannot loop.
+        var host = new Grid { IsHitTestVisible = false };
+        host.Children.Add(shadow);
+        host.SizeChanged += (_, e) =>
+        {
+            var w = e.NewSize.Width;
+            var h = e.NewSize.Height;
+            var clip = Geometry.Combine(
+                new RectangleGeometry(new Rect(-ShadowReach, -ShadowReach, w + 2 * ShadowReach, h + 2 * ShadowReach)),
+                new RectangleGeometry(new Rect(0, 0, w, h), 12, 12),
+                GeometryCombineMode.Exclude, null);
+            clip.Freeze();
+            host.Clip = clip;
+        };
+        stack.Children.Add(host);
+        var margin = card.Margin;
+        card.Margin = new Thickness(0);
+        stack.Children.Add(card);
+        // A Border, carrying the row's Tag and margin, so the list still reads as one Border per room.
+        return new Border { Child = stack, Margin = margin, Tag = card.Tag };
+    }
+
+    /// <summary>The brush keys of a group (design 104a): its colour, its text, a row's rim and tint.</summary>
+    internal static (string Dot, string Text, string Rim, string Tint) RoomGroupBrushes(RoomGroup group) => group switch
+    {
+        RoomGroup.CanEnter => ("RmGroupOpen", "RmGroupOpenText", "RmGroupOpenRim", "RmRowTintOpen"),
+        RoomGroup.InGame => ("RmGroupLive", "RmGroupLiveText", "RmGroupLiveRim", "RmRowTintLive"),
+        _ => ("RmGroupOff", "RmGroupOffText", "RmGroupOffRim", "RmRowTintOff"),
+    };
+
+    /// <summary>
+    /// A heading over one of the three groups (PUEDES ENTRAR / EN PARTIDA / NO DISPONIBLES): a dot
+    /// and the name in the group's colour, how many rooms it holds, and a rule to the edge.
+    /// </summary>
+    private static FrameworkElement BuildRoomGroupHeading(RoomGroup group, int count, bool first)
+    {
+        var keys = RoomGroupBrushes(group);
+        var line = new Grid
+        {
+            // The rows are 6 apart; the design pads the first heading 2 and the others 10 above.
+            Margin = new Thickness(6, first ? 2 : 10, 6, 8),
             Tag = "RoomGroup:" + group,
         };
-        tb.SetResourceReference(TextBlock.FontSizeProperty, "RmChipSize");
-        return tb;
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        line.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = Rm(keys.Dot), VerticalAlignment = VerticalAlignment.Center });
+        var name = new TextBlock
+        {
+            Text = Strings.Get(RoomActionRule.GroupKey(group)),
+            Foreground = Rm(keys.Text),
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        name.SetResourceReference(TextBlock.FontSizeProperty, "RmCountSize");
+        Grid.SetColumn(name, 1);
+        line.Children.Add(name);
+        var number = new TextBlock
+        {
+            Text = count.ToString(Strings.Culture),
+            Foreground = Rm("RmGroupCount"),
+            FontFamily = MonoFont,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        number.SetResourceReference(TextBlock.FontSizeProperty, "RmCountSize");
+        Grid.SetColumn(number, 2);
+        line.Children.Add(number);
+        var rule = new Border { Height = 1, Background = Rm("RmGroupRule"), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(rule, 3);
+        line.Children.Add(rule);
+        return line;
     }
 
     /// <summary>One room. The name is kept for the tests that reach it by reflection.</summary>
@@ -133,33 +244,53 @@ public partial class MultiplayerTab
         var facts = RoomFactsOf(lobby);
         var action = RoomActionRule.Decide(facts);
         var mine = action == RoomAction.OpenMine;
+        var group = RoomGroupBrushes(RoomActionRule.GroupOf(action));
 
+        // Design 104a: the card's face comes from the style; the group's colour is its rim and
+        // a tint that fades out to the right. The viewer's own room keeps its group's tint and
+        // swaps the rim for a white ring, half a pixel thicker - which the content's margin
+        // gives back, so nothing in the row moves.
         var card = new Border
         {
-            Style = (Style)FindResource(mine ? "RmRowCardMine" : "RmRowCard"),
+            Style = (Style)FindResource("RmRowCard"),
+            BorderBrush = Rm(mine ? "RmRowMineRing" : group.Rim),
+            BorderThickness = new Thickness(mine ? 1.5 : 1),
             Tag = lobby,
         };
+        // 52 high in every layout (the maintainer's call over 104a's 72): 3 of padding above and
+        // below, a 36-px icon, and 3 between the name (14) and its chips.
+        var padY = RowPaddingY - (mine ? 1.5 : 1);
         AutomationProperties.SetAutomationId(card, "RoomRow:" + lobby.Id);
+        var inner = mine ? 10.5 : 11;
+        var layers = new Grid();
+        layers.Children.Add(new Border { CornerRadius = new CornerRadius(inner), Background = Rm(group.Tint), IsHitTestVisible = false, Tag = "RoomTint" });
+        // The light along the top edge, kept clear of the rounded corners.
+        layers.Children.Add(new Border { Height = 1, Margin = new Thickness(inner, 0, inner, 0), VerticalAlignment = VerticalAlignment.Top, Background = Rm("RmRowEdgeLight"), IsHitTestVisible = false });
+        var wash = new Border { CornerRadius = new CornerRadius(inner), Background = Rm("RmRowHoverWash"), Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+        layers.Children.Add(wash);
+        var flashWash = new Border { CornerRadius = new CornerRadius(inner), Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+        layers.Children.Add(flashWash);
+        card.MouseEnter += (_, _) => wash.Visibility = Visibility.Visible;
+        card.MouseLeave += (_, _) => wash.Visibility = Visibility.Collapsed;
 
-        var grid = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        // The design's 12 / 14 of padding, less the rim.
+        var grid = new Grid { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(mine ? 12.5 : 13, padY, mine ? 12.5 : 13, padY) };
         foreach (var spec in _roomColumns)
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = spec.FixedWidth is double w ? new GridLength(w) : new GridLength(1, GridUnitType.Star),
-            });
+            grid.ColumnDefinitions.Add(RoomColumnDefinition(spec));
 
         var profile = ModRegistry.Find(lobby.ModId);
 
         // === ROOM: icon, then the name over its chips ===
         var room = new Grid();
-        room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RoomIconSize) });
         room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var icon = new Border
         {
-            Width = 36,
-            Height = 36,
+            Width = RoomIconSize,
+            Height = RoomIconSize,
             CornerRadius = new CornerRadius(8),
-            BorderBrush = Rm("RmChipRim"),
+            BorderBrush = Rm("RmIconRim"),
+            ToolTip = profile == null ? null : TooltipHelper.Wrap(profile.DisplayName),
             BorderThickness = new Thickness(1),
             Background = ResolveRoomModIcon(profile) ?? Rm("MpField"),
             VerticalAlignment = VerticalAlignment.Center,
@@ -174,23 +305,41 @@ public partial class MultiplayerTab
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        name.SetResourceReference(TextBlock.FontSizeProperty, "RmNameSize");
+        name.SetResourceReference(TextBlock.FontSizeProperty, "RmRowNameSize");
         roomText.Children.Add(name);
 
         // ONE line of chips. A WrapPanel in a 22-px clip: a chip that does not fit wraps onto a
         // line nobody sees, so it leaves WHOLE rather than cut in half.
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var chip in RoomChipsOf(lobby, facts)) chips.Children.Add(chip);
-        var chipLine = new Grid { ClipToBounds = true, Height = 22, Margin = new Thickness(0, 5, 0, 0) };
+        var chipLine = new Grid { ClipToBounds = true, Height = 22, Margin = new Thickness(0, 3, 0, 0) };
         chipLine.Children.Add(chips);
         roomText.Children.Add(chipLine);
         Grid.SetColumn(roomText, 1);
         room.Children.Add(roomText);
         PlaceRoomCell(grid, RoomColumn.Room, room);
 
-        // === HOST: name (and "you") over the rating ===
+        // === HOST: photo, badge, then the name (and "you") over the rating ===
         var hostName = RoomHostName(lobby);
-        var host = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var hostCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // The badge's place is kept on every row, so the names line up whether a host wears one
+        // (a host being placed does not).
+        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var avatar = BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, HostAvatarSize);
+        avatar.VerticalAlignment = VerticalAlignment.Center;
+        hostCell.Children.Add(avatar);
+        if (BuildRoomHostBadge(lobby) is { } hostBadge)
+        {
+            hostBadge.Margin = new Thickness(8, 0, 0, 0);
+            hostBadge.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(hostBadge, 1);
+            hostCell.Children.Add(hostBadge);
+        }
+        var host = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        Grid.SetColumn(host, 2);
+        hostCell.Children.Add(host);
         var hostLine = new Grid();
         hostLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -201,7 +350,7 @@ public partial class MultiplayerTab
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        hostText.SetResourceReference(TextBlock.FontSizeProperty, "RmHostSize");
+        hostText.SetResourceReference(TextBlock.FontSizeProperty, "RmRowHostSize");
         var hostIsMe = mine && IsHostedByMe(lobby);
         if (hostIsMe)
         {
@@ -211,7 +360,7 @@ public partial class MultiplayerTab
             var you = new TextBlock
             {
                 Text = Strings.Get("RmHostYou"),
-                Foreground = Rm("MpTextFaint"),
+                Foreground = Rm("RmTextLabel"),
                 Margin = new Thickness(6, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Bottom,
             };
@@ -227,30 +376,40 @@ public partial class MultiplayerTab
         host.Children.Add(hostLine);
         if (BuildRoomHostRating(lobby, hostIsMe) is { } rating)
         {
-            rating.Margin = new Thickness(0, 4, 0, 0);
+            rating.Margin = new Thickness(0, 3, 0, 0);
             host.Children.Add(rating);
         }
-        PlaceRoomCell(grid, RoomColumn.Host, host, gap: true);
+        PlaceRoomCell(grid, RoomColumn.Host, hostCell, gap: true);
 
-        // === PLAYERS: "1/2", clickable to see who is in ===
+        // === PLAYERS: "1/2" over a dot per seat, clickable to see who is in ===
         var seats = RoomFormats.SeatsOf(lobby.MaxPlayers, lobby.SpectatorSlots, lobby.CurrentPlayers, lobby.SpectatorsPresent);
         var players = new TextBlock
         {
             Text = $"{seats.PlayersSeated}/{seats.PlayerSeats}",
-            Foreground = Rm("RmTextHost"),
+            Foreground = Rm("RmTextStrong"),
             FontFamily = MonoFont,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = FontWeights.Bold,
+            HorizontalAlignment = HorizontalAlignment.Left,
             Background = Brushes.Transparent,
             Cursor = System.Windows.Input.Cursors.Hand,
             Tag = lobby,
-            ToolTip = Strings.Get("MpRoomPeekTooltip"),
         };
-        players.SetResourceReference(TextBlock.FontSizeProperty, "RmHostSize");
+        players.SetResourceReference(TextBlock.FontSizeProperty, "RmRowSeatsSize");
         players.MouseEnter += (_, _) => players.TextDecorations = TextDecorations.Underline;
         players.MouseLeave += (_, _) => players.TextDecorations = null;
         players.MouseLeftButtonUp += PlayersPeek_Click;
-        PlaceRoomCell(grid, RoomColumn.Players, players, gap: true);
+        // The whole cell carries the tooltip (a tooltip on the digits alone is a small target),
+        // and a transparent fill so the gaps between the dots answer the pointer too.
+        var playersCell = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = Brushes.Transparent,
+            ToolTip = TooltipHelper.Wrap(Strings.Format("RmPlayersTip", seats.PlayersSeated, seats.PlayerSeats)
+                                         + "\n" + Strings.Get("MpRoomPeekTooltip")),
+        };
+        playersCell.Children.Add(players);
+        playersCell.Children.Add(BuildSeatDots(seats.PlayersSeated, seats.PlayerSeats));
+        PlaceRoomCell(grid, RoomColumn.Players, playersCell, gap: true);
 
         // === PING: to this host over Radmin, only when the server publishes hosts' addresses ===
         if (HostPingColumnShown)
@@ -268,14 +427,63 @@ public partial class MultiplayerTab
         };
 
         if (_roomIdsSeeded && !string.IsNullOrEmpty(lobby.Id) && !_knownRoomIds.Contains(lobby.Id))
-            FlashNewRoom(card);
+            FlashNewRoom(flashWash);
         if (!string.IsNullOrEmpty(lobby.Id)) _knownRoomIds.Add(lobby.Id);
 
-        card.Child = grid;
+        layers.Children.Add(grid);
+        card.Child = layers;
         return card;
     }
 
     private static readonly FontFamily MonoFont = new("Consolas, Courier New, monospace");
+
+    /// <summary>The mod's icon at the head of a row (design 104a: 48, radius 10).</summary>
+    internal const double RoomIconSize = 36;
+
+    /// <summary>A row's padding above and below its content. With the name (15) over the chip line
+    /// (22, 3 apart) and the 1-px rim, the row measures the 52 of <c>MpRoomRowHeight</c>.</summary>
+    internal const double RowPaddingY = 3;
+
+    /// <summary>The host's Discord photo in the rooms row (the maintainer asked for it back over 86).</summary>
+    internal const double HostAvatarSize = 30;
+
+    /// <summary>More seats than this and the row of dots stops: the count above still says it.</summary>
+    internal const int MaxSeatDots = 8;
+
+    /// <summary>A dot per playing seat (design 104a): filled when taken, an outline when free.</summary>
+    internal static StackPanel BuildSeatDots(int seated, int seats)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 7, 0, 0), Tag = "RoomSeats" };
+        var shown = Math.Min(Math.Max(seats, 0), MaxSeatDots);
+        for (var i = 0; i < shown; i++)
+        {
+            var taken = i < seated;
+            row.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 8,
+                Height = 8,
+                Margin = new Thickness(0, 0, i == shown - 1 ? 0 : 4, 0),
+                Fill = taken ? Rm("RmSeatOn") : Brushes.Transparent,
+                Stroke = taken ? null : Rm("RmSeatOff"),
+                StrokeThickness = taken ? 0 : 1.5,
+            });
+        }
+        return row;
+    }
+
+    /// <summary>The host's badge, STILL, on the room's ladder (team for a ranked 2v2/3v3, as the
+    /// rating under his name). None for a host still being placed — the badge would give away the
+    /// number placement privacy hides — and none when the server sent no place.</summary>
+    private FrameworkElement? BuildRoomHostBadge(LobbySummary lobby)
+    {
+        var h = lobby.Host;
+        if (h == null) return null;
+        var format = RoomFormats.Resolve(lobby.Competitive, lobby.MaxPlayers, lobby.SpectatorSlots);
+        var team = format is RoomFormat.TwoVTwo or RoomFormat.ThreeVThree;
+        if ((team ? h.InPlacementTeam : h.InPlacement) == true) return null;
+        if (BadgeOf(format, h.BadgeMode, h.LadderRank, h.LadderRankTeam) is not { } shown) return null;
+        return BuildShownBadge(shown, 22, "room-host-" + h.Id);
+    }
 
     /// <summary>I am the host (as opposed to merely in the room).</summary>
     private bool IsHostedByMe(LobbySummary lobby)
@@ -360,19 +568,24 @@ public partial class MultiplayerTab
             yield return RoomChip(started is DateTime s
                     ? Strings.Format("RmChipInGame", RoomAgeFormat.Coarse(DateTime.UtcNow - s))
                     : Strings.Get("RmChipInGameBare"),
-                "RmDotGreen", "RmTextGreen");
+                "RmGroupLive", "RmGroupLiveText", fillKey: "RmChipLiveBg", rimKey: "RmChipLiveRim", pulse: true);
         }
-        if (facts.VersionDiffers) yield return RoomChip(Strings.Get("RmChipOtherVersion"), "RmDotOrange", "RmTextOrange");
-        if (seats.WatchSeats > 0) yield return RoomChip(Strings.Format("RmChipObservers", seats.Watching, seats.WatchSeats), "RmDotBlue", "RmTextBlue");
+        if (facts.VersionDiffers)
+            yield return RoomChip(Strings.Get("RmChipOtherVersion"), "RmGroupOff", "RmGroupOffText", fillKey: "RmChipWarnBg", rimKey: "RmChipWarnRim");
+        if (seats.WatchSeats > 0) yield return RoomChip(Strings.Format("RmChipObservers", seats.Watching, seats.WatchSeats), "RmDotPassword", "RmTextHost");
         if (facts.Mine)
-            yield return RoomChip(Strings.Get(IsHostedByMe(lobby) ? "RmChipYours" : "RmChipInside"), "RmDotBlue", "RmTextBlue");
+            yield return RoomChip(Strings.Get(IsHostedByMe(lobby) ? "RmChipYours" : "RmChipInside"), "RmChipMineDot", "RmChipMineText", fillKey: "RmChipMineBg", rimKey: null);
     }
 
-    /// <summary>A 22-px chip: a 6-px dot and a short label, on a faint fill with a rim.</summary>
-    private static Border RoomChip(string text, string dotKey, string textKey, string? tip = null)
+    /// <summary>A 22-px chip: a 6-px dot and a short label, on a faint fill with a rim. A chip
+    /// with a state of its own (in a match, another version, mine) names its fill and rim.</summary>
+    private static Border RoomChip(string text, string dotKey, string textKey, string? tip = null,
+        string fillKey = "RmChipBg", string? rimKey = "RmChipRim", bool pulse = false)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        row.Children.Add(new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, Fill = Rm(dotKey), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+        var dot = new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, Fill = Rm(dotKey), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+        if (pulse) AttachChipPulse(dot);
+        row.Children.Add(dot);
         var label = new TextBlock { Text = text, Foreground = Rm(textKey), FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         label.SetResourceReference(TextBlock.FontSizeProperty, "RmChipSize");
         row.Children.Add(label);
@@ -380,15 +593,61 @@ public partial class MultiplayerTab
         {
             Height = 22,
             CornerRadius = new CornerRadius(11),
-            Padding = new Thickness(8, 0, 8, 0),
+            Padding = new Thickness(rimKey == null ? 9 : 8, 0, rimKey == null ? 9 : 8, 0),
             Margin = new Thickness(0, 0, 6, 0),
-            Background = Rm("RmChipBg"),
-            BorderBrush = Rm("RmChipRim"),
-            BorderThickness = new Thickness(1),
+            Background = Rm(fillKey),
+            BorderBrush = rimKey == null ? null : Rm(rimKey),
+            BorderThickness = new Thickness(rimKey == null ? 0 : 1),
             Child = row,
         };
         if (tip != null) chip.ToolTip = TooltipHelper.Wrap(tip);
         return chip;
+    }
+
+    /// <summary>
+    /// The "in a match" dot breathes (1.6 s, opacity 1 to 0.4 and scale 1 to 0.7) only while
+    /// somebody can see it and effects are on (<see cref="RankBadge.MayRunOn"/>). The clocks live
+    /// with the dot: started when it is loaded, STOPPED through their controller when it leaves
+    /// the tree or the conditions change - detaching alone would leave them ticking.
+    /// </summary>
+    private static void AttachChipPulse(System.Windows.Shapes.Ellipse dot)
+    {
+        var scale = new ScaleTransform(1, 1);
+        dot.RenderTransform = scale;
+        dot.RenderTransformOrigin = new Point(.5, .5);
+        var clocks = new List<System.Windows.Media.Animation.AnimationClock>();
+
+        void Stop()
+        {
+            foreach (var c in clocks) c.Controller?.Stop();
+            clocks.Clear();
+            dot.ApplyAnimationClock(OpacityProperty, null);
+            scale.ApplyAnimationClock(ScaleTransform.ScaleXProperty, null);
+            scale.ApplyAnimationClock(ScaleTransform.ScaleYProperty, null);
+        }
+        void Sync()
+        {
+            var run = dot.IsLoaded && RankBadge.MayRunOn(dot);
+            if (!run) { if (clocks.Count > 0) Stop(); return; }
+            if (clocks.Count > 0) return;
+            System.Windows.Media.Animation.AnimationClock Clock(double to)
+            {
+                var a = new System.Windows.Media.Animation.DoubleAnimation(1, to, TimeSpan.FromSeconds(0.8))
+                {
+                    AutoReverse = true,
+                    RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+                };
+                System.Windows.Media.Animation.Timeline.SetDesiredFrameRate(a, RankBadge.FrameRate);
+                var c = a.CreateClock();
+                clocks.Add(c);
+                return c;
+            }
+            dot.ApplyAnimationClock(OpacityProperty, Clock(0.4));
+            scale.ApplyAnimationClock(ScaleTransform.ScaleXProperty, Clock(0.7));
+            scale.ApplyAnimationClock(ScaleTransform.ScaleYProperty, Clock(0.7));
+        }
+        dot.Loaded += (_, _) => { RankBadge.RunConditionsChanged += Sync; Sync(); };
+        dot.Unloaded += (_, _) => { RankBadge.RunConditionsChanged -= Sync; Stop(); };
     }
 
     /// <summary>The row's one action: a button, or the word "Full".</summary>
@@ -398,22 +657,38 @@ public partial class MultiplayerTab
         var caption = Strings.Get(RoomActionRule.CaptionKey(action));
         if (action == RoomAction.Full)
         {
+            // A STATE, not an action: an amber plate the size of a row button, with no hand
+            // cursor and no hover, so it reads the same with the pointer on it.
             var full = new TextBlock
             {
                 Text = caption,
-                Foreground = Rm("MpTextFaint"),
+                Foreground = Rm("RmGroupOffText"),
                 FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 6, 0),
-                HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            full.SetResourceReference(TextBlock.FontSizeProperty, "RmButtonSize");
-            return full;
+            full.SetResourceReference(TextBlock.FontSizeProperty, "RmRowButtonSize");
+            return new Border
+            {
+                Height = 34,
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(15, 0, 15, 0),
+                Background = Rm("RmFullBg"),
+                BorderBrush = Rm("RmFullRim"),
+                BorderThickness = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = full,
+            };
         }
 
         var btn = new Button
         {
-            Style = (Style)Application.Current.FindResource(action == RoomAction.OpenMine ? "RmRowButtonPrimary" : "RmRowButton"),
+            Style = (Style)Application.Current.FindResource(action switch
+            {
+                RoomAction.OpenMine => "RmRowButtonPrimary",
+                RoomAction.Join => "RmRowButtonJoin",
+                _ => "RmRowButton",
+            }),
             Content = caption,
             Tag = lobby,
         };
@@ -483,17 +758,14 @@ public partial class MultiplayerTab
         };
         // Not hit-testable: a placeholder that lit up on hover would read as a room.
         var row = new Border { Style = (Style)FindResource("RmRowCard"), IsHitTestVisible = false };
-        var grid = new Grid();
+        var grid = new Grid { Margin = new Thickness(13, RowPaddingY - 1, 13, RowPaddingY - 1) };
         foreach (var spec in _roomColumns)
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = spec.FixedWidth is double w ? new GridLength(w) : new GridLength(1, GridUnitType.Star),
-            });
+            grid.ColumnDefinitions.Add(RoomColumnDefinition(spec));
 
         var room = new Grid();
-        room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RoomIconSize) });
         room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        room.Children.Add(new Border { Width = 36, Height = 36, CornerRadius = new CornerRadius(8), Background = A(0x12) });
+        room.Children.Add(new Border { Width = RoomIconSize, Height = RoomIconSize, CornerRadius = new CornerRadius(8), Background = A(0x12) });
         var share = SkeletonNameShare[_skeletonIndex++ % SkeletonNameShare.Length];
         var nameLine = new Grid { Height = 12 };
         nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(share, GridUnitType.Star) });
@@ -507,7 +779,10 @@ public partial class MultiplayerTab
         Grid.SetColumn(lines, 1);
         room.Children.Add(lines);
         PlaceRoomCell(grid, RoomColumn.Room, room);
-        PlaceRoomCell(grid, RoomColumn.Host, Bar(90, 12, 0x12), gap: true);
+        var hostGhost = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        hostGhost.Children.Add(new Border { Width = HostAvatarSize, Height = HostAvatarSize, CornerRadius = new CornerRadius(HostAvatarSize / 2), Background = A(0x12), Margin = new Thickness(0, 0, 10, 0) });
+        hostGhost.Children.Add(Bar(90, 12, 0x12));
+        PlaceRoomCell(grid, RoomColumn.Host, hostGhost, gap: true);
         PlaceRoomCell(grid, RoomColumn.Players, Bar(30, 12, 0x12), gap: true);
         if (HostPingColumnShown) PlaceRoomCell(grid, RoomColumn.Ping, Bar(40, 12, 0x12), gap: true);
         row.Child = grid;

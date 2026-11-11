@@ -568,6 +568,12 @@ rather than the reverse.
   remembers its answer for 60 s** per mod and path (`_installedMemo`): a rail repaint asked the disk
   for every mod each time. `ForgetCheckResult` forgets the entry, so installs, updates and
   uninstalls are seen at once.
+  **Folded, the list still says which mods are the catalog** (`ModRail.BuildFolded`): a rule parts
+  every two groups, its tooltip names the group below on a 12-px hover area (a tooltip on the 1-px
+  line could never be reached), and catalog icons sit at `CatalogTileOpacity` (.55) except on the
+  selected tile and under the pointer. The fold arrows are DRAWN (`ModRail.Chevrons`, a fixed 8x7
+  path), not the characters `«` `»`: as text they were reported sitting high in the button until the
+  window settled. Pinned in `LibraryViewTests`.
   (6) **Chrome.xaml gives every ScrollViewer `Padding="0,0,8,0"`**, and it silently crops anything laid
   out to a known width: the folded tiles lost 13 px until the padding was given back.
   (7) **Header:** title bar 40 and nav 56 in BOTH layouts; the old compact heights (34 / 42) and the
@@ -642,10 +648,14 @@ rather than the reverse.
   host over "1630 ELO" or "En posicionamiento 3/10", players, the ping to the host over Radmin (only
   with a server that publishes hosts' addresses), and ONE action decided by the pure
   `Services/Multiplayer/RoomActionRule`, which also groups the list under PUEDES ENTRAR / EN PARTIDA /
-  NO DISPONIBLES AHORA. The quick match is a card above the list (`MultiplayerTab.QuickCard.cs` over
-  `Services/Multiplayer/QuickCardView`). The rules are in `.claude/rules/multiplayer.md` (ROOMS PAGE).
+  NO DISPONIBLES AHORA. The quick match is a one-line bar above the list with a mod picker and a
+  Rated / Casual / Either segment (`MultiplayerTab.QuickCard.cs` over
+  `Services/Multiplayer/QuickCardView`; 2026-11-10, over 86's card), and the host cell wears his photo
+  and rank badge again (also 2026-11-10). The rules are in `.claude/rules/multiplayer.md` (ROOMS PAGE).
   `--demo-rooms=86a..86e` (and a Settings → Developer row) paints it with sample rooms; buttons there
-  say what they would do instead of doing it.
+  say what they would do instead of doing it. **The rows' LOOK is design 104a since 2026-11-11**
+  (`docs/design_salas_filas`): raised cards tinted with their group's colour, the headings as a bar,
+  seat dots and four signal bars; see the 104a bullet in `.claude/rules/multiplayer.md`.
 
 - **Screen 93 of `docs/design_base_launcher_2` SUPERSEDES what this file and `multiplayer.md` say about
   the Clasificación page** (the pinned copy of the viewer's row, the plain hairline rows, the page title
@@ -708,7 +718,11 @@ rather than the reverse.
 
 - **Tab lag is measured: every click that changes the page writes `SWITCH  a -> b  N ms (first
   time|repeat)`** (`ScreenTrace.Clicked` + a one-frame `CompositionTarget.Rendering`, click to the
-  frame handed over). `perf switches` and `perf switchesfirst` drive every tab; the goals are 100 ms
+  frame handed over). **And `SETTLE  <page>  N ms after the click, K builds (M ms, worst W ms)`**
+  counts the page rebuilds that follow (`ScreenTrace.PageBuilt`, from `RenderStatsTab`,
+  `RenderRanking` and `PaintMatches`), because the lag on Statistics, Ranking and Matches came AFTER
+  the first frame, as server answers landed: Statistics rebuilt itself five times on opening. See
+  the "answers rebuild only what moved" bullet in `.claude/rules/multiplayer.md`. `perf switches` and `perf switchesfirst` drive every tab; the goals are 100 ms
   repeated and 250 ms the first time, and `compare` fails above them. `testbed.py check <name> --ref
   <prototype> --block <id> [--title T] -- <launch args>` opens the launcher and leaves prototype,
   launcher and difference side by side, at 1.25, in `out/check`.
@@ -4411,6 +4425,17 @@ rather than the reverse.
   An `id` is permanent: changing one re-announces to everybody, reusing one silently suppresses
   the new item for everyone who saw the old. Pinned by the announcement cases in
   `NotificationCenterTests`.
+
+- **Last month's HIGHLIGHTS ride the bell once a month (2026-11-10) — the one multiplayer item the
+  bell carries** (`NotificationKind.MonthlyHighlights`, `NotificationView.BelongsInTheBell`; the
+  maintainer asked for it "para que todos lo vean"). The notification sweep asks the public
+  `GET /stats/highlights` only in the first `HighlightsNotice.DaysToSay` (7) days of a month and only
+  until that month has been said (`LauncherConfig.NotifiedHighlightsMonth`); a month with no rated
+  match is marked seen silently, an older "previous" month is never said, and a failed request marks
+  nothing so the next sweep tries again. The text is pure (`HighlightsNotice`, `HighlightsNoticeTests`):
+  who climbed most, who played most, the best streak, a category with nobody left out. Clicking opens
+  Ranking › Highlights on that month (`MultiplayerTab.ShowHighlightsOfLastMonth`). It is news, so "Do
+  not disturb" keeps it in the bell without a pop-up.
 
 - **The project's Discord has ONE owner on each side — `LauncherConfig.SupportDiscordUrl`
   (a `const`, like `PrivacyPolicyUrl`) and `Controls/SupportLink` — and WHERE it appears is

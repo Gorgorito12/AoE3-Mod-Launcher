@@ -648,6 +648,13 @@ public enum NotificationKind
     MatchRated,
 
     /// <summary>
+    /// Last month's highlights (2026-11-10): the Discord gets them on the first of the month, the bell
+    /// carries them to everybody else, once, in the month's first week. Mod-less; clicking opens
+    /// Ranking › Highlights on that month. <c>TargetId</c> is the month ("2026-10").
+    /// </summary>
+    MonthlyHighlights,
+
+    /// <summary>
     /// News from the project itself, published through the notification feed.
     ///
     /// <para>Mod-less, like <see cref="LauncherUpdate"/> and <see cref="Connectivity"/>. It
@@ -2109,6 +2116,16 @@ public class LauncherConfig
     /// see <see cref="Services.Multiplayer.RoomFormats.KindToken"/>.</summary>
     public string LastRoomKind { get; set; } = "casual";
 
+    /// <summary>What the quick match looks for: <c>ranked</c> (the default, what it always did),
+    /// <c>casual</c> or <c>either</c>. A mod with no ladder searches casual whatever this says.</summary>
+    [JsonPropertyName("quickMatchKind")]
+    public string QuickMatchKind { get; set; } = "ranked";
+
+    /// <summary>The mod the quick match searches. Empty FOLLOWS the Library's active mod, and choosing
+    /// that mod in the bar writes empty again, so somebody who never strays keeps following it.</summary>
+    [JsonPropertyName("quickMatchModId")]
+    public string QuickMatchModId { get; set; } = "";
+
     /// <summary>
     /// GitHub release tag the user dismissed via "Later". The launcher won't
     /// prompt again for this exact tag — only when a different tag appears.
@@ -2460,6 +2477,11 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("notifiedRefundIds")]
     public List<string> NotifiedRefundIds { get; set; } = new();
+
+    /// <summary>The last month whose highlights the bell has announced ("2026-10"), or marked as seen
+    /// with nothing to say. One notice per month and PC: see <c>HighlightsNotice</c>.</summary>
+    [JsonPropertyName("notifiedHighlightsMonth")]
+    public string NotifiedHighlightsMonth { get; set; } = "";
 
     /// <summary>
     /// The rating season this launcher last saw. <b>OBSOLETE</b>: rating seasons were removed

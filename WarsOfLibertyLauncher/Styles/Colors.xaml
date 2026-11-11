@@ -543,8 +543,8 @@
     <SolidColorBrush x:Key="RmRowHover" Color="#12FFFFFF"/>
     <SolidColorBrush x:Key="RmRowMineBg" Color="#1455ACEE"/>
     <SolidColorBrush x:Key="RmRowMineRim" Color="#5955ACEE"/>
-    <SolidColorBrush x:Key="RmChipBg" Color="#0FFFFFFF"/>
-    <SolidColorBrush x:Key="RmChipRim" Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="RmChipBg" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="RmChipRim" Color="#24FFFFFF"/>
     <SolidColorBrush x:Key="RmCountBg" Color="#14FFFFFF"/>
     <SolidColorBrush x:Key="RmButtonBg" Color="#12FFFFFF"/>
     <SolidColorBrush x:Key="RmButtonHover" Color="#24FFFFFF"/>
@@ -559,6 +559,74 @@
     <SolidColorBrush x:Key="RmTextGreen" Color="#7FE0A8"/>
     <SolidColorBrush x:Key="RmDotOrange" Color="#F4900C"/>
     <SolidColorBrush x:Key="RmTextOrange" Color="#F5BD76"/>
+
+    <!-- Design 104a (docs/design_salas_filas): a room row is a raised card tinted with the colour
+         of its GROUP - green if you can enter, blue in a match, amber if not available. Each is
+         declared once; a row takes its group's brushes. The blue carries 30 % more alpha in the
+         tint and the rim (K = 1.3), because over the navy page it shows less than the other two. -->
+    <SolidColorBrush x:Key="RmGroupOpen" Color="#4FD68A"/>
+    <SolidColorBrush x:Key="RmGroupOpenText" Color="#7FE0A8"/>
+    <SolidColorBrush x:Key="RmGroupOpenRim" Color="#6B4FD68A"/>
+    <SolidColorBrush x:Key="RmGroupLive" Color="#55ACEE"/>
+    <SolidColorBrush x:Key="RmGroupLiveText" Color="#A9D6F7"/>
+    <SolidColorBrush x:Key="RmGroupLiveRim" Color="#8B55ACEE"/>
+    <SolidColorBrush x:Key="RmGroupOff" Color="#F4900C"/>
+    <SolidColorBrush x:Key="RmGroupOffText" Color="#F5BD76"/>
+    <SolidColorBrush x:Key="RmGroupOffRim" Color="#6BF4900C"/>
+    <!-- The coloured shadow under each row (104a: 0 10 22, spread -12, the group's colour at 40 %)
+         and the glow under "Ver sala" (0 4 14, the action blue at 35 %). -->
+    <SolidColorBrush x:Key="RmRowShadowOpen" Color="#664FD68A"/>
+    <SolidColorBrush x:Key="RmRowShadowLive" Color="#6655ACEE"/>
+    <SolidColorBrush x:Key="RmRowShadowOff" Color="#66F4900C"/>
+    <SolidColorBrush x:Key="RmPrimaryGlow" Color="#592F7FE0"/>
+    <LinearGradientBrush x:Key="RmRowTintOpen" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Offset="0" Color="#474FD68A"/>
+        <GradientStop Offset="0.36" Color="#1C4FD68A"/>
+        <GradientStop Offset="0.72" Color="#004FD68A"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RmRowTintLive" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Offset="0" Color="#5D55ACEE"/>
+        <GradientStop Offset="0.36" Color="#2455ACEE"/>
+        <GradientStop Offset="0.72" Color="#0055ACEE"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RmRowTintOff" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Offset="0" Color="#47F4900C"/>
+        <GradientStop Offset="0.36" Color="#1CF4900C"/>
+        <GradientStop Offset="0.72" Color="#00F4900C"/>
+    </LinearGradientBrush>
+    <!-- The card's own face (white 9 % to 4.5 %, top to bottom), its 1-px light along the top,
+         the wash a hovered row gets, and the ring of the viewer's own room. -->
+    <LinearGradientBrush x:Key="RmRowFace" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#17FFFFFF"/>
+        <GradientStop Offset="1" Color="#0BFFFFFF"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="RmRowEdgeLight" Color="#1AFFFFFF"/>
+    <SolidColorBrush x:Key="RmRowHoverWash" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="RmRowMineRing" Color="#8CFFFFFF"/>
+    <!-- The column headings' bar, and the rule that fills a group heading's line. -->
+    <SolidColorBrush x:Key="RmHeaderBarBg" Color="#0FFFFFFF"/>
+    <SolidColorBrush x:Key="RmHeaderBarRim" Color="#17FFFFFF"/>
+    <SolidColorBrush x:Key="RmGroupRule" Color="#17FFFFFF"/>
+    <SolidColorBrush x:Key="RmGroupCount" Color="#8C9CB1"/>
+    <!-- Cells: a seat taken and a seat free, a signal bar that is off, the mod icon's rim. -->
+    <SolidColorBrush x:Key="RmSeatOn" Color="#DCE7F5"/>
+    <SolidColorBrush x:Key="RmSeatOff" Color="#5CFFFFFF"/>
+    <SolidColorBrush x:Key="RmPingBarOff" Color="#29FFFFFF"/>
+    <SolidColorBrush x:Key="RmIconRim" Color="#29FFFFFF"/>
+    <!-- Chips with a state of their own: in a match, another version, and the viewer's room. -->
+    <SolidColorBrush x:Key="RmChipLiveBg" Color="#2E55ACEE"/>
+    <SolidColorBrush x:Key="RmChipLiveRim" Color="#8055ACEE"/>
+    <SolidColorBrush x:Key="RmChipWarnBg" Color="#1FF4900C"/>
+    <SolidColorBrush x:Key="RmChipWarnRim" Color="#73F4900C"/>
+    <SolidColorBrush x:Key="RmChipMineBg" Color="#DCE7F5"/>
+    <SolidColorBrush x:Key="RmChipMineText" Color="#0F1C2E"/>
+    <SolidColorBrush x:Key="RmChipMineDot" Color="#2F7FE0"/>
+    <!-- The row's action: Join in the green of "you can enter", and Full as an amber state. -->
+    <SolidColorBrush x:Key="RmJoinBg" Color="#1D4A37"/>
+    <SolidColorBrush x:Key="RmJoinHover" Color="#246046"/>
+    <SolidColorBrush x:Key="RmJoinRim" Color="#8C4FD68A"/>
+    <SolidColorBrush x:Key="RmFullBg" Color="#3D2C17"/>
+    <SolidColorBrush x:Key="RmFullRim" Color="#80F4900C"/>
     <SolidColorBrush x:Key="MpActionText" Color="#8CBCF5"/>
     <SolidColorBrush x:Key="MpOk" Color="#4FD68A"/>
     <SolidColorBrush x:Key="MpOkText" Color="#8FE0B0"/>

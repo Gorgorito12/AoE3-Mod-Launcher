@@ -241,12 +241,12 @@
     <sys:Double x:Key="MpSubBarHeight">44</sys:Double>
     <!-- The same strip in the compact layout (design handoff turns 38-39). -->
     <sys:Double x:Key="MpSubBarHeightCompact">44</sys:Double>
-    <!-- Room row (design 86): a MINIMUM of 62 in both layouts, which RmRowCard binds to
+    <!-- Room row: a MINIMUM of 52 in both layouts (design 104a draws 72; the maintainer asked for lower rows, 2026-11-11), which RmRowCard binds to
          MinHeight. The name is one line with an ellipsis and the chips one line that drops a
          chip whole, so a row measures exactly this at 100 % text and grows instead of clipping
          at 125 %. The compact key stays for its reader (ApplyActivityLayout) and now agrees. -->
-    <sys:Double x:Key="MpRoomRowHeight">62</sys:Double>
-    <sys:Double x:Key="MpRoomRowHeightCompact">62</sys:Double>
+    <sys:Double x:Key="MpRoomRowHeight">52</sys:Double>
+    <sys:Double x:Key="MpRoomRowHeightCompact">52</sys:Double>
     <!-- (The chat / players panel's width is no longer a token: design 57 makes it 280 below
          1600 px of page width, 320 above and a 44-px rail folded — RoomsActivityLayout.ChatWidth.) -->
     <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main
@@ -562,15 +562,19 @@
     <sys:Double x:Key="RmSmallSize">12</sys:Double>
     <sys:Double x:Key="RmCountSize">11.5</sys:Double>
     <sys:Double x:Key="RmChipSize">11</sys:Double>
+    <!-- Design 104a's row: name 15 (14 here, rows lowered at the maintainer's request), host 13.5, the seat count 14 and the row button 13. Their own
+         tokens, because RmNameSize / RmHostSize / RmButtonSize also dress the quick match bar. -->
+    <sys:Double x:Key="RmRowNameSize">14</sys:Double>
+    <sys:Double x:Key="RmRowHostSize">13.5</sys:Double>
+    <sys:Double x:Key="RmRowSeatsSize">14</sys:Double>
+    <sys:Double x:Key="RmRowButtonSize">13</sys:Double>
     <!-- The quick match card (design 86). -->
-    <sys:Double x:Key="QcTitleSize">24</sys:Double>
     <sys:Double x:Key="RmEmptyTitleSize">22</sys:Double>
     <sys:Double x:Key="QcTitleSizeCompact">17</sys:Double>
-    <sys:Double x:Key="QcClockSize">20</sys:Double>
+    <sys:Double x:Key="QcClockSize">17</sys:Double>
+    <!-- The empty rooms list's body (52ch at 13.5 px); the old quick match card used it too. -->
     <sys:Double x:Key="QcLineSize">13.5</sys:Double>
-    <sys:Double x:Key="QcButtonSize">16</sys:Double>
     <sys:Double x:Key="QcButtonSizeCompact">14</sys:Double>
-    <sys:Double x:Key="QcButton2Size">15</sys:Double>
     <sys:Double x:Key="QcButton2SizeCompact">13.5</sys:Double>
     <sys:Double x:Key="RoomFigureSize">30</sys:Double>
     <sys:Double x:Key="TournamentFigureSize">20</sys:Double>

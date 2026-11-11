@@ -16,7 +16,8 @@ namespace WarsOfLibertyLauncher.Tests;
 /// The rank badge outside the Ranking table (docs/design_insignias_rango, 45c): the room's roster
 /// puts it beside each avatar. The refusal is the point: a <c>ladder_rank</c> the server did not
 /// send must draw NO badge, never a Discovery one — that would tell a player on the ladder that
-/// they are not. The rooms LIST draws none since design 86 (the host's name and rating instead).
+/// they are not. The rooms LIST wears the host's badge again since 2026-11-10 (the maintainer's call
+/// over design 86), with the same refusal: no place from the server, no badge.
 /// </summary>
 [Collection("wpf-and-language")]
 public class RoomBadgesTests
@@ -24,12 +25,13 @@ public class RoomBadgesTests
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 
     [Fact]
-    public void TheRoomsRowDrawsNoBadgeWhateverTheRank()
+    public void TheRoomsRowWearsTheBadgeOnlyWhenTheServerSaidWhere()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            foreach (var rank in new int?[] { null, 0, 3 })
-                Assert.Empty(Badges(RoomCard(ladderRank: rank)));
+            Assert.Empty(Badges(RoomCard(ladderRank: null)));
+            Assert.Single(Badges(RoomCard(ladderRank: 0)));   // Discovery: a badge with no numeral
+            Assert.Single(Badges(RoomCard(ladderRank: 3)));
         });
         Assert.Null(error);
     }

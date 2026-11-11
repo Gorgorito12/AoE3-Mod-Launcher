@@ -214,8 +214,36 @@ public class ActivityPaintKeyTests
         var src = File.ReadAllText(UiThreadAttributionTests.LauncherFile("Controls/MultiplayerTab.xaml.cs"));
         var start = src.IndexOf("var soloSizeBefore = LadderSize(team: false);", StringComparison.Ordinal);
         Assert.True(start >= 0, "the ladder-size branch was not found");
-        var branch = src.Substring(start, src.IndexOf("if (_activeSubtab == Subtab.Ranking) RenderRanking();", start, StringComparison.Ordinal) - start);
+        var branch = src.Substring(start, src.IndexOf("if (_activeSubtab == Subtab.Ranking && _rankingMode != RankingMode.Matches) RenderRankingIfChanged();", start, StringComparison.Ordinal) - start);
         Assert.Contains("LadderSize(team: true) != teamSizeBefore", branch);
         Assert.Contains("RenderPlayersPanel();", branch);
+    }
+
+    /// <summary>An answer that says the same thing keeps the object already held, so every
+    /// "nothing changed" check that compares by reference sees nothing changed: an identical
+    /// answer used to rebuild a whole page because it was a new object.</summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheSameAnswerAgainKeepsTheObjectOnScreen()
+    {
+        var held = Stats();
+        var again = RoundTrip(Stats(generatedAt: "2026-10-07T12:01:00Z"));
+        Assert.Same(held, ActivityPaintKey.KeepIfSame(held, again));
+
+        var moved = Stats(topRating: 1712);
+        Assert.Same(moved, ActivityPaintKey.KeepIfSame(held, moved));
+        Assert.Same(moved, ActivityPaintKey.KeepIfSame<CommunityStats>(null, moved));
+        Assert.Null(ActivityPaintKey.KeepIfSame<CommunityStats>(held, null));
+    }
+
+    /// <summary>The content is worked out once per object and is the same string the paint key
+    /// starts with, so the Rooms block and the Ranking page compare one serialization.</summary>
+    [Fact]
+    public void TheContentIsWorkedOutOncePerAnswer()
+    {
+        var s = Stats();
+        var first = ActivityPaintKey.ContentOf(s);
+        Assert.Same(first, ActivityPaintKey.ContentOf(s));
+        Assert.StartsWith(first!, ActivityPaintKey.For(s, Context));
+        Assert.DoesNotContain("generated_at", first);
     }
 }

@@ -61,6 +61,8 @@ public class RoomActionButtonTests
 
     private static object Res(string key) => Application.Current.FindResource(key);
 
+    /// <summary>Every action is the faint secondary button except "Unirse", which carries a blue rim
+    /// so the rooms you can enter stand out (2026-11-10), and "Ver sala", the only solid one.</summary>
     [Fact]
     public void EachRoomOffersWhatTheRuleSays_InTheFaintSecondaryButton()
     {
@@ -70,7 +72,8 @@ public class RoomActionButtonTests
 
             var open = Room("OPEN0001", max: 4, current: 2);
             var join = ActionOf(Card(tab, open), open)!;
-            Assert.Same(Res("RmRowButton"), join.Style);
+            Assert.Same(Res("RmRowButtonJoin"), join.Style);
+            Assert.Same(Res("RmRowButton"), ((Style)join.Style).BasedOn);
             Assert.Equal(Strings.Get("RmActJoin"), join.Content);
             Assert.True(join.IsEnabled);
 
@@ -103,7 +106,7 @@ public class RoomActionButtonTests
         Assert.Null(error);
     }
 
-    /// <summary>The captions fit the 136-px action cell in both languages ("Revisar mi copia" binds).</summary>
+    /// <summary>The captions fit the 160-px action cell in both languages ("Revisar mi copia" binds).</summary>
     [Fact]
     public void THE_ONE_THAT_MATTERS_EveryCaptionFitsTheActionColumn()
     {
@@ -123,8 +126,8 @@ public class RoomActionButtonTests
                             Content = Strings.Get(RoomActionRule.CaptionKey(action)),
                         };
                         b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                        Assert.True(b.DesiredSize.Width <= 136,
-                            $"'{b.Content}' ({language}) needs {b.DesiredSize.Width:0.#} px; the cell is 136.");
+                        Assert.True(b.DesiredSize.Width <= 160,
+                            $"'{b.Content}' ({language}) needs {b.DesiredSize.Width:0.#} px; the cell is 160.");
                     }
                 }
             }
@@ -166,6 +169,137 @@ public class RoomActionButtonTests
                 "RoomGroup:" + RoomGroup.InGame, "GAME0001",
                 "RoomGroup:" + RoomGroup.Unavailable, "FULL0001",
             }, order);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Design 104a: a row wears the colour of its GROUP - green if you can enter, blue in a match,
+    /// amber if not available - as its rim and as a tint, and no row is left grey.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_EveryRowWearsItsGroupsColour()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithModInstalled();
+            var cases = new (LobbySummary Room, string Rim, string Tint)[]
+            {
+                (Room("OPEN0001", max: 4, current: 2), "RmGroupOpenRim", "RmRowTintOpen"),
+                (Room("GAME0001", max: 2, current: 2, status: "in_game"), "RmGroupLiveRim", "RmRowTintLive"),
+                (Room("FULL0001", max: 4, current: 4), "RmGroupOffRim", "RmRowTintOff"),
+            };
+            foreach (var (room, rim, tint) in cases)
+            {
+                var card = Card(tab, room);
+                Assert.Same(tab.FindResource("RmRowCard"), card.Style);
+                Assert.Same(Res(rim), card.BorderBrush);
+                Assert.Equal(new Thickness(1), card.BorderThickness);
+                var layer = Descendants(card).OfType<Border>().Single(b => Equals(b.Tag, "RoomTint"));
+                Assert.Same(Res(tint), layer.Background);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>Four signal bars (104a): up to 60 ms all four, under 100 three, up to 150 two,
+    /// slower one, and none for a ping that was not measured.</summary>
+    [Theory]
+    [InlineData(38, 4)]
+    [InlineData(60, 4)]
+    [InlineData(61, 3)]
+    [InlineData(99, 3)]
+    [InlineData(100, 2)]
+    [InlineData(150, 2)]
+    [InlineData(151, 1)]
+    [InlineData(900, 1)]
+    public void ThePingLightsTheDesignsBars(int ms, int bars)
+    {
+        Assert.Equal(bars, MultiplayerTab.LitBars(HostPingKind.Answered, ms));
+        Assert.Equal(0, MultiplayerTab.LitBars(HostPingKind.NoAnswer, ms));
+        Assert.Equal(0, MultiplayerTab.LitBars(HostPingKind.Answered, null));
+    }
+
+    /// <summary>A dot per playing seat, the taken ones filled; a big room stops at eight dots and
+    /// a full room is drawn as an amber plate that is not a button.</summary>
+    [Fact]
+    public void SeatsAreDotsAndFullIsAPlate()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithModInstalled();
+            var dots = MultiplayerTab.BuildSeatDots(3, 6).Children.OfType<System.Windows.Shapes.Ellipse>().ToList();
+            Assert.Equal(6, dots.Count);
+            Assert.Equal(3, dots.Count(d => ReferenceEquals(d.Fill, Res("RmSeatOn"))));
+            Assert.Equal(3, dots.Count(d => ReferenceEquals(d.Stroke, Res("RmSeatOff"))));
+            Assert.Equal(MultiplayerTab.MaxSeatDots, MultiplayerTab.BuildSeatDots(8, 12).Children.Count);
+
+            var full = Room("FULL0001", max: 4, current: 4);
+            var card = Card(tab, full);
+            var plate = Descendants(card).OfType<Border>().Single(b => ReferenceEquals(b.Background, Res("RmFullBg")));
+            Assert.NotEqual(System.Windows.Input.Cursors.Hand, plate.Cursor);
+            Assert.Equal(4, Descendants(card).OfType<StackPanel>().Single(p => Equals(p.Tag, "RoomSeats")).Children.Count);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>A row MEASURES 52 high (the maintainer found 104a's 72 too big) with a 36-px icon:
+    /// the minimum alone would not show a row that grows past it.</summary>
+    [Fact]
+    public void ARowMeasuresFiftyTwoHigh()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithModInstalled();
+            foreach (var room in new[] { Room("OPEN0001", max: 4, current: 2), Room("GAME0001", max: 2, current: 2, status: "in_game") })
+            {
+                var card = Card(tab, room);
+                card.Measure(new Size(1200, double.PositiveInfinity));
+                Assert.InRange(card.DesiredSize.Height, 51.5, 52.5 + 6);
+                Assert.Equal(52, card.DesiredSize.Height - card.Margin.Bottom, 0.5);
+                var icon = Descendants(card).OfType<Border>().First(b => b.Width == MultiplayerTab.RoomIconSize);
+                Assert.Equal(36, icon.Height);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>Each room in the list stands on its group's coloured shadow (104a), drawn as a
+    /// cached sibling BEHIND the card - the card itself carries no Effect, or its text would lose
+    /// ClearType - and with the effects reduced there is none.</summary>
+    [Fact]
+    public void EveryRowStandsOnItsGroupsShadowAndTheCardCarriesNoEffect()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithModInstalled();
+            var rooms = new List<LobbySummary>
+            {
+                Room("OPEN0001", max: 4, current: 2),
+                Room("GAME0001", max: 2, current: 2, status: "in_game"),
+            };
+            var render = typeof(MultiplayerTab).GetMethod("RenderRoomRows", Private)!;
+            typeof(MultiplayerTab).GetField("_lastBrowserList", Private)!.SetValue(tab, rooms);
+            render.Invoke(tab, new object?[] { rooms });
+            var rows = tab.RoomsListPanel.Children.OfType<Border>().Where(b => b.Tag is LobbySummary).ToList();
+            Assert.Equal(2, rows.Count);
+            foreach (var row in rows)
+            {
+                var shadow = Descendants(row).OfType<Border>().Single(b => Equals(b.Tag, "RoomShadow"));
+                Assert.NotNull(shadow.Effect);
+                Assert.NotNull(shadow.CacheMode);
+                var card = Descendants(row).OfType<Border>().Single(b => b.Tag is LobbySummary);
+                Assert.Null(card.Effect);
+            }
+
+            RankBadge.SetUserReducedEffects(true);
+            try
+            {
+                render.Invoke(tab, new object?[] { rooms });
+                Assert.DoesNotContain(tab.RoomsListPanel.Children.OfType<Border>().SelectMany(Descendants).OfType<Border>(),
+                    b => Equals(b.Tag, "RoomShadow"));
+            }
+            finally { RankBadge.SetUserReducedEffects(false); }
         });
         Assert.Null(error);
     }

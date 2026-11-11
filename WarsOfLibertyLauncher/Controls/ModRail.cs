@@ -6,6 +6,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
@@ -89,6 +90,7 @@ public sealed class ModRail : UserControl
         _nameSize = metrics.RowNameSize;
         _rows.Clear();
         _selectable.Clear();
+        _catalogTiles.Clear();
         _shell.Child = open ? BuildOpen() : BuildFolded();
         _scroll?.ScrollToVerticalOffset(offset);
     }
@@ -106,6 +108,7 @@ public sealed class ModRail : UserControl
             button.Style = (Style)Application.Current.Resources[on ? "LibraryRowSelected" : "LibraryRow"];
             name?.SetResourceReference(TextBlock.ForegroundProperty, on ? "LibraryWhite" : "UiBodyText");
         }
+        foreach (var paint in _catalogTiles) paint();
         // The scroll bar takes the mod's colour; it was copied when the list was built.
         if (_scroll != null) _scroll.Resources["BgNeutral"] = Application.Current.Resources["ModAccentThumb"];
     }
@@ -138,6 +141,7 @@ public sealed class ModRail : UserControl
             _percent = null;
             _rows.Clear();
             _selectable.Clear();
+            _catalogTiles.Clear();
             _shell.Child = _open ? BuildOpen() : BuildFolded();
             _scroll?.ScrollToVerticalOffset(offset);
         }
@@ -232,16 +236,15 @@ public sealed class ModRail : UserControl
         unfold.Margin = new Thickness(0, 4, 0, 6);
         list.Children.Add(unfold);
 
-        var favorites = _groups.FirstOrDefault(g => g.Kind == LibraryGroupKind.Favorites);
-        foreach (var group in _groups)
+        // Open, the catalog sits under its own heading; folded there was one rule after the favourites
+        // and nothing between "my mods" and the catalog (reported). A rule now parts every two groups,
+        // the group's name is its tooltip, and the catalog's icons are dimmed (full on the selected
+        // tile and under the pointer): what is not installed reads as not yours yet.
+        for (var g = 0; g < _groups.Count; g++)
         {
-            foreach (var mod in group.Mods) list.Children.Add(BuildTile(mod));
-            if (group == favorites && _groups.Count > 1)
-            {
-                var divider = new Border { Width = 32, Height = 1, Margin = new Thickness(0, 4, 0, 4) };
-                divider.SetResourceReference(Border.BackgroundProperty, "GlassRimStrong");
-                list.Children.Add(divider);
-            }
+            var group = _groups[g];
+            if (g > 0) list.Children.Add(FoldedDivider(group));
+            foreach (var mod in group.Mods) list.Children.Add(BuildTile(mod, group.Kind == LibraryGroupKind.Catalog));
         }
         return _scroll = new ScrollViewer
         {
@@ -253,11 +256,65 @@ public sealed class ModRail : UserControl
         };
     }
 
+    /// <summary>The rule between two folded groups. Its tooltip names the group below it, so the area
+    /// that carries it is 12 px tall: a tooltip on the 1-px line itself could never be reached.</summary>
+    internal const double FoldedDividerHeight = 12;
+
+    private static UIElement FoldedDivider(LibraryGroup below)
+    {
+        var line = new Border { Width = 32, Height = 1, VerticalAlignment = VerticalAlignment.Center };
+        line.SetResourceReference(Border.BackgroundProperty, "GlassRimStrong");
+        var (name, count) = below.Kind switch
+        {
+            LibraryGroupKind.Favorites => (Strings.Get("LibGroupFavorites"), below.Mods.Count),
+            LibraryGroupKind.Mine => (Strings.Get("LibGroupMine"), below.Mods.Count),
+            _ => (Strings.Get("LibGroupCatalog"), below.Mods.Count),
+        };
+        var host = new Border
+        {
+            Height = FoldedDividerHeight,
+            Width = 44,
+            Background = Brushes.Transparent,
+            Margin = new Thickness(0, 0, 0, 4),
+            Child = line,
+            ToolTip = TooltipHelper.Wrap($"{name} · {count}"),
+            Tag = below.Kind,
+        };
+        AutomationProperties.SetName(host, name);
+        return host;
+    }
+
+    /// <summary>The fold arrows are DRAWN, not typed. As a character the glyph's place in the button
+    /// came from the font's metrics and the text's layout, and it was reported sitting high in the
+    /// button now and then until the window had settled; a fixed-size path is centred by geometry.</summary>
+    internal static Path Chevrons(bool pointsRight)
+    {
+        var data = pointsRight
+            ? "M0,0 L3.5,3.5 L0,7 M4.5,0 L8,3.5 L4.5,7"
+            : "M3.5,0 L0,3.5 L3.5,7 M8,0 L4.5,3.5 L8,7";
+        var path = new Path
+        {
+            Data = Geometry.Parse(data),
+            Width = 8,
+            Height = 7,
+            Stretch = Stretch.None,
+            StrokeThickness = 1.4,
+            StrokeLineJoin = PenLineJoin.Round,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            SnapsToDevicePixels = true,
+        };
+        path.SetResourceReference(Shape.StrokeProperty, "UiSoftText");
+        return path;
+    }
+
     private Button FoldButton(string glyph, string tip)
     {
         var button = new Button
         {
-            Content = glyph,
+            Content = Chevrons(pointsRight: glyph == "»"),
             Width = 28,
             Height = 26,
             Padding = new Thickness(0),
@@ -406,7 +463,10 @@ public sealed class ModRail : UserControl
         return line;
     }
 
-    private UIElement BuildTile(ModProfile mod)
+    /// <summary>How much of a catalog tile's icon shows while it is neither selected nor hovered.</summary>
+    internal const double CatalogTileOpacity = .55;
+
+    private UIElement BuildTile(ModProfile mod, bool catalog = false)
     {
         var state = _state(mod);
         var selected = string.Equals(mod.Id, _selected, StringComparison.OrdinalIgnoreCase);
@@ -466,8 +526,19 @@ public sealed class ModRail : UserControl
         AutomationProperties.SetName(button, mod.DisplayName ?? mod.Id);
         button.Click += (_, _) => Selected?.Invoke(this, mod);
         _selectable.Add((mod.Id, button, null));
+        if (catalog)
+        {
+            // Only the picture dims: an Opacity on the button would take the selection rim with it.
+            void Paint() => icon.Opacity = button.IsMouseOver || string.Equals(mod.Id, _selected, StringComparison.OrdinalIgnoreCase) ? 1 : CatalogTileOpacity;
+            Paint();
+            button.MouseEnter += (_, _) => Paint();
+            button.MouseLeave += (_, _) => Paint();
+            _catalogTiles.Add(Paint);
+        }
         return button;
     }
+
+    private readonly List<Action> _catalogTiles = new();
 
     private FrameworkElement Icon(ModProfile mod, double size)
     {

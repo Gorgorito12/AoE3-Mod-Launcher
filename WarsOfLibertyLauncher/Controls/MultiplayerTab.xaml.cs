@@ -1485,6 +1485,7 @@ public partial class MultiplayerTab : UserControl
             // Coming back to the tab is coming back to whatever view it was left on; Ranking ›
             // Matches used to keep the list it loaded first for the whole run.
             if (_activeSubtab == Subtab.Ranking) MaybeRefreshMatchesOnEntry();
+            QueueSubpagePrefetch();
         }
         _quotaTimer?.Start();
 
@@ -1522,7 +1523,7 @@ public partial class MultiplayerTab : UserControl
         _roomsListTimer?.Stop();
         _roomsListTimer = new System.Windows.Threading.DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(5),
+            Interval = Services.Multiplayer.RoomsPageRefresh.PollInterval(_lobbiesChangedSeen),
         };
         _roomsListTimer.Tick += (_, _) => DiagnosticLog.Time("MP rooms-list tick", () =>
         {
@@ -3326,6 +3327,13 @@ public partial class MultiplayerTab : UserControl
     /// "Open ranking". <paramref name="mode"/> picks the ladder (the Teams tab's "Open team
     /// ranking" opens TEAMS); null leaves the Ranking's own choice alone. A TEAMS request on a
     /// server with no team ladder lands on 1v1, which RenderRanking already enforces.</summary>
+    /// <summary>Ranking › Highlights on LAST month: where the bell's monthly notice leads.</summary>
+    internal void ShowHighlightsOfLastMonth()
+    {
+        _rankingLeadersPrevious = true;
+        ShowRanking(RankingMode.Highlights);
+    }
+
     internal void ShowRanking(RankingMode? mode)
     {
         if (mode is { } m) _rankingMode = m;
@@ -4521,7 +4529,19 @@ public partial class MultiplayerTab : UserControl
         StatsView.Visibility   = !gate && _activeSubtab == Subtab.Stats   ? Visibility.Visible : Visibility.Collapsed;
 
         // So a bundle says which page was on screen; written only when it changes.
-        Services.ScreenTrace.Subtab(gate ? $"{_activeSubtab} (sign-in)" : _activeSubtab.ToString());
+        Services.ScreenTrace.Subtab(gate ? $"{_activeSubtab} (sign-in)" : TracedSubtabName());
+    }
+
+    /// <summary>The page a bundle names: the subtab, and inside Ranking the Matches view, which is
+    /// a page of its own as far as a player is concerned.</summary>
+    private string TracedSubtabName()
+        => _activeSubtab == Subtab.Ranking && _rankingMode == RankingMode.Matches ? "Ranking/Matches" : _activeSubtab.ToString();
+
+    /// <summary>A ranking mode button was pressed: measured like a subtab (SWITCH and SETTLE).</summary>
+    private void TraceRankingModeChange()
+    {
+        Services.ScreenTrace.Clicked();
+        Services.ScreenTrace.Subtab(TracedSubtabName());
     }
 
     private void RenderRoomsTab()
@@ -7266,11 +7286,11 @@ public partial class MultiplayerTab : UserControl
 
         try
         {
-            _statsCommunity = await _session.Api.GetCommunityStatsAsync(
-                modId: StatsModId(), mode: StatsMode());
+            _statsCommunity = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_statsCommunity, await _session.Api.GetCommunityStatsAsync(
+                modId: StatsModId(), mode: StatsMode()));
             _statsCommunityFetchedUtc = DateTime.UtcNow;
             _statsLoadFailed = false;
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -7317,7 +7337,7 @@ public partial class MultiplayerTab : UserControl
             string.Join(",", _deckTailsOpen.OrderBy(t => t, StringComparer.Ordinal))),
         (_statsLoadFailed, _demoStats, _demoStatsLoading, _demoStatsEmpty, _demoStatsBig,
             _config?.UseModColor, TextScale.CurrentFactor),
-        (RankBadge.AnimationsEnabled, ModRegistry.Generation, DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute,
+        (RankBadge.AnimationsEnabled, ModRegistry.Generation, DateTime.Now.Date,
             _statsMods, _getActiveProfile?.Invoke()?.Id));
 
     /// <summary>
@@ -7339,8 +7359,10 @@ public partial class MultiplayerTab : UserControl
 
     private void RenderStatsTab()
     {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         _statsPaintKey = null;
         RenderStatsTabCore();
+        Services.ScreenTrace.PageBuilt("Stats", System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         // After the draw: it can move the layout and the accent.
         _statsPaintKey = CurrentStatsPaintKey();
     }
@@ -8588,7 +8610,7 @@ public partial class MultiplayerTab : UserControl
         // page is still the one that asked: a repaint that changes nothing is a flicker for no
         // reason, and one that repeats is a loop.
         if (after != null && !ReferenceEquals(before, after) && _activeSubtab == Subtab.Stats)
-            RenderStatsTab();
+            QueueStatsRender();
     }
 
     /// <summary>
@@ -8735,13 +8757,13 @@ public partial class MultiplayerTab : UserControl
             // second ago lands on top of it, and the page shows one mod's table over
             // another payload's totals.
             if (_demoStats) return;
-            _deckStats = stats;
+            _deckStats = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_deckStats, stats);
 
             DiagnosticLog.Write(
                 $"Deck stats: {stats?.Cards.Count ?? 0} cards from "
                 + $"{stats?.Contributors ?? 0} contributors.");
 
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -8872,14 +8894,14 @@ public partial class MultiplayerTab : UserControl
             // second ago lands on top of it, and the page shows one mod's table over
             // another payload's totals.
             if (_demoStats) return;
-            _matchups = stats;
+            _matchups = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_matchups, stats);
 
             // Logged on success too. This table is empty by construction for its first weeks, so
             // "the server has nothing yet" and "the request never went out" look identical on
             // screen AND in a diagnostic bundle unless the success is written down.
             DiagnosticLog.Write($"Matchups: {stats?.Matchups.Count ?? 0} pairs.");
 
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -8909,14 +8931,14 @@ public partial class MultiplayerTab : UserControl
             var mods = await _session.Api.GetStatsModsAsync();
             _statsModsFetchedUtc = DateTime.UtcNow;
             if (_demoStats) return;
-            _statsMods = mods?.Mods;
+            _statsMods = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_statsMods, mods?.Mods);
 
             DiagnosticLog.Write($"Stats mods: {_statsMods?.Count ?? 0} with matches.");
 
             // Both pickers are built from this, so the page is repainted even though no table
             // changed: the mod row may have gained a chip and the mode switch may have just
             // become offerable.
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -8950,7 +8972,7 @@ public partial class MultiplayerTab : UserControl
             // second ago lands on top of it, and the page shows one mod's table over
             // another payload's totals.
             if (_demoStats) return;
-            _civStats = stats;
+            _civStats = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_civStats, stats);
 
             // Logged on SUCCESS too, not only on failure. This table is empty by construction for
             // its first weeks, so "the server has nothing yet" and "the request never went out"
@@ -8963,7 +8985,7 @@ public partial class MultiplayerTab : UserControl
             // The data can land after the page is already on screen. Only the STATS tables read
             // it now — the ranking's civilization strip is gone; its CIVS column comes with the
             // ladder's own payload.
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -10245,6 +10267,10 @@ public partial class MultiplayerTab : UserControl
             if (_demoStats) return;
             var soloSizeBefore = LadderSize(team: false);
             var teamSizeBefore = LadderSize(team: true);
+            // The same answer again (the minute poll, a matches_changed that changed nothing
+            // drawn here) keeps the object already on screen, so every page's "nothing changed"
+            // check - Rooms, Ranking, Statistics - sees that it is the same.
+            stats = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_communityStats, stats);
             _communityStats = stats;
             // The rank badges on the rooms list, in the room and in the Players panel are cut by
             // a SHARE of the ladder — both ladders, since a player may show either badge — and
@@ -10259,13 +10285,15 @@ public partial class MultiplayerTab : UserControl
                 if (_lobbyWindow != null) RenderRoomMembers();
                 RenderPlayersPanel();
             }
-            if (_activeSubtab == Subtab.Ranking) RenderRanking();
+            // Through the page's key: the ladder is rebuilt only when what it draws moved. The
+            // Matches view draws nothing from this payload, so it is left alone.
+            if (_activeSubtab == Subtab.Ranking && _rankingMode != RankingMode.Matches) RenderRankingIfChanged();
             // AND Statistics, which is where this payload's maps and head counts are drawn.
             // SubtabStats_Click is what kicks this fetch off, and for one build it was the
             // only subtab that never heard the answer: the map table stayed empty until the
             // user left the tab and came back, which reads as "no data" rather than as "not
             // yet". Three ifs and no else-if, for the reason the next comment gives.
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
             // The profile reads this payload too — for the ladder's entry bar, the size of the
             // league and the viewer's own place in it — so it has to repaint when it lands or
             // those three stay blank until the tab is left and re-entered.
@@ -11125,16 +11153,7 @@ public partial class MultiplayerTab : UserControl
 
         RoomsHeaderStrip.ColumnDefinitions.Clear();
         foreach (var spec in resolved)
-            RoomsHeaderStrip.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                // A null FixedWidth is the reference's `1fr`: the Room column absorbs
-                // whatever the fixed ones leave. MinWidth stays 0 so it can shrink and
-                // let its text ellipsise, rather than pushing the fixed columns off the
-                // edge of a list that does not scroll horizontally.
-                Width = spec.FixedWidth is double w
-                    ? new GridLength(w, GridUnitType.Pixel)
-                    : new GridLength(1, GridUnitType.Star),
-            });
+            RoomsHeaderStrip.ColumnDefinitions.Add(RoomColumnDefinition(spec));
 
         for (var i = 0; i < resolved.Count; i++)
         {
@@ -11257,8 +11276,22 @@ public partial class MultiplayerTab : UserControl
     /// with <c>4007 replaced</c> — which also explains a chat that keeps reconnecting. Raised on the
     /// socket's pump thread; it only logs.
     /// </summary>
+    /// <summary>Whether this session's live channel has carried <c>lobbies_changed</c>: the rooms
+    /// poll slows to its fallback cadence while it has (<c>RoomsPageRefresh.PollInterval</c>).</summary>
+    private bool _lobbiesChangedSeen;
+
+    private void SetLobbiesChangedSeen(bool seen)
+    {
+        _lobbiesChangedSeen = seen;
+        if (_roomsListTimer != null)
+            _roomsListTimer.Interval = Services.Multiplayer.RoomsPageRefresh.PollInterval(seen);
+    }
+
     private void OnGlobalChatDisconnected(object? sender, string reason)
     {
+        // Without the live channel nothing announces a change: back to the 5-s poll.
+        if (ReferenceEquals(sender, _globalChatSocket))
+            Dispatcher.InvokeAsync(() => { if (_lobbiesChangedSeen) SetLobbiesChangedSeen(false); });
         var description = (sender as LobbyWebSocket)?.LastCloseDescription;
         var replaced = reason == "server_close:4007"
             ? " — another launcher or PC signed in with this account took over the presence socket"
@@ -11315,6 +11348,11 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "lobby_created":
                         HandleLobbyCreatedFrame(e.Json);
+                        QueueRoomsRefreshFromAnnouncement();
+                        break;
+                    case "lobbies_changed":
+                        if (!_lobbiesChangedSeen) SetLobbiesChangedSeen(true);
+                        QueueRoomsRefreshFromAnnouncement();
                         break;
                     case "match_rated":
                         HandleMatchRatedFrame(e.Json);
@@ -11549,6 +11587,36 @@ public partial class MultiplayerTab : UserControl
             Num(json, "rating_after"),
             json.TryGetProperty("unrated_reason", out var ur) && ur.ValueKind == JsonValueKind.String
                 ? ur.GetString() : null));
+    }
+
+    private System.Windows.Threading.DispatcherTimer? _roomsAnnounceTimer;
+
+    /// <summary>A new room appeared in about a second instead of on the next 5-s poll: the live
+    /// channel already announced it, and only the notification listened.</summary>
+    private void QueueRoomsRefreshFromAnnouncement()
+    {
+        if (!Services.Multiplayer.RoomsPageRefresh.ShouldRefreshOnAnnouncement(
+                signedIn: _session?.Status == MultiplayerSession.SessionStatus.SignedIn,
+                onRooms: _activeSubtab == Subtab.Rooms,
+                tabVisible: IsVisible,
+                roomWindowOpen: _lobbyWindow != null,
+                launcherActive: LauncherIsActive()))
+            return;
+        if (_roomsAnnounceTimer == null)
+        {
+            _roomsAnnounceTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(Services.Multiplayer.RoomsPageRefresh.AnnouncementDebounceMs),
+            };
+            _roomsAnnounceTimer.Tick += (_, _) =>
+            {
+                _roomsAnnounceTimer.Stop();
+                Services.PerfCounters.Increment("MP.RoomsListFromAnnouncement");
+                _ = RefreshRoomsListAsync(quiet: true);
+            };
+        }
+        // Later announcements join the one already queued; they never postpone it.
+        if (!_roomsAnnounceTimer.IsEnabled) _roomsAnnounceTimer.Start();
     }
 
     private void HandleLobbyCreatedFrame(JsonElement json)
@@ -12832,31 +12900,27 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// One-second blue wash over a row that has just appeared.
     ///
-    /// <para>The animated brush is a fresh local <see cref="SolidColorBrush"/>, never the
-    /// row's own: the palette brushes are frozen DynamicResources and animating one
-    /// throws — the bug that once froze the countdown line. The animation restores the
-    /// row's normal fill by animating back to whatever colour it started with.</para>
+    /// <para>It is a layer of its own over the row's tint, faded out: the row's fill is a shared
+    /// frozen gradient (design 104a), and animating a palette brush throws — the bug that once
+    /// froze the countdown line.</para>
     /// </summary>
-    private static void FlashNewRoom(Border card)
+    private static void FlashNewRoom(Border wash)
     {
-        var resting = (card.Background as SolidColorBrush)?.Color
-            ?? ((SolidColorBrush)Application.Current.FindResource("MpPanel")).Color;
         var flash = ((SolidColorBrush)Application.Current.FindResource("MpEventBg")).Color;
-
-        var brush = new SolidColorBrush(resting);
-        card.Background = brush;
-        brush.BeginAnimation(SolidColorBrush.ColorProperty, new System.Windows.Media.Animation.ColorAnimation
+        wash.Background = new SolidColorBrush(flash);
+        wash.Visibility = Visibility.Visible;
+        // FINITE, so it needs no clock kept: it ends on its own with the wash at 0.
+        wash.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation
         {
-            From = flash,
-            To = resting,
+            From = 1,
+            To = 0,
             Duration = new Duration(TimeSpan.FromMilliseconds(1000)),
-            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
         });
     }
 
     private void PlaceRoomCell(Grid grid, Services.RoomColumn column, UIElement cell, bool gap = false)
     {
-        // Every column after the first opens with the design's 12-px gap. RoomsTableLayout's
+        // Every column after the first opens with the design's 16-px gap. RoomsTableLayout's
         // widths include it, so the header and the rows still line up.
         if (gap && cell is FrameworkElement fe)
             fe.Margin = new Thickness(fe.Margin.Left + RoomColumnGap, fe.Margin.Top, fe.Margin.Right, fe.Margin.Bottom);

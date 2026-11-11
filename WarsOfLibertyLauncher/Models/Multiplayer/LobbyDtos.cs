@@ -2176,6 +2176,11 @@ public class TournamentSummary
     [JsonPropertyName("roster_size")]
     public int? RosterSize { get; set; }
 
+    /// <summary>Whether a game of it was played (2026-11-11). One with a game is never deleted.
+    /// Null against a server that predates deleting, which then offers no Delete.</summary>
+    [JsonPropertyName("has_games")]
+    public bool? HasGames { get; set; }
+
     [JsonPropertyName("created_at")]
     public string? CreatedAt { get; set; }
 
@@ -2213,6 +2218,15 @@ public class TournamentListResponse
 
     [JsonPropertyName("drafts")]
     public List<TournamentSummary>? Drafts { get; set; }
+
+    /// <summary>
+    /// The ended tournaments only the caller still sees (2026-11-11): their own cancelled ones
+    /// with no game (for the week before the server deletes them) and old finished ones they
+    /// took part in. Null against a server that predates it - which is also how the launcher
+    /// knows that server cannot delete a tournament.
+    /// </summary>
+    [JsonPropertyName("mine")]
+    public List<TournamentSummary>? Mine { get; set; }
 }
 
 /// <summary>One side of a bracket match: a player in a 1v1, a whole team in a 3v3.</summary>
@@ -2268,6 +2282,18 @@ public class TournamentEntrantMember
 
     [JsonPropertyName("display_name")]
     public string? DisplayName { get; set; }
+
+    /// <summary>The Discord picture, a ready URL (2026-11-11). Null: the initial is drawn.</summary>
+    [JsonPropertyName("avatar_url")]
+    public string? AvatarUrl { get; set; }
+
+    /// <summary>Place on the 1v1 ladder, sent for a 1v1 tournament. Absent while being placed.</summary>
+    [JsonPropertyName("ladder_rank")]
+    public int? LadderRank { get; set; }
+
+    /// <summary>Place on the team ladder, sent for a 2v2/3v3 tournament. Absent while being placed.</summary>
+    [JsonPropertyName("ladder_rank_team")]
+    public int? LadderRankTeam { get; set; }
 }
 
 /// <summary>The room currently bound to a bracket match, when there is one.</summary>
@@ -2361,6 +2387,10 @@ public class TournamentDetail : TournamentSummary
 
     [JsonPropertyName("winner_entrant_id")]
     public string? WinnerEntrantId { get; set; }
+
+    /// <summary>The organiser's Discord picture (2026-11-11), or null.</summary>
+    [JsonPropertyName("owner_avatar_url")]
+    public string? OwnerAvatarUrl { get; set; }
 
     /// <summary>
     /// Who else the owner lets run this tournament. Ids, for asking "may I".
