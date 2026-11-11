@@ -16,27 +16,49 @@ namespace WarsOfLibertyLauncher.Tests;
 /// call site can still hand it the wrong room or the wrong preference, which is the failure a
 /// player would actually see.
 ///
-/// <para>The rooms LIST no longer wears one (design 86, the maintainer's call: the host's name and
-/// rating, as the prototype draws them); the badge lives in the room, the profile and the ranking.
-/// The room still decides which one shows there.</para>
+/// <para>The rooms LIST wears the host's badge again, beside his photo (the maintainer asked for both
+/// back over design 86, 2026-11-10), and the ROOM decides which: the team badge in a ranked 2v2/3v3,
+/// the 1v1 badge in a ranked 1v1, the player's own choice in a casual room.</para>
 /// </summary>
 [Collection("wpf-and-language")]
 public class RankBadgeContextTests
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 
-    /// <summary>Design 86: whatever the host's places, the rooms row draws no badge.</summary>
+    /// <summary>The room decides the host's badge, whatever he chose for himself.</summary>
     [Fact]
-    public void TheRoomsRowWearsNoBadgeAnyMore()
+    public void THE_ONE_THAT_MATTERS_TheRoomsRowWearsTheRoomsBadge()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            foreach (var (competitive, max, mode) in new[] { (true, 4, "1v1"), (true, 2, "team"), (false, 8, "team") })
-            {
-                var card = RoomCard(competitive, max, solo: 5, team: 2, mode);
-                Assert.Empty(TeamBadges(card));
-                Assert.Empty(Badges(card));
-            }
+            // A ranked 2v2 room: the team badge, though the host chose 1v1.
+            Assert.Single(TeamBadges(RoomCard(true, 4, solo: 5, team: 2, "1v1")));
+            // A ranked 1v1 room: the 1v1 badge, though the host chose team.
+            var oneVOne = RoomCard(true, 2, solo: 5, team: 2, "team");
+            Assert.Empty(TeamBadges(oneVOne));
+            Assert.Single(Badges(oneVOne));
+            // A casual room defers to the player: here, team.
+            Assert.Single(TeamBadges(RoomCard(false, 8, solo: 5, team: 2, "team")));
+            // A server that sends no team place: the 1v1 badge, the shared rule's fallback.
+            var noTeam = RoomCard(true, 4, solo: 5, team: null, "1v1");
+            Assert.Empty(TeamBadges(noTeam));
+            Assert.Single(Badges(noTeam));
+            // No place at all: no badge rather than a wrong one.
+            Assert.Empty(Badges(RoomCard(true, 2, solo: null, team: null, "1v1")));
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>A host still being placed shows his progress and NO badge: the badge would give away
+    /// the place placement privacy hides (design 55).</summary>
+    [Fact]
+    public void AHostBeingPlacedWearsNoBadge()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var card = RoomCard(true, 2, solo: 5, team: 2, "1v1", placing: true);
+            Assert.Empty(Badges(card));
+            Assert.Empty(TeamBadges(card));
         });
         Assert.Null(error);
     }
@@ -66,7 +88,7 @@ public class RankBadgeContextTests
 
     // ── helpers ──
 
-    private static FrameworkElement RoomCard(bool competitive, int maxPlayers, int? solo, int? team, string mode)
+    private static FrameworkElement RoomCard(bool competitive, int maxPlayers, int? solo, int? team, string mode, bool placing = false)
     {
         var tab = new MultiplayerTab();
         var lobby = new LobbySummary
@@ -84,6 +106,8 @@ public class RankBadgeContextTests
                 LadderRank = solo,
                 LadderRankTeam = team,
                 BadgeMode = mode,
+                InPlacement = placing,
+                InPlacementTeam = placing,
             },
         };
         return (FrameworkElement)typeof(MultiplayerTab)

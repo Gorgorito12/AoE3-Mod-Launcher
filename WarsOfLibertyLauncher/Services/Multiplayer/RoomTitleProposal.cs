@@ -72,11 +72,22 @@ public static class RoomTitleProposal
     public static string QuickMatch(string modName, int maxLength)
         => Compose(modName ?? "", QuickMatchMarker, maxLength);
 
+    /// <summary>The casual quick match's marker (2026-11-10). A network value like the other one;
+    /// the ranked marker keeps its text, which older launchers recognise.</summary>
+    private const string CasualQuickMatchMarker = "Casual quick match 1v1";
+
+    /// <summary>The title of a room the quick match opens, for the kind it opens.</summary>
+    public static string QuickMatch(string modName, int maxLength, bool casual)
+        => casual ? Compose(modName ?? "", CasualQuickMatchMarker, maxLength) : QuickMatch(modName, maxLength);
+
     /// <summary>Whether a title is one the quick match wrote — its marker is what ends it.</summary>
     public static bool IsQuickMatch(string? title)
     {
         var text = (title ?? "").Trim();
-        return text == QuickMatchMarker || text.EndsWith(Join + QuickMatchMarker, StringComparison.Ordinal);
+        foreach (var marker in new[] { QuickMatchMarker, CasualQuickMatchMarker })
+            if (text == marker || text.EndsWith(Join + marker, StringComparison.Ordinal))
+                return true;
+        return false;
     }
 
     /// <summary>The languages a title could have been written in by an earlier build. Used

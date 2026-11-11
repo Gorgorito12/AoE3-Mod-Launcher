@@ -113,6 +113,10 @@ internal static class RoomListDemoData
                     GamesPlayedTeam = placementPlayed ?? 40,
                     InPlacement = placementPlayed != null,
                     InPlacementTeam = placementPlayed != null,
+                    // The rooms row wears the host's badge again (2026-11-10): a place that follows
+                    // the rating, none while placing or with no rating.
+                    LadderRank = placementPlayed != null || rating is not double r ? null : r >= 1600 ? 4 : r >= 1400 ? 9 : 22,
+                    LadderRankTeam = placementPlayed != null || rating is not double rt ? null : rt >= 1600 ? 6 : rt >= 1400 ? 12 : 25,
                 },
             };
         }

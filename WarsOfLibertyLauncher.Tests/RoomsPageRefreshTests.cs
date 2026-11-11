@@ -36,6 +36,34 @@ public class RoomsPageRefreshTests
     public void TheCellsTickOnlyOnTheRoomsPage(bool onRooms, bool roomWindowOpen, bool launcherActive, bool expected)
         => Assert.Equal(expected, RoomsPageRefresh.ShouldTickCells(onRooms, roomWindowOpen, launcherActive));
 
+    /// <summary>A room announced on the live channel is asked for at once — only where the poll itself
+    /// would run, and never with the tab hidden (that would spend the per-IP budget for nobody).</summary>
+    [Theory]
+    // signedIn, onRooms, tabVisible, roomWindowOpen, launcherActive, expected
+    [InlineData(true, true, true, false, false, true)]   // THE ONE THAT MATTERS: on the list, it comes now
+    [InlineData(true, true, false, false, true, false)]  // tab hidden
+    [InlineData(true, false, true, false, true, false)]  // another subtab
+    [InlineData(true, true, true, true, false, false)]   // behind the room window
+    [InlineData(false, true, true, false, true, false)]  // signed out
+    public void AnAnnouncedRoomIsFetchedOnlyWhereTheListIsShown(bool signedIn, bool onRooms, bool tabVisible,
+        bool roomWindowOpen, bool launcherActive, bool expected)
+        => Assert.Equal(expected, RoomsPageRefresh.ShouldRefreshOnAnnouncement(signedIn, onRooms, tabVisible, roomWindowOpen, launcherActive));
+
+    /// <summary>The frame handler queues the request instead of fetching per frame: a burst is one.</summary>
+    [Fact]
+    public void ABurstOfAnnouncementsIsOneRequest()
+    {
+        var source = File.ReadAllText(Path.Combine(LauncherDir(), "Controls", "MultiplayerTab.xaml.cs"));
+        var body = source[source.IndexOf("private void QueueRoomsRefreshFromAnnouncement()", StringComparison.Ordinal)..];
+        body = body[..body.IndexOf("private void HandleLobbyCreatedFrame", StringComparison.Ordinal)];
+        Assert.Contains("if (!_roomsAnnounceTimer.IsEnabled) _roomsAnnounceTimer.Start();", body);
+        Assert.Contains("RoomsPageRefresh.AnnouncementDebounceMs", body);
+        Assert.True(RoomsPageRefresh.AnnouncementDebounceMs is > 0 and <= 1000);
+    }
+
+    private static string LauncherDir([System.Runtime.CompilerServices.CallerFilePath] string here = "")
+        => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "WarsOfLibertyLauncher"));
+
     /// <summary>Both timers ask the rule, and closing the room window brings the list current.</summary>
     [Fact]
     public void BothTimersGoThroughTheRuleAndClosingTheRoomRefreshesTheList()

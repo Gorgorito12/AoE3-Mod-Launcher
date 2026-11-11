@@ -693,21 +693,44 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   ONCE per mod and install path (`KnownModHash`, off the UI thread through `_computeModFingerprint`),
   never per row, and the list repaints when it lands; an unknown hash, or a room without
   `mod_combined_hash`, is "same version".
-  (4) **No badge in the row and no capacity bars** (the maintainer chose the prototype): the host's
-  name over his rating on the ROOM's ladder (team for a ranked 2v2/3v3). A host still being placed
-  shows "En posicionamiento 3/10" and never a number, even if an older server sends one
-  (`HiddenPlacementTag`, pinned by `PlacementPrivacyTests`).
-  (5) **The quick match card** replaces the "Find a 1v1 match" button: states Ready (who waits, nobody,
-  another version, unknown), Looking, Waiting (clock), Found, Outdated, NoMod, NotRanked, InOtherRoom;
-  hidden offline and signed out, and repainted by every session pass (entering or leaving a room
-  changes it). **NotRanked is learned, not known:** the server says a mod has no ladder only by making
-  the search's room casual, so the first search costs one room opened and closed (and the notice), and
-  the mod is then remembered for the session (`_qmUnrankedMods`) and the card says so before the next
-  click. **Found survives the search ending**: `RememberQuickMatchFound` keeps the room and the rival,
+  (4) **The host cell is his Discord photo (28 px), his badge STILL and his name over his rating, all on
+  the ROOM's ladder** (team for a ranked 2v2/3v3; a casual room defers to his own choice). The photo
+  and badge came BACK on 2026-11-10 at the maintainer's request, over design 86, which had removed
+  them; there are still no capacity bars. A host still being placed shows "En posicionamiento 3/10",
+  NO badge and never a number, even if an older server sends one (`HiddenPlacementTag`,
+  `BuildRoomHostBadge`, pinned by `PlacementPrivacyTests` and
+  `RankBadgeContextTests.THE_ONE_THAT_MATTERS_TheRoomsRowWearsTheRoomsBadge`). The badge's 30 px are
+  kept on every row so the names line up. The headings are `RmTextLabel` over a 1-px rule; PLAYERS has
+  a people icon, PING three signal bars lit by the ping's colour (`LitBars`: 3 under 100 ms, 2 to 150,
+  1 slower, none unmeasured); "Unirse" is `RmRowButtonJoin`, the faint button with a blue rim, and
+  "Ver sala" stays the only solid one.
+  (5) **The quick match is a BAR of about 56 px (2026-11-10, the maintainer's call over design 86's tall
+  card)**: icon 36, "Quick match" + the MOD picker + the KIND segment on the first line, one line of
+  state under it, the button on the right (`QuickCardView`, `MultiplayerTab.QuickCard.cs`). States
+  Ready (who waits, nobody, another version, unknown), Looking, Waiting (clock), Found, Outdated,
+  NoMod, NotRanked, InOtherRoom; hidden offline and signed out, and repainted by every session pass.
+  **The kind** is Rated / Casual / Either (`QuickMatchKind`, always a 1v1): Casual joins a casual room
+  of exactly two playing seats; **Either OPENS a rated room** (what older launchers and rated-only
+  searchers can join) and, waiting in it, moves to ANY casual candidate whatever the ages, because a
+  casual room's host searches Casual and will never come to a rated one (`PickToMoveTo`;
+  `THE_ONE_THAT_MATTERS_CasualAndEitherEndUpInOneRoom`). **The mod** is the one chosen in the bar
+  while it is installed, else the Library's (`QuickMatchProfile`; choosing the Library's mod saves
+  empty, so it keeps following); choosing never moves the Library. Both are kept in
+  `LauncherConfig.QuickMatchKind` / `QuickMatchModId`. Nobody waiting in the chosen mod but somebody in
+  another installed one: the line says so with a "Change" link inline (`WaitingElsewhere`, only on
+  fingerprints already read). The casual room's title is the network value `Casual quick match 1v1`;
+  the rated marker is unchanged. **NotRanked is learned, not known:** the server says a mod has no
+  ladder only by making the search's room casual; the mod is then remembered for the session
+  (`_qmUnrankedMods`), the bar offers Casual alone and a Rated search there closes its room with the
+  notice, while Casual and Either simply wait in it. **Found survives the search ending**: `RememberQuickMatchFound` keeps the room and the rival,
   or the card read "you are in another room" the moment the rival arrived (found live). Its spinner and
   pulse are clocks stopped through their controller, paused while hidden or minimised, and built still
   under reduced effects — the SETTING too, not only the governor (`RankBadge.SetUserReducedEffects`).
-  Compact (one line, 40-px icon) below a 900-px window.
+  There is no compact form any more: the bar is already small. **A room announced on the live channel
+  (`lobby_created`, or `lobbies_changed` from a server that sends it) is fetched at once while the list
+  is on screen** (`QueueRoomsRefreshFromAnnouncement`, 300 ms debounce,
+  `RoomsPageRefresh.ShouldRefreshOnAnnouncement`), so a new room shows in about a second; the 5-s poll
+  stays as the fallback.
   (5b) **Observer seats are inside `max_players`, as on the server (`playingSeatsOf`).**
   `RoomPlayingSeats()` subtracts them; it used not to, so a room of four with two watching seats showed
   "2 / 4", a free seat nobody could play in and "4 players · 2 observers", and auto-start waited for the

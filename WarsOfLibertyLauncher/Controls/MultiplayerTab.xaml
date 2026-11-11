@@ -1136,7 +1136,9 @@
                                  absorbs the slack. -->
                             <Border Grid.Row="1"
                                     x:Name="RoomsHeaderBand"
-                                    Background="Transparent">
+                                    Background="Transparent"
+                                    BorderBrush="{DynamicResource MpRimFaint}"
+                                    BorderThickness="0,0,0,1">
                             <!-- ClipToBounds: a Grid cell does NOT clip, so without this a
                                  header that outgrows its share draws straight over the next
                                  column instead of being cut. Belt and braces behind the
@@ -1155,8 +1157,8 @@
                                      matches reality cannot cause that again. -->
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="202"/>
-                                    <ColumnDefinition Width="86"/>
+                                    <ColumnDefinition Width="250"/>
+                                    <ColumnDefinition Width="100"/>
                                     <ColumnDefinition Width="148"/>
                                 </Grid.ColumnDefinitions>
                                 <!-- Design 86: plain headings, 11 bold, no sorting. The list is
@@ -1166,18 +1168,18 @@
                                      heading; the others carry the 12-px gap that opens each
                                      column, like their cells (PlaceRoomCell). -->
                                 <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Margin="48,0,0,0"
-                                           Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="1" x:Name="ColHeaderHost" Margin="12,0,0,0"
-                                           Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="2" x:Name="ColHeaderPlayers" Margin="12,0,0,0"
-                                           Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 <!-- PING: only with a server that publishes the hosts' Radmin
                                      addresses; ApplyRoomColumns places it and shows it then. -->
                                 <TextBlock Grid.Column="2" x:Name="ColHeaderPing" Margin="12,0,0,0" Visibility="Collapsed"
-                                           Foreground="{DynamicResource RmHeading}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
+                                           Foreground="{DynamicResource RmTextLabel}" FontSize="{DynamicResource RmChipSize}" FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="3" x:Name="ColHeaderAction"/>
                             </Grid>

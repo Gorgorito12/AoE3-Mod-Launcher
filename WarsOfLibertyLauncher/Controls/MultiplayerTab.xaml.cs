@@ -11315,6 +11315,10 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "lobby_created":
                         HandleLobbyCreatedFrame(e.Json);
+                        QueueRoomsRefreshFromAnnouncement();
+                        break;
+                    case "lobbies_changed":
+                        QueueRoomsRefreshFromAnnouncement();
                         break;
                     case "match_rated":
                         HandleMatchRatedFrame(e.Json);
@@ -11549,6 +11553,36 @@ public partial class MultiplayerTab : UserControl
             Num(json, "rating_after"),
             json.TryGetProperty("unrated_reason", out var ur) && ur.ValueKind == JsonValueKind.String
                 ? ur.GetString() : null));
+    }
+
+    private System.Windows.Threading.DispatcherTimer? _roomsAnnounceTimer;
+
+    /// <summary>A new room appeared in about a second instead of on the next 5-s poll: the live
+    /// channel already announced it, and only the notification listened.</summary>
+    private void QueueRoomsRefreshFromAnnouncement()
+    {
+        if (!Services.Multiplayer.RoomsPageRefresh.ShouldRefreshOnAnnouncement(
+                signedIn: _session?.Status == MultiplayerSession.SessionStatus.SignedIn,
+                onRooms: _activeSubtab == Subtab.Rooms,
+                tabVisible: IsVisible,
+                roomWindowOpen: _lobbyWindow != null,
+                launcherActive: LauncherIsActive()))
+            return;
+        if (_roomsAnnounceTimer == null)
+        {
+            _roomsAnnounceTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(Services.Multiplayer.RoomsPageRefresh.AnnouncementDebounceMs),
+            };
+            _roomsAnnounceTimer.Tick += (_, _) =>
+            {
+                _roomsAnnounceTimer.Stop();
+                Services.PerfCounters.Increment("MP.RoomsListFromAnnouncement");
+                _ = RefreshRoomsListAsync(quiet: true);
+            };
+        }
+        // Later announcements join the one already queued; they never postpone it.
+        if (!_roomsAnnounceTimer.IsEnabled) _roomsAnnounceTimer.Start();
     }
 
     private void HandleLobbyCreatedFrame(JsonElement json)

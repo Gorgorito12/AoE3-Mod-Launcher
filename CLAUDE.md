@@ -648,8 +648,10 @@ rather than the reverse.
   host over "1630 ELO" or "En posicionamiento 3/10", players, the ping to the host over Radmin (only
   with a server that publishes hosts' addresses), and ONE action decided by the pure
   `Services/Multiplayer/RoomActionRule`, which also groups the list under PUEDES ENTRAR / EN PARTIDA /
-  NO DISPONIBLES AHORA. The quick match is a card above the list (`MultiplayerTab.QuickCard.cs` over
-  `Services/Multiplayer/QuickCardView`). The rules are in `.claude/rules/multiplayer.md` (ROOMS PAGE).
+  NO DISPONIBLES AHORA. The quick match is a one-line bar above the list with a mod picker and a
+  Rated / Casual / Either segment (`MultiplayerTab.QuickCard.cs` over
+  `Services/Multiplayer/QuickCardView`; 2026-11-10, over 86's card), and the host cell wears his photo
+  and rank badge again (also 2026-11-10). The rules are in `.claude/rules/multiplayer.md` (ROOMS PAGE).
   `--demo-rooms=86a..86e` (and a Settings → Developer row) paints it with sample rooms; buttons there
   say what they would do instead of doing it.
 

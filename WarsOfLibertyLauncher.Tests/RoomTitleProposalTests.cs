@@ -312,6 +312,18 @@ public class RoomTitleProposalTests
         Assert.False(RoomTitleProposal.IsQuickMatch(null));
     }
 
+    /// <summary>The casual quick match has a marker of its own, recognised like the other; neither
+    /// changes with the host's language (a network value), and the ranked one keeps its old text.</summary>
+    [Fact]
+    public void TheCasualQuickMatchIsRecognisedAndTheRankedOneUnchanged()
+    {
+        var casual = RoomTitleProposal.QuickMatch("WoL", Cap, casual: true);
+        Assert.EndsWith("· Casual quick match 1v1", casual);
+        Assert.True(RoomTitleProposal.IsQuickMatch(casual));
+        Assert.Equal(RoomTitleProposal.QuickMatch("WoL", Cap), RoomTitleProposal.QuickMatch("WoL", Cap, casual: false));
+        Assert.EndsWith("· Quick match 1v1", RoomTitleProposal.QuickMatch("WoL", Cap));
+    }
+
     private static CreateLobbyDialog NewDialog(out ModProfile profile)
     {
         profile = new ModProfile { Id = "wol", DisplayName = "WoL" };

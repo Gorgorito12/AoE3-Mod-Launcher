@@ -834,6 +834,10 @@ ladder" state of the quick match card appears only after the first search for th
 the server knows it, at create time;
 the activity facts keep their own count instead of 2/3/4 by width; the sample peak hours are the
 fixture's. The subtab bar (capitals, a blue line) is now the same for all four subtabs.
+**Two later departures from 86, both the maintainer's (2026-11-10):** the quick match card became a
+one-line bar of about 56 px with a mod picker and a Rated / Casual / Either segment (no kicker, no
+version chip, no foot line); and the host cell of a room wears his Discord photo and his rank badge
+again, with icons on PLAYERS and PING and a blue rim on "Unirse".
 
 **Screen 93 (Clasificación)**, compared with `Clasificación v3.dc.html` in 93a (1920), 93b, 93d and 93e
 (1366), 93c (2560, Teams) and 93f (Highlights), then English, reduced effects and the Solid and

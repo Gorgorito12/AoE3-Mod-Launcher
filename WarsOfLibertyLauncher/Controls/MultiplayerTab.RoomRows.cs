@@ -188,9 +188,27 @@ public partial class MultiplayerTab
         room.Children.Add(roomText);
         PlaceRoomCell(grid, RoomColumn.Room, room);
 
-        // === HOST: name (and "you") over the rating ===
+        // === HOST: photo, badge, then the name (and "you") over the rating ===
         var hostName = RoomHostName(lobby);
-        var host = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var hostCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // The badge's place is kept on every row, so the names line up whether a host wears one
+        // (a host being placed does not).
+        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var avatar = BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, HostAvatarSize);
+        avatar.VerticalAlignment = VerticalAlignment.Center;
+        hostCell.Children.Add(avatar);
+        if (BuildRoomHostBadge(lobby) is { } hostBadge)
+        {
+            hostBadge.Margin = new Thickness(8, 0, 0, 0);
+            hostBadge.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(hostBadge, 1);
+            hostCell.Children.Add(hostBadge);
+        }
+        var host = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        Grid.SetColumn(host, 2);
+        hostCell.Children.Add(host);
         var hostLine = new Grid();
         hostLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -230,7 +248,7 @@ public partial class MultiplayerTab
             rating.Margin = new Thickness(0, 4, 0, 0);
             host.Children.Add(rating);
         }
-        PlaceRoomCell(grid, RoomColumn.Host, host, gap: true);
+        PlaceRoomCell(grid, RoomColumn.Host, hostCell, gap: true);
 
         // === PLAYERS: "1/2", clickable to see who is in ===
         var seats = RoomFormats.SeatsOf(lobby.MaxPlayers, lobby.SpectatorSlots, lobby.CurrentPlayers, lobby.SpectatorsPresent);
@@ -250,7 +268,19 @@ public partial class MultiplayerTab
         players.MouseEnter += (_, _) => players.TextDecorations = TextDecorations.Underline;
         players.MouseLeave += (_, _) => players.TextDecorations = null;
         players.MouseLeftButtonUp += PlayersPeek_Click;
-        PlaceRoomCell(grid, RoomColumn.Players, players, gap: true);
+        var people = new TextBlock
+        {
+            Text = "\uE716",
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 13,
+            Foreground = Rm("RmTextLabel"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 7, 0),
+        };
+        var playersCell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        playersCell.Children.Add(people);
+        playersCell.Children.Add(players);
+        PlaceRoomCell(grid, RoomColumn.Players, playersCell, gap: true);
 
         // === PING: to this host over Radmin, only when the server publishes hosts' addresses ===
         if (HostPingColumnShown)
@@ -276,6 +306,23 @@ public partial class MultiplayerTab
     }
 
     private static readonly FontFamily MonoFont = new("Consolas, Courier New, monospace");
+
+    /// <summary>The host's Discord photo in the rooms row (the maintainer asked for it back over 86).</summary>
+    internal const double HostAvatarSize = 28;
+
+    /// <summary>The host's badge, STILL, on the room's ladder (team for a ranked 2v2/3v3, as the
+    /// rating under his name). None for a host still being placed — the badge would give away the
+    /// number placement privacy hides — and none when the server sent no place.</summary>
+    private FrameworkElement? BuildRoomHostBadge(LobbySummary lobby)
+    {
+        var h = lobby.Host;
+        if (h == null) return null;
+        var format = RoomFormats.Resolve(lobby.Competitive, lobby.MaxPlayers, lobby.SpectatorSlots);
+        var team = format is RoomFormat.TwoVTwo or RoomFormat.ThreeVThree;
+        if ((team ? h.InPlacementTeam : h.InPlacement) == true) return null;
+        if (BadgeOf(format, h.BadgeMode, h.LadderRank, h.LadderRankTeam) is not { } shown) return null;
+        return BuildShownBadge(shown, 22, "room-host-" + h.Id);
+    }
 
     /// <summary>I am the host (as opposed to merely in the room).</summary>
     private bool IsHostedByMe(LobbySummary lobby)
@@ -413,7 +460,12 @@ public partial class MultiplayerTab
 
         var btn = new Button
         {
-            Style = (Style)Application.Current.FindResource(action == RoomAction.OpenMine ? "RmRowButtonPrimary" : "RmRowButton"),
+            Style = (Style)Application.Current.FindResource(action switch
+            {
+                RoomAction.OpenMine => "RmRowButtonPrimary",
+                RoomAction.Join => "RmRowButtonJoin",
+                _ => "RmRowButton",
+            }),
             Content = caption,
             Tag = lobby,
         };

@@ -30,8 +30,12 @@
 ## 1. Qué es
 
 El jugador presiona **«Buscar partida»** y el launcher lo empareja y arma la sala solo, en lugar de
-crear una sala y esperar a ver si alguien la encuentra. Está pensado para **partidas competitivas
-(puntuadas)**: toda partida rápida es competitiva.
+crear una sala y esperar a ver si alguien la encuentra. Desde 2026-11-10 el jugador elige **Con
+puntos**, **Casual** o **Ambas** (siempre 1v1) y el mod, entre los que tiene instalados. «Ambas» abre
+una sala con puntos cuando nadie espera (es lo que también pueden encontrar los launchers viejos y
+quien busca solo con puntos) y, mientras espera, se muda a cualquier sala casual candidata, porque
+quien espera en una casual buscó Casual y nunca vendrá a una con puntos. Un mod sin clasificación
+busca casual.
 
 ---
 

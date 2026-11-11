@@ -5,6 +5,19 @@ using WarsOfLibertyLauncher.Models.Multiplayer;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
+/// <summary>What a quick match looks for (2026-11-10): always a 1v1, rated, casual, or either.</summary>
+public enum QuickMatchKind
+{
+    /// <summary>A competitive 1v1 room: the only kind there was before.</summary>
+    Ranked,
+
+    /// <summary>A casual room of exactly two playing seats.</summary>
+    Casual,
+
+    /// <summary>Either of the two.</summary>
+    Either,
+}
+
 /// <summary>
 /// The quick match, phase 0 (docs/DISENO-PARTIDA-RAPIDA.md): with no matchmaking server, a search
 /// is "join a competitive 1v1 room of my mod that is waiting for a rival, or open one and wait".
@@ -30,23 +43,49 @@ public static class QuickMatchPlanner
     /// at the door with <c>mod_mismatch</c>), a 1v1 with its playing seat free, and not hosted
     /// by the searcher himself.
     /// </summary>
-    public static bool IsCandidate(LobbySummary? room, string? myUserId, string modId, string modHash)
-        => IsCompatibleExceptVersion(room, myUserId, modId)
+    public static bool IsCandidate(LobbySummary? room, string? myUserId, string modId, string modHash,
+        QuickMatchKind kind = QuickMatchKind.Ranked)
+        => IsCompatibleExceptVersion(room, myUserId, modId, kind)
            && string.Equals(room!.ModCombinedHash, modHash, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether a room is the kind a search for <paramref name="kind"/> may join: a
+    /// competitive 1v1, a casual room of exactly two playing seats, or either.</summary>
+    public static bool IsKind(LobbySummary room, QuickMatchKind kind)
+    {
+        var ranked = room.Competitive
+                     && RoomFormats.Resolve(room.Competitive, room.MaxPlayers, room.SpectatorSlots) == RoomFormat.OneVOne;
+        var casual = !room.Competitive
+                     && RoomFormats.SeatsOf(room.MaxPlayers, room.SpectatorSlots, room.CurrentPlayers, room.SpectatorsPresent)
+                         .PlayerSeats == 2;
+        return kind switch
+        {
+            QuickMatchKind.Ranked => ranked,
+            QuickMatchKind.Casual => casual,
+            _ => ranked || casual,
+        };
+    }
+
+    /// <summary>
+    /// The kind of room a search OPENS when nothing is waiting. Either opens a RANKED one: that is
+    /// also what an older launcher and anybody searching "ranked only" can join. A mod with no
+    /// ladder always opens a casual one — the server would make it casual anyway.
+    /// </summary>
+    public static QuickMatchKind KindToCreate(QuickMatchKind kind, bool modHasLadder)
+        => !modHasLadder || kind == QuickMatchKind.Casual ? QuickMatchKind.Casual : QuickMatchKind.Ranked;
 
     /// <summary>
     /// <see cref="IsCandidate"/> without the fingerprint: a room of the same mod waiting for a
     /// 1v1 rival that this install could not join because its version differs.
     /// </summary>
-    private static bool IsCompatibleExceptVersion(LobbySummary? room, string? myUserId, string modId)
+    private static bool IsCompatibleExceptVersion(LobbySummary? room, string? myUserId, string modId,
+        QuickMatchKind kind = QuickMatchKind.Ranked)
     {
         if (room == null || string.IsNullOrEmpty(modId)) return false;
-        if (!room.Competitive || room.IsPrivate) return false;
+        if (room.IsPrivate) return false;
         if (!string.Equals(room.Status, "open", StringComparison.Ordinal)) return false;
         if (!string.IsNullOrEmpty(room.TournamentMatchId)) return false;
         if (!string.Equals(room.ModId, modId, StringComparison.OrdinalIgnoreCase)) return false;
-        if (RoomFormats.Resolve(room.Competitive, room.MaxPlayers, room.SpectatorSlots) != RoomFormat.OneVOne)
-            return false;
+        if (!IsKind(room, kind)) return false;
         if (RoomFormats.SeatsOf(room.MaxPlayers, room.SpectatorSlots, room.CurrentPlayers, room.SpectatorsPresent)
             .PlayingFull) return false;
         return !IsHostedBy(room, myUserId);
@@ -75,10 +114,11 @@ public static class QuickMatchPlanner
     /// room for its rating. Empty when nothing is waiting.
     /// </summary>
     public static IReadOnlyList<LobbySummary> RoomsToJoin(
-        IEnumerable<LobbySummary>? rooms, string? myUserId, string modId, string modHash, double? myRating)
+        IEnumerable<LobbySummary>? rooms, string? myUserId, string modId, string modHash, double? myRating,
+        QuickMatchKind kind = QuickMatchKind.Ranked)
     {
         var candidates = (rooms ?? Enumerable.Empty<LobbySummary>())
-            .Where(r => IsCandidate(r, myUserId, modId, modHash))
+            .Where(r => IsCandidate(r, myUserId, modId, modHash, kind))
             .ToList();
         candidates.Sort((a, b) =>
         {
@@ -109,26 +149,53 @@ public static class QuickMatchPlanner
     /// list could send two waiters past each other.
     /// </summary>
     public static LobbySummary? PickToMoveTo(
-        IEnumerable<LobbySummary>? rooms, string myLobbyId, string? myUserId, string modId, string modHash)
+        IEnumerable<LobbySummary>? rooms, string myLobbyId, string? myUserId, string modId, string modHash,
+        QuickMatchKind kind = QuickMatchKind.Ranked)
     {
         var list = (rooms ?? Enumerable.Empty<LobbySummary>()).ToList();
         var mine = list.FirstOrDefault(r => string.Equals(r.Id, myLobbyId, StringComparison.Ordinal));
         if (mine == null) return null;
-        return list
+        var others = list
             .Where(r => !string.Equals(r.Id, myLobbyId, StringComparison.Ordinal))
-            .Where(r => IsCandidate(r, myUserId, modId, modHash))
-            .Where(r => CompareAge(r, mine) < 0)
+            .Where(r => IsCandidate(r, myUserId, modId, modHash, kind))
             .OrderBy(r => r, Comparer<LobbySummary>.Create(CompareAge))
-            .FirstOrDefault();
+            .ToList();
+        // Searching Either and waiting in a RANKED room: a casual room's host searches Casual (Either
+        // opens ranked), so he will never come here. This one goes to him, whatever the ages.
+        if (kind == QuickMatchKind.Either && mine.Competitive
+            && others.FirstOrDefault(r => !r.Competitive) is { } casual)
+            return casual;
+        return others.FirstOrDefault(r => CompareAge(r, mine) < 0);
+    }
+
+    /// <summary>
+    /// The first installed mod, other than the one searched, with a room this player could join
+    /// right now — what the card says when nobody waits in the chosen mod. Only a fingerprint
+    /// already known counts (<paramref name="knownHashOf"/> returns null for one not read yet): this
+    /// never reads an install just to answer.
+    /// </summary>
+    public static string? WaitingElsewhere(
+        IEnumerable<LobbySummary>? rooms, string? myUserId, IEnumerable<string> installedModIds,
+        Func<string, string?> knownHashOf, QuickMatchKind kind, string exceptModId)
+    {
+        var list = (rooms ?? Enumerable.Empty<LobbySummary>()).ToList();
+        foreach (var modId in installedModIds)
+        {
+            if (string.Equals(modId, exceptModId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (knownHashOf(modId) is not { Length: > 0 } hash) continue;
+            if (list.Any(r => IsCandidate(r, myUserId, modId, hash, kind))) return modId;
+        }
+        return null;
     }
 
     /// <summary>
     /// How many rooms are waiting for a 1v1 rival in the same mod with ANOTHER version of it — what
     /// the search says when it finds nothing it can join, so a player on an old build learns why.
     /// </summary>
-    public static int OtherVersionCount(IEnumerable<LobbySummary>? rooms, string? myUserId, string modId, string modHash)
+    public static int OtherVersionCount(IEnumerable<LobbySummary>? rooms, string? myUserId, string modId, string modHash,
+        QuickMatchKind kind = QuickMatchKind.Ranked)
         => (rooms ?? Enumerable.Empty<LobbySummary>())
-            .Count(r => IsCompatibleExceptVersion(r, myUserId, modId)
+            .Count(r => IsCompatibleExceptVersion(r, myUserId, modId, kind)
                         && !string.Equals(r.ModCombinedHash, modHash, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>How long a search waits in its own room before giving up and closing it.</summary>

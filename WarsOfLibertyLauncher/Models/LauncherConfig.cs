@@ -2109,6 +2109,16 @@ public class LauncherConfig
     /// see <see cref="Services.Multiplayer.RoomFormats.KindToken"/>.</summary>
     public string LastRoomKind { get; set; } = "casual";
 
+    /// <summary>What the quick match looks for: <c>ranked</c> (the default, what it always did),
+    /// <c>casual</c> or <c>either</c>. A mod with no ladder searches casual whatever this says.</summary>
+    [JsonPropertyName("quickMatchKind")]
+    public string QuickMatchKind { get; set; } = "ranked";
+
+    /// <summary>The mod the quick match searches. Empty FOLLOWS the Library's active mod, and choosing
+    /// that mod in the bar writes empty again, so somebody who never strays keeps following it.</summary>
+    [JsonPropertyName("quickMatchModId")]
+    public string QuickMatchModId { get; set; } = "";
+
     /// <summary>
     /// GitHub release tag the user dismissed via "Later". The launcher won't
     /// prompt again for this exact tag — only when a different tag appears.

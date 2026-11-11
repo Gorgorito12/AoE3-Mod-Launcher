@@ -76,7 +76,7 @@ public partial class MultiplayerTab
     }
 
     /// <summary>The PING cell of a new row, registered so the measurement can repaint it in place.</summary>
-    private TextBlock BuildHostPingCell(LobbySummary lobby)
+    private FrameworkElement BuildHostPingCell(LobbySummary lobby)
     {
         var tb = new TextBlock
         {
@@ -85,17 +85,57 @@ public partial class MultiplayerTab
             VerticalAlignment = VerticalAlignment.Center,
         };
         tb.SetResourceReference(TextBlock.FontSizeProperty, "RmButtonSize");
+        var bars = BuildSignalBars();
+        tb.Tag = bars;
+        var cell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Background = System.Windows.Media.Brushes.Transparent };
+        cell.Children.Add(bars);
+        cell.Children.Add(tb);
         FillHostPingCell(tb, HostPingFactsFor(lobby));
         _hostPingCells[lobby.Id] = tb;
-        return tb;
+        return cell;
     }
+
+    /// <summary>Three bars, 4 / 7 / 10 px, bottom-aligned, in front of the milliseconds.</summary>
+    private static StackPanel BuildSignalBars()
+    {
+        var bars = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) };
+        foreach (var height in new[] { 4.0, 7.0, 10.0 })
+            bars.Children.Add(new Border
+            {
+                Width = 3,
+                Height = height,
+                CornerRadius = new CornerRadius(1),
+                Margin = new Thickness(0, 0, 2, 0),
+                VerticalAlignment = VerticalAlignment.Bottom,
+            });
+        bars.Height = 10;
+        return bars;
+    }
+
+    /// <summary>How many of the three bars a ping lights: under 100 ms all three, up to 150 two,
+    /// slower one; unmeasured none (the bars stay grey beside the dash).</summary>
+    internal static int LitBars(HostPingKind kind, int? ms)
+        => kind != HostPingKind.Answered || ms is not int v || v < 0 ? 0 : v < 100 ? 3 : v <= 150 ? 2 : 1;
 
     internal static void FillHostPingCell(TextBlock tb, HostPingFacts facts)
     {
         var kind = HostPing.Classify(facts);
+        var colourKey = kind == HostPingKind.Answered ? RoomActionRule.PingBrushKey(facts.LastMs) : "RmPingUnknown";
         tb.Text = HostPing.Text(kind, facts.LastMs);
-        tb.Foreground = Rm(kind == HostPingKind.Answered ? RoomActionRule.PingBrushKey(facts.LastMs) : "RmPingUnknown");
-        tb.ToolTip = HostPing.TipKey(kind) is { } key ? TooltipHelper.Wrap(Strings.Get(key)) : null;
+        tb.Foreground = Rm(colourKey);
+        var tip = HostPing.TipKey(kind) is { } key ? TooltipHelper.Wrap(Strings.Get(key)) : null;
+        tb.ToolTip = tip;
+        if (tb.Tag is StackPanel bars)
+        {
+            var lit = LitBars(kind, facts.LastMs);
+            for (var i = 0; i < bars.Children.Count; i++)
+                if (bars.Children[i] is Border bar)
+                {
+                    bar.Background = Rm(i < lit ? colourKey : "RmPingUnknown");
+                    bar.Opacity = i < lit ? 1 : .45;
+                }
+            if (bars.Parent is FrameworkElement cell) cell.ToolTip = tip;
+        }
     }
 
     /// <summary>Repaint every PING cell on screen from the latest readings, without rebuilding a row.</summary>

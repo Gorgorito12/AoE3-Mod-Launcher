@@ -942,6 +942,19 @@
         </Style.Triggers>
     </Style>
 
+    <!-- "Unirse" on a room you can enter: the same button with a blue rim, so the rooms you can
+         join stand out at a glance. "Ver sala" stays the only solid one. State lives in the Style's
+         own triggers (this file's rule), so the hover still lands. -->
+    <Style x:Key="RmRowButtonJoin" TargetType="Button" BasedOn="{StaticResource RmRowButton}">
+        <Setter Property="BorderBrush" Value="#992F7FE0"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="BorderBrush" Value="#2F7FE0"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- The quick match card's buttons (design 86): 52 high (40 compact), radius 10. The primary
          is the ACTIVE MOD's accent, as the design paints it, with the glow as a sibling under the
          caption (an Effect on the caption's ancestor would cost it ClearType). Hover brightens

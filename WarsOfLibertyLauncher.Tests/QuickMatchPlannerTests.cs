@@ -358,4 +358,93 @@ public class QuickMatchPlannerTests
     {
         Assert.Equal(TimeSpan.FromMinutes(30), QuickMatchPlanner.GiveUpAfter);
     }
+
+    // ---- the kind of match (2026-11-10): ranked, casual, either --------------------------------
+
+    [Theory]
+    // competitive, maxPlayers, kind, expected
+    [InlineData(true, 2, QuickMatchKind.Ranked, true)]
+    [InlineData(false, 2, QuickMatchKind.Ranked, false)]   // ranked never enters a casual room
+    [InlineData(false, 2, QuickMatchKind.Casual, true)]
+    [InlineData(true, 2, QuickMatchKind.Casual, false)]    // casual never enters a ranked room
+    [InlineData(false, 4, QuickMatchKind.Casual, false)]   // a casual room of four is not a 1v1
+    [InlineData(false, 8, QuickMatchKind.Either, false)]
+    [InlineData(true, 4, QuickMatchKind.Either, false)]
+    [InlineData(true, 2, QuickMatchKind.Either, true)]
+    [InlineData(false, 2, QuickMatchKind.Either, true)]
+    public void EachKindJoinsOnlyItsRooms(bool competitive, int maxPlayers, QuickMatchKind kind, bool expected)
+        => Assert.Equal(expected, QuickMatchPlanner.IsCandidate(Room("r", competitive: competitive, maxPlayers: maxPlayers), Me, Mod, Hash, kind));
+
+    [Fact]
+    public void ACasualRoomStillRefusesWhatEveryRoomRefuses()
+    {
+        Assert.False(QuickMatchPlanner.IsCandidate(Room("r", competitive: false, isPrivate: true), Me, Mod, Hash, QuickMatchKind.Casual));
+        Assert.False(QuickMatchPlanner.IsCandidate(Room("r", competitive: false, currentPlayers: 2), Me, Mod, Hash, QuickMatchKind.Casual));
+        Assert.False(QuickMatchPlanner.IsCandidate(Room("r", competitive: false, modHash: "x"), Me, Mod, Hash, QuickMatchKind.Casual));
+        Assert.False(QuickMatchPlanner.IsCandidate(Room("r", competitive: false, hostId: Me), Me, Mod, Hash, QuickMatchKind.Casual));
+    }
+
+    [Theory]
+    [InlineData(QuickMatchKind.Ranked, true, QuickMatchKind.Ranked)]
+    [InlineData(QuickMatchKind.Either, true, QuickMatchKind.Ranked)]   // what an older launcher can join
+    [InlineData(QuickMatchKind.Casual, true, QuickMatchKind.Casual)]
+    [InlineData(QuickMatchKind.Ranked, false, QuickMatchKind.Casual)]  // no ladder: the server would make it casual
+    [InlineData(QuickMatchKind.Either, false, QuickMatchKind.Casual)]
+    public void TheKindOpenedWhenNothingWaits(QuickMatchKind kind, bool hasLadder, QuickMatchKind opened)
+        => Assert.Equal(opened, QuickMatchPlanner.KindToCreate(kind, hasLadder));
+
+    /// <summary>
+    /// One searches Casual, the other Either, both with no room yet: the casual one opens a casual
+    /// room, the other a ranked one (Either opens ranked). The casual host never looks at ranked
+    /// rooms, so the Either waiter must be the one who moves, whatever the ages — or they wait a
+    /// room apart for ever.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_CasualAndEitherEndUpInOneRoom()
+    {
+        var casualRoom = Room("casual", createdAt: "2026-10-28T15:00:05Z", hostId: "user-casual", competitive: false);
+        var eitherRoom = Room("either", createdAt: "2026-10-28T15:00:00Z", hostId: Me);   // OLDER, ranked
+        var rooms = new[] { casualRoom, eitherRoom };
+
+        // The Either searcher, waiting in the older ranked room, moves to the newer casual one.
+        Assert.Same(casualRoom, QuickMatchPlanner.PickToMoveTo(rooms, "either", Me, Mod, Hash, QuickMatchKind.Either));
+        // The Casual searcher never moves to a ranked room.
+        Assert.Null(QuickMatchPlanner.PickToMoveTo(rooms, "casual", "user-casual", Mod, Hash, QuickMatchKind.Casual));
+    }
+
+    /// <summary>Two Either searchers waiting in ranked rooms: the older-room rule, so exactly one moves.</summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TwoEitherSearchersDoNotMoveInACircle()
+    {
+        var a = Room("a", createdAt: "2026-10-28T15:00:00Z", hostId: "user-a");
+        var b = Room("b", createdAt: "2026-10-28T15:00:01Z", hostId: "user-b");
+        var rooms = new[] { a, b };
+        Assert.Null(QuickMatchPlanner.PickToMoveTo(rooms, "a", "user-a", Mod, Hash, QuickMatchKind.Either));
+        Assert.Same(a, QuickMatchPlanner.PickToMoveTo(rooms, "b", "user-b", Mod, Hash, QuickMatchKind.Either));
+    }
+
+    [Fact]
+    public void RankedAndCasualSearchersNeverMeet()
+    {
+        var ranked = Room("ranked", createdAt: "2026-10-28T15:00:00Z", hostId: "user-r");
+        var casual = Room("casual", createdAt: "2026-10-28T15:00:01Z", hostId: "user-c", competitive: false);
+        var rooms = new[] { ranked, casual };
+        Assert.Null(QuickMatchPlanner.PickToMoveTo(rooms, "casual", "user-c", Mod, Hash, QuickMatchKind.Casual));
+        Assert.Null(QuickMatchPlanner.PickToMoveTo(rooms, "ranked", "user-r", Mod, Hash, QuickMatchKind.Ranked));
+    }
+
+    [Fact]
+    public void SomebodyWaitingInAnotherInstalledModIsFound()
+    {
+        var rooms = new[] { Room("hd", modId: "hundred-days", modHash: "hd-hash") };
+        string? Known(string mod) => mod switch { "wol" => Hash, "hundred-days" => "hd-hash", _ => null };
+
+        Assert.Equal("hundred-days", QuickMatchPlanner.WaitingElsewhere(rooms, Me, new[] { "wol", "hundred-days" }, Known, QuickMatchKind.Ranked, "wol"));
+        // Not the mod already chosen, not a mod whose fingerprint was never read, not another version.
+        Assert.Null(QuickMatchPlanner.WaitingElsewhere(rooms, Me, new[] { "wol", "hundred-days" }, Known, QuickMatchKind.Ranked, "hundred-days"));
+        Assert.Null(QuickMatchPlanner.WaitingElsewhere(rooms, Me, new[] { "hundred-days" }, _ => null, QuickMatchKind.Ranked, "wol"));
+        Assert.Null(QuickMatchPlanner.WaitingElsewhere(rooms, Me, new[] { "hundred-days" }, _ => "other", QuickMatchKind.Ranked, "wol"));
+        // Nor a room of the wrong kind.
+        Assert.Null(QuickMatchPlanner.WaitingElsewhere(rooms, Me, new[] { "hundred-days" }, Known, QuickMatchKind.Casual, "wol"));
+    }
 }

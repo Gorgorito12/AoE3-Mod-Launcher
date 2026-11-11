@@ -18,4 +18,16 @@ public static class RoomsPageRefresh
 
     public static bool ShouldTickCells(bool onRooms, bool roomWindowOpen, bool launcherActive)
         => onRooms && (!roomWindowOpen || launcherActive);
+
+    /// <summary>
+    /// A room was announced on the live channel (<c>lobby_created</c>, or <c>lobbies_changed</c> from a
+    /// server that sends it): the list is asked for at once instead of on the next 5-s poll, when the
+    /// list is on screen and the poll itself would run. A burst of announcements is one request
+    /// (<see cref="AnnouncementDebounceMs"/>).
+    /// </summary>
+    public static bool ShouldRefreshOnAnnouncement(bool signedIn, bool onRooms, bool tabVisible, bool roomWindowOpen, bool launcherActive)
+        => tabVisible && ShouldPollList(signedIn, onRooms, roomWindowOpen, launcherActive);
+
+    /// <summary>Announcements this close together share one request.</summary>
+    public const int AnnouncementDebounceMs = 300;
 }

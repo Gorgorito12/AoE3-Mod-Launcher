@@ -97,8 +97,8 @@ public static partial class Strings
         },
         ["QmModNotRanked"] = new()
         {
-            [LangEn] = "This mod has no ranked ladder, so it has no quick match. Your room was closed.",
-            [LangEs] = "Este mod no tiene clasificación, así que no tiene partida rápida. Tu sala se cerró.",
+            [LangEn] = "This mod has no ranked ladder, so there is no rated match. Your room was closed: choose Casual or Either to play it.",
+            [LangEs] = "Este mod no tiene clasificación, así que no hay partida con puntos. Tu sala se cerró: elige Casual o Ambas para jugarlo.",
         },
         ["QmModMissing"] = new()
         {

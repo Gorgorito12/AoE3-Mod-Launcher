@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using WarsOfLibertyLauncher.Localization;
+using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 
@@ -57,51 +58,108 @@ public partial class MultiplayerTab
     /// <summary>The card's clock, updated in place every second while waiting.</summary>
     private TextBlock? _quickCardClock;
 
-    /// <summary>The compact card (40-px icon, one line) below this window height, as the design.</summary>
-    private const double QuickCardCompactBelow = 900;
+    /// <summary>
+    /// The mod the bar searches: the one chosen in it while it is still installed, else the
+    /// Library's active mod. An empty choice FOLLOWS the Library (choosing the active mod writes
+    /// empty), so somebody who never strays keeps following it.
+    /// </summary>
+    internal ModProfile? QuickMatchProfile()
+    {
+        var chosen = Cfg().QuickMatchModId;
+        if (!string.IsNullOrEmpty(chosen) && ModRegistry.Find(chosen) is { } picked && RoomModInstalled(picked.Id))
+            return picked;
+        return _getActiveProfile?.Invoke();
+    }
 
-    private bool QuickCardCompact
-        => Window.GetWindow(this) is { } w && w.ActualHeight > 0 && w.ActualHeight < QuickCardCompactBelow;
+    /// <summary>What a search would look for: the saved choice, forced to Casual for a mod the
+    /// server has refused a ranked room this session.</summary>
+    internal QuickMatchKind QuickMatchKindNow(ModProfile? profile)
+    {
+        if (profile != null && _qmUnrankedMods.Contains(profile.Id)) return QuickMatchKind.Casual;
+        return Cfg().QuickMatchKind switch
+        {
+            "casual" => QuickMatchKind.Casual,
+            "either" => QuickMatchKind.Either,
+            _ => QuickMatchKind.Ranked,
+        };
+    }
 
-    /// <summary>Where the page is, as the card sees it.</summary>
+    private static string KindToken(QuickMatchKind kind) => kind switch
+    {
+        QuickMatchKind.Casual => "casual",
+        QuickMatchKind.Either => "either",
+        _ => "ranked",
+    };
+
+    /// <summary>The mods the bar can search in: those installed here, by name.</summary>
+    private System.Collections.Generic.List<ModProfile> QuickMatchInstalledMods()
+        => ModRegistry.All.Where(p => RoomModInstalled(p.Id))
+            .OrderBy(p => p.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+    /// <summary>My copy's fingerprint only if it is already known: the notice about another mod never
+    /// reads an install to answer (the rooms of that mod in the list read it for their own rows).</summary>
+    private string? PeekModHash(string modId)
+    {
+        if (_demoRooms) return RoomListDemoData.MyHash;
+        var profile = ModRegistry.Find(modId);
+        if (profile == null) return null;
+        string path;
+        try { path = GetInstallPath(profile) ?? ""; }
+        catch { return null; }
+        return _roomModHashes.TryGetValue(modId, out var known) && string.Equals(known.Path, path, StringComparison.OrdinalIgnoreCase)
+            ? known.Hash
+            : null;
+    }
+
+    private void SaveQuickMatchChoice(string? modId, QuickMatchKind? kind)
+    {
+        var config = Cfg();
+        if (modId != null)
+            config.QuickMatchModId = string.Equals(modId, _getActiveProfile?.Invoke()?.Id, StringComparison.OrdinalIgnoreCase) ? "" : modId;
+        if (kind is { } k) config.QuickMatchKind = KindToken(k);
+        try { config.Save(); }
+        catch (Exception ex) { DiagnosticLog.Write($"QuickMatch: saving the bar's choice: {ex.Message}"); }
+        _quickCardKey = null;
+        RenderQuickCard();
+    }
+
+    /// <summary>Where the page is, as the bar sees it.</summary>
     private QuickCardFacts QuickCardFactsNow()
     {
-        var profile = _getActiveProfile?.Invoke();
+        var profile = QuickMatchProfile();
         var mod = profile?.DisplayName ?? "";
-        var compact = QuickCardCompact;
-        if (IsUpdateGated) return new QuickCardFacts(QuickCardState.Outdated, QuickCardWait.Unknown, mod, compact);
+        var kind = QuickMatchKindNow(profile);
+        if (IsUpdateGated) return new QuickCardFacts(QuickCardState.Outdated, QuickCardWait.Unknown, mod, kind);
         if (profile == null || !RoomModInstalled(profile.Id))
-            return new QuickCardFacts(QuickCardState.NoMod, QuickCardWait.Unknown, mod, compact);
-        if (_qmStage == QuickMatchStage.Idle && _qmUnrankedMods.Contains(profile.Id)
-            && string.IsNullOrEmpty(_session?.CurrentLobbyId))
-            return new QuickCardFacts(QuickCardState.NotRanked, QuickCardWait.Unknown, mod, compact);
+            return new QuickCardFacts(QuickCardState.NoMod, QuickCardWait.Unknown, mod, kind);
 
         switch (_qmStage)
         {
             case QuickMatchStage.Looking:
-                return new QuickCardFacts(QuickCardState.Looking, QuickCardWait.Unknown, mod, compact);
+                return new QuickCardFacts(QuickCardState.Looking, QuickCardWait.Unknown, _qmModName ?? mod, _qmKind);
             case QuickMatchStage.Waiting:
                 if (RoomPlayerCount() >= 2)
                 {
                     var myId = _session?.CurrentUser?.Id;
                     var rival = _roomMembers.Values.FirstOrDefault(m => m.UserId != myId
                         && !string.Equals(m.Role, "spectator", StringComparison.Ordinal))?.Login;
-                    return new QuickCardFacts(QuickCardState.Found, QuickCardWait.Unknown, mod, compact,
+                    return new QuickCardFacts(QuickCardState.Found, QuickCardWait.Unknown, _qmModName ?? mod, _qmKind,
                         Rival: rival, Hosting: _isHostInCurrentRoom);
                 }
-                return new QuickCardFacts(QuickCardState.Waiting, QuickCardWait.Unknown, mod, compact);
+                return new QuickCardFacts(QuickCardState.Waiting, QuickCardWait.Unknown, _qmModName ?? mod, _qmKind);
         }
 
         if (!_demoRooms && _session?.CurrentLobbyId is { } lobbyId)
         {
             // The room the search found: "You play X", not "leave it to search".
             if (string.Equals(lobbyId, _qmFoundLobbyId, StringComparison.Ordinal) && RoomPlayerCount() >= 2)
-                return new QuickCardFacts(QuickCardState.Found, QuickCardWait.Unknown, mod, compact,
+                return new QuickCardFacts(QuickCardState.Found, QuickCardWait.Unknown, mod, kind,
                     Rival: _qmFoundRival, Hosting: _qmFoundHosting);
             // The room's name, never its code: a room just created is not in the list yet.
             var name = _lastBrowserList?.FirstOrDefault(l => l.Id == lobbyId)?.Title
                        ?? (string.IsNullOrEmpty(_roomTitle) ? lobbyId : _roomTitle);
-            return new QuickCardFacts(QuickCardState.InOtherRoom, QuickCardWait.Unknown, mod, compact, RoomName: name);
+            return new QuickCardFacts(QuickCardState.InOtherRoom, QuickCardWait.Unknown, mod, kind, RoomName: name);
         }
 
         string? peak = null;
@@ -110,11 +168,12 @@ public partial class MultiplayerTab
                 Strings.Format("MpActivityPeakHour", peakStart),
                 Strings.Format("MpActivityPeakHour", (peakStart + CommunityStatsView.PeakWindowHours) % 24));
 
-        return QuickCardReadyFacts(profile.Id, mod, compact, peak);
+        var facts = QuickCardReadyFacts(profile.Id, mod, kind, peak);
+        return _qmUnrankedMods.Contains(profile.Id) ? facts with { State = QuickCardState.NotRanked } : facts;
     }
 
     /// <summary>The Ready state: who is waiting, worked out from the list already on screen.</summary>
-    private QuickCardFacts QuickCardReadyFacts(string modId, string mod, bool compact, string? peak)
+    private QuickCardFacts QuickCardReadyFacts(string modId, string mod, QuickMatchKind kind, string? peak)
     {
         var rooms = _lastBrowserList;
         var myId = _session?.CurrentUser?.Id;
@@ -122,24 +181,34 @@ public partial class MultiplayerTab
         // for it: the sample's rooms match except the one marked as another version.
         var hash = _demoRooms ? RoomListDemoData.MyHash : KnownModHash(modId);
         if (rooms == null || hash == null)
-            return new QuickCardFacts(QuickCardState.Ready, QuickCardWait.Unknown, mod, compact, Peak: peak);
+            return new QuickCardFacts(QuickCardState.Ready, QuickCardWait.Unknown, mod, kind, Peak: peak);
 
-        var join = QuickMatchPlanner.RoomsToJoin(rooms, myId, modId, hash, _cachedStanding?.Rating);
+        var join = QuickMatchPlanner.RoomsToJoin(rooms, myId, modId, hash, _cachedStanding?.Rating, kind);
         if (join.Count > 0)
         {
             var room = join[0];
             var created = RoomAgeFormat.ParseCreatedUtc(room.CreatedAt);
             var minutes = created is DateTime c ? Math.Max(1, (int)(DateTime.UtcNow - c).TotalMinutes) : 1;
-            return new QuickCardFacts(QuickCardState.Ready, QuickCardWait.Room, mod, compact,
-                Host: RoomHostName(room), Minutes: minutes, Peak: peak);
+            return new QuickCardFacts(QuickCardState.Ready, QuickCardWait.Room, mod, kind,
+                Host: RoomHostName(room), Minutes: minutes, RoomCasual: !room.Competitive, Peak: peak);
         }
-        var other = QuickMatchPlanner.OtherVersionCount(rooms, myId, modId, hash);
+
+        // Nobody here: is somebody waiting in another mod this player has?
+        var elsewhereId = QuickMatchPlanner.WaitingElsewhere(rooms, myId,
+            QuickMatchInstalledMods().Select(p => p.Id), PeekModHash, kind, modId);
+        var elsewhere = elsewhereId != null ? ModRegistry.Find(elsewhereId)?.DisplayName : null;
+        _quickCardElsewhereId = elsewhere != null ? elsewhereId : null;
+
+        var other = QuickMatchPlanner.OtherVersionCount(rooms, myId, modId, hash, kind);
         return other > 0
-            ? new QuickCardFacts(QuickCardState.Ready, QuickCardWait.OtherVersion, mod, compact, OtherRooms: other, Peak: peak)
-            : new QuickCardFacts(QuickCardState.Ready, QuickCardWait.Nobody, mod, compact, Peak: peak);
+            ? new QuickCardFacts(QuickCardState.Ready, QuickCardWait.OtherVersion, mod, kind, OtherRooms: other, Peak: peak, ElsewhereMod: elsewhere)
+            : new QuickCardFacts(QuickCardState.Ready, QuickCardWait.Nobody, mod, kind, Peak: peak, ElsewhereMod: elsewhere);
     }
 
-    /// <summary>Paint the card: hidden offline (the page says it needs internet), otherwise its state.</summary>
+    /// <summary>The mod the "Change" link of the notice moves the bar to.</summary>
+    private string? _quickCardElsewhereId;
+
+    /// <summary>Paint the bar: hidden offline (the page says it needs internet), otherwise its state.</summary>
     private void RenderQuickCard()
     {
         if (QuickCardHost == null) return;
@@ -160,9 +229,12 @@ public partial class MultiplayerTab
 
         var facts = QuickCardFactsNow();
         var model = QuickCardView.Of(facts);
-        var version = _getActiveProfile?.Invoke() is { } p ? Cfg().GetState(p.Id).LastKnownVersion : null;
-        var key = string.Join("|", facts.Compact, model.Kicker, model.Mark, model.Title, model.Line, model.Foot,
-            model.ShowVersion, version, string.Join(",", model.Buttons.Select(b => b.Action + ":" + b.Primary)), Strings.Language);
+        var profile = QuickMatchProfile();
+        var version = profile is { } p ? Cfg().GetState(p.Id).LastKnownVersion : null;
+        var installed = model.ShowPickers ? string.Join(",", QuickMatchInstalledMods().Select(m => m.Id)) : "";
+        var key = string.Join("|", model.Mark, model.Title, model.Line, model.Elsewhere, model.ShowPickers,
+            profile?.Id, facts.Kind, facts.State, installed, version,
+            string.Join(",", model.Buttons.Select(b => b.Action + ":" + b.Primary)), Strings.Language);
         if (QuickCardHost.Visibility != Visibility.Visible)
         {
             QuickCardHost.Visibility = Visibility.Visible;
@@ -175,7 +247,7 @@ public partial class MultiplayerTab
         }
         _quickCardKey = key;
         StopQuickCardClocks();
-        QuickCardHost.Child = BuildQuickCard(model, facts.Compact, string.IsNullOrWhiteSpace(version) ? null : version);
+        QuickCardHost.Child = BuildQuickCard(model, facts, profile, string.IsNullOrWhiteSpace(version) ? null : version);
         UpdateQuickCardClock();
         SyncQuickCardClocks();
     }
@@ -186,20 +258,22 @@ public partial class MultiplayerTab
             _quickCardClock.Text = QuickMatchPlanner.Elapsed(DateTime.UtcNow - _qmStartedUtc);
     }
 
-    private FrameworkElement BuildQuickCard(QuickCardModel m, bool compact, string? version)
+    /// <summary>The bar's height: 36-px icon and button inside 8 px of padding, two lines of text.</summary>
+    internal const double QuickBarIconSize = 36;
+
+    private FrameworkElement BuildQuickCard(QuickCardModel m, QuickCardFacts facts, ModProfile? profile, string? version)
     {
         _quickCardClock = null;
-        var grid = new Grid { Margin = compact ? new Thickness(13, 9, 11, 9) : new Thickness(21, 17, 21, 17) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 40 : 56) });
+        var grid = new Grid { Margin = new Thickness(12, 8, 12, 8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(QuickBarIconSize) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var profile = _getActiveProfile?.Invoke();
         var icon = new Border
         {
-            Width = compact ? 40 : 56,
-            Height = compact ? 40 : 56,
-            CornerRadius = new CornerRadius(compact ? 10 : 12),
+            Width = QuickBarIconSize,
+            Height = QuickBarIconSize,
+            CornerRadius = new CornerRadius(9),
             BorderBrush = Rm("RmChipRim"),
             BorderThickness = new Thickness(1),
             Background = ResolveRoomModIcon(profile) ?? Rm("MpField"),
@@ -207,21 +281,11 @@ public partial class MultiplayerTab
         };
         grid.Children.Add(icon);
 
-        var text = new StackPanel { Margin = new Thickness(compact ? 14 : 20, 0, compact ? 14 : 20, 0), VerticalAlignment = VerticalAlignment.Center };
-        if (m.Kicker != null)
-        {
-            var kick = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-            if (BuildQuickCardMark(m.Mark) is { } mark) kick.Children.Add(mark);
-            var k = new TextBlock { Text = m.Kicker, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
-            k.SetResourceReference(TextBlock.FontSizeProperty, "RmChipSize");
-            if (m.KickerGreen) k.Foreground = Rm("RmTextGreen");
-            else k.SetResourceReference(TextBlock.ForegroundProperty, "ModAccentText");
-            kick.Children.Add(k);
-            text.Children.Add(kick);
-        }
-
-        var titleRow = new WrapPanel { Orientation = Orientation.Horizontal };
-        if (m.Kicker == null && BuildQuickCardMark(m.Mark) is { } compactMark) titleRow.Children.Add(compactMark);
+        var text = new StackPanel { Margin = new Thickness(12, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
+        // Line 1: the mark, the title, the clock, then the two pickers. A WrapPanel so a narrow window
+        // drops the pickers to a second line instead of putting them over the title.
+        var head = new WrapPanel { Orientation = Orientation.Horizontal };
+        if (BuildQuickCardMark(m.Mark) is { } mark) head.Children.Add(mark);
         var title = new TextBlock
         {
             Text = m.Title,
@@ -229,44 +293,60 @@ public partial class MultiplayerTab
             FontWeight = FontWeights.Bold,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 14, 0),
         };
         title.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
-        title.SetResourceReference(TextBlock.FontSizeProperty, compact ? "QcTitleSizeCompact" : "QcTitleSize");
-        titleRow.Children.Add(title);
+        title.SetResourceReference(TextBlock.FontSizeProperty, "QcTitleSizeCompact");
+        head.Children.Add(title);
         if (m.ShowClock)
         {
-            _quickCardClock = new TextBlock { FontFamily = MonoFont, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            _quickCardClock = new TextBlock { FontFamily = MonoFont, FontWeight = FontWeights.SemiBold, Margin = new Thickness(-4, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
             _quickCardClock.SetResourceReference(TextBlock.FontSizeProperty, "QcClockSize");
             _quickCardClock.SetResourceReference(TextBlock.ForegroundProperty, "ModAccentText");
-            titleRow.Children.Add(_quickCardClock);
+            head.Children.Add(_quickCardClock);
         }
-        text.Children.Add(titleRow);
+        if (m.ShowPickers)
+        {
+            var installed = QuickMatchInstalledMods();
+            if (installed.Count > 0 && profile != null)
+            {
+                var picker = BuildQuickModPicker(profile, installed, version);
+                picker.Margin = new Thickness(0, 2, 8, 2);
+                head.Children.Add(picker);
+            }
+            if (profile != null) head.Children.Add(BuildQuickKindSegment(profile, facts.Kind));
+        }
+        text.Children.Add(head);
 
+        // Line 2: one line of state, cut with an ellipsis; the notice about another mod and its
+        // "Change" link sit INSIDE the sentence, right after it (as a column they landed at the far
+        // end of the bar, beside the button and away from what they belong to).
         var line = new TextBlock
         {
-            Text = m.Line,
             Foreground = Rm("MpTextSecondary"),
-            Margin = new Thickness(0, compact ? 4 : 6, 0, 0),
-            TextWrapping = compact ? TextWrapping.NoWrap : TextWrapping.Wrap,
+            TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 760,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 3, 0, 0),
         };
-        line.SetResourceReference(TextBlock.FontSizeProperty, compact ? "RmHostSize" : "QcLineSize");
-        text.Children.Add(line);
-
-        if (m.Foot != null || (m.ShowVersion && version != null))
+        line.SetResourceReference(TextBlock.FontSizeProperty, "RmHostSize");
+        line.Inlines.Add(new System.Windows.Documents.Run(m.Elsewhere == null ? m.Line : m.Line + " " + m.Elsewhere));
+        if (m.Elsewhere != null && _quickCardElsewhereId != null)
         {
-            var foot = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-            if (m.ShowVersion && version != null) foot.Children.Add(BuildVersionChip(version));
-            if (m.Foot != null)
+            var change = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(Strings.Get("QcElsewhereSwitch")))
             {
-                var f = new TextBlock { Text = m.Foot, Foreground = Rm("RmTextLabel"), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
-                f.SetResourceReference(TextBlock.FontSizeProperty, "RmButtonSize");
-                foot.Children.Add(f);
-            }
-            text.Children.Add(foot);
+                TextDecorations = null,
+                Foreground = Rm("UiInfoText"),
+                Cursor = System.Windows.Input.Cursors.Hand,
+            };
+            change.MouseEnter += (_, _) => change.TextDecorations = TextDecorations.Underline;
+            change.MouseLeave += (_, _) => change.TextDecorations = null;
+            AutomationProperties.SetAutomationId(change, "QuickCard:Elsewhere");
+            change.Click += async (_, _) => await OnQuickCardAction(QuickCardAction.SwitchMod);
+            line.Inlines.Add(new System.Windows.Documents.Run("  "));
+            line.Inlines.Add(change);
         }
+        text.Children.Add(line);
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
 
@@ -277,13 +357,11 @@ public partial class MultiplayerTab
             {
                 Style = (Style)FindResource(b.Primary ? "QcButtonPrimary" : "QcButton"),
                 Content = b.Caption,
-                Height = compact ? 40 : 52,
-                Padding = new Thickness(b.Primary ? (compact ? 18 : 24) : (compact ? 16 : 20), 0, b.Primary ? (compact ? 18 : 24) : (compact ? 16 : 20), 0),
-                Margin = new Thickness(buttons.Children.Count > 0 ? 10 : 0, 0, 0, 0),
+                Height = QuickBarIconSize,
+                Padding = new Thickness(b.Primary ? 18 : 14, 0, b.Primary ? 18 : 14, 0),
+                Margin = new Thickness(buttons.Children.Count > 0 ? 8 : 0, 0, 0, 0),
             };
-            btn.SetResourceReference(Control.FontSizeProperty, b.Primary
-                ? (compact ? "QcButtonSizeCompact" : "QcButtonSize")
-                : (compact ? "QcButton2SizeCompact" : "QcButton2Size"));
+            btn.SetResourceReference(Control.FontSizeProperty, b.Primary ? "QcButtonSizeCompact" : "QcButton2SizeCompact");
             AutomationProperties.SetAutomationId(btn, "QuickCard:" + b.Action);
             AutomationProperties.SetName(btn, b.Caption);
             var action = b.Action;
@@ -295,33 +373,105 @@ public partial class MultiplayerTab
         return grid;
     }
 
-    private static Border BuildVersionChip(string version)
+    /// <summary>"[icon] Wars of Liberty ▾": opens the list of installed mods. Choosing one never moves
+    /// the Library: the bar keeps its own mod (empty when it is the Library's).</summary>
+    private Button BuildQuickModPicker(ModProfile profile, System.Collections.Generic.List<ModProfile> installed, string? version)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var name = new TextBlock
+        {
+            Text = profile.DisplayName,
+            Foreground = Rm("RmTextHost"),
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 200,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        name.SetResourceReference(TextBlock.FontSizeProperty, "RmButtonSize");
+        row.Children.Add(name);
         row.Children.Add(new System.Windows.Shapes.Path
         {
-            Data = Geometry.Parse("M1,1 H6 L11,6 L6,11 L1,6 Z"),
-            Fill = new SolidColorBrush(Color.FromRgb(0x7E, 0xE0, 0x8B)),
-            Width = 11,
-            Height = 11,
-            Stretch = Stretch.Uniform,
-            Margin = new Thickness(0, 0, 6, 0),
+            Data = Geometry.Parse("M0,0 L4,4 L8,0"),
+            Stroke = Rm("RmTextLabel"),
+            StrokeThickness = 1.4,
+            Width = 8,
+            Height = 5,
+            Margin = new Thickness(8, 1, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         });
-        var t = new TextBlock { Text = version, FontFamily = MonoFont, FontWeight = FontWeights.SemiBold, Foreground = Rm("RmTextHost"), VerticalAlignment = VerticalAlignment.Center };
-        t.SetResourceReference(TextBlock.FontSizeProperty, "RmChipSize");
-        row.Children.Add(t);
-        return new Border
+        var button = new Button
         {
-            Height = 24,
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(9, 0, 9, 0),
-            Margin = new Thickness(0, 0, 10, 0),
-            Background = Rm("RmChipBg"),
-            BorderBrush = Rm("RmButtonRim"),
-            BorderThickness = new Thickness(1),
-            Child = row,
+            Content = row,
+            Height = 28,
+            Padding = new Thickness(10, 0, 10, 0),
+            ToolTip = TooltipHelper.Wrap(version != null
+                ? Strings.Format("QcModPickerTip", version)
+                : Strings.Get("QcModPickerTipNoVersion")),
         };
+        button.SetResourceReference(StyleProperty, "RmRowButton");
+        button.HorizontalAlignment = HorizontalAlignment.Left;
+        AutomationProperties.SetAutomationId(button, "QuickCard:Mod");
+        AutomationProperties.SetName(button, profile.DisplayName);
+        button.Click += (_, _) =>
+        {
+            var popup = ModSearchPopup.Build(button, installed, _ => true, profile,
+                p => ResolveRoomModIcon(p),
+                p => ModTheme.AccentOf(p.AccentColor, Cfg().UseModColor),
+                picked => SaveQuickMatchChoice(picked.Id, null));
+            if (popup.Child is Border { Child: FrameworkElement body }) body.Width = Math.Max(body.Width, 300);
+            ChromePopups.Track(popup, button);
+            popup.IsOpen = true;
+        };
+        return button;
+    }
+
+    /// <summary>Rated | Casual | Either. A mod with no ladder offers Casual alone, saying why.</summary>
+    private FrameworkElement BuildQuickKindSegment(ModProfile profile, QuickMatchKind kind)
+    {
+        var segment = new SegmentRow { Gap = 4, SegmentHeight = 28, Margin = new Thickness(0, 2, 0, 2) };
+        segment.SetOptions(new[]
+        {
+            new SegmentOption(QuickMatchKind.Ranked, Strings.Get("QcSegRanked")),
+            new SegmentOption(QuickMatchKind.Casual, Strings.Get("QcSegCasual")),
+            new SegmentOption(QuickMatchKind.Either, Strings.Get("QcSegEither")),
+        });
+        segment.Selected = kind;
+        var noLadder = _qmUnrankedMods.Contains(profile.Id);
+        // The segment's template ignores Padding and its font is the monospace of "1v1 / 2v2": here
+        // the words get the body font and their own margin.
+        foreach (var button in segment.Buttons)
+        {
+            if (button.Content is string caption)
+                button.Content = new TextBlock { Text = caption, Margin = new Thickness(11, 0, 11, 0) };
+            button.SetResourceReference(Control.FontFamilyProperty, "BodyFont");
+            button.SetResourceReference(Control.FontSizeProperty, "RmButtonSize");
+        }
+        var buttons = segment.Buttons.ToList();
+        for (var i = 0; i < buttons.Count; i++)
+        {
+            var option = (QuickMatchKind)new[] { QuickMatchKind.Ranked, QuickMatchKind.Casual, QuickMatchKind.Either }[i];
+            AutomationProperties.SetAutomationId(buttons[i], "QuickCard:Kind:" + KindToken(option));
+            if (noLadder && option != QuickMatchKind.Casual)
+            {
+                buttons[i].IsEnabled = false;
+                ToolTipService.SetShowOnDisabled(buttons[i], true);
+                buttons[i].ToolTip = TooltipHelper.Wrap(Strings.Format("QcSegNoLadderTip", profile.DisplayName));
+            }
+            else
+            {
+                buttons[i].ToolTip = TooltipHelper.Wrap(Strings.Get(option switch
+                {
+                    QuickMatchKind.Casual => "QcSegCasualTip",
+                    QuickMatchKind.Either => "QcSegEitherTip",
+                    _ => "QcSegRankedTip",
+                }));
+            }
+        }
+        segment.Picked += picked => SaveQuickMatchChoice(null, (QuickMatchKind)picked);
+        // The segments size to their words, not to an equal share of a wide line.
+        segment.HorizontalAlignment = HorizontalAlignment.Left;
+        foreach (var column in segment.ColumnDefinitions) column.Width = GridLength.Auto;
+        return segment;
     }
 
     /// <summary>The spinner, pulse or green dot. Their clocks are finite-free forever animations,
@@ -396,8 +546,10 @@ public partial class MultiplayerTab
                 QuickCardAction.Stop => "QcStop",
                 QuickCardAction.Update => "QcUpdate",
                 QuickCardAction.Library => "QcLibrary",
+                QuickCardAction.SwitchMod => "QcElsewhereSwitch",
                 _ => "QcLeaveAndSearch",
             }));
+            if (action == QuickCardAction.SwitchMod && _quickCardElsewhereId is { } demoTo) SaveQuickMatchChoice(demoTo, null);
             return;
         }
         switch (action)
@@ -417,7 +569,10 @@ public partial class MultiplayerTab
                 _onUpdateRequested?.Invoke();
                 break;
             case QuickCardAction.Library:
-                if (_getActiveProfile?.Invoke() is { } p) _openModInLibrary?.Invoke(p);
+                if (QuickMatchProfile() is { } p) _openModInLibrary?.Invoke(p);
+                break;
+            case QuickCardAction.SwitchMod:
+                if (_quickCardElsewhereId is { } to) SaveQuickMatchChoice(to, null);
                 break;
         }
     }

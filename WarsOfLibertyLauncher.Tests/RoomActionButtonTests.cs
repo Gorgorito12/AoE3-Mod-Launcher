@@ -61,6 +61,8 @@ public class RoomActionButtonTests
 
     private static object Res(string key) => Application.Current.FindResource(key);
 
+    /// <summary>Every action is the faint secondary button except "Unirse", which carries a blue rim
+    /// so the rooms you can enter stand out (2026-11-10), and "Ver sala", the only solid one.</summary>
     [Fact]
     public void EachRoomOffersWhatTheRuleSays_InTheFaintSecondaryButton()
     {
@@ -70,7 +72,8 @@ public class RoomActionButtonTests
 
             var open = Room("OPEN0001", max: 4, current: 2);
             var join = ActionOf(Card(tab, open), open)!;
-            Assert.Same(Res("RmRowButton"), join.Style);
+            Assert.Same(Res("RmRowButtonJoin"), join.Style);
+            Assert.Same(Res("RmRowButton"), ((Style)join.Style).BasedOn);
             Assert.Equal(Strings.Get("RmActJoin"), join.Content);
             Assert.True(join.IsEnabled);
 
