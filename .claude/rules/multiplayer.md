@@ -713,8 +713,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   two, slower one). The "in a match" chip is blue and its dot breathes through `AttachChipPulse`,
   whose clocks start on Loaded and are STOPPED through their controller on Unloaded and whenever
   `RankBadge.MayRunOn` says no. Join is `RmJoinBg` green, "Ver sala" the one solid blue, and Full an
-  amber plate that is a `Border`, not a button. **Not built:** the coloured shadow under each row and
-  the glow under "Ver sala" - an `Effect` on a row costs its text ClearType. Pinned in
+  amber plate that is a `Border`, not a button. **The coloured shadow under each row and the glow under
+  "Ver sala" are SIBLINGS, never an `Effect` on the row or the button face** (that would cost the text
+  ClearType): `WithRowShadow` puts a blurred, `BitmapCache`d border behind the card, inside a host
+  CLIPPED to everything but the card's rounded rectangle - the card is translucent, and unclipped the
+  shadow showed through it as a glowing band across the whole row (the first try). None with the
+  effects reduced. Measured scrolling the list (`perf roomsscroll`): 22.0 vs 20.3 % CPU with hardware
+  rendering, 31.7 vs 24.2 % in software, frame p95 under 1 ms either way. Pinned in
   `RoomActionButtonTests` (`THE_ONE_THAT_MATTERS_EveryRowWearsItsGroupsColour`, the bars, the dots).
 
 - **THE ROOMS PAGE IS DESIGN 86 (`Controls/MultiplayerTab.RoomRows.cs`, `.QuickCard.cs`,

@@ -692,6 +692,8 @@ def perf_scenarios():
         "switches": {"runs": 3, "seconds": 45, "args": ["--demo-tournaments=teams", "--demo-elo"], "drive": "switches"},
         "switchesfirst": {"runs": 3, "seconds": 15, "args": ["--demo-stats"], "drive": "switches"},
         "scroll": {"runs": 1, "seconds": 20, "args": ["--open-tab=workshop"], "drive": "scroll"},
+        # The rooms list scrolled up and down (design 104a's rows, with their shadows).
+        "roomsscroll": {"runs": 3, "seconds": 20, "args": ["--demo-rooms=86a"], "drive": "scroll"},
         "resize": {"runs": 1, "seconds": 20, "args": [], "drive": "resize"},
         "mods": {"runs": 1, "seconds": 30, "args": [], "drive": "mods"},
     }

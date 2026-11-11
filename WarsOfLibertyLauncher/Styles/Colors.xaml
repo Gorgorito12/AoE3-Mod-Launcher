@@ -573,6 +573,12 @@
     <SolidColorBrush x:Key="RmGroupOff" Color="#F4900C"/>
     <SolidColorBrush x:Key="RmGroupOffText" Color="#F5BD76"/>
     <SolidColorBrush x:Key="RmGroupOffRim" Color="#6BF4900C"/>
+    <!-- The coloured shadow under each row (104a: 0 10 22, spread -12, the group's colour at 40 %)
+         and the glow under "Ver sala" (0 4 14, the action blue at 35 %). -->
+    <SolidColorBrush x:Key="RmRowShadowOpen" Color="#664FD68A"/>
+    <SolidColorBrush x:Key="RmRowShadowLive" Color="#6655ACEE"/>
+    <SolidColorBrush x:Key="RmRowShadowOff" Color="#66F4900C"/>
+    <SolidColorBrush x:Key="RmPrimaryGlow" Color="#592F7FE0"/>
     <LinearGradientBrush x:Key="RmRowTintOpen" StartPoint="0,0" EndPoint="1,0">
         <GradientStop Offset="0" Color="#474FD68A"/>
         <GradientStop Offset="0.36" Color="#1C4FD68A"/>

@@ -125,6 +125,63 @@ public partial class MultiplayerTab
         return column;
     }
 
+    /// <summary>
+    /// The row with its coloured shadow under it (design 104a: 0 10 22, spread -12, the group's
+    /// colour at 40 %). The shadow is a SIBLING behind the card, never an Effect on it: an Effect on
+    /// the card would rasterise its text and cost it ClearType. It is blurred once and cached
+    /// (<see cref="BitmapCache"/>), so scrolling moves a bitmap instead of blurring again. With the
+    /// effects reduced (the setting, or a PC measured as slow) the card goes in alone.
+    /// </summary>
+    /// <summary>How far past the card its shadow's blur can reach: the 22 of blur and some.</summary>
+    private const double ShadowReach = 48;
+
+    private static FrameworkElement WithRowShadow(Border card, RoomGroup group)
+    {
+        if (RankBadge.ReducedEffects) return card;
+        var key = group switch
+        {
+            RoomGroup.CanEnter => "RmRowShadowOpen",
+            RoomGroup.InGame => "RmRowShadowLive",
+            _ => "RmRowShadowOff",
+        };
+        var stack = new Grid();
+        // The card's rectangle inset by the spread (12) and moved down 10: only the blur shows,
+        // under the bottom edge.
+        var shadow = new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Margin = new Thickness(12, 22, 12, 2),
+            Background = Rm(key),
+            Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 22 },
+            CacheMode = new BitmapCache(),
+            IsHitTestVisible = false,
+            Tag = "RoomShadow",
+        };
+        // The card is translucent, so a shadow behind it would show THROUGH it as a glowing band
+        // across the whole row (seen on the first try). A CSS box-shadow is never drawn under its
+        // box, so the host is clipped to everything but the card's own rounded rectangle. Clip
+        // writes no layout, so setting it from SizeChanged cannot loop.
+        var host = new Grid { IsHitTestVisible = false };
+        host.Children.Add(shadow);
+        host.SizeChanged += (_, e) =>
+        {
+            var w = e.NewSize.Width;
+            var h = e.NewSize.Height;
+            var clip = Geometry.Combine(
+                new RectangleGeometry(new Rect(-ShadowReach, -ShadowReach, w + 2 * ShadowReach, h + 2 * ShadowReach)),
+                new RectangleGeometry(new Rect(0, 0, w, h), 12, 12),
+                GeometryCombineMode.Exclude, null);
+            clip.Freeze();
+            host.Clip = clip;
+        };
+        stack.Children.Add(host);
+        var margin = card.Margin;
+        card.Margin = new Thickness(0);
+        stack.Children.Add(card);
+        // A Border, carrying the row's Tag and margin, so the list still reads as one Border per room.
+        return new Border { Child = stack, Margin = margin, Tag = card.Tag };
+    }
+
     /// <summary>The brush keys of a group (design 104a): its colour, its text, a row's rim and tint.</summary>
     internal static (string Dot, string Text, string Rim, string Tint) RoomGroupBrushes(RoomGroup group) => group switch
     {

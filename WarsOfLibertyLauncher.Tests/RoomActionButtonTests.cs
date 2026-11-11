@@ -263,4 +263,44 @@ public class RoomActionButtonTests
         });
         Assert.Null(error);
     }
+
+    /// <summary>Each room in the list stands on its group's coloured shadow (104a), drawn as a
+    /// cached sibling BEHIND the card - the card itself carries no Effect, or its text would lose
+    /// ClearType - and with the effects reduced there is none.</summary>
+    [Fact]
+    public void EveryRowStandsOnItsGroupsShadowAndTheCardCarriesNoEffect()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithModInstalled();
+            var rooms = new List<LobbySummary>
+            {
+                Room("OPEN0001", max: 4, current: 2),
+                Room("GAME0001", max: 2, current: 2, status: "in_game"),
+            };
+            var render = typeof(MultiplayerTab).GetMethod("RenderRoomRows", Private)!;
+            typeof(MultiplayerTab).GetField("_lastBrowserList", Private)!.SetValue(tab, rooms);
+            render.Invoke(tab, new object?[] { rooms });
+            var rows = tab.RoomsListPanel.Children.OfType<Border>().Where(b => b.Tag is LobbySummary).ToList();
+            Assert.Equal(2, rows.Count);
+            foreach (var row in rows)
+            {
+                var shadow = Descendants(row).OfType<Border>().Single(b => Equals(b.Tag, "RoomShadow"));
+                Assert.NotNull(shadow.Effect);
+                Assert.NotNull(shadow.CacheMode);
+                var card = Descendants(row).OfType<Border>().Single(b => b.Tag is LobbySummary);
+                Assert.Null(card.Effect);
+            }
+
+            RankBadge.SetUserReducedEffects(true);
+            try
+            {
+                render.Invoke(tab, new object?[] { rooms });
+                Assert.DoesNotContain(tab.RoomsListPanel.Children.OfType<Border>().SelectMany(Descendants).OfType<Border>(),
+                    b => Equals(b.Tag, "RoomShadow"));
+            }
+            finally { RankBadge.SetUserReducedEffects(false); }
+        });
+        Assert.Null(error);
+    }
 }

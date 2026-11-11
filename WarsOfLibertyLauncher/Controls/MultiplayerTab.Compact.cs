@@ -605,7 +605,7 @@ public partial class MultiplayerTab
                         ordered.Count(o => RoomActionRule.GroupOf(o.Action) == g), first: group == null));
                     group = g;
                 }
-                RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
+                RoomsListPanel.Children.Add(WithRowShadow(BuildRoomCard(lobby, idx++), g));
             }
             UpdateRoomsCount(ordered.Count);
         }
