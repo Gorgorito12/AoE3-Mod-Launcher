@@ -7,7 +7,8 @@ namespace WarsOfLibertyLauncher.Services;
 
 public enum NotificationFilter { All, Mods, Launcher }
 
-public enum NotificationTone { Ok, Info, Error }
+/// <summary><c>Highlight</c> is gold: last month's highlights, the community's own news, not an alert.</summary>
+public enum NotificationTone { Ok, Info, Error, Highlight }
 
 public enum NotificationDay { Today, Yesterday, ThisWeek, Earlier }
 
@@ -45,6 +46,7 @@ public static class NotificationView
     {
         NotificationKind.UpdateFinished or NotificationKind.Installed => NotificationTone.Ok,
         NotificationKind.Connectivity => item.TargetId == "offline" ? NotificationTone.Error : NotificationTone.Ok,
+        NotificationKind.MonthlyHighlights => NotificationTone.Highlight,
         _ => NotificationTone.Info,
     };
 

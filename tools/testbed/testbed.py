@@ -331,10 +331,13 @@ def seed(args):
 def sample_notifications():
     now = datetime.datetime.now(datetime.timezone.utc)
     def item(kind, mod, title, body, hours, read=False, target=None):
-        when = (now - datetime.timedelta(hours=hours)).isoformat()
+        # "Z", as the launcher writes it: an offset ("+00:00") is read as LOCAL time and every
+        # sample then read hours older than it was.
+        when = (now - datetime.timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         return {"id": f"s{hours}", "kind": kind, "modId": mod, "title": title, "body": body,
                 "createdAtUtc": when, "read": read, "targetId": target}
     return [
+        item("MonthlyHighlights", "", "Destacados de octubre", "El Taita subió 197 de ELO · NathanR06 ganó 8 seguidas", 0.5, False, "2026-10"),
         item(0, "improvement-mod", "Actualización de Improvement Mod", "v16.10.2026 → v19.07.2026 · 186 MB", 1),
         item(1, "hundred-days", "Hundred Days se actualizó", "Ya tienes la vbeta-0.10.", 26),
         item(2, "hundred-days", "Nueva traducción al español", "Hundred Days · publicada por la comunidad", 27, True),

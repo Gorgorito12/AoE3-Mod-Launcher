@@ -80,6 +80,11 @@ public class NotificationViewTests
         Assert.Equal(NotificationTone.Ok, NotificationView.ToneOf(Item(NotificationKind.Connectivity, target: "online")));
     }
 
+    /// <summary>Last month's highlights are gold, not the blue of an ordinary notice.</summary>
+    [Fact]
+    public void TheMonthsHighlightsAreGold()
+        => Assert.Equal(NotificationTone.Highlight, NotificationView.ToneOf(Item(NotificationKind.MonthlyHighlights)));
+
     [Fact]
     public void ClearingTheReadOnesLeavesWhatTheBellDoesNotShow()
     {

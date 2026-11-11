@@ -387,6 +387,9 @@
         </Style>
         <Style x:Key="MpOverlayScrollViewer" TargetType="ScrollViewer">
             <Setter Property="Padding" Value="0"/>
+            <!-- The dotted keyboard-focus frame drew round the whole rooms list after a click in it
+                 (plan step 13): a list is not a control to be focused as a block. -->
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ScrollViewer">
