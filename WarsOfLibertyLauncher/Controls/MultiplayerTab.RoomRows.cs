@@ -200,12 +200,9 @@ public partial class MultiplayerTab
             BorderThickness = new Thickness(mine ? 1.5 : 1),
             Tag = lobby,
         };
-        // The compact layout (a short window) is the same card, lower: 60 instead of 72, with 8
-        // of padding above and below and a 40-px icon, which still holds the two lines.
-        var compact = _compactLayout;
-        if (compact) card.MinHeight = CompactRowHeight;
-        var padY = (compact ? 8 : 12) - (mine ? 1.5 : 1);
-        var iconSize = compact ? CompactRoomIconSize : RoomIconSize;
+        // 60 high in every layout (the maintainer's call over 104a's 72): 6 of padding above and
+        // below, a 40-px icon, and 4 between the name and its chips.
+        var padY = RowPaddingY - (mine ? 1.5 : 1);
         AutomationProperties.SetAutomationId(card, "RoomRow:" + lobby.Id);
         var inner = mine ? 10.5 : 11;
         var layers = new Grid();
@@ -232,9 +229,9 @@ public partial class MultiplayerTab
         room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var icon = new Border
         {
-            Width = iconSize,
-            Height = iconSize,
-            CornerRadius = new CornerRadius(compact ? 9 : 10),
+            Width = RoomIconSize,
+            Height = RoomIconSize,
+            CornerRadius = new CornerRadius(9),
             BorderBrush = Rm("RmIconRim"),
             ToolTip = profile == null ? null : TooltipHelper.Wrap(profile.DisplayName),
             BorderThickness = new Thickness(1),
@@ -258,7 +255,7 @@ public partial class MultiplayerTab
         // line nobody sees, so it leaves WHOLE rather than cut in half.
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var chip in RoomChipsOf(lobby, facts)) chips.Children.Add(chip);
-        var chipLine = new Grid { ClipToBounds = true, Height = 22, Margin = new Thickness(0, 6, 0, 0) };
+        var chipLine = new Grid { ClipToBounds = true, Height = 22, Margin = new Thickness(0, 4, 0, 0) };
         chipLine.Children.Add(chips);
         roomText.Children.Add(chipLine);
         Grid.SetColumn(roomText, 1);
@@ -384,12 +381,11 @@ public partial class MultiplayerTab
     private static readonly FontFamily MonoFont = new("Consolas, Courier New, monospace");
 
     /// <summary>The mod's icon at the head of a row (design 104a: 48, radius 10).</summary>
-    internal const double RoomIconSize = 48;
+    internal const double RoomIconSize = 40;
 
-    /// <summary>The same row in the compact layout: 60 high with a 40-px icon. The icon's COLUMN
-    /// stays 48 wide, so the names still start under the ROOM heading's own text.</summary>
-    internal const double CompactRowHeight = 60;
-    internal const double CompactRoomIconSize = 40;
+    /// <summary>A row's padding above and below its content. With the name (15) over the chip line
+    /// (22, 4 apart) and the 1-px rim, the row measures the 60 of <c>MpRoomRowHeight</c>.</summary>
+    internal const double RowPaddingY = 6;
 
     /// <summary>The host's Discord photo in the rooms row (the maintainer asked for it back over 86).</summary>
     internal const double HostAvatarSize = 30;
@@ -705,15 +701,14 @@ public partial class MultiplayerTab
         };
         // Not hit-testable: a placeholder that lit up on hover would read as a room.
         var row = new Border { Style = (Style)FindResource("RmRowCard"), IsHitTestVisible = false };
-        if (_compactLayout) row.MinHeight = CompactRowHeight;
-        var grid = new Grid { Margin = new Thickness(13, 11, 13, 11) };
+        var grid = new Grid { Margin = new Thickness(13, RowPaddingY - 1, 13, RowPaddingY - 1) };
         foreach (var spec in _roomColumns)
             grid.ColumnDefinitions.Add(RoomColumnDefinition(spec));
 
         var room = new Grid();
         room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RoomIconSize) });
         room.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        room.Children.Add(new Border { Width = RoomIconSize, Height = RoomIconSize, CornerRadius = new CornerRadius(10), Background = A(0x12) });
+        room.Children.Add(new Border { Width = RoomIconSize, Height = RoomIconSize, CornerRadius = new CornerRadius(9), Background = A(0x12) });
         var share = SkeletonNameShare[_skeletonIndex++ % SkeletonNameShare.Length];
         var nameLine = new Grid { Height = 12 };
         nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(share, GridUnitType.Star) });

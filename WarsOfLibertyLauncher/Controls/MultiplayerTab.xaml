@@ -446,7 +446,8 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Design 104a's room row: a raised card, 72 high, radius 12. The face is a faint white
+        <!-- Design 104a's room row: a raised card, 60 high (104a draws 72; lowered at the maintainer's
+             request), radius 12. The face is a faint white
              gradient; the tint of the row's GROUP, the light along the top, the hover wash and the
              content are layers INSIDE it (BuildRoomCard), which is why the padding is 0 here: the
              content carries the design's 12 / 14 as its own margin. The rim is always 1 px in the

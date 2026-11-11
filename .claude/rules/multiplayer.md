@@ -697,14 +697,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 - **THE ROOMS LIST'S ROWS ARE DESIGN 104a (`docs/design_salas_filas`, 2026-11-11), which SUPERSEDES
   what rule (4) of the ROOMS PAGE bullet below says about the row's LOOK** (the faint row, the blue
   "mine" fill, the people icon, three signal bars, the blue-rimmed Join, "Full" as text). What a row
-  shows and does is unchanged. A row is `RmRowCard`, 72 high (60 in the compact layout, icon 40),
+  shows and does is unchanged. A row is `RmRowCard`, 60 high with a 40-px icon in every layout (104a
+  draws 72 and 48; lowered at the maintainer's request the same day, `RowPaddingY` 6, 4 between name and chips),
   with a 1-px rim and a tint in the colour of its GROUP (`RoomGroupBrushes`: enter green, in a match
   blue at 1.3x, unavailable amber), declared once in `Colors.xaml` as `RmGroup*` / `RmRowTint*`; the
   tint, the top light, the hover wash, the new-room flash and the content are LAYERS inside the card
   (its padding is 0), because the fill is a shared frozen gradient that nothing may animate. The
   viewer's own room keeps its group's tint and wears a white 1.5-px ring. The headings are a bar
   (`RoomsHeaderBand`) whose 1 of rim + 13 equals the row's, and `RoomColumnDefinition` is the ONE
-  place a column becomes a `ColumnDefinition` for both. Columns: icon 48 inside Room (1.6*), Host
+  place a column becomes a `ColumnDefinition` for both. Columns: icon 40 inside Room (1.6*), Host
   0.8* with a minimum of 236 (the design's 190, its gap and the badge), Players 148, Ping 120, Action
   176, each fixed width carrying its 16-px gap. Cells: host photo 30 and his badge (kept over 104a,
   the maintainer's call of 2026-11-10); "1/2" over a dot per seat, at most `MaxSeatDots` (8), still
