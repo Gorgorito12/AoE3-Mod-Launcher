@@ -686,8 +686,13 @@ public class LobbyApiClient : IDisposable
         if (resp.Content.Headers.ContentLength == 0)
             return default!;
 
-        var stream = await resp.Content.ReadAsStreamAsync(ct);
-        return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, ct)
+        // Parsed on the THREAD POOL. The body is already buffered, so DeserializeAsync used to run
+        // synchronously on whoever awaited it - the UI thread - and a statistics page asks for six
+        // payloads at once, one of them up to 600 pairs. Only the parse moves: the await still
+        // returns to the caller's thread, so nothing that handles the answer changes threads, and
+        // the error path above (which raises SessionRejected) never left it.
+        var body = await resp.Content.ReadAsByteArrayAsync(ct);
+        return await Task.Run(() => JsonSerializer.Deserialize<T>(body, _jsonOptions), ct)
             ?? throw new LobbyApiException(500, "internal", "Empty success response.", null);
     }
 

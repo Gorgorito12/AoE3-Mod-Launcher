@@ -53,11 +53,25 @@ public static class ActivityPaintKey
 
     /// <summary>The payload alone, without what is drawn nowhere: the Ranking page compares
     /// answers by this.</summary>
-    public static string? Content(CommunityStats? stats)
+    public static string? Content(CommunityStats? stats) => ContentOf(stats);
+
+    public static string? For(CommunityStats? stats, ActivityPaintContext context)
+        => ContentOf(stats) is { } content ? content + "\n" + context : null;
+
+    /// <summary>
+    /// Any payload's content (without <c>generated_at</c> and <c>rd</c>), serialized ONCE per
+    /// object: the Rooms block, the Ranking page and the Statistics page each compared the same
+    /// answer and serialized it again on the UI thread every time.
+    /// </summary>
+    public static string? ContentOf(object? value)
     {
+        if (value == null) return "null";
+        if (s_content.TryGetValue(value, out var known)) return known;
         try
         {
-            return JsonSerializer.Serialize(stats, Options);
+            var content = JsonSerializer.Serialize(value, value.GetType(), Options);
+            s_content.AddOrUpdate(value, content);
+            return content;
         }
         catch
         {
@@ -65,15 +79,18 @@ public static class ActivityPaintKey
         }
     }
 
-    public static string? For(CommunityStats? stats, ActivityPaintContext context)
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, string> s_content = new();
+
+    /// <summary>
+    /// The answer that just arrived, or the one already held when the two say the same thing.
+    /// Keeping the old object is what lets every "nothing changed" check downstream - which
+    /// compare by reference - see that nothing changed: an identical answer used to rebuild a
+    /// whole page because it was a new object.
+    /// </summary>
+    public static T? KeepIfSame<T>(T? held, T? fresh) where T : class
     {
-        try
-        {
-            return JsonSerializer.Serialize(stats, Options) + "\n" + context;
-        }
-        catch
-        {
-            return null;
-        }
+        if (held == null || fresh == null) return fresh;
+        var a = ContentOf(held);
+        return a != null && string.Equals(a, ContentOf(fresh), StringComparison.Ordinal) ? held : fresh;
     }
 }

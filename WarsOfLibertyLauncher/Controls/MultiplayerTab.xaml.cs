@@ -1485,6 +1485,7 @@ public partial class MultiplayerTab : UserControl
             // Coming back to the tab is coming back to whatever view it was left on; Ranking ›
             // Matches used to keep the list it loaded first for the whole run.
             if (_activeSubtab == Subtab.Ranking) MaybeRefreshMatchesOnEntry();
+            QueueSubpagePrefetch();
         }
         _quotaTimer?.Start();
 
@@ -4528,7 +4529,19 @@ public partial class MultiplayerTab : UserControl
         StatsView.Visibility   = !gate && _activeSubtab == Subtab.Stats   ? Visibility.Visible : Visibility.Collapsed;
 
         // So a bundle says which page was on screen; written only when it changes.
-        Services.ScreenTrace.Subtab(gate ? $"{_activeSubtab} (sign-in)" : _activeSubtab.ToString());
+        Services.ScreenTrace.Subtab(gate ? $"{_activeSubtab} (sign-in)" : TracedSubtabName());
+    }
+
+    /// <summary>The page a bundle names: the subtab, and inside Ranking the Matches view, which is
+    /// a page of its own as far as a player is concerned.</summary>
+    private string TracedSubtabName()
+        => _activeSubtab == Subtab.Ranking && _rankingMode == RankingMode.Matches ? "Ranking/Matches" : _activeSubtab.ToString();
+
+    /// <summary>A ranking mode button was pressed: measured like a subtab (SWITCH and SETTLE).</summary>
+    private void TraceRankingModeChange()
+    {
+        Services.ScreenTrace.Clicked();
+        Services.ScreenTrace.Subtab(TracedSubtabName());
     }
 
     private void RenderRoomsTab()
@@ -7273,11 +7286,11 @@ public partial class MultiplayerTab : UserControl
 
         try
         {
-            _statsCommunity = await _session.Api.GetCommunityStatsAsync(
-                modId: StatsModId(), mode: StatsMode());
+            _statsCommunity = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_statsCommunity, await _session.Api.GetCommunityStatsAsync(
+                modId: StatsModId(), mode: StatsMode()));
             _statsCommunityFetchedUtc = DateTime.UtcNow;
             _statsLoadFailed = false;
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -7324,7 +7337,7 @@ public partial class MultiplayerTab : UserControl
             string.Join(",", _deckTailsOpen.OrderBy(t => t, StringComparer.Ordinal))),
         (_statsLoadFailed, _demoStats, _demoStatsLoading, _demoStatsEmpty, _demoStatsBig,
             _config?.UseModColor, TextScale.CurrentFactor),
-        (RankBadge.AnimationsEnabled, ModRegistry.Generation, DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute,
+        (RankBadge.AnimationsEnabled, ModRegistry.Generation, DateTime.Now.Date,
             _statsMods, _getActiveProfile?.Invoke()?.Id));
 
     /// <summary>
@@ -7346,8 +7359,10 @@ public partial class MultiplayerTab : UserControl
 
     private void RenderStatsTab()
     {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         _statsPaintKey = null;
         RenderStatsTabCore();
+        Services.ScreenTrace.PageBuilt("Stats", System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         // After the draw: it can move the layout and the accent.
         _statsPaintKey = CurrentStatsPaintKey();
     }
@@ -8595,7 +8610,7 @@ public partial class MultiplayerTab : UserControl
         // page is still the one that asked: a repaint that changes nothing is a flicker for no
         // reason, and one that repeats is a loop.
         if (after != null && !ReferenceEquals(before, after) && _activeSubtab == Subtab.Stats)
-            RenderStatsTab();
+            QueueStatsRender();
     }
 
     /// <summary>
@@ -8742,13 +8757,13 @@ public partial class MultiplayerTab : UserControl
             // second ago lands on top of it, and the page shows one mod's table over
             // another payload's totals.
             if (_demoStats) return;
-            _deckStats = stats;
+            _deckStats = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_deckStats, stats);
 
             DiagnosticLog.Write(
                 $"Deck stats: {stats?.Cards.Count ?? 0} cards from "
                 + $"{stats?.Contributors ?? 0} contributors.");
 
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -8879,14 +8894,14 @@ public partial class MultiplayerTab : UserControl
             // second ago lands on top of it, and the page shows one mod's table over
             // another payload's totals.
             if (_demoStats) return;
-            _matchups = stats;
+            _matchups = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_matchups, stats);
 
             // Logged on success too. This table is empty by construction for its first weeks, so
             // "the server has nothing yet" and "the request never went out" look identical on
             // screen AND in a diagnostic bundle unless the success is written down.
             DiagnosticLog.Write($"Matchups: {stats?.Matchups.Count ?? 0} pairs.");
 
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -8916,14 +8931,14 @@ public partial class MultiplayerTab : UserControl
             var mods = await _session.Api.GetStatsModsAsync();
             _statsModsFetchedUtc = DateTime.UtcNow;
             if (_demoStats) return;
-            _statsMods = mods?.Mods;
+            _statsMods = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_statsMods, mods?.Mods);
 
             DiagnosticLog.Write($"Stats mods: {_statsMods?.Count ?? 0} with matches.");
 
             // Both pickers are built from this, so the page is repainted even though no table
             // changed: the mod row may have gained a chip and the mode switch may have just
             // become offerable.
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -8957,7 +8972,7 @@ public partial class MultiplayerTab : UserControl
             // second ago lands on top of it, and the page shows one mod's table over
             // another payload's totals.
             if (_demoStats) return;
-            _civStats = stats;
+            _civStats = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_civStats, stats);
 
             // Logged on SUCCESS too, not only on failure. This table is empty by construction for
             // its first weeks, so "the server has nothing yet" and "the request never went out"
@@ -8970,7 +8985,7 @@ public partial class MultiplayerTab : UserControl
             // The data can land after the page is already on screen. Only the STATS tables read
             // it now — the ranking's civilization strip is gone; its CIVS column comes with the
             // ladder's own payload.
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
         }
         catch (Exception ex)
         {
@@ -10252,6 +10267,10 @@ public partial class MultiplayerTab : UserControl
             if (_demoStats) return;
             var soloSizeBefore = LadderSize(team: false);
             var teamSizeBefore = LadderSize(team: true);
+            // The same answer again (the minute poll, a matches_changed that changed nothing
+            // drawn here) keeps the object already on screen, so every page's "nothing changed"
+            // check - Rooms, Ranking, Statistics - sees that it is the same.
+            stats = Services.Multiplayer.ActivityPaintKey.KeepIfSame(_communityStats, stats);
             _communityStats = stats;
             // The rank badges on the rooms list, in the room and in the Players panel are cut by
             // a SHARE of the ladder — both ladders, since a player may show either badge — and
@@ -10266,13 +10285,15 @@ public partial class MultiplayerTab : UserControl
                 if (_lobbyWindow != null) RenderRoomMembers();
                 RenderPlayersPanel();
             }
-            if (_activeSubtab == Subtab.Ranking) RenderRanking();
+            // Through the page's key: the ladder is rebuilt only when what it draws moved. The
+            // Matches view draws nothing from this payload, so it is left alone.
+            if (_activeSubtab == Subtab.Ranking && _rankingMode != RankingMode.Matches) RenderRankingIfChanged();
             // AND Statistics, which is where this payload's maps and head counts are drawn.
             // SubtabStats_Click is what kicks this fetch off, and for one build it was the
             // only subtab that never heard the answer: the map table stayed empty until the
             // user left the tab and came back, which reads as "no data" rather than as "not
             // yet". Three ifs and no else-if, for the reason the next comment gives.
-            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            QueueStatsRender();
             // The profile reads this payload too — for the ladder's entry bar, the size of the
             // league and the viewer's own place in it — so it has to repaint when it lands or
             // those three stay blank until the tab is left and re-entered.

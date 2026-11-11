@@ -74,18 +74,21 @@ public partial class MultiplayerTab
     private void RankingModeSolo_Click(object sender, RoutedEventArgs e)
     {
         _rankingMode = RankingMode.Solo;
+        TraceRankingModeChange();
         RenderRanking();
     }
 
     private void RankingModeTeam_Click(object sender, RoutedEventArgs e)
     {
         _rankingMode = RankingMode.Team;
+        TraceRankingModeChange();
         RenderRanking();
     }
 
     private void RankingModeHighlights_Click(object sender, RoutedEventArgs e)
     {
         _rankingMode = RankingMode.Highlights;
+        TraceRankingModeChange();
         RenderRanking();
     }
 
@@ -135,8 +138,12 @@ public partial class MultiplayerTab
     private void RenderRanking()
     {
         if (RankingBody == null) return;
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         _rankingPaintKey = null;
         RenderRankingCore();
+        // The Matches view reports its own builds from PaintMatches.
+        if (_rankingMode != RankingMode.Matches)
+            Services.ScreenTrace.PageBuilt("Ranking", System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         _rankingHistoryMinute = CurrentMinute;
         // After the draw: it can change the mode (Teams on a server with no team ladder).
         if (_rankingMode is RankingMode.Solo or RankingMode.Team) _rankingPaintKey = CurrentRankingPaintKey();

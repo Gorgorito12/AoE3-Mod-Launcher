@@ -718,7 +718,11 @@ rather than the reverse.
 
 - **Tab lag is measured: every click that changes the page writes `SWITCH  a -> b  N ms (first
   time|repeat)`** (`ScreenTrace.Clicked` + a one-frame `CompositionTarget.Rendering`, click to the
-  frame handed over). `perf switches` and `perf switchesfirst` drive every tab; the goals are 100 ms
+  frame handed over). **And `SETTLE  <page>  N ms after the click, K builds (M ms, worst W ms)`**
+  counts the page rebuilds that follow (`ScreenTrace.PageBuilt`, from `RenderStatsTab`,
+  `RenderRanking` and `PaintMatches`), because the lag on Statistics, Ranking and Matches came AFTER
+  the first frame, as server answers landed: Statistics rebuilt itself five times on opening. See
+  the "answers rebuild only what moved" bullet in `.claude/rules/multiplayer.md`. `perf switches` and `perf switchesfirst` drive every tab; the goals are 100 ms
   repeated and 250 ms the first time, and `compare` fails above them. `testbed.py check <name> --ref
   <prototype> --block <id> [--title T] -- <launch args>` opens the launcher and leaves prototype,
   launcher and difference side by side, at 1.25, in `out/check`.

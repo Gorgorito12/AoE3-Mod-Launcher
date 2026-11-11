@@ -811,6 +811,26 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   stays. Verified live against a local server: an answering host, a silent one, a password room and
   a host without Radmin.
 
+- **STATISTICS, RANKING AND MATCHES OPEN WITH ONE BUILD; AN ANSWER REBUILDS ONLY WHAT MOVED
+  (2026-11-11).** Measured against a local server (`SETTLE`, see CLAUDE.md): opening Statistics
+  rebuilt the whole page 5 times (six requests, each answer calling `RenderStatsTab`), Matches 3,
+  and going back rebuilt again. Five rules now: (1) **an answer identical to the one held keeps the
+  held object** (`ActivityPaintKey.KeepIfSame`, content without `generated_at`/`rd`, serialized ONCE
+  per object by `ContentOf`), so the by-reference paint keys see nothing changed; (2) **Statistics'
+  answers go through `QueueStatsRender`** (90 ms of quiet, 350 ms at most, then
+  `RenderStatsTabIfChanged`), and its key no longer carries the minute; (3) **the community answer
+  goes through `RenderRankingIfChanged`** and leaves the Matches view alone; (4) **Matches has a
+  paint key** (`MatchesPaintKey`, set on EVERY branch of `PaintMatches`, the loading one included),
+  a refresh whose first page equals the top of the list changes nothing (`refresh: true`), duplicates
+  are found with a set, and **a page's flags are learned before it is drawn**
+  (`PrepareMatchesArtAsync`, 600 ms at most); (5) **the data is fetched ahead of the click**
+  (`QueueSubpagePrefetch`: at `ApplicationIdle` when the tab is shown, once a minute, signed in,
+  never with "check for updates at startup" off), so a first open draws real data in its first
+  frame. JSON is parsed on the thread pool (`LobbyApiClient.ParseResponseAsync`, `Task.Run` around
+  the parse only; the await still returns to the caller and the error path never moves). Measured
+  after: one build per first open (Statistics 30 ms, Ranking 6-33 ms, Matches 17-26 ms with the big
+  sample, the same in software rendering), zero on going back.
+
 - **THE TAB IS TRANSPARENT; THE PAGE COLOUR IS THE MAIN WINDOW'S (2026-11-11).** `TabRootGrid` has no
   background and the sub-bar is always `RmSubBarBg`: `MainWindow.NeutralBackdrop` paints `MpAppBg` with
   design 86's two glows behind the title bar, the tabs and the whole tab, so every bar is glass over the

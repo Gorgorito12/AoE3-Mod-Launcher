@@ -122,6 +122,40 @@ public partial class MultiplayerTab
             _ = RefreshMatchesInPlaceAsync();
     }
 
+    private DateTime _subpagesPrefetchedUtc = DateTime.MinValue;
+
+    /// <summary>
+    /// The data of Statistics and of Ranking › Matches, asked for while nobody is doing anything,
+    /// so that opening either page draws what it has in its first frame instead of a skeleton that
+    /// the answers then replace (two builds each, measured). DATA only: nothing is built.
+    ///
+    /// <para>At most once a minute, at <c>ApplicationIdle</c>, with the tab on screen and signed in,
+    /// and never with "check for updates at startup" off, which is how a player on a metered link
+    /// asks the launcher to stay quiet. The requests themselves are the pages' own, which already
+    /// skip anything fetched within their 60-second windows.</para>
+    /// </summary>
+    private void QueueSubpagePrefetch()
+    {
+        if (_demoStats || _eloPreview) return;
+        if (_config?.CheckUpdatesOnStartup == false) return;
+        if (DateTime.UtcNow - _subpagesPrefetchedUtc < TimeSpan.FromMinutes(1)) return;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            if (!IsVisible || _demoStats || _eloPreview) return;
+            if (_session?.Status != MultiplayerSession.SessionStatus.SignedIn) return;
+            _subpagesPrefetchedUtc = DateTime.UtcNow;
+            DiagnosticLog.Write("Multiplayer: fetching Statistics and Matches ahead of a click.");
+            RefreshStatsForMod();
+            if (!_matchesLoaded && !_matchesLoading)
+            {
+                // Marked as the server's list, or the first render of the view would take it for
+                // a preview's leftovers and throw it away.
+                _matchesFromDemo = false;
+                _ = LoadMatchesAsync(reset: true);
+            }
+        }));
+    }
+
     /// <summary>The statistics page's community figures, without dropping what is on screen.</summary>
     private void MarkStatsStale()
     {
@@ -160,9 +194,11 @@ public partial class MultiplayerTab
         {
             var page = await api.BrowseMatchesAsync(null, MatchesPageSize, MatchesQuery);
             if (generation != _matchesGeneration) return;
+            await PrepareMatchesArtAsync(page.Items);
+            if (generation != _matchesGeneration) return;
             _matchesStale = false;
             _matchesFetchedUtc = DateTime.UtcNow;
-            ApplyMatchesPage(page, reset: true);
+            ApplyMatchesPage(page, reset: true, refresh: true);
         }
         catch (Exception ex)
         {

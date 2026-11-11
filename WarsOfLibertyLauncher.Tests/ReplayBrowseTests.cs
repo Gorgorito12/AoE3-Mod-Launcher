@@ -1064,4 +1064,52 @@ public class RankingMatchesTests
         });
         Assert.Null(error);
     }
+
+    /// <summary>Going back to Matches draws nothing when nothing it shows moved: every entry used to
+    /// rebuild every tile of every page loaded. The same groups are on screen, the same objects.</summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_GoingBackToMatchesDrawsNothingWhenNothingMoved()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("ranking");
+            Click(tab.RankingModeMatches);
+            var first = TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesGroupTag).First();
+
+            Click(tab.RankingModeSolo);
+            Click(tab.RankingModeMatches);
+            Assert.Same(first, TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesGroupTag).First());
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>A refresh whose first page is what is already at the top changes nothing on
+    /// screen; one that brings a new match draws it.</summary>
+    [Fact]
+    public void ARefreshThatBringsTheSamePageLeavesTheListAlone()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("ranking");
+            Click(tab.RankingModeMatches);
+            var items = (List<CommunityMatch>)typeof(MultiplayerTab)
+                .GetField("_matchesItems", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(tab)!;
+            var count = items.Count;
+            var first = TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesGroupTag).First();
+            var copy = System.Text.Json.JsonSerializer.Deserialize<List<CommunityMatch>>(
+                System.Text.Json.JsonSerializer.Serialize(items.Take(5).ToList()))!;
+
+            tab.ApplyMatchesPage(new MatchBrowsePage { Items = copy }, reset: true, refresh: true);
+            Assert.Equal(count, items.Count);
+            Assert.Same(first, TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesGroupTag).First());
+
+            copy.Insert(0, new CommunityMatch { Id = "brand-new", ModId = "wol", ReportedAt = DateTime.UtcNow.ToString("o") });
+            tab.ApplyMatchesPage(new MatchBrowsePage { Items = copy }, reset: true, refresh: true);
+            Assert.Equal("brand-new", items[0].Id);
+        });
+        Assert.Null(error);
+    }
 }
