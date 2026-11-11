@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filas de salas</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}button:focus-visible{outline:2px solid #8cbcf5;outline-offset:2px}@keyframes slPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}@media (prefers-reduced-motion:reduce){*{animation:none!important}}</style></helmet>
+<section id="t104" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t104" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">104</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Salas · filas con relieve y cabecera de columnas en barra</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px">La lista de 86 se ve plana por tres cosas: la fila es un 4 % de blanco sobre un panel casi del mismo tono, sin borde ni sombra; el único color de toda la fila es el punto de 6 px del chip; y SALA · ANFITRIÓN · JUGADORES · PING son un renglón gris de 11 px con la misma letra que la etiqueta de grupo que tiene justo debajo, así que se leen como dos títulos repetidos. Aquí la fila pasa a ser una ficha con relieve (degradado suave, filo de luz arriba y sombra abajo), el color del estado tiñe la fila entera y no solo un punto, y cada dato se explica solo: avatar del anfitrión, asientos ocupados y libres, barras de señal con los ms. La cabecera SALA · ANFITRIÓN · JUGADORES · PING se queda en 104a, pero como una barra con fondo alineada con las columnas, y la etiqueta de grupo va en el color de su grupo, así que ya no se confunden. 104c es la alternativa sin cabecera y 104d la de tabla. Los colores son los tres que ya usa el anuncio de Discord y que están en <code style="font:11px ui-monospace,monospace">Colors.xaml</code> desde 66: verde si puedes entrar («Unirse»), azul en partida y ámbar si está llena o no está disponible. En Tweaks cambias el ancho (portátil o escritorio) y la transparencia.</div>
+  <div style="display:flex;flex-direction:column;gap:44px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="4">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:9px;max-width:1180px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <div style="width:{{ f.w }};box-sizing:border-box;padding:{{ f.m }};container-type:inline-size;color-scheme:dark;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.3);background:#0f1c2e;font-family:'Segoe UI',system-ui,sans-serif">
+          <div aria-hidden="true" style="position:absolute;inset:0;background:radial-gradient(1400px 800px at 85% -15%, rgba(47,127,224,.13), transparent 70%),radial-gradient(1000px 700px at -5% 115%, rgba(85,172,238,.07), transparent 70%)"></div>
+          <div style="position:relative;display:flex;flex-direction:column;border-radius:14px;background:{{ f.gBg }};backdrop-filter:blur({{ f.gBlur }});box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);overflow:hidden">
+            <div style="flex:none;display:flex;align-items:center;gap:10px;padding:14px 18px 10px"><span style="font:600 15px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Salas abiertas</span><span style="height:22px;box-sizing:border-box;padding:0 8px;border-radius:11px;display:flex;align-items:center;background:rgba(255,255,255,.08);font:600 11.5px/1 Consolas,ui-monospace,monospace;color:#dce7f5">{{ f.count }}</span><div style="flex:1"></div><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">Actualizado hace un momento</span></div>
+            <div style="display:flex;flex-direction:column;gap:{{ f.gap }};margin:{{ f.tblM }};padding:{{ f.listPad }};border-radius:{{ f.tblR }};background:{{ f.tblBg }};box-shadow:{{ f.tblSh }};overflow:hidden">
+              <sc-if value="{{ f.hasHead }}" hint-placeholder-val="{{ false }}">
+                <div style="flex:none;display:grid;grid-template-columns:{{ f.cols }};gap:0 16px;align-items:center;height:{{ f.headH }};box-sizing:border-box;padding:0 14px;border-radius:{{ f.headR }};background:rgba(255,255,255,.06);box-shadow:{{ f.headSh }};font:700 11.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:#a8bcd2"><span style="grid-column:1 / span 2">SALA</span><span>ANFITRIÓN</span><span>JUGADORES</span><span>PING</span><span></span></div>
+              </sc-if>
+              <sc-for list="{{ f.rooms }}" as="r" hint-placeholder-count="4">
+                <sc-if value="{{ r.isHead }}" hint-placeholder-val="{{ false }}">
+                  <div style="flex:none;display:flex;align-items:center;gap:8px;padding:{{ r.gPad }};background:{{ r.gBg }};box-shadow:{{ r.gSh }}"><span aria-hidden="true" style="flex:none;width:7px;height:7px;border-radius:4px;background:{{ r.dot }}"></span><span style="font:700 11.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;color:{{ r.c }}">{{ r.label }}</span><span style="font:600 11.5px/1 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ r.n }}</span><span aria-hidden="true" style="flex:1;height:1px;background:{{ r.line }}"></span></div>
+                </sc-if>
+                <sc-if value="{{ r.isRow }}" hint-placeholder-val="{{ true }}">
+                  <div style-hover="filter:brightness(1.1)" style="position:relative;overflow:hidden;flex:none;display:grid;grid-template-columns:{{ f.cols }};gap:0 16px;align-items:center;min-height:{{ f.rowH }};box-sizing:border-box;padding:{{ f.rowPad }};border-radius:{{ f.rowR }};background:{{ r.bg }};box-shadow:{{ r.sh }}">
+                    <sc-if value="{{ r.hasArt }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position:absolute;top:0;bottom:0;left:0;width:48%;background:{{ r.art }};opacity:{{ r.artOp }};-webkit-mask-image:linear-gradient(90deg,#000 0%,rgba(0,0,0,.55) 50%,transparent 100%);mask-image:linear-gradient(90deg,#000 0%,rgba(0,0,0,.55) 50%,transparent 100%)"></span></sc-if>
+                    <span role="img" aria-label="{{ r.modName }}" title="{{ r.modName }}" style="position:relative;width:{{ f.ic }};height:{{ f.ic }};border-radius:{{ f.icR }};background:{{ r.icon }};opacity:{{ r.iconOp }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),0 4px 12px rgba(0,0,0,.35)"></span>
+                    <div style="position:relative;min-width:0;display:flex;flex-direction:column;gap:6px">
+                      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 15px/1.4 'Segoe UI',system-ui,sans-serif;color:{{ r.nameC }};text-shadow:{{ r.nameSh }}">{{ r.name }}</span>
+                      <div style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden">
+                        <sc-for list="{{ r.chips }}" as="k" hint-placeholder-count="2"><span style="flex:none;height:22px;box-sizing:border-box;padding:0 9px;border-radius:11px;display:flex;align-items:center;gap:6px;background:{{ k.bg }};box-shadow:{{ k.ring }};font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ k.c }};white-space:nowrap"><span aria-hidden="true" style="width:6px;height:6px;border-radius:3px;background:{{ k.dot }};animation:{{ k.anim }}"></span>{{ k.t }}</span></sc-for>
+                      </div>
+                    </div>
+                    <div style="position:relative;min-width:0;display:flex;align-items:center;gap:10px">
+                      <span aria-hidden="true" style="flex:none;width:30px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.3);font:700 12px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ r.ini }}</span>
+                      <div style="min-width:0;display:flex;flex-direction:column;gap:3px">
+                        <div style="display:flex;align-items:baseline;gap:6px;min-width:0"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 13.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ r.host }}</span><span style="flex:none;font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ r.you }}</span></div>
+                        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ r.hostPre }}<span style="font-family:Consolas,ui-monospace,monospace;color:#dce7f5">{{ r.hostNum }}</span>{{ r.hostPost }}</span>
+                      </div>
+                    </div>
+                    <div title="{{ r.plTip }}" style="position:relative;display:flex;flex-direction:column;gap:7px">
+                      <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2;white-space:nowrap"><span style="font:700 14px/1 Consolas,ui-monospace,monospace;color:#f0f5fb">{{ r.pl }}</span>{{ f.plWord }}</span>
+                      <div aria-hidden="true" style="display:flex;align-items:center;gap:4px"><sc-for list="{{ r.pips }}" as="s" hint-placeholder-count="2"><span style="width:8px;height:8px;box-sizing:border-box;border-radius:4px;background:{{ s.bg }};box-shadow:{{ s.ring }}"></span></sc-for></div>
+                    </div>
+                    <div title="{{ r.pingTip }}" style="position:relative;display:flex;align-items:center;gap:8px">
+                      <span aria-hidden="true" style="flex:none;display:flex;align-items:flex-end;gap:2px;height:14px"><sc-for list="{{ r.bars }}" as="b" hint-placeholder-count="4"><span style="width:3px;height:{{ b.h }};border-radius:1px;background:{{ b.c }}"></span></sc-for></span>
+                      <span style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:{{ r.pingC }};white-space:nowrap">{{ r.ping }}</span>
+                    </div>
+                    <div style="position:relative;display:flex;justify-content:flex-end">
+                      <sc-if value="{{ r.hasBtn }}" hint-placeholder-val="{{ true }}"><button type="button" style-hover="filter:brightness(1.14)" style="appearance:none;border:0;margin:0;cursor:pointer;height:34px;box-sizing:border-box;padding:0 16px;border-radius:8px;display:flex;align-items:center;background:{{ r.btBg }};box-shadow:{{ r.btSh }};font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ r.btC }};white-space:nowrap">{{ r.bt }}</button></sc-if>
+                      <sc-if value="{{ r.bText }}" hint-placeholder-val="{{ false }}"><span style="height:34px;box-sizing:border-box;padding:0 16px;border-radius:8px;display:flex;align-items:center;gap:7px;background:#3D2C17;box-shadow:inset 0 0 0 1px rgba(244,144,12,.5);font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#F5BD76;white-space:nowrap">{{ r.bt }}</span></sc-if>
+                    </div>
+                  </div>
+                </sc-if>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:34px;max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><b>Para Claude Code (si se elige 104a).</b> Todo sale de datos que la fila ya tiene; no hay campos nuevos. <b>Cabecera</b> (<code>RoomsHeaderBand</code> / <code>RoomsHeaderStrip</code>): se conserva, fija sobre la lista, pero deja de ser texto suelto: barra de 32 de alto y radio 8, blanco al 6 % con borde de blanco al 9 %, texto 11,5/700 en mayúsculas #a8bcd2, con el mismo margen lateral (10) y relleno (14) que las filas para que cada título caiga sobre su columna; SALA ocupa el icono y el nombre, y la columna del botón no lleva título. Las columnas de <code>RoomsTableLayout</code> pasan a estas medidas: icono 48 · sala 1,6* · anfitrión 0,8* (mínimo 190) · jugadores 132 · ping 104 · acción 160, separación 16. <b>Fila</b> (<code>MpRoomCard</code>, la arma <code>BuildRoomCard</code>): alto mínimo 72, relleno 12/14, radio 12. Fondo en dos capas: degradado vertical de blanco 9 % a 4,5 %, y encima un degradado horizontal del color del grupo: 28 % en el borde izquierdo, 11 % al 36 % del ancho y 0 % al 72 %. Borde de 1 px del color del grupo al 42 % (el azul de «En partida» lleva un 30 % más en los tres valores, porque sobre el fondo azul marino se nota menos que el verde), filo superior de 1 px de blanco al 10 % y, debajo, una sombra del mismo color (0 10 22, recogida 12, al 40 %). La sala propia cambia el borde por 1,5 px de blanco al 55 %, sin otro tono. Las tres secciones llevan color; ninguna fila queda gris. <b>Colores de grupo</b> (los de 66, <code>MpRoomJoin*</code>, <code>MpRoomInGame*</code>, <code>MpRoomFull*</code>): puedes entrar, verde #4fd68a (texto #7fe0a8) · en partida, azul #55ACEE (texto #A9D6F7) · no disponibles ahora (llena u otra versión), ámbar #F4900C (texto #F5BD76). Ojo: hoy «En partida» sale con punto verde; pasa a azul para que el verde signifique una sola cosa. <b>Etiqueta de grupo:</b> punto de 7 px, texto 11,5/700 en mayúsculas del color del grupo, la cuenta en Consolas y una línea de 1 px que llena el resto. <b>Anfitrión:</b> círculo de 30 con la inicial (o el avatar de Discord si la sala lo trae; si no lo trae, no se inventa), nombre 13,5/600 y debajo «1630 ELO» o «Posicionamiento 3/10». <b>Jugadores:</b> «1/2» y debajo un punto de 8 px por asiento, relleno #dce7f5 si está ocupado y solo contorno si está libre. <b>Ping:</b> cuatro barras de 3 px (5, 8, 11 y 14 de alto) más los ms: hasta 60 ms cuatro barras, hasta 100 tres, hasta 150 dos y por encima una; verdes hasta 100, blancas hasta 150, ámbar por encima; sin medir, barras apagadas y «—». <b>Botón de fila:</b> 34 de alto, radio 8, 13/600. «Unirse» con <code>MpRoomJoin</code> (#1D4A37 y borde verde al 55 %), «Ver sala» en el azul global #2f7fe0, el resto en cristal, y «Llena» como estado ámbar sin cursor de mano. El punto del chip «En partida» late (1,6 s); con efectos reducidos se queda fijo.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"ventana":{"editor":"enum","options":["1366×768","1920×1080"],"default":"1920×1080","tsType":"string"},"transparencia":{"editor":"enum","options":["Sólida","Media","Máxima"],"default":"Media","tsType":"string"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const al = (h, a) => 'rgba(' + hex(h).join(',') + ',' + a + ')';
+    const lvl = p.transparencia ?? 'Media';
+    const G = ({ 'Sólida': { bg: 'rgba(12,22,38,.86)', blur: '0px' }, 'Máxima': { bg: 'rgba(10,19,33,.28)', blur: '8px' } })[lvl] || { bg: 'rgba(10,19,33,.5)', blur: '16px' };
+    const wide = (p.ventana ?? '1920×1080') !== '1366×768';
+    const m = wide ? 16 : 12, W = (wide ? 1552 : 1050) + m * 2;
+
+    const MOD = {
+      wol: { name: 'Wars of Liberty', icon: 'mods/wol/icon.png', acc: '#c04444', art: 'url(mods/wol/hero.jpg) -1653px -444px/2400px auto no-repeat' },
+      hd: { name: 'Hundred Days', icon: 'mods/hundred-days/icon.png', acc: '#a37c42', art: 'url(mods/hundred-days/banner.jpg) 50% 40%/cover no-repeat' },
+      im: { name: 'Improvement Mod', icon: 'mods/improvement-mod/icon.png', acc: '#3a8cd9', art: '' }
+    };
+    const GROUP = {
+      open: { label: 'PUEDES ENTRAR', c: '#4fd68a', t: '#7fe0a8' },
+      live: { label: 'EN PARTIDA', c: '#55ACEE', t: '#A9D6F7', k: 1.3 },
+      off: { label: 'NO DISPONIBLES AHORA', c: '#F4900C', t: '#F5BD76' }
+    };
+    const BTN = {
+      join: { bg: '#1D4A37', sh: 'inset 0 0 0 1px rgba(79,214,138,.55)', c: '#ffffff' },
+      mine: { bg: '#2f7fe0', sh: '0 4px 14px rgba(47,127,224,.35)', c: '#ffffff' },
+      sec: { bg: 'rgba(255,255,255,.08)', sh: 'inset 0 0 0 1px rgba(255,255,255,.18)', c: '#dce7f5' }
+    };
+
+    const chip = (t, dot, o) => ({ t, dot, c: (o && o.c) || '#dce7f5', bg: (o && o.bg) || 'rgba(255,255,255,.07)', solid: (o && o.solid) || 'rgba(12,22,38,.74)', ring: 'inset 0 0 0 1px ' + ((o && o.rim) || 'rgba(255,255,255,.14)'), anim: o && o.pulse ? 'slPulse 1.6s ease-in-out infinite' : 'none' });
+    const comp = () => chip('Competitiva · 1v1', '#E6C06A');
+    const casual = t => chip('Casual · ' + t, '#8C9CB1');
+    const live = min => chip('En partida · ' + min + ' min', '#55ACEE', { c: '#A9D6F7', bg: 'rgba(85,172,238,.18)', solid: '#173A57', rim: 'rgba(85,172,238,.5)', pulse: true });
+    const warn = t => chip(t, '#F4900C', { c: '#F5BD76', bg: 'rgba(244,144,12,.12)', solid: '#3D2C17', rim: 'rgba(244,144,12,.45)' });
+    const mine = () => chip('Tu sala', '#2f7fe0', { c: '#0f1c2e', bg: '#dce7f5', solid: '#dce7f5', rim: 'rgba(255,255,255,0)' });
+    const plain = t => chip(t, '#a8bcd2');
+
+    const FULL = [
+      { g: 'open', mod: 'wol', name: 'Wars of Liberty · Partida rápida 1v1', chips: [comp(), mine()], host: 'Gorgo', you: true, elo: '1383', pl: [1, 2], ping: null, btn: 'mine', bt: 'Ver sala' },
+      { g: 'open', mod: 'wol', name: 'WoL 1v1 · mapas ESOC', chips: [comp()], host: 'Kaiser', elo: '1630', pl: [1, 2], ping: 62, btn: 'join', bt: 'Unirse' },
+      { g: 'open', mod: 'wol', name: 'Práctica 3v3 de la casa', chips: [casual('3v3'), plain('Con contraseña')], host: 'Rioplatense', elo: '1288', pl: [3, 6], ping: 41, btn: 'join', bt: 'Unirse' },
+      { g: 'open', mod: 'hd', name: 'Napoleónicas 2v2', chips: [casual('2v2')], host: 'Malinche', place: '3/10', pl: [2, 4], ping: 88, btn: 'sec', bt: 'Instalar mod' },
+      { g: 'open', mod: 'wol', name: 'Exhibición 2v2', chips: [casual('2v2'), plain('Observadores 1/2')], host: 'Aluclown', elo: '1541', pl: [4, 4], ping: 47, btn: 'sec', bt: 'Entrar a mirar' },
+      { g: 'live', mod: 'wol', name: 'Revancha', chips: [comp(), live(14)], host: 'Almirante', elo: '1402', pl: [2, 2], ping: 54, btn: 'sec', bt: 'Ver partida' },
+      { g: 'off', mod: 'wol', name: 'Mapas nuevos 1v1', chips: [comp(), warn('Otra versión')], host: 'Bicorne', elo: '1318', pl: [1, 2], ping: 170, btn: 'sec', bt: 'Revisar mi copia' },
+      { g: 'off', mod: 'im', name: 'Todos contra todos', chips: [casual('8 jugadores')], host: 'Zanjón', elo: '1190', pl: [8, 8], ping: 55, btn: 'text', bt: 'Llena' }
+    ];
+    const ONE = [
+      { g: 'live', mod: 'wol', name: 'Wars of Liberty · Casual', chips: [casual('1v1'), live(1)], host: 'FranticFred', elo: '1241', pl: [2, 2], ping: null, btn: 'sec', bt: 'Ver partida' }
+    ];
+
+    const bars = v => { const n = v == null ? 0 : v <= 60 ? 4 : v <= 100 ? 3 : v <= 150 ? 2 : 1; const col = v == null ? '' : v > 150 ? '#F4900C' : v <= 100 ? '#4fd68a' : '#dce7f5'; return [5, 8, 11, 14].map((h, i) => ({ h: h + 'px', c: i < n ? col : 'rgba(255,255,255,.16)' })); };
+    const pingC = v => v == null ? '#8C9CB1' : v > 150 ? '#F5BD76' : v <= 100 ? '#7fe0a8' : '#dce7f5';
+    const RELIEF = 'inset 0 1px 0 rgba(255,255,255,.1), 0 8px 18px -10px rgba(0,0,0,.6)';
+
+    const surface = (v, r) => {
+      const S = GROUP[r.g].c, K = GROUP[r.g].k || 1, M = MOD[r.mod], off = r.g === 'off';
+      if (v === 'tabla') return { bg: 'rgba(255,255,255,.015)', sh: 'inset 0 -1px 0 rgba(255,255,255,.07)' };
+      if (v === 'mod') return off
+        ? { bg: 'linear-gradient(90deg,' + al(M.acc, .14) + ' 0%,rgba(255,255,255,0) 46%), linear-gradient(180deg,#16263e,#132238)', sh: 'inset 0 0 0 1px rgba(255,255,255,.08)' }
+        : { bg: 'linear-gradient(90deg,' + al(M.acc, .36) + ' 0%,' + al(M.acc, .1) + ' 44%,rgba(255,255,255,0) 72%), linear-gradient(180deg,#1b2d48,#15253c)', sh: (r.you ? 'inset 0 0 0 1.5px rgba(255,255,255,.5), ' : 'inset 0 0 0 1px rgba(255,255,255,.13), ') + RELIEF };
+      return {
+        bg: 'linear-gradient(90deg,' + al(S, +(.28 * K).toFixed(2)) + ' 0%,' + al(S, +(.11 * K).toFixed(2)) + ' 36%,' + al(S, 0) + ' 72%), linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.045))',
+        sh: (r.you ? 'inset 0 0 0 1.5px rgba(255,255,255,.55), ' : 'inset 0 0 0 1px ' + al(S, +(.42 * K).toFixed(2)) + ', ') + 'inset 0 1px 0 rgba(255,255,255,.1), 0 10px 22px -12px ' + al(S, .4)
+      };
+    };
+
+    const build = c => {
+      const v = c.v, table = v === 'tabla', byMod = v === 'mod';
+      const rooms = [];
+      let last = '';
+      c.rooms.forEach(r => {
+        const g = GROUP[r.g], M = MOD[r.mod], off = r.g === 'off' && byMod;
+        if (r.g !== last) {
+          const first = last === '';
+          rooms.push({ isHead: true, isRow: false, label: g.label, n: String(c.rooms.filter(x => x.g === r.g).length), dot: g.c, c: g.t,
+            gPad: table ? '8px 14px' : first ? '2px 6px' : '10px 6px 2px',
+            gBg: table ? al(g.c, .09) : 'transparent', gSh: table ? 'inset 0 -1px 0 rgba(255,255,255,.07)' : 'none',
+            line: table ? 'rgba(255,255,255,0)' : 'rgba(255,255,255,.09)' });
+          last = r.g;
+        }
+        const s = surface(v, r), b = BTN[r.btn];
+        rooms.push({
+          isHead: false, isRow: true, bg: s.bg, sh: s.sh,
+          hasArt: byMod && !!M.art, art: M.art, artOp: off ? '.2' : '.5',
+          icon: 'url(' + M.icon + ') center/cover no-repeat, #1a2c48', iconOp: off ? '.7' : '1', modName: M.name,
+          name: r.name, nameC: off ? '#c3d2e5' : '#f0f5fb', nameSh: byMod ? '0 1px 6px rgba(0,0,0,.75)' : 'none', chips: byMod ? r.chips.map(k => ({ ...k, bg: k.solid })) : r.chips,
+          ini: r.host.charAt(0).toUpperCase(), host: r.host, you: r.you ? 'tú' : '',
+          hostPre: r.place ? 'Posicionamiento ' : (byMod ? 'Anfitrión · ' : ''),
+          hostNum: r.place || r.elo, hostPost: r.place ? '' : ' ELO',
+          pl: r.pl[0] + '/' + r.pl[1], plTip: r.pl[0] + ' de ' + r.pl[1] + ' jugadores',
+          pips: Array.from({ length: r.pl[1] }, (_, i) => i < r.pl[0] ? { bg: '#dce7f5', ring: 'none' } : { bg: 'rgba(255,255,255,0)', ring: 'inset 0 0 0 1.5px rgba(255,255,255,.36)' }),
+          bars: bars(r.ping), ping: r.ping == null ? '—' : r.ping + ' ms', pingC: pingC(r.ping), pingTip: r.ping == null ? 'Ping sin medir' : 'Ping: ' + r.ping + ' ms',
+          hasBtn: !!b, bText: !b, bt: r.bt, btBg: b ? b.bg : '', btSh: b ? b.sh : '', btC: b ? b.c : ''
+        });
+      });
+      return {
+        id: c.id, href: '#' + c.id, label: c.label, w: W + 'px', m: m + 'px', gBg: G.bg, gBlur: G.blur, count: String(c.rooms.length), rooms,
+        cols: (table ? '40px' : '48px') + ' minmax(0,1.6fr) minmax(190px,.8fr) ' + (table ? '112px' : '132px') + ' 104px 160px',
+        rowH: table ? '60px' : '72px', rowPad: table ? '8px 14px' : '12px 14px', rowR: table ? '0' : '12px', ic: table ? '40px' : '48px', icR: table ? '9px' : '10px',
+        gap: table ? '0' : '6px', listPad: table ? '0' : '0 10px 12px', tblM: table ? '0 10px 10px' : '0', tblR: table ? '12px' : '0',
+        tblBg: table ? 'rgba(5,10,18,.34)' : 'transparent', tblSh: table ? 'inset 0 0 0 1px rgba(255,255,255,.1)' : 'none',
+        hasHead: !byMod, headH: table ? '36px' : '32px', headR: table ? '0' : '8px', headSh: table ? 'inset 0 -1px 0 rgba(255,255,255,.1)' : 'inset 0 0 0 1px rgba(255,255,255,.09)', plWord: byMod ? ' jugadores' : ''
+      };
+    };
+
+    const frames = [
+      build({ id: '104a', v: 'estado', rooms: FULL,
+        label: 'Elegida · el color lo pone el estado. Fichas con relieve, teñidas de izquierda a derecha con el color de su grupo: verde si puedes entrar, azul en partida y ámbar si está llena o es de otra versión; la tuya lleva el borde blanco y el único botón azul. La cabecera SALA · ANFITRIÓN · JUGADORES · PING va como barra alineada con las columnas. Lo malo: «En partida» pasa de verde a azul respecto a lo que hay hoy.' }),
+      build({ id: '104b', v: 'estado', rooms: ONE,
+        label: 'La misma con una sola sala en partida, el caso de tu captura: la cabecera es una barra y la etiqueta de grupo va en su color, así que ya no se leen como dos renglones grises apilados.' }),
+      build({ id: '104c', v: 'mod', rooms: FULL,
+        label: 'Alternativa · el color lo pone el mod. Cada ficha lleva la imagen de su mod fundida a la izquierda (o el resplandor de su color si no tiene imagen) y el estado queda en la etiqueta de grupo, el chip y el botón. Es la más vistosa; lo malo es que, cuando casi todas las salas son de Wars of Liberty, la lista entera se vuelve roja y el rojo compite con los avisos.' }),
+      build({ id: '104d', v: 'tabla', rooms: FULL,
+        label: 'Alternativa · tabla con cabecera de verdad. Se conservan SALA · ANFITRIÓN · JUGADORES · PING, pero como barra fija de una tabla hundida, con filas de 60 separadas por una línea y los grupos como franjas de su color. Caben más salas a la vista; es la más sobria y la que menos relieve gana.' })
+    ];
+    return { frames };
+  }
+}
+</script>
+</body>
+</html>
