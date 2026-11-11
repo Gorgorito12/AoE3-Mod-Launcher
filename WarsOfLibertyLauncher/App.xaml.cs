@@ -581,6 +581,12 @@ public partial class App : System.Windows.Application
             if (Services.HarnessMode.Active) main.ShowActivated = false;
             using (Services.TrayStartParking.EnterWpfShow(main)) main.Show();
         });
+        // The lights run only while the launcher is in front, and that is learned from
+        // Activated/Deactivated. A window shown WITHOUT the foreground (the player clicked into
+        // another program while it loaded, or a test launch) raises neither, so the flag kept
+        // its optimistic start and the update pill pulsed for nobody, ~84 redraws a second.
+        // An Activated that arrives a moment later still sets it back.
+        Controls.RankBadge.SetAppActive(main.IsActive);
 
         if (StartMinimized)
         {

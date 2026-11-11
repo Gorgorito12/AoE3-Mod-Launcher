@@ -765,11 +765,18 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the sample profile while the preview owns the page). There is no page for another player, so their
   rows are not clickable; a hand cursor there would promise something that does not happen.
   (6) **Going back to the subtab draws nothing when nothing moved** (`RenderRankingIfChanged`, used by
-  the session pass only). The key holds the payload, the standing and the month's highlights by
-  REFERENCE (every answer is a new object, so a new answer always draws), the mode, the language, the
-  viewer, the sizes, the gap, the effects, the flag tables and the minute. Measured: a switch to the
-  subtab went from 27 ms to 63 ms with the new page and is ~3 ms with the key. Every caller that
+  the session pass only). The key holds the payload by CONTENT (`ActivityPaintKey.Content`: its JSON
+  without `generated_at` and `rd`, cached per payload object), the standing and the month's highlights
+  by reference, the mode, the language, the viewer, the sizes, the gap, the effects and the flag
+  tables. **It used to hold the payload by reference and the minute**, and every answer is a new
+  object, so the once-a-minute poll rebuilt the whole table for figures nobody could see change —
+  the real log showed Rooms → Ranking at 282-393 ms. When only the minute moved, only «Latest
+  matches» repaints (`RenderRankingHistory`, its "N min ago"). Measured: ~3 ms. Every caller that
   changed something calls `RenderRanking()`. Highlights and Matches always draw, as before.
+  **While the first answer is on its way the table shows skeleton rows**, and a failed load says so
+  (`RkLoadFailed`) — it used to say "nobody is ranked yet", a claim about the server made before
+  asking it. Torneos does the same (`MpTournamentsLoadFailed`), and its page key includes whether it
+  has ever fetched, or the skeleton stayed up after the answer.
   (7) **The sheen on the first podium card follows the badges' rule, not a copy of it.** It ran on
   with the launcher behind another program (the log said `LAYOUT STORM … nobody watching`, one
   `DoubleAnimationUsingKeyFrames` clock). `RankBadge.MayRunOn(host)` is the rule (foreground, on
@@ -7112,6 +7119,25 @@ parameter is absent, so an older launcher receives exactly what it always did.
   and cleared when the page's mod changes, since another mod's civilizations are a different
   set. The default-open group is chosen ONCE (`_deckCivsSeeded`) - re-deciding it per repaint
   would slam shut a group that had just been opened.
+
+- **STATISTICS: THE MATCHUP TABLES SHOW EIGHT, AND GOING BACK TO THE PAGE BUILDS NOTHING
+  (2026-11-11).** The rivals table (and the allies table in team mode) drew every row the server
+  sent — up to 600, ~25,000 px — and the same pair once per mod VERSION. The pure rules are
+  `Services/Multiplayer/MatchupListView.cs`: `Merge` folds versions and reversed pairs into one
+  line (a reversed RIVAL pair inverts the record; an ALLIES pair does not — the record belongs to
+  the pair, only the names swap), `Top` keeps the 8 most played (server order on ties), `For(civ)`
+  reads one civilization's lines from its side. `BuildPairPanel` shows the top 8, a civ picker past
+  8 lines (`StatsPairsCiv`), and "See all N" opens the rest in a box of 10 rows with its own scroll
+  (`StatsPairsBox`) that hands the wheel to the page at its ends. The choice survives a refresh
+  (`PairTableState`) and resets when the mod changes. **The page's scrollbar can be dragged now**:
+  `StatsScroll` had the page margin INSIDE it, so its bar sat in the window's 6-px resize border and
+  the click went to Windows; the margin is outside it, as on the other pages
+  (`TheStatisticsScrollBarStandsClearOfTheWindowsEdge`). **Going back to the subtab draws nothing
+  when nothing changed** (`RenderStatsTabIfChanged`, key `CurrentStatsPaintKey`: payloads by
+  reference, mod, mode, language, layout, the open/folded state, effects, catalog generation and the
+  minute). Measured with 600 matchups (`--demo-stats=big`): a repeat Rooms → Statistics went from
+  974 ms in a real log to 41-101 ms. Pinned by `MatchupListViewTests` and three cases in
+  `StatsPageTests`.
 
 - **CAPPING THE STATISTICS PAGE'S WIDTH WAS TRIED AND REJECTED - do not re-propose it when
   somebody says the figure is far from its name.** The diagnosis is right and worth keeping:

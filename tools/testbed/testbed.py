@@ -308,7 +308,9 @@ def seed(args):
         "startMinimized": False, "closeToTray": False, "enableJoinLinks": False,
         "selfInstallPromptShown": True, "crossUserAccountNoticeShown": True,
         "gameRecordingNoticePending": False, "antivirusNoticeAcknowledged": True,
-        "catalogBaselineSeeded": True, "enableSounds": False, "checkUpdatesOnStartup": False,
+        "catalogBaselineSeeded": True, "enableSounds": False,
+        # Off unless asked: on, the launcher talks to GitHub and the catalog at every start.
+        "checkUpdatesOnStartup": bool(getattr(args, "checks", False)),
         "activeModId": "wol", "userModIds": ["improvement-mod"],
         "favoriteModIds": ["wol"],
         "notifications": sample_notifications(),
@@ -674,6 +676,9 @@ def frame_ms(perf):
 def perf_scenarios():
     return {
         "coldstart": {"runs": 5, "seconds": 8, "args": []},
+        # The start a player has: update checks on, and long enough for the checks of the other
+        # installed mods, the catalog refresh and the notification sweep to land.
+        "coldstart-checks": {"runs": 3, "seconds": 20, "args": [], "checks": True},
         "idle": {"runs": 1, "seconds": 60, "args": []},
         "tray": {"runs": 1, "seconds": 60, "args": ["--minimized"]},
         "workshop": {"runs": 1, "seconds": 30, "args": ["--open-tab=workshop"]},
@@ -728,7 +733,7 @@ def perf(args):
     results = []
     for i in range(scenario["runs"]):
         ns = argparse.Namespace(keep=False, size=args.size, max=args.max, lang="es", glass=None, software=args.software,
-                                rest=scenario["args"])
+                                rest=scenario["args"], checks=scenario.get("checks", False))
         launch(ns)
         pid = run_pid()
         sample = OUT / "perf" / f"{args.label}-{args.scenario}-{i}.json"
@@ -889,6 +894,7 @@ def main():
     p.add_argument("--lang", default="es")
     p.add_argument("--glass")
     p.add_argument("--software", action="store_true")
+    p.add_argument("--checks", action="store_true", help="update checks on at start, as a player has them")
     p.add_argument("--keep", action="store_true", help="keep the data folder of the last run")
     p.add_argument("rest", nargs="*")
     sub.add_parser("close")

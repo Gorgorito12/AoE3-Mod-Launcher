@@ -51,6 +51,20 @@ public static class ActivityPaintKey
                 info.Properties.RemoveAt(i);
     }
 
+    /// <summary>The payload alone, without what is drawn nowhere: the Ranking page compares
+    /// answers by this.</summary>
+    public static string? Content(CommunityStats? stats)
+    {
+        try
+        {
+            return JsonSerializer.Serialize(stats, Options);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static string? For(CommunityStats? stats, ActivityPaintContext context)
     {
         try

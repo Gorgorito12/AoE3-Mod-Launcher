@@ -453,6 +453,13 @@ public static partial class Strings
         ["MpStatsTailCivsOpen"] = new() { [LangEn] = "Also showing the {0} with {1} matches or fewer.", [LangEs] = "Mostrando también las {0} con {1} partidas o menos." },
         ["MpStatsSeeLess"] = new() { [LangEn] = "See less", [LangEs] = "Ver menos" },
         ["MpStatsSeeAllCivs"] = new() { [LangEn] = "See all", [LangEs] = "Ver todas" },
+        ["MpTournamentsLoadFailed"] = new() { [LangEn] = "Couldn't load the tournaments. They will be asked for again shortly.", [LangEs] = "No se pudieron cargar los torneos. Se volverán a pedir en breve." },
+        ["RkLoadFailed"] = new() { [LangEn] = "Couldn't load the ranking. It will try again shortly.", [LangEs] = "No se pudo cargar la clasificación. Se volverá a intentar en breve." },
+        // The pairs tables (matchups, played together): the most played, then the rest on request.
+        ["MpStatsPairsAllCivs"] = new() { [LangEn] = "All civilizations", [LangEs] = "Todas las civilizaciones" },
+        ["MpStatsPairsTopShown"] = new() { [LangEn] = "The {0} most played of {1}.", [LangEs] = "Los {0} más jugados de {1}." },
+        ["MpStatsPairsAllShown"] = new() { [LangEn] = "All {0}, most played first.", [LangEs] = "Los {0}, los más jugados primero." },
+        ["MpStatsPairsSeeAll"] = new() { [LangEn] = "See all {0}", [LangEs] = "Ver los {0}" },
         ["MpStatsBarTip"] = new() { [LangEn] = "{0} wins out of {1} decided", [LangEs] = "{0} victorias de {1} decididas" },
         ["MpStatsBarTipNoSample"] = new() { [LangEn] = "No sample: {0} decided, {1} needed", [LangEs] = "Sin muestra: {0} decididas, hacen falta {1}" },
         ["MpStatsPctTip"] = new() { [LangEn] = "Shown from {0} decided matches", [LangEs] = "Se muestra a partir de {0} partidas decididas" },

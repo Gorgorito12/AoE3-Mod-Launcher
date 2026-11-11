@@ -144,7 +144,8 @@ public class PageSpacingTests
                 Assert.Equal(s, Math.Max(tab.RankingSideColumn.Margin.Left, tab.RankingSideColumn.Margin.Top));
                 Assert.Equal(s, tab.RankingYouHost.Margin.Bottom);
                 Assert.Equal(s, tab.RankingPodiumHost.Margin.Bottom);
-                Assert.Equal(new Thickness(s), tab.StatsPage.Margin);
+                // Around the scroller, not inside it: inside, the bar sat in the window's resize edge.
+                Assert.Equal(new Thickness(s), tab.StatsScroll.Margin);
             }
         });
         Assert.Null(error);

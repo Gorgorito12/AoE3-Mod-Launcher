@@ -2908,11 +2908,65 @@ public class LauncherConfig
         }
     }
 
+    private static readonly JsonSerializerOptions SaveOptions = new() { WriteIndented = true };
+
+    /// <summary>One writer at a time: the UI thread and background saves both call Save.</summary>
+    private static readonly object SaveLock = new();
+
+    /// <summary>
+    /// Writes the whole file to a scratch copy and swaps it in, under one lock. It used to be a
+    /// plain overwrite that the UI thread and background saves could run at the same moment, and
+    /// a <c>launcher-config.json.clobbered-…</c> left in a player's data folder is what that looks
+    /// like. A save that dies half way now leaves the previous file whole. The scratch file ends
+    /// in <c>.tmp</c> and is removed whatever happens.
+    /// </summary>
     public void Save()
     {
-        var path = Services.AppPaths.ConfigFile;
-        var options = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(path, JsonSerializer.Serialize(this, options));
+        lock (SaveLock)
+        {
+            WriteWhole(Services.AppPaths.ConfigFile, JsonSerializer.SerializeToUtf8Bytes(this, SaveOptions));
+        }
+    }
+
+    /// <summary>The swap itself, separate so a test can drive it on any path.</summary>
+    internal static void WriteWhole(string path, byte[] bytes)
+    {
+        var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            using (var fs = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                fs.Write(bytes, 0, bytes.Length);
+                fs.Flush();
+            }
+
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    File.Move(tmp, path, overwrite: true);
+                    return;
+                }
+                catch (Exception ex) when ((ex is IOException || ex is UnauthorizedAccessException) && attempt < 3)
+                {
+                    // Something reading the file for a moment (an antivirus scan, the diagnostics
+                    // export). Short, because this can run on the UI thread.
+                    System.Threading.Thread.Sleep(40 * attempt);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    // Windows will not replace a file another program still has open, even one
+                    // that shares it for writing; the old in-place write went through there. Do
+                    // that rather than lose the save — it is what every save used to be.
+                    File.WriteAllBytes(path, bytes);
+                    return;
+                }
+            }
+        }
+        finally
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* best effort */ }
+        }
     }
 }
 

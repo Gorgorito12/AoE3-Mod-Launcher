@@ -54,6 +54,69 @@ public class StatsPageTests
             Assert.False(tab.Resources.Contains("MpAction"));
         });
 
+    /// <summary>
+    /// The server sends up to 600 pairs and the page drew every one, ~25,000 px for one card.
+    /// Now it draws the eight most played; the rest open in a box that never grows past ten rows,
+    /// and the civilization picker narrows the table to one civilization's pairs.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_SixHundredPairsDrawEightAndTheRestInABox()
+        => WithPage("big", tab =>
+        {
+            int total = MatchupListView.Merge(StatsDemoData.BigMatchups().Matchups).Count;
+            Assert.True(total > MatchupListView.BoxRows);
+            string text = AllText(tab.StatsLeftColumn);
+            Assert.Contains(Strings.Format("MpStatsPairsTopShown", MatchupListView.TopCount, total), text);
+            Assert.DoesNotContain(Under<ScrollViewer>(tab.StatsLeftColumn),
+                s => System.Windows.Automation.AutomationProperties.GetAutomationId(s) == "StatsPairsBox");
+
+            Under<Button>(tab.StatsLeftColumn)
+                .First(b => Equals(b.Content, Strings.Format("MpStatsPairsSeeAll", total)))
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            var box = Under<ScrollViewer>(tab.StatsLeftColumn)
+                .Single(s => System.Windows.Automation.AutomationProperties.GetAutomationId(s) == "StatsPairsBox");
+            Assert.True(box.MaxHeight <= MatchupListView.BoxRows * 45);
+
+            var picker = Under<ComboBox>(tab.StatsLeftColumn)
+                .First(c => System.Windows.Automation.AutomationProperties.GetAutomationId(c) == "StatsPairsCiv");
+            picker.SelectedIndex = 1;
+            Assert.DoesNotContain(Under<Button>(tab.StatsLeftColumn),
+                b => Equals(b.Content, Strings.Get("MpStatsSeeLess")));
+        });
+
+    /// <summary>
+    /// The page's scroll bar sat in the last 6 px of the window, which Windows keeps for
+    /// resizing it, so its thumb could not be dragged. It has to stand clear of the edge.
+    /// </summary>
+    [Fact]
+    public void TheStatisticsScrollBarStandsClearOfTheWindowsEdge()
+        => WithPage("big", tab =>
+        {
+            tab.Measure(new Size(1200, 800));
+            tab.Arrange(new Rect(0, 0, 1200, 800));
+            tab.UpdateLayout();
+            var right = tab.StatsScroll.TranslatePoint(new Point(tab.StatsScroll.ActualWidth, 0), tab).X;
+            Assert.True(tab.ActualWidth - right >= 8, $"the bar ends {tab.ActualWidth - right} px from the edge");
+        });
+
+    /// <summary>
+    /// Going back to the subtab rebuilt every card each time (974 ms in a player's log). With
+    /// nothing moved it now draws nothing; the language is one of the things that does move it.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_GoingBackToStatisticsDrawsNothingWhenNothingMoved()
+        => WithPage("full", tab =>
+        {
+            var first = tab.StatsLeftColumn.Children[0];
+            Assert.False(tab.RenderStatsTabIfChanged());
+            Assert.Same(first, tab.StatsLeftColumn.Children[0]);
+
+            Strings.SetLanguage("en");
+            Assert.True(tab.RenderStatsTabIfChanged());
+            Assert.NotSame(first, tab.StatsLeftColumn.Children[0]);
+        });
+
     /// <summary>The civilizations with three matches or fewer fold, and the fold opens.</summary>
     [Fact]
     public void TheThinCivilizationsFoldAndTheFoldOpens()

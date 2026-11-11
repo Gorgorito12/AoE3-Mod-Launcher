@@ -106,6 +106,39 @@ internal static class UpdateVerdict
     }
 
     /// <summary>
+    /// What the LAST check already learned, for a mod not checked yet this session: the Library
+    /// drew every mod as up to date until the network answered, although the installed tag and
+    /// the latest one were both on disk from the session before. GitHubReleases only, and only
+    /// when both tags are known: the patcher's answer is a list nothing persists, and an
+    /// unknown version is left for the real check to say. The cached latest is trusted only for
+    /// the repository it came from (a mod moved to another repo must not keep the old one's).
+    /// The check that follows replaces this answer either way.
+    /// </summary>
+    internal static bool HasUpdateFromLastKnown(ModProfile? profile, ModState? state)
+    {
+        if (profile?.UpdateMechanism != ModUpdateMechanism.GitHubReleases || state == null) return false;
+        var gh = profile.GitHubReleases;
+        var current = state.LastKnownVersion;
+        if (gh == null || string.IsNullOrEmpty(current)) return false;
+
+        var cached = string.Equals(state.LatestReleaseRepo, gh.SourceRepo, StringComparison.OrdinalIgnoreCase)
+            ? state.LastKnownLatestVersion
+            : null;
+        // A mod that follows its author's latest release: only what a check actually learned.
+        // Falling back to the catalog's approved tag here called a player on a NEWER release
+        // out of date (Improvement Mod installed 24.07, approved 19.07): the approved tag is an
+        // offline seed, not "the latest".
+        bool followsLatest = gh.FollowLatest && string.IsNullOrEmpty(gh.ExternalAssetUrlTemplate);
+        if (followsLatest && string.IsNullOrWhiteSpace(cached)) return false;
+        var latest = UpdateService.ResolveEffectiveGitHubTag(gh, cached);
+        if (string.IsNullOrEmpty(latest) || string.Equals(current, latest, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var pinned = state.PinnedVersion;
+        return string.IsNullOrEmpty(pinned) || !string.Equals(pinned, current, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Whether there is an update worth showing a badge for. <see cref="UpdateOffer.VersionUnknown"/>
     /// counts: a detected mod with no stamped version is exactly the case the Workshop badge
     /// used to miss forever.

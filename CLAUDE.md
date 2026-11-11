@@ -558,6 +558,16 @@ rather than the reverse.
   on the rows already built; the filter pills are keyed too (`_libraryFiltersKey`) and `ModTheme.Apply`
   returns at once for the colour already applied. Together they took a repeated switch from 53-81 ms
   to 30-51 ms, click to settled frame (`MODSWITCH … settled`).
+  **The rail's Updates badge comes from the LAST check before this session's has answered**
+  (`UpdateVerdict.HasUpdateFromLastKnown`, the no-cache branch of `BuildModRowState`): every mod
+  used to read "up to date" until the network replied, though both tags were on disk. GitHubReleases
+  only, a cached latest only from the SAME repository, and a follow-latest mod with nothing learned
+  says nothing — its approved tag is an offline seed, and reading it as "the latest" called a player
+  on a newer release (Improvement Mod 24.07 against approved 19.07) out of date; the sweep found it.
+  The real check replaces it. Pinned by `UpdateVerdictTests`. **`IsProfileInstalledLocally`
+  remembers its answer for 60 s** per mod and path (`_installedMemo`): a rail repaint asked the disk
+  for every mod each time. `ForgetCheckResult` forgets the entry, so installs, updates and
+  uninstalls are seen at once.
   (6) **Chrome.xaml gives every ScrollViewer `Padding="0,0,8,0"`**, and it silently crops anything laid
   out to a known width: the folded tiles lost 13 px until the padding was given back.
   (7) **Header:** title bar 40 and nav 56 in BOTH layouts; the old compact heights (34 / 42) and the
@@ -2117,7 +2127,17 @@ rather than the reverse.
   their clocks; on the players' laptops each of those frames took ~300 ms and the UI thread never
   rested. The rule now: a forever animation is started with `CreateClock()` +
   `ApplyAnimationClock`, the clock is kept, and stopping calls `clock.Controller.Stop()` before
-  detaching (`RankBadge.Start`/`Stop`, `MainWindow.PulseLauncherUpdatePill`/`StopLauncherUpdatePillPulse`).
+  detaching (`RankBadge.Start`/`Stop`).
+  **The update pill went further and has no forever animation at all** (2026-11-11): a running
+  clock makes WPF draw every frame even while the value it holds is still, and the pill's
+  "rest" between pulses was exactly that — measured 65 redraws a second with the window idle.
+  `PulseLauncherUpdatePill` plays one FINITE breath (`BreatheLauncherUpdatePill`, 680 ms,
+  `FillBehavior.Stop`, 30 fps, its two clocks still kept and stopped through their controller)
+  and a `_pillBreathTimer` (3.6 s) starts the next; `StopLauncherUpdatePillPulse` stops the timer
+  and the clocks. Measured after: 16 redraws a second, CPU 4.6 % → 3.3 %. Between breaths nothing
+  is drawn. `App.ShowMainWindow` also tells `RankBadge.SetAppActive` the window's real focus right
+  after `Show()`: a window shown without focus never raises `Deactivated`, so lights kept running
+  for nobody.
   A FINITE animation (a fade, the bell shake) ends on its own and needs none of this. Two more
   rules came with it, by the maintainer's choice: **looping light is capped at
   `RankBadge.FrameRate` (30)** — WPF otherwise redraws at the monitor's refresh rate while any clock
@@ -2391,7 +2411,12 @@ rather than the reverse.
   migrated into `mods[...]` on `Load()` (which also rewrites a retired
   `multiplayer.lobbyBaseUrl` and clears the session token). The config schema +
   example live in `docs/CONFIGURATION.md` (per-mod dict, not the legacy flat
-  fields). `Save()` is non-atomic and runs from background threads.
+  fields). `Save()` runs from background threads, so it is serialised (`SaveLock`) and goes
+  through `LauncherConfig.WriteWhole`: a `.{guid}.tmp` beside the file, then a `File.Move` over
+  it, three tries; a reader holding the file open (Windows refuses to replace an open file) makes
+  it fall back to an in-place write rather than lose the save. It used to be a plain overwrite
+  from several threads, and a `launcher-config.json.clobbered-…` in a player's data folder is
+  what that left. Pinned by `ConfigSaveTests`.
 
 - **Multi-install copies (`ModState.OtherInstalls`) are hidden/deduped, never
   hard-deleted — a phantom "Mod (2)" in the MODS switcher was a stale registration.**
@@ -6937,8 +6962,8 @@ rather than the reverse.
   permanently silencing it. Instead `LauncherUpdatePill` (`MainWindow.xaml`, a gold
   pill in the title bar, `IsHitTestVisibleInChrome` so the drag handler doesn't eat
   the click) is shown on **every** launch a newer version exists — no permanent
-  dismiss — pulses once per session (`PulseLauncherUpdatePill` /
-  `StopLauncherUpdatePillPulse`) and on click (`LauncherUpdatePill_Click`) opens the
+  dismiss — breathes while somebody can see it (`PulseLauncherUpdatePill` /
+  `StopLauncherUpdatePillPulse`, finite breaths on a timer — see the animation-clock bullet) and on click (`LauncherUpdatePill_Click`) opens the
   existing download/restart dialog. Strings `LauncherUpdatePill` /
   `LauncherUpdatePillTooltip`.
   **(7) There is a MANUAL check, in Settings -> Maintenance**, and it exists because there was no

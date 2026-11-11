@@ -1741,7 +1741,7 @@ public partial class MultiplayerTab : UserControl
                 RenderRanking();
                 break;
             case Subtab.Stats:
-                RenderStatsTab();
+                RenderStatsTabIfChanged();
                 break;
         }
     }
@@ -4404,7 +4404,7 @@ public partial class MultiplayerTab : UserControl
             case Subtab.Rooms:      ShowSubtabView(); Services.DiagnosticLog.Time("MP RenderRoomsTab", RenderRoomsTab);   break;
             case Subtab.Tournaments: ShowSubtabView(); RenderTournamentsTab(onlyIfChanged: true); break;
             case Subtab.Ranking:    ShowSubtabView(); RenderRankingIfChanged(); break;
-            case Subtab.Stats:      ShowSubtabView(); RenderStatsTab();   break;
+            case Subtab.Stats:      ShowSubtabView(); RenderStatsTabIfChanged();   break;
         }
 
         // The profile is a WINDOW now, so it is not one of the cases above — but it is still
@@ -5927,6 +5927,9 @@ public partial class MultiplayerTab : UserControl
                             && "loading".StartsWith(want, StringComparison.OrdinalIgnoreCase);
         _statsLoadFailed = want.Length > 0
                            && "error".StartsWith(want, StringComparison.OrdinalIgnoreCase);
+        // A community the size of the real one: the matchups table is what made this page slow,
+        // and five sample pairs could not show it.
+        _demoStatsBig = want.Length > 0 && "big".StartsWith(want, StringComparison.OrdinalIgnoreCase);
 
         // The TEAM ladder, without a click. It is the half of the page that did not exist
         // until now, and the half a screenshot is most likely to be wanted of.
@@ -5968,6 +5971,7 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Which preview scenario is on screen, so the two switches can rebuild it.</summary>
     private bool _demoStatsEmpty;
     private bool _demoStatsLoading;
+    private bool _demoStatsBig;
 
     /// <summary>
     /// Every fixture the page draws, all at the mod and mode currently selected.
@@ -5994,7 +5998,9 @@ public partial class MultiplayerTab : UserControl
         _civStats = _demoStatsEmpty
             ? Services.Multiplayer.StatsDemoData.NoCivStats(mod)
             : Services.Multiplayer.StatsDemoData.CivStats(mod, mode);
-        _matchups = Services.Multiplayer.StatsDemoData.Matchups(mod, mode);
+        _matchups = _demoStatsBig
+            ? Services.Multiplayer.StatsDemoData.BigMatchups(mod)
+            : Services.Multiplayer.StatsDemoData.Matchups(mod, mode);
         _deckStats = Services.Multiplayer.StatsDemoData.Decks(mod);
 
         // 98d, today's state: nobody's civilization is known yet, so there is nothing to pair
@@ -6108,6 +6114,8 @@ public partial class MultiplayerTab : UserControl
     private string TournamentPageKey()
         => string.Join("\u0001", Strings.Language, _session?.CurrentUser?.Id, _demoTournaments, _tournamentsUnavailable,
             _teamInviteCount, _tournamentPreview?.ViewerChoice,
+            // Loading and "the request failed" draw different things with no list either way.
+            _tournamentsFetchedUtc == DateTime.MinValue,
             System.Text.Json.JsonSerializer.Serialize(_tournaments),
             System.Text.Json.JsonSerializer.Serialize(_tournamentDetail));
 
@@ -7227,6 +7235,7 @@ public partial class MultiplayerTab : UserControl
         _deckStats = null;
         _statsLoadFailed = false;
         _statsCivsExpanded = false;
+        ResetPairTables();
         // The SCOPED one. _communityStats is unscoped now, so a mod change tells it nothing -
         // dropping it here is what used to blank the Rooms strip on the way past.
         _statsCommunity = null;
@@ -7298,7 +7307,45 @@ public partial class MultiplayerTab : UserControl
     /// what is read once rather than scanned: how the figures are measured, how many matches
     /// actually counted, and when people play.</para>
     /// </summary>
+    /// <summary>What the Statistics page last drew, so going back to the subtab draws nothing
+    /// when nothing it shows moved. Same rule as <see cref="RenderRankingIfChanged"/>.</summary>
+    private object? _statsPaintKey;
+
+    private object CurrentStatsPaintKey() => (
+        (_statsCommunity, _civStats, _matchups, _deckStats, DeckCardNames.Peek(StatsModId()), StatsModId(), StatsMode()),
+        (Strings.Language, _statsLayout, _statsCivsExpanded, _statsMapsExpanded, _deckCivSelected, _deckCivsExpanded,
+            string.Join(",", _deckTailsOpen.OrderBy(t => t, StringComparer.Ordinal))),
+        (_statsLoadFailed, _demoStats, _demoStatsLoading, _demoStatsEmpty, _demoStatsBig,
+            _config?.UseModColor, TextScale.CurrentFactor),
+        (RankBadge.AnimationsEnabled, ModRegistry.Generation, DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute,
+            _statsMods, _getActiveProfile?.Invoke()?.Id));
+
+    /// <summary>
+    /// Going BACK to the subtab: draws only when something the page shows moved. A switch to
+    /// Statistics rebuilt every card each time, which a real community's tables made the slowest
+    /// tab switch in the launcher (974 ms in a player's log). Every caller that changed something
+    /// (a payload, a picker, the language, a fold) calls <see cref="RenderStatsTab"/> directly.
+    /// </summary>
+    internal bool RenderStatsTabIfChanged()
+    {
+        if (_statsPaintKey is { } drawn && Equals(drawn, CurrentStatsPaintKey()))
+        {
+            Services.PerfCounters.Increment("Stats.Unchanged");
+            return false;
+        }
+        RenderStatsTab();
+        return true;
+    }
+
     private void RenderStatsTab()
+    {
+        _statsPaintKey = null;
+        RenderStatsTabCore();
+        // After the draw: it can move the layout and the accent.
+        _statsPaintKey = CurrentStatsPaintKey();
+    }
+
+    private void RenderStatsTabCore()
     {
         // WHERE THE READER WAS. Every child of this page is rebuilt below, and a rebuilt panel
         // loses the scroll position: whichever payload lands last - the civilizations, the mod
