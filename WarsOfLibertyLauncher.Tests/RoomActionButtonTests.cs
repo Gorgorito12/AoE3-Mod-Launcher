@@ -106,7 +106,7 @@ public class RoomActionButtonTests
         Assert.Null(error);
     }
 
-    /// <summary>The captions fit the 136-px action cell in both languages ("Revisar mi copia" binds).</summary>
+    /// <summary>The captions fit the 160-px action cell in both languages ("Revisar mi copia" binds).</summary>
     [Fact]
     public void THE_ONE_THAT_MATTERS_EveryCaptionFitsTheActionColumn()
     {
@@ -126,8 +126,8 @@ public class RoomActionButtonTests
                             Content = Strings.Get(RoomActionRule.CaptionKey(action)),
                         };
                         b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                        Assert.True(b.DesiredSize.Width <= 136,
-                            $"'{b.Content}' ({language}) needs {b.DesiredSize.Width:0.#} px; the cell is 136.");
+                        Assert.True(b.DesiredSize.Width <= 160,
+                            $"'{b.Content}' ({language}) needs {b.DesiredSize.Width:0.#} px; the cell is 160.");
                     }
                 }
             }
@@ -198,6 +198,47 @@ public class RoomActionButtonTests
                 var layer = Descendants(card).OfType<Border>().Single(b => Equals(b.Tag, "RoomTint"));
                 Assert.Same(Res(tint), layer.Background);
             }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>Four signal bars (104a): up to 60 ms all four, under 100 three, up to 150 two,
+    /// slower one, and none for a ping that was not measured.</summary>
+    [Theory]
+    [InlineData(38, 4)]
+    [InlineData(60, 4)]
+    [InlineData(61, 3)]
+    [InlineData(99, 3)]
+    [InlineData(100, 2)]
+    [InlineData(150, 2)]
+    [InlineData(151, 1)]
+    [InlineData(900, 1)]
+    public void ThePingLightsTheDesignsBars(int ms, int bars)
+    {
+        Assert.Equal(bars, MultiplayerTab.LitBars(HostPingKind.Answered, ms));
+        Assert.Equal(0, MultiplayerTab.LitBars(HostPingKind.NoAnswer, ms));
+        Assert.Equal(0, MultiplayerTab.LitBars(HostPingKind.Answered, null));
+    }
+
+    /// <summary>A dot per playing seat, the taken ones filled; a big room stops at eight dots and
+    /// a full room is drawn as an amber plate that is not a button.</summary>
+    [Fact]
+    public void SeatsAreDotsAndFullIsAPlate()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithModInstalled();
+            var dots = MultiplayerTab.BuildSeatDots(3, 6).Children.OfType<System.Windows.Shapes.Ellipse>().ToList();
+            Assert.Equal(6, dots.Count);
+            Assert.Equal(3, dots.Count(d => ReferenceEquals(d.Fill, Res("RmSeatOn"))));
+            Assert.Equal(3, dots.Count(d => ReferenceEquals(d.Stroke, Res("RmSeatOff"))));
+            Assert.Equal(MultiplayerTab.MaxSeatDots, MultiplayerTab.BuildSeatDots(8, 12).Children.Count);
+
+            var full = Room("FULL0001", max: 4, current: 4);
+            var card = Card(tab, full);
+            var plate = Descendants(card).OfType<Border>().Single(b => ReferenceEquals(b.Background, Res("RmFullBg")));
+            Assert.NotEqual(System.Windows.Input.Cursors.Hand, plate.Cursor);
+            Assert.Equal(4, Descendants(card).OfType<StackPanel>().Single(p => Equals(p.Tag, "RoomSeats")).Children.Count);
         });
         Assert.Null(error);
     }

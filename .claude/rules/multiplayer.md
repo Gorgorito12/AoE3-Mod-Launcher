@@ -694,6 +694,28 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   (`TournamentFilter:*`, `TournamentTab:*`, `TournamentRound:*`, `TournamentZoomIn/Out`), which is
   also how the testbed presses them.
 
+- **THE ROOMS LIST'S ROWS ARE DESIGN 104a (`docs/design_salas_filas`, 2026-11-11), which SUPERSEDES
+  what rule (4) of the ROOMS PAGE bullet below says about the row's LOOK** (the faint row, the blue
+  "mine" fill, the people icon, three signal bars, the blue-rimmed Join, "Full" as text). What a row
+  shows and does is unchanged. A row is `RmRowCard`, 72 high (60 in the compact layout, icon 40),
+  with a 1-px rim and a tint in the colour of its GROUP (`RoomGroupBrushes`: enter green, in a match
+  blue at 1.3x, unavailable amber), declared once in `Colors.xaml` as `RmGroup*` / `RmRowTint*`; the
+  tint, the top light, the hover wash, the new-room flash and the content are LAYERS inside the card
+  (its padding is 0), because the fill is a shared frozen gradient that nothing may animate. The
+  viewer's own room keeps its group's tint and wears a white 1.5-px ring. The headings are a bar
+  (`RoomsHeaderBand`) whose 1 of rim + 13 equals the row's, and `RoomColumnDefinition` is the ONE
+  place a column becomes a `ColumnDefinition` for both. Columns: icon 48 inside Room (1.6*), Host
+  0.8* with a minimum of 236 (the design's 190, its gap and the badge), Players 148, Ping 120, Action
+  176, each fixed width carrying its 16-px gap. Cells: host photo 30 and his badge (kept over 104a,
+  the maintainer's call of 2026-11-10); "1/2" over a dot per seat, at most `MaxSeatDots` (8), still
+  clickable for the peek; FOUR signal bars (`LitBars`: up to 60 ms four, under 100 three, up to 150
+  two, slower one). The "in a match" chip is blue and its dot breathes through `AttachChipPulse`,
+  whose clocks start on Loaded and are STOPPED through their controller on Unloaded and whenever
+  `RankBadge.MayRunOn` says no. Join is `RmJoinBg` green, "Ver sala" the one solid blue, and Full an
+  amber plate that is a `Border`, not a button. **Not built:** the coloured shadow under each row and
+  the glow under "Ver sala" - an `Effect` on a row costs its text ClearType. Pinned in
+  `RoomActionButtonTests` (`THE_ONE_THAT_MATTERS_EveryRowWearsItsGroupsColour`, the bars, the dots).
+
 - **THE ROOMS PAGE IS DESIGN 86 (`Controls/MultiplayerTab.RoomRows.cs`, `.QuickCard.cs`,
   `.RoomsDemo.cs`; the pure rules in `Services/Multiplayer/RoomActionRule`, `QuickCardView`,
   `RoomListDemoData`). This SUPERSEDES the paragraphs further down about the rooms table's sort arrows,

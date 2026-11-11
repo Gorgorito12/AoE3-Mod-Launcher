@@ -32,6 +32,8 @@ public static partial class Strings
         ["RmPingTipNotPublished"] = new() { [LangEn] = "This room's host isn't published (password or tournament). You'll see the ping once you're in the room.", [LangEs] = "El anfitrión de esta sala no se publica (contraseña o torneo). Verás el ping al entrar en la sala." },
         ["RmPingTipHostNoRadmin"] = new() { [LangEn] = "The host isn't on Radmin yet, so there's nothing to measure.", [LangEs] = "El anfitrión aún no está en Radmin, así que no hay nada que medir." },
         ["RmPingTipNoAnswer"] = new() { [LangEn] = "The host doesn't answer the ping. His firewall often blocks it, and the match can still play fine.", [LangEs] = "El anfitrión no responde al ping. Su firewall suele bloquearlo, y la partida puede ir bien igualmente." },
+        ["RmPingTipUnmeasured"] = new() { [LangEn] = "Ping not measured", [LangEs] = "Ping sin medir" },
+        ["RmPlayersTip"] = new() { [LangEn] = "{0} of {1} players", [LangEs] = "{0} de {1} jugadores" },
         ["RmUpdatedNow"] = new() { [LangEn] = "Updated a moment ago", [LangEs] = "Actualizado hace un momento" },
         ["RmLoading"] = new() { [LangEn] = "Loading…", [LangEs] = "Cargando…" },
         ["RmNotUpdated"] = new() { [LangEn] = "Not updated", [LangEs] = "Sin actualizar" },

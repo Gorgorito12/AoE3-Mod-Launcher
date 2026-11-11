@@ -653,7 +653,9 @@ rather than the reverse.
   `Services/Multiplayer/QuickCardView`; 2026-11-10, over 86's card), and the host cell wears his photo
   and rank badge again (also 2026-11-10). The rules are in `.claude/rules/multiplayer.md` (ROOMS PAGE).
   `--demo-rooms=86a..86e` (and a Settings → Developer row) paints it with sample rooms; buttons there
-  say what they would do instead of doing it.
+  say what they would do instead of doing it. **The rows' LOOK is design 104a since 2026-11-11**
+  (`docs/design_salas_filas`): raised cards tinted with their group's colour, the headings as a bar,
+  seat dots and four signal bars; see the 104a bullet in `.claude/rules/multiplayer.md`.
 
 - **Screen 93 of `docs/design_base_launcher_2` SUPERSEDES what this file and `multiplayer.md` say about
   the Clasificación page** (the pinned copy of the viewer's row, the plain hairline rows, the page title

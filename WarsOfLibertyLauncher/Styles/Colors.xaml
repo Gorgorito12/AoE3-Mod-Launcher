@@ -543,8 +543,8 @@
     <SolidColorBrush x:Key="RmRowHover" Color="#12FFFFFF"/>
     <SolidColorBrush x:Key="RmRowMineBg" Color="#1455ACEE"/>
     <SolidColorBrush x:Key="RmRowMineRim" Color="#5955ACEE"/>
-    <SolidColorBrush x:Key="RmChipBg" Color="#0FFFFFFF"/>
-    <SolidColorBrush x:Key="RmChipRim" Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="RmChipBg" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="RmChipRim" Color="#24FFFFFF"/>
     <SolidColorBrush x:Key="RmCountBg" Color="#14FFFFFF"/>
     <SolidColorBrush x:Key="RmButtonBg" Color="#12FFFFFF"/>
     <SolidColorBrush x:Key="RmButtonHover" Color="#24FFFFFF"/>

@@ -246,7 +246,7 @@
          chip whole, so a row measures exactly this at 100 % text and grows instead of clipping
          at 125 %. The compact key stays for its reader (ApplyActivityLayout) and now agrees. -->
     <sys:Double x:Key="MpRoomRowHeight">72</sys:Double>
-    <sys:Double x:Key="MpRoomRowHeightCompact">72</sys:Double>
+    <sys:Double x:Key="MpRoomRowHeightCompact">60</sys:Double>
     <!-- (The chat / players panel's width is no longer a token: design 57 makes it 280 below
          1600 px of page width, 320 above and a 44-px rail folded — RoomsActivityLayout.ChatWidth.) -->
     <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main
@@ -562,6 +562,12 @@
     <sys:Double x:Key="RmSmallSize">12</sys:Double>
     <sys:Double x:Key="RmCountSize">11.5</sys:Double>
     <sys:Double x:Key="RmChipSize">11</sys:Double>
+    <!-- Design 104a's row: name 15, host 13.5, the seat count 14 and the row button 13. Their own
+         tokens, because RmNameSize / RmHostSize / RmButtonSize also dress the quick match bar. -->
+    <sys:Double x:Key="RmRowNameSize">15</sys:Double>
+    <sys:Double x:Key="RmRowHostSize">13.5</sys:Double>
+    <sys:Double x:Key="RmRowSeatsSize">14</sys:Double>
+    <sys:Double x:Key="RmRowButtonSize">13</sys:Double>
     <!-- The quick match card (design 86). -->
     <sys:Double x:Key="RmEmptyTitleSize">22</sys:Double>
     <sys:Double x:Key="QcTitleSizeCompact">17</sys:Double>

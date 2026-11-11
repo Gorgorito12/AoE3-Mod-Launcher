@@ -81,7 +81,7 @@ public partial class MultiplayerTab
         var tb = new TextBlock
         {
             FontFamily = MonoFont,
-            FontWeight = FontWeights.Medium,
+            FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         };
         tb.SetResourceReference(TextBlock.FontSizeProperty, "RmButtonSize");
@@ -95,27 +95,29 @@ public partial class MultiplayerTab
         return cell;
     }
 
-    /// <summary>Three bars, 4 / 7 / 10 px, bottom-aligned, in front of the milliseconds.</summary>
+    /// <summary>Four bars, 5 / 8 / 11 / 14 px, bottom-aligned, in front of the milliseconds (104a).</summary>
     private static StackPanel BuildSignalBars()
     {
-        var bars = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) };
-        foreach (var height in new[] { 4.0, 7.0, 10.0 })
+        var bars = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var heights = new[] { 5.0, 8.0, 11.0, 14.0 };
+        for (var i = 0; i < heights.Length; i++)
             bars.Children.Add(new Border
             {
                 Width = 3,
-                Height = height,
+                Height = heights[i],
                 CornerRadius = new CornerRadius(1),
-                Margin = new Thickness(0, 0, 2, 0),
+                Margin = new Thickness(0, 0, i == heights.Length - 1 ? 0 : 2, 0),
                 VerticalAlignment = VerticalAlignment.Bottom,
             });
-        bars.Height = 10;
+        bars.Height = 14;
         return bars;
     }
 
-    /// <summary>How many of the three bars a ping lights: under 100 ms all three, up to 150 two,
-    /// slower one; unmeasured none (the bars stay grey beside the dash).</summary>
+    /// <summary>How many of the four bars a ping lights: up to 60 ms all four, under 100 three, up
+    /// to 150 two, slower one; unmeasured none (the bars stay off beside the dash). The cuts at
+    /// 100 and 150 are the colour's own (<see cref="RoomActionRule.PingBrushKey"/>).</summary>
     internal static int LitBars(HostPingKind kind, int? ms)
-        => kind != HostPingKind.Answered || ms is not int v || v < 0 ? 0 : v < 100 ? 3 : v <= 150 ? 2 : 1;
+        => kind != HostPingKind.Answered || ms is not int v || v < 0 ? 0 : v <= 60 ? 4 : v < 100 ? 3 : v <= 150 ? 2 : 1;
 
     internal static void FillHostPingCell(TextBlock tb, HostPingFacts facts)
     {
@@ -123,7 +125,7 @@ public partial class MultiplayerTab
         var colourKey = kind == HostPingKind.Answered ? RoomActionRule.PingBrushKey(facts.LastMs) : "RmPingUnknown";
         tb.Text = HostPing.Text(kind, facts.LastMs);
         tb.Foreground = Rm(colourKey);
-        var tip = HostPing.TipKey(kind) is { } key ? TooltipHelper.Wrap(Strings.Get(key)) : null;
+        var tip = TooltipHelper.Wrap(Strings.Get(HostPing.TipKey(kind) ?? "RmPingTipUnmeasured"));
         tb.ToolTip = tip;
         if (tb.Tag is StackPanel bars)
         {
@@ -131,8 +133,7 @@ public partial class MultiplayerTab
             for (var i = 0; i < bars.Children.Count; i++)
                 if (bars.Children[i] is Border bar)
                 {
-                    bar.Background = Rm(i < lit ? colourKey : "RmPingUnknown");
-                    bar.Opacity = i < lit ? 1 : .45;
+                    bar.Background = Rm(i < lit ? colourKey : "RmPingBarOff");
                 }
             if (bars.Parent is FrameworkElement cell) cell.ToolTip = tip;
         }
