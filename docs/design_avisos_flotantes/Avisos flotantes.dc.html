@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avisos flotantes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}button:focus-visible{outline:2px solid #8cbcf5;outline-offset:2px}@keyframes avCount{from{transform:scaleX(1)}to{transform:scaleX(0)}}@media (prefers-reduced-motion:reduce){*{animation:none!important}}</style></helmet>
+<section id="t105" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t105" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">105</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Avisos flotantes · un solo dibujo para todos</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 24px;display:flex;flex-direction:column;gap:5px">
+    <span>El aviso de «Rival encontrado» sale feo por tres cosas. <b>El icono es una letra</b>: el diseño 96e puso el carácter ⚔ y Windows lo pinta con su fuente de símbolos, en negro y sin el recuadro, así que casi no se ve sobre el fondo oscuro. <b>La tarjeta no tiene tono</b>: es casi del mismo negro que lo que tiene detrás y nada dice si es una buena noticia o un problema. Y <b>el botón salió verde</b>, que es el color de «Unirse», cuando aquí ya estás dentro y lo que haces es ver tu sala.</span>
+    <span>Al revisar los demás avisos encontré el mismo origen en todos: cada tanda se dibujó con su propia forma (63c mide 360 con radio 8 y botón a la izquierda; 70b y 83l, 420 con texto de 12; 96e, 85j y 87m, 420 con texto de 13 y botón azul) y casi todos usan letras como icono (⚔ ⏹ ! i ✓ ✕ ▶), que van a salir igual de mal. Aquí hay <b>un solo dibujo</b> para los quince, con iconos vectoriales, un tono por estado y la misma regla de botones.</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:44px;align-items:flex-start">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="2">
+      <div id="{{ f.id }}" data-screen-label="{{ f.id }}" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:9px;max-width:1180px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="{{ f.href }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:stretch">
+          <sc-for list="{{ f.stages }}" as="s" hint-placeholder-count="1">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font:600 11px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.04em;color:rgba(0,0,0,.6)">{{ s.cap }}</span>
+              <div style="flex:1;box-sizing:border-box;padding:{{ s.pad }};border-radius:12px;color-scheme:dark;background:{{ s.bg }};display:grid;grid-template-columns:{{ s.cols }};gap:26px 22px;align-items:start;align-content:center;font-family:'Segoe UI',system-ui,sans-serif">
+                <sc-if value="{{ s.isImg }}" hint-placeholder-val="{{ false }}"><img src="uploads/aviso-rival-hoy.png" alt="Captura del aviso «Opponent found!» como sale hoy en el launcher" style="display:block;width:420px;height:auto;border-radius:6px"></sc-if>
+                <sc-for list="{{ s.toasts }}" as="t" hint-placeholder-count="1">
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-if value="{{ t.hasNote }}" hint-placeholder-val="{{ false }}"><span style="font:400 10.5px/1.3 Consolas,ui-monospace,monospace;color:#8C9CB1">{{ t.note }}</span></sc-if>
+                    <div style="position:relative;width:420px;box-sizing:border-box;border-radius:14px;overflow:hidden;background:{{ t.bg }};backdrop-filter:blur({{ t.blur }});box-shadow:{{ t.sh }};display:flex;flex-direction:column">
+                      <sc-if value="{{ t.desk }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;padding:11px 16px 0"><span aria-hidden="true" style="width:14px;height:14px;background:url(design_handoff_workshop/AppIcon.png) center/contain no-repeat"></span><span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">AoE3 Mod Launcher</span></div></sc-if>
+                      <div style="display:grid;grid-template-columns:44px minmax(0,1fr) 24px;gap:0 14px;align-items:start;padding:{{ t.padTop }} 14px 0 16px">
+                        <span style="position:relative;width:44px;height:44px;box-sizing:border-box;border-radius:11px;display:flex;align-items:center;justify-content:center;background:{{ t.tileBg }};box-shadow:{{ t.tileSh }};font:700 14px/1 'Segoe UI',system-ui,sans-serif;color:#ffffff">
+                          <sc-if value="{{ t.hasPic }}" hint-placeholder-val="{{ true }}"><svg width="24" height="24" viewBox="0 0 20 20" fill="none" stroke="{{ t.picC }}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ t.pic }}"></path></svg></sc-if>{{ t.crest }}<sc-if value="{{ t.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:-5px;bottom:-5px;width:20px;height:20px;border-radius:10px;background:{{ t.tone }};box-shadow:0 0 0 2px #101d31;display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#0f1c2e" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ t.badge }}"></path></svg></span></sc-if>
+                        </span>
+                        <div style="min-width:0;display:flex;flex-direction:column;gap:3px;padding-top:1px">
+                          <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 14.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#f4f8fc">{{ t.title }}</span>
+                          <sc-if value="{{ t.hasSub }}" hint-placeholder-val="{{ false }}"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 12px/1.4 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">{{ t.sub }}</span></sc-if>
+                          <span style="font:400 13px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ t.body }}</span>
+                        </div>
+                        <button type="button" aria-label="Cerrar" title="Cerrar" style-hover="background:rgba(255,255,255,.1)" style="appearance:none;border:0;margin:0;padding:0;cursor:pointer;width:24px;height:24px;border-radius:6px;background:transparent;display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#a8bcd2" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8"></path></svg></button>
+                      </div>
+                      <sc-if value="{{ t.hasActs }}" hint-placeholder-val="{{ true }}"><div style="display:flex;justify-content:flex-end;gap:8px;padding:13px 16px 0"><sc-for list="{{ t.acts }}" as="a" hint-placeholder-count="1"><button type="button" style-hover="filter:brightness(1.12)" style="appearance:none;border:0;margin:0;cursor:pointer;flex:none;white-space:nowrap;min-width:96px;box-sizing:border-box;height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ a.bg }};box-shadow:{{ a.sh }};font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ a.c }}">{{ a.t }}</button></sc-for></div></sc-if>
+                      <div style="height:16px"></div>
+                      <sc-if value="{{ t.hasBar }}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.07)"><span style="display:block;width:100%;height:100%;transform-origin:left center;background:{{ t.tone }};animation:avCount {{ t.secs }} linear infinite"></span></span></sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:34px;max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;display:flex;flex-direction:column;gap:6px">
+    <span><b>Para Claude Code.</b> Es un cambio de <code style="font:11px ui-monospace,monospace">Controls/AppToast.cs</code> y <code style="font:11px ui-monospace,monospace">Controls/DesktopToastWindow.cs</code>; quién lanza cada aviso, sus textos, sus tiempos y cuándo va al escritorio no cambian. <b>Tarjeta:</b> 420 de ancho, radio 14, relleno 16 (14 a la derecha, por la ✕). Fondo en tres capas: el cristal de los flotantes según la transparencia (Sólida <code style="font:11px ui-monospace,monospace">rgba(12,22,38,.95)</code> + 18 · Media <code style="font:11px ui-monospace,monospace">.74</code> + 28 · Máxima <code style="font:11px ui-monospace,monospace">.6</code> + 32; en el escritorio, #12213a sólido), un degradado vertical de blanco 5 % → 0 % en el 60 % superior, y un resplandor del tono desde la esquina superior izquierda (elipse de 320 × 170, 22 % → 0 % al 72 %). Borde de 1 px de blanco al 13 %, filo de luz de 1 px de blanco al 8 % arriba y sombra 0 14 36 negra al 50 %. <b>Aviso importante</b> (los que hoy ya van al escritorio porque te esperan: rival encontrado y rival de torneo): el borde pasa al color del tono al 55 % y se añade un halo del tono (difuminado 34, recogido 6, al 50 %).</span>
+    <span><b>Icono:</b> recuadro de 44 con radio 11, siempre dibujado, nunca una letra. Tres clases: <b>pictograma</b> (trazo de 1,7 con extremos redondos en el color de texto del tono, sobre el tono al 16 % con borde al 45 %) para sucesos y estados; <b>icono del mod</b> con una insignia de 20 del tono abajo a la derecha, cuando el aviso es de una sala o de un mod concretos; y <b>escudo del equipo</b> en las invitaciones. Los trazos van como <code style="font:11px ui-monospace,monospace">Geometry</code> en recursos; los datos de cada uno están en el <code style="font:11px ui-monospace,monospace">PIC</code> del script de esta página, en una caja de 20 × 20. La ✕ también es un trazo (12 × 12 en un botón de 24 con radio 6). <b>Tonos</b> (los fijos de la base): verde #4fd68a / texto #7fe0a8 · azul #55ACEE / #A9D6F7 · ámbar #F4900C / #F5BD76 · neutro #8C9CB1 / #c3d2e5.</span>
+    <span><b>Texto:</b> título 14,5/600 #f4f8fc en una línea con puntos suspensivos (interlineado 1,4); línea de contexto opcional 12 #a8bcd2 en una línea (solo las grabaciones la usan); cuerpo 13/1,45 #c3d2e5, dos líneas como mucho. <b>Botones:</b> abajo a la derecha, 32 de alto, mínimo 96, radio 7, 12,5/600, separados 8, el principal en el extremo. Uno solo de color: azul #2f7fe0 cuando el aviso te pide actuar (Ver sala, Aceptar, Abrir el asistente, Mostrar en la carpeta), verde <code style="font:11px ui-monospace,monospace">MpRoomJoin</code> solo para «Unirse». Todo lo demás (Ignorar, Ahora no, Rechazar, Ver, Jugar, Reintentar, Ver equipo), sólido #1a2c48 con borde <code style="font:11px ui-monospace,monospace">rgba(130,175,255,.22)</code>. <b>Barra de tiempo (nuevo):</b> 3 px pegada al borde inferior, del color del tono, que se vacía de derecha a izquierda en lo que dura el aviso y se detiene con el ratón encima; los avisos que no se cierran solos no la llevan. Con efectos reducidos no se anima. Si no se quiere, se quita sin tocar nada más. <b>Escritorio:</b> la misma tarjeta sin difuminado, con una línea arriba que dice de quién es (icono de 14 y «AoE3 Mod Launcher» en 11,5 #a8bcd2).</span>
+    <span><b>Sustituye</b> a los dibujos de avisos de 63c, 70b, 83l, 85j, 87m y 96e. Los menús, popovers y diálogos pequeños (103) no son avisos flotantes y no cambian aquí.</span>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"transparencia":{"editor":"enum","options":["Sólida","Media","Máxima"],"default":"Media","tsType":"string"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const al = (h, a) => 'rgba(' + hex(h).join(',') + ',' + a + ')';
+    const lvl = p.transparencia ?? 'Media';
+    const GLASS = ({ 'Sólida': ['rgba(12,22,38,.95)', '18px'], 'Máxima': ['rgba(12,22,38,.6)', '32px'] })[lvl] || ['rgba(12,22,38,.74)', '28px'];
+
+    const TONE = {
+      ok: { c: '#4fd68a', t: '#7fe0a8' },
+      info: { c: '#55ACEE', t: '#A9D6F7' },
+      warn: { c: '#F4900C', t: '#F5BD76' },
+      neutral: { c: '#8C9CB1', t: '#c3d2e5' }
+    };
+    // Pictogramas: un solo trazo en una caja de 20 x 20, sin relleno.
+    const PIC = {
+      swords: 'M3.5 3.5l9.5 9.5M10.5 15.5l5-5M13 13l3.5 3.5M16.5 3.5L7 13M4.5 10.5l5 5M7 13l-3.5 3.5',
+      check: 'M4.5 10.5l3.8 3.8 7.2-8.3',
+      plus: 'M10 4.5v11M4.5 10h11',
+      stop: 'M6.5 6.5h7v7h-7z',
+      clock: 'M10 3.5a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13M10 6.8V10l2.3 1.6',
+      warn: 'M10 4.5v6.5M10 14.6v.4',
+      info: 'M10 9v6.2M10 5.2v.4',
+      offline: 'M3.2 8.3a10 10 0 0 1 13.6 0M6 11.2a6 6 0 0 1 8 0M10 14.4v.3M4.2 3.6l11.6 13',
+      up: 'M10 16V4.5M5.5 9L10 4.5 14.5 9',
+      download: 'M10 3.5v8.5M6.3 8.6L10 12.3l3.7-3.7M4.5 16h11'
+    };
+    const MODICON = { wol: 'mods/wol/icon.png', hd: 'mods/hundred-days/icon.png' };
+    const B = {
+      pri: { bg: '#2f7fe0', sh: '0 4px 14px rgba(47,127,224,.4)', c: '#ffffff' },
+      join: { bg: '#1D4A37', sh: 'inset 0 0 0 1px rgba(79,214,138,.55)', c: '#ffffff' },
+      sec: { bg: '#1a2c48', sh: 'inset 0 0 0 1px rgba(130,175,255,.22)', c: '#dce7f5' }
+    };
+    const act = (t, k) => ({ t, ...B[k || 'sec'] });
+
+    const toast = o => {
+      const T = TONE[o.tone || 'neutral'], desk = !!o.desk, hot = !!o.hot;
+      const glass = desk ? '#12213a' : GLASS[0];
+      const neutral = (o.tone || 'neutral') === 'neutral';
+      return {
+        note: o.note || '', hasNote: !!o.note, desk, padTop: desk ? '10px' : '16px', tone: T.c,
+        bg: 'radial-gradient(320px 170px at 0% 0%,' + al(T.c, .22) + ',' + al(T.c, 0) + ' 72%), linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 60%), ' + glass,
+        blur: desk ? '0px' : GLASS[1],
+        sh: hot
+          ? 'inset 0 0 0 1px ' + al(T.c, .55) + ', inset 0 1px 0 rgba(255,255,255,.1), 0 14px 36px rgba(0,0,0,.5), 0 0 34px -6px ' + al(T.c, .5)
+          : 'inset 0 0 0 1px rgba(255,255,255,.13), inset 0 1px 0 rgba(255,255,255,.08), 0 14px 36px rgba(0,0,0,.5)',
+        hasPic: !!o.pic, pic: o.pic ? PIC[o.pic] : '', picC: T.t,
+        crest: o.crest || '',
+        tileBg: o.mod ? 'url(' + MODICON[o.mod] + ') center/cover no-repeat, #1a2c48' : o.crest ? '#4f6a8a' : neutral ? 'rgba(255,255,255,.07)' : al(T.c, .16),
+        tileSh: o.mod ? 'inset 0 0 0 1px rgba(255,255,255,.16)' : o.crest ? 'none' : 'inset 0 0 0 1px ' + (neutral ? 'rgba(255,255,255,.16)' : al(T.c, .45)),
+        hasBadge: !!o.badge, badge: o.badge ? PIC[o.badge] : '',
+        title: o.title, sub: o.sub || '', hasSub: !!o.sub, body: o.body,
+        acts: o.acts || [], hasActs: !!(o.acts && o.acts.length),
+        hasBar: !!o.secs, secs: (o.secs || 8) + 's'
+      };
+    };
+
+    const found = { tone: 'ok', pic: 'swords', hot: true, secs: 20 };
+    const ALL = [
+      toast({ ...found, note: '96e · QmFound · 20 s · escritorio', title: '¡Rival encontrado!', body: 'jossavi entró en tu partida rápida. Márcate como listo para empezar.', acts: [act('Ver sala', 'pri')] }),
+      toast({ ...found, note: '85j · rival de torneo · 20 s · escritorio', title: 'Cuzco entró en la sala del cruce', body: 'Copa de Octubre · Octavos de final. Márcate como listo para empezar.', acts: [act('Ver sala', 'pri')] }),
+      toast({ note: '70b · RoomCreated · 8 s', tone: 'ok', mod: 'wol', badge: 'plus', secs: 8, title: 'Kaiser abrió una sala', body: 'Wars of Liberty · Competitiva 1v1 · 1/2 jugadores', acts: [act('Ignorar'), act('Unirse', 'join')] }),
+      toast({ note: '87m · invitación de revancha', tone: 'info', mod: 'wol', badge: 'swords', secs: 20, title: 'Gorgo te pide la revancha', body: 'Te invitó a su sala nueva: WoL 1v1 · mapas ESOC, competitiva 1v1.', acts: [act('Ahora no'), act('Unirse', 'join')] }),
+      toast({ note: '83l · TeamInviteNotice', tone: 'info', crest: 'TF', secs: 20, title: 'Invitación a un equipo', body: 'Te invitaron a unirte a Tercios de Flandes.', acts: [act('Rechazar'), act('Ver'), act('Aceptar', 'pri')] }),
+      toast({ note: '83l · invitación aceptada', tone: 'ok', pic: 'check', secs: 8, title: 'Te uniste a Tercios de Flandes', body: 'Ya está en Mis equipos. Puedes salir cuando quieras.', acts: [act('Ver equipo')] }),
+      toast({ note: '96e · QmTimedOut · 15 s · escritorio', pic: 'clock', secs: 15, title: 'Buscar partida 1v1', body: 'Nadie entró en 30 minutos, así que la búsqueda se detuvo y tu sala se cerró.' }),
+      toast({ note: '96e · QmStoppedByGame · 6 s', pic: 'stop', secs: 6, title: 'Buscar partida 1v1', body: 'Búsqueda detenida: abriste un juego.' }),
+      toast({ note: '96e · QmOtherVersion · 12 s', tone: 'info', pic: 'info', secs: 12, title: 'Buscar partida 1v1', body: 'Salas esperando con otra versión de este mod: 2. Actualiza o repara el tuyo para jugar en ellas.' }),
+      toast({ note: '96e · QmRadmin · 15 s', tone: 'warn', pic: 'warn', secs: 15, title: 'Radmin VPN no está listo', body: 'Radmin VPN no está encendido. La búsqueda sigue, pero lo necesitarás para jugar la partida.', acts: [act('Abrir el asistente', 'pri')] }),
+      toast({ note: '70b · sin conexión · no se cierra solo', tone: 'warn', pic: 'offline', title: 'Sin conexión con el servidor', body: 'Las salas y el chat vuelven solos cuando se recupere. Tus mods se pueden jugar igual.', acts: [act('Reintentar')] }),
+      toast({ note: '70b · mod actualizado · 8 s', tone: 'ok', mod: 'hd', badge: 'check', secs: 8, title: 'Hundred Days se actualizó', body: 'Ya tienes la vbeta-0.10.', acts: [act('Jugar')] }),
+      toast({ note: '70c · RatingRefund · 8 s', tone: 'ok', pic: 'up', secs: 8, title: 'Recuperaste 34 puntos', body: 'Un rival contra el que perdiste fue sancionado por hacer trampas.' }),
+      toast({ note: '63c · grabación guardada · 8 s', tone: 'ok', pic: 'download', secs: 8, title: 'Grabación guardada', sub: 'Aluclown vs Geaf_Argento · ESOC Indonesia', body: 'Ábrela en AoE3 › Cargar partida grabada, con Wars of Liberty 1.2.3.', acts: [act('Mostrar en la carpeta', 'pri')] }),
+      toast({ note: '63c · error de descarga · no se cierra solo', tone: 'warn', pic: 'warn', title: 'No se pudo descargar la grabación', sub: 'Aluclown vs Geaf_Argento · ESOC Indonesia', body: 'Sin conexión con el servidor. Inténtalo de nuevo en un momento.', acts: [act('Reintentar')] })
+    ];
+
+    const APP = 'radial-gradient(900px 520px at 85% -15%, rgba(47,127,224,.13), transparent 70%), radial-gradient(700px 460px at -5% 115%, rgba(85,172,238,.07), transparent 70%), #0f1c2e';
+    const frames = [
+      { id: '105a', href: '#105a',
+        label: 'El aviso de tu captura. A la izquierda, cómo sale hoy. En el centro, dentro del launcher: icono dibujado sobre su recuadro verde, resplandor verde desde la esquina, borde y halo del mismo color porque es el aviso que estabas esperando, «Ver sala» en azul y la barra de abajo que se vacía en los 20 s que dura. A la derecha, el mismo cuando sale en el escritorio de Windows, en inglés como en tu captura: sólido, sin difuminado, y con una línea que dice de qué programa es.',
+        stages: [
+          { cap: 'HOY', isImg: true, pad: '40px 28px', cols: '420px', bg: '#0a1220', toasts: [] },
+          { cap: 'NUEVO · DENTRO DEL LAUNCHER', isImg: false, pad: '40px 28px', cols: '420px', bg: 'linear-gradient(0deg,rgba(15,28,46,.78),rgba(15,28,46,.4)), url(mods/wol/hero.jpg) center 30%/cover no-repeat',
+            toasts: [toast({ ...found, title: '¡Rival encontrado!', body: 'jossavi entró en tu partida rápida. Márcate como listo para empezar.', acts: [act('Ver sala', 'pri')] })] },
+          { cap: 'NUEVO · EN EL ESCRITORIO', isImg: false, pad: '40px 28px', cols: '420px', bg: 'linear-gradient(135deg,#2b3644 0%,#161b24 100%)',
+            toasts: [toast({ ...found, desk: true, title: 'Opponent found!', body: 'jossavi joined your quick match. Mark yourself ready to start.', acts: [act('See room', 'pri')] })] }
+        ] },
+      { id: '105b', href: '#105b',
+        label: 'Todos los avisos flotantes que hay dibujados en el proyecto, con el mismo dibujo. Encima de cada uno, de qué turno viene y cuánto dura. Solo los dos primeros llevan borde y halo de color; los demás, borde neutro y el tono en el icono y el resplandor. Los que no se cierran solos (sin conexión, error de descarga) no llevan barra de tiempo.',
+        stages: [{ cap: 'LOS QUINCE AVISOS', isImg: false, pad: '30px 28px 34px', cols: 'repeat(3, 420px)', bg: APP, toasts: ALL }] }
+    ];
+    return { frames };
+  }
+}
+</script>
+</body>
+</html>

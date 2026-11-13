@@ -287,23 +287,23 @@ public class MyTeamsWindowTests
     [Fact]
     public void TheTeamToastsBuildAndSayWhatTheInviteNeeds() => Run(() =>
     {
-        static AppToast.ToastAction Act(string key, bool primary) => new(Strings.Get(key), primary, () => { });
+        static AppToast.ToastAction Act(string key, bool primary) => new(Strings.Get(key), primary ? AppToast.ToastButton.Action : AppToast.ToastButton.Solid, () => { });
         var invite = MultiplayerTab.TeamInviteToast("Tercios de Flandes", new[] { Act("MtToastDecline", false), Act("MtToastView", false), Act("MtToastAccept", true) });
         Assert.Equal(WarsOfLibertyLauncher.Services.ToastCause.News, invite.Cause);
         Assert.True(invite.PreferDesktop);
-        Assert.Equal("TF", invite.Crest!.Text);
+        Assert.Equal("TF", invite.Crest!.Initials);
 
         var panel = new StackPanel { Width = 420 };
-        panel.Children.Add(AppToast.BuildCrested(invite, invite.Crest!, () => { }));
+        panel.Children.Add(AppToast.Build(invite, () => { }));
         var joined = MultiplayerTab.TeamJoinedToast("Tercios de Flandes", new[] { Act("MtToastViewTeam", false) });
-        panel.Children.Add(AppToast.BuildCrested(joined, joined.Crest!, () => { }));
+        panel.Children.Add(AppToast.Build(joined, () => { }));
         var declined = MultiplayerTab.TeamDeclinedToast("Tercios de Flandes");
-        panel.Children.Add(AppToast.BuildCrested(declined, declined.Crest!, () => { }));
+        panel.Children.Add(AppToast.Build(declined, () => { }));
         panel.Measure(new Size(420, double.PositiveInfinity));
         panel.Arrange(new Rect(panel.DesiredSize));
         panel.UpdateLayout();
         Assert.Equal(3, panel.Children.Count);
-        Assert.Equal(3, Buttons(panel).Count(b => b.Content is string && b.MinWidth == 96 && panel.Children[0].IsAncestorOf(b)));
+        Assert.Equal(3, Buttons(panel).Count(b => b.Content is string && b.MinWidth == 84 && panel.Children[0].IsAncestorOf(b)));
     });
 
     private static List<Button> Buttons(DependencyObject root)

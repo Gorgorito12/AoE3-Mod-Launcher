@@ -369,8 +369,15 @@
     <!-- The rest of a history card (design 55k): the result (13.5/600), the second line —
          "{mod} · {map} · {hour}" (11) — and "1607 → 1612" under the delta (10.5, monospace). -->
     <sys:Double x:Key="MpHistoryTitleSize">13.5</sys:Double>
-    <!-- Handoff 63: the replay toast's title (13.5) and the Matches view's empty-state title (15). -->
-    <sys:Double x:Key="MpToastTitleSize">13.5</sys:Double>
+    <!-- The floating notices (design 105, COMPACT by the maintainer's call of 2026-11-12, one
+         step under the design's 14.5 / 12 / 13 / 12.5 / 11.5): title 13.5/600, context line 11.5,
+         body 12.5/1.45, buttons 12/600, and the desktop card's "AoE3 Mod Launcher" line 11. -->
+    <sys:Double x:Key="ToastTitleSize">13.5</sys:Double>
+    <sys:Double x:Key="ToastContextSize">11.5</sys:Double>
+    <sys:Double x:Key="ToastBodySize">12.5</sys:Double>
+    <sys:Double x:Key="ToastButtonSize">12</sys:Double>
+    <sys:Double x:Key="ToastOwnerSize">11</sys:Double>
+    <!-- The Matches view's empty-state title (15). -->
     <sys:Double x:Key="MpMatchesEmptyTitleSize">15</sys:Double>
     <sys:Double x:Key="MpHistoryMetaSize">11</sys:Double>
     <sys:Double x:Key="MpHistoryTrailSize">10.5</sys:Double>

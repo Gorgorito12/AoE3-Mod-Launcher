@@ -77,7 +77,7 @@ public class ToastRoutingTests
     [Fact]
     public void ACardThatSaysNothingIsNews()
     {
-        var card = new AppToast.ToastOptions("i", "t", null, Array.Empty<AppToast.ToastAction>());
+        var card = new AppToast.ToastOptions(AppToast.ToastTone.Info, AppToast.ToastIcon.Info, "t", null, Array.Empty<AppToast.ToastAction>());
         Assert.Equal(ToastCause.News, card.Cause);
     }
 

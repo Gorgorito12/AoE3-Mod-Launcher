@@ -130,7 +130,7 @@ public partial class MultiplayerTab
     {
         DiagnosticLog.Write($"Rooms DEMO: '{what}' pressed — nothing is sent.");
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "", Strings.Get("RmDemoNotice"), what, Array.Empty<AppToast.ToastAction>(),
+            AppToast.ToastTone.Info, AppToast.ToastIcon.Info, Strings.Get("RmDemoNotice"), what, Array.Empty<AppToast.ToastAction>(),
             AutoDismissMs: 3500, Cause: ToastCause.Answer));
     }
 }

@@ -151,13 +151,13 @@ public partial class MultiplayerTab
         w.RoomCopyWord.Text = Strings.Get(_roomCodeJustCopied ? "RoomCopiedShort" : "RoomCopy");
         w.CopyRoomIdButton.Visibility = InTournamentRoom ? Visibility.Collapsed : Visibility.Visible;
 
-        w.RenameRoomButton.Visibility = RoomViewerIsHost() && result == null && !InTournamentRoom && !QuickSearchAlone
+        w.RenameRoomButton.Visibility = RoomViewerIsHost() && result == null && !InTournamentRoom && !QuickSearchAlone && !_currentLobbyMatchmaking
             ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshRoomTournamentHeader(result);
 
         w.InvitePlayersButton.Content = Strings.Get("MpRoomInvite");
-        w.InvitePlayersButton.Visibility = result == null && !InTournamentRoom && !QuickSearchAlone
+        w.InvitePlayersButton.Visibility = result == null && !InTournamentRoom && !QuickSearchAlone && !_currentLobbyMatchmaking
             ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshRoomEloCards(result);
@@ -515,12 +515,12 @@ public partial class MultiplayerTab
         if (w.IsActive) return;
         var round = Strings.Format(bracket.RoundKeys[Math.Clamp(bracket.CurrentRound - 1, 0, bracket.RoundKeys.Count - 1)], bracket.CurrentRound);
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "\u2694",
+            AppToast.ToastTone.Ok, AppToast.ToastIcon.Swords,
             Strings.Format("RtToastJoined", login),
             Strings.Format("RtToastBody", bracket.Name, RoundWord(round)),
             new[]
             {
-                new AppToast.ToastAction(Strings.Get("QmFoundView"), true, () =>
+                new AppToast.ToastAction(Strings.Get("QmFoundView"), AppToast.ToastButton.Action, () =>
                 {
                     _bringMultiplayerToFront?.Invoke();
                     if (_lobbyWindow == null) return;
@@ -529,7 +529,8 @@ public partial class MultiplayerTab
                 }),
             },
             PreferDesktop: true,
-            Cause: ToastCause.Request));
+            Cause: ToastCause.Request,
+            Important: true));
     }
 
     /// <summary>The way on after a result: the next game, or the bracket it fed.</summary>
@@ -880,7 +881,7 @@ public partial class MultiplayerTab
             VpnMissing = _roomRadminMissing,
             RematchWaitingFor = _rematchInvited?.Login,
             OffersRematch = result != null && OffersRematch(result) && !InTournamentRoom,
-            OffersFindAnother = result != null && OffersFindAnother(result) && !InTournamentRoom,
+            OffersFindAnother = result != null && OffersFindAnother(result, casualOneVOne: !_currentLobbyIsCompetitive && RoomPlayingSeats() == 2) && !InTournamentRoom,
             UnratedReason = result != null ? UnratedSentence(result) : null,
             OnTeams = players.Count(m => m.Team is 1 or 2),
             Watching = RoomViewerWatches(),

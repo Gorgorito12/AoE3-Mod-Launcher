@@ -62,6 +62,8 @@ public partial class MultiplayerTab
         Looking,
         /// <summary>In its own room, waiting for a rival (and looking for an older room).</summary>
         Waiting,
+        /// <summary>In the server's queue (MultiplayerTab.Matchmaking.cs): no room until matched.</summary>
+        Queued,
     }
 
     private QuickMatchStage _qmStage = QuickMatchStage.Idle;
@@ -164,12 +166,21 @@ public partial class MultiplayerTab
         _qmKind = QuickMatchKindNow(profile);
         _qmStartedUtc = DateTime.UtcNow;
         _qmRadminNotReady = false;
+        _qmUsingQueue = false;
         StartQuickMatchClock();
         RefreshQuickMatchUi();
         DiagnosticLog.Write($"QuickMatch: searching a {_qmKind} 1v1 in '{profile.Id}'.");
 
         // Informational, and never in the way: Radmin is needed to PLAY, not to find a rival.
         _ = WarnIfRadminNotReadyAsync();
+        // The server's queue when it has one; the room-based search otherwise.
+        if (await UseQueueAsync())
+        {
+            if (_qmStage != QuickMatchStage.Looking) return;
+            await JoinQueueAsync();
+            return;
+        }
+        if (_qmStage != QuickMatchStage.Looking) return;
         await JoinOrCreateAsync();
     }
 
@@ -202,6 +213,8 @@ public partial class MultiplayerTab
             {
                 RememberQuickMatchFound(room.Id, RoomHostName(room), hosting: false);
                 EndQuickMatch($"joined waiting room {room.Id}");
+                // The one who joins is told too, not only the one who waited.
+                SoundService.PlayMatchFound();
                 await SayInRoomAsync(room.Id, Strings.Get("QmJoinedRoom"));
                 return;
             }
@@ -221,7 +234,7 @@ public partial class MultiplayerTab
         if (otherVersions > 0)
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
-                "ℹ", Strings.Get("QmFindMatch"), Strings.Format("QmOtherVersion", otherVersions),
+                AppToast.ToastTone.Info, AppToast.ToastIcon.Info, Strings.Get("QmFindMatch"), Strings.Format("QmOtherVersion", otherVersions),
                 Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 12000, Cause: ToastCause.Answer));
         }
         await CreateQuickMatchRoomAsync();
@@ -403,6 +416,20 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
+    /// <c>lobbies_changed</c>: a room was opened, filled or closed somewhere. A search waiting in its
+    /// own room looks again shortly instead of at its next 20-s look — the frame carries nothing,
+    /// so it cannot be filtered by mod, but one cheap list read is the whole cost.
+    /// </summary>
+    private void OnQuickMatchListChanged()
+    {
+        if (_qmStage != QuickMatchStage.Waiting || _qmConvergeTimer == null) return;
+        if (_qmConvergeTimer.Interval <= QuickMatchLookSoon && _qmConvergeTimer.IsEnabled) return;
+        _qmConvergeTimer.Stop();
+        _qmConvergeTimer.Interval = QuickMatchLookSoon;
+        _qmConvergeTimer.Start();
+    }
+
+    /// <summary>
     /// Somebody joined the room the search waits in: that is the rival. The search ends and the
     /// player is told — on the desktop when he is elsewhere, since he may have been waiting minutes.
     /// </summary>
@@ -414,12 +441,14 @@ public partial class MultiplayerTab
 
         RememberQuickMatchFound(_qmLobbyId!, login, hosting: true);
         EndQuickMatch($"rival '{login}' joined");
+        SoundService.PlayMatchFound();
+        WindowFlash.UntilForeground(_lobbyWindow ?? Window.GetWindow(this));
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "⚔",
+            AppToast.ToastTone.Ok, AppToast.ToastIcon.Swords,
             Strings.Get("QmFoundTitle"),
             Strings.Format("QmFoundBody", login),
-            new[] { new AppToast.ToastAction(Strings.Get("QmFoundView"), true, ShowQuickMatchRoom) },
-            AutoDismissMs: 20000, PreferDesktop: true, Cause: ToastCause.Request));
+            new[] { new AppToast.ToastAction(Strings.Get("QmFoundView"), AppToast.ToastButton.Action, ShowQuickMatchRoom) },
+            AutoDismissMs: 20000, PreferDesktop: true, Cause: ToastCause.Request, Important: true));
     }
 
     /// <summary>
@@ -439,19 +468,22 @@ public partial class MultiplayerTab
         if (!string.IsNullOrEmpty(message))
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
-                "⏹", Strings.Get("QmFindMatch"), message, Array.Empty<AppToast.ToastAction>(),
+                AppToast.ToastTone.Neutral,
+                message == Strings.Get("QmTimedOut") ? AppToast.ToastIcon.Clock : AppToast.ToastIcon.Stop,
+                Strings.Get("QmFindMatch"), message, Array.Empty<AppToast.ToastAction>(),
                 AutoDismissMs: preferDesktop ? 15000 : 6000, PreferDesktop: preferDesktop, Cause: ToastCause.Answer));
         }
     }
 
     /// <summary>
-    /// Whether the result card offers "Find another": only after a RANKED 1v1, the one kind of
-    /// match the quick match looks for. The format is the one frozen at Start, so a casual
-    /// two-seat room (format <c>Casual</c>, no label) is not offered a ranked search it never was.
+    /// Whether the result card offers "Find another": after a 1v1, the one kind of match the quick
+    /// match looks for — a ranked one (its format frozen at Start), or a casual room of exactly two
+    /// playing seats now that the quick match searches casual too. A team match never.
     /// </summary>
-    internal static bool OffersFindAnother(MatchOutcomeView model)
-        => model.FormatLabelKey != null
-           && string.Equals(model.FormatLabelKey, RoomFormats.LabelKey(RoomFormat.OneVOne), StringComparison.Ordinal);
+    internal static bool OffersFindAnother(MatchOutcomeView model, bool casualOneVOne = false)
+        => casualOneVOne
+           || (model.FormatLabelKey != null
+               && string.Equals(model.FormatLabelKey, RoomFormats.LabelKey(RoomFormat.OneVOne), StringComparison.Ordinal));
 
     /// <summary>
     /// The result card's "Find another": out of the finished room first — one active room per
@@ -531,7 +563,7 @@ public partial class MultiplayerTab
     }
 
     private void ShowRematchFailed() => _showAppToast?.Invoke(new AppToast.ToastOptions(
-        "\u26A0", Strings.Get("RoomRematchFailed"), null, Array.Empty<AppToast.ToastAction>(),
+        AppToast.ToastTone.Warn, AppToast.ToastIcon.Warn, Strings.Get("RoomRematchFailed"), null, Array.Empty<AppToast.ToastAction>(),
         AutoDismissMs: 6000, Cause: ToastCause.Answer));
 
     private async Task FindAnotherAfterResultAsync()
@@ -596,6 +628,14 @@ public partial class MultiplayerTab
             await CancelQuickMatchAsync(Strings.Get("QmTimedOut"), preferDesktop: true);
             return;
         }
+        // The server ends a queued search at 30 minutes; this is only the backstop for a server
+        // that never said so (a socket that stayed down).
+        if (_qmStage == QuickMatchStage.Queued
+            && DateTime.UtcNow - _qmStartedUtc >= QuickMatchPlanner.GiveUpAfter + TimeSpan.FromMinutes(2))
+        {
+            await CancelQuickMatchAsync(Strings.Get("QmTimedOut"), preferDesktop: true);
+            return;
+        }
         RefreshQuickMatchUi();
     }
 
@@ -606,10 +646,12 @@ public partial class MultiplayerTab
         _qmFoundHosting = hosting;
     }
 
-    /// <summary>Ends the search's state and its clocks. Idempotent.</summary>
-    private void EndQuickMatch(string reason)
+    /// <summary>Ends the search's state and its clocks. Idempotent. <paramref name="tellServer"/>
+    /// false when the server is the one that ended it (a match, a refusal, its own timeout).</summary>
+    private void EndQuickMatch(string reason, bool tellServer = true)
     {
         if (_qmStage == QuickMatchStage.Idle) return;
+        EndQueueSearch(tellServer);
         DiagnosticLog.Write(
             $"QuickMatch: search over — {reason} (after {QuickMatchPlanner.Elapsed(DateTime.UtcNow - _qmStartedUtc)}).");
         _qmStage = QuickMatchStage.Idle;
@@ -663,10 +705,10 @@ public partial class MultiplayerTab
             _qmRadminNotReady = true;
             RefreshQuickRoom();
             _showAppToast?.Invoke(new AppToast.ToastOptions(
-                "⚠",
+                AppToast.ToastTone.Warn, AppToast.ToastIcon.Warn,
                 Strings.Get("QmRadminTitle"),
                 Strings.Get("QmRadminNotice"),
-                new[] { new AppToast.ToastAction(Strings.Get("QmRadminOpen"), true, OpenRadminAssistant) },
+                new[] { new AppToast.ToastAction(Strings.Get("QmRadminOpen"), AppToast.ToastButton.Action, OpenRadminAssistant) },
                 AutoDismissMs: 15000, Cause: ToastCause.Answer));
         }
         catch (Exception ex)
@@ -762,7 +804,7 @@ public partial class MultiplayerTab
     }
 
     private void ShowSearchStopped() => _showAppToast?.Invoke(new AppToast.ToastOptions(
-        "⏹", Strings.Get("QmFindMatch"), Strings.Get("QmCancelled"), Array.Empty<AppToast.ToastAction>(),
+        AppToast.ToastTone.Neutral, AppToast.ToastIcon.Stop, Strings.Get("QmFindMatch"), Strings.Get("QmCancelled"), Array.Empty<AppToast.ToastAction>(),
         AutoDismissMs: 6000, Cause: ToastCause.Answer));
 
     private System.Windows.Shapes.Ellipse QuickSeatDot()

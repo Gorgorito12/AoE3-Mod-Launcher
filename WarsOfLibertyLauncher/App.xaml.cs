@@ -322,8 +322,13 @@ public partial class App : System.Windows.Application
         // because a real room invite needs a second player on a second machine, which
         // makes "how does it look" nearly untestable — and because reaching the same
         // preview through Settings takes clicks, which a screenshot script cannot make.
-        PreviewToasts = Array.Exists(e.Args, a =>
-            string.Equals(a, "--preview-toasts", StringComparison.OrdinalIgnoreCase));
+        // "--preview-toasts=N" picks a set of design 105's notices (1-3); bare, the review set.
+        var previewToasts = Array.Find(e.Args, a =>
+            a.StartsWith("--preview-toasts", StringComparison.OrdinalIgnoreCase));
+        PreviewToasts = previewToasts != null;
+        if (previewToasts != null && previewToasts.Length > "--preview-toasts=".Length
+            && int.TryParse(previewToasts["--preview-toasts=".Length..], out var toastSet))
+            PreviewToastsSet = toastSet;
 
         // Same reasoning one line up, for a window that is three clicks deep. The brand
         // menu is a StaysOpen=false Popup, which closes the instant an automation client
@@ -773,6 +778,9 @@ public partial class App : System.Windows.Application
     /// notification cards from Loaded so their appearance can be inspected (and
     /// screenshotted) without a real invitation arriving. Inert otherwise.</summary>
     public static bool PreviewToasts { get; private set; }
+
+    /// <summary>Which set <c>--preview-toasts=N</c> asked for; 0 when bare.</summary>
+    public static int PreviewToastsSet { get; private set; }
 
     /// <summary><c>--preview-library=updating|installing|stopped</c>, in the test harness only: paints
     /// the Library's download states on the selected mod with nothing being downloaded.</summary>

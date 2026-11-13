@@ -725,7 +725,29 @@ public partial class MainWindow : Window
 
             // --preview-toasts: sample cards, once the window and its ToastHost exist.
             // Last in the handler so nothing it does can disturb a real startup path.
-            if (App.PreviewToasts) PreviewNotificationToasts();
+            // It waits for the window to come to the front (15 s at most): routing sends every card
+            // to the desktop while nobody is looking at the launcher, and a test launch often
+            // starts behind another program, so the in-window cards would never be seen.
+            if (App.PreviewToasts)
+            {
+                var shown = false;
+                void Fire()
+                {
+                    if (shown) return;
+                    shown = true;
+                    PreviewNotificationToasts(App.PreviewToastsSet);
+                }
+                if (IsActive) Fire();
+                else
+                {
+                    EventHandler? onActive = null;
+                    onActive = (_, _) => { Activated -= onActive; Fire(); };
+                    Activated += onActive;
+                    var fallback = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+                    fallback.Tick += (_, _) => { fallback.Stop(); Activated -= onActive; Fire(); };
+                    fallback.Start();
+                }
+            }
 
             // --open-settings: the settings window, for the same screenshot-script reason.
             if (App.OpenTab is { } openTab)
@@ -933,7 +955,8 @@ public partial class MainWindow : Window
                 DiagnosticLog.Write(
                     $"Started from a self-update; now on {LauncherUpdateService.CurrentInformationalTag}.");
                 ShowAppToast(new Controls.AppToast.ToastOptions(
-                    Icon: "✔",
+                    Tone: Controls.AppToast.ToastTone.Ok,
+                    Icon: Controls.AppToast.ToastIcon.Check,
                     Title: Strings.Get("StartupUpdateDoneTitle"),
                     Body: Strings.Format(
                         "StartupUpdateDoneBody", LauncherUpdateService.CurrentInformationalTag),
@@ -1205,12 +1228,12 @@ public partial class MainWindow : Window
             var modName = ModRegistry.Find(modId)?.DisplayName ?? modId;
 
             ShowAppToast(new Controls.AppToast.ToastOptions(
-                "🎮",
+                Controls.AppToast.ToastTone.Ok, Controls.AppToast.ToastIcon.Plus,
                 Strings.Get("MpToastNewRoomTitle"),
                 Strings.Format("MpToastNewRoomBody", name, host, modName),
                 new[]
                 {
-                    new Controls.AppToast.ToastAction(Strings.Get("MpToastJoin"), true, () =>
+                    new Controls.AppToast.ToastAction(Strings.Get("MpToastJoin"), Controls.AppToast.ToastButton.Join, () =>
                     {
                         // The click can come from the DESKTOP card, with the launcher
                         // minimised or hidden in the tray — switching tabs on a window
@@ -1220,8 +1243,9 @@ public partial class MainWindow : Window
                         SwitchTopTab(TopTab.Multiplayer);
                         _ = MultiplayerView?.JoinByLobbyIdAsync(lobbyId);
                     }),
-                    new Controls.AppToast.ToastAction(Strings.Get("MpToastIgnore"), false, () => { }),
-                }));
+                    new Controls.AppToast.ToastAction(Strings.Get("MpToastIgnore"), Controls.AppToast.ToastButton.Solid, () => { }),
+                },
+                ModId: modId));
 
             if (_activeTopTab != TopTab.Multiplayer) SetMultiplayerTabDot(true);
             MultiplayerView?.SetNewRoomIndicator(true);
@@ -2651,41 +2675,85 @@ public partial class MainWindow : Window
     /// <summary>How long a preview card stays up. Long on purpose — see the call sites.</summary>
     private const int PreviewDismissMs = 40_000;
 
-    public void PreviewNotificationToasts()
+    public void PreviewNotificationToasts(int set = 0)
     {
-        // The invite: always on the desktop, with its two buttons — the case that prompted
-        // this. Sent through ShowAppToast rather than DesktopToastWindow directly, so the
-        // preview exercises the routing too and cannot flatter it.
-        ShowAppToast(new Controls.AppToast.ToastOptions(
-            "📨",
-            Strings.Format("MpInviteToastTitle", Strings.Get("PreviewToastSampleUser")),
-            Strings.Get("PreviewToastSampleRoom"),
-            new[]
-            {
-                new Controls.AppToast.ToastAction(Strings.Get("MpToastJoin"), true,
-                    () => DiagnosticLog.Write("Toast preview: Join pressed (no-op).")),
-                new Controls.AppToast.ToastAction(Strings.Get("MpToastMute"), false,
-                    () => DiagnosticLog.Write("Toast preview: Mute pressed (no-op).")),
-            },
-            // Longer than the 9 s a real card gets: this one exists to be LOOKED at, and
-            // a preview that vanishes before you have finished judging it is no preview.
-            // Asked for, so "Do not disturb" does not hide it.
-            AutoDismissMs: PreviewDismissMs, PreferDesktop: true, Cause: Services.ToastCause.Answer));
+        static Controls.AppToast.ToastAction Inert(string key, Controls.AppToast.ToastButton kind) =>
+            new(Strings.Get(key), kind, () => DiagnosticLog.Write($"Toast preview: '{key}' pressed (no-op)."));
+        const Controls.AppToast.ToastButton Solid = Controls.AppToast.ToastButton.Solid;
+        const Controls.AppToast.ToastButton Act = Controls.AppToast.ToastButton.Action;
+        const Controls.AppToast.ToastButton Join = Controls.AppToast.ToastButton.Join;
+        var rival = Strings.Get("PreviewToastSampleUser");
+        var room = Strings.Get("PreviewToastSampleRoom");
+        var mod = _updateService?.Profile;
+        var modId = mod?.Id;
+        var modName = mod?.DisplayName ?? "Wars of Liberty";
 
-        // And a room-created card beside it, unchanged, so the two can be compared —
-        // this one still follows the normal "wherever you are looking" routing.
-        ShowAppToast(new Controls.AppToast.ToastOptions(
-            "⚔",
-            Strings.Get("PreviewToastRoomTitle"),
-            Strings.Get("PreviewToastSampleRoom"),
-            new[]
-            {
-                new Controls.AppToast.ToastAction(Strings.Get("MpToastJoin"), true,
-                    () => DiagnosticLog.Write("Toast preview: room Join pressed (no-op).")),
-            },
-            AutoDismissMs: PreviewDismissMs, Cause: Services.ToastCause.Answer));
+        // Every card goes through ShowAppToast rather than DesktopToastWindow directly, so the
+        // preview exercises the routing too and cannot flatter it. Long-lived on purpose: a
+        // preview exists to be LOOKED at. Asked for, so "Do not disturb" does not hide it.
+        void Card(Controls.AppToast.ToastTone tone, Controls.AppToast.ToastIcon icon, string title, string? body,
+            Controls.AppToast.ToastAction[] actions, bool desktop = false, bool important = false,
+            string? withMod = null, string? crest = null, bool closesItself = true)
+            => ShowAppToast(new Controls.AppToast.ToastOptions(
+                tone, icon, title, body, actions,
+                AutoDismissMs: closesItself ? PreviewDismissMs : 0, PreferDesktop: desktop,
+                Cause: Services.ToastCause.Answer, Important: important, ModId: withMod,
+                Crest: crest == null ? null : new Controls.AppToast.ToastCrest(crest)));
 
-        DiagnosticLog.Write("Toast preview: sample invite + room cards shown.");
+        var ok = Controls.AppToast.ToastTone.Ok;
+        var info = Controls.AppToast.ToastTone.Info;
+        var warn = Controls.AppToast.ToastTone.Warn;
+        var neutral = Controls.AppToast.ToastTone.Neutral;
+        var none = Array.Empty<Controls.AppToast.ToastAction>();
+
+        // Design 105's table, four at a time (no more fit on a surface). Set 0 is the review set:
+        // the rival found where you are looking AND on the desktop, an amber one with a button,
+        // and an invitation, the one notice with a green button beside a solid one.
+        switch (set)
+        {
+            case 1:
+                Card(ok, Controls.AppToast.ToastIcon.Swords, Strings.Get("QmFoundTitle"), Strings.Format("QmFoundBody", rival),
+                    new[] { Inert("QmFoundView", Act) }, important: true);
+                Card(ok, Controls.AppToast.ToastIcon.Swords, Strings.Format("RtToastJoined", rival),
+                    Strings.Format("RtToastBody", "Copa de otoño", Strings.Get("RtRoundTheFinal")),
+                    new[] { Inert("QmFoundView", Act) }, important: true);
+                Card(ok, Controls.AppToast.ToastIcon.Plus, Strings.Get("MpToastNewRoomTitle"),
+                    Strings.Format("MpToastNewRoomBody", room, rival, modName),
+                    new[] { Inert("MpToastJoin", Join), Inert("MpToastIgnore", Solid) }, withMod: modId);
+                Card(info, Controls.AppToast.ToastIcon.Swords, Strings.Format("RoomRematchToastTitle", rival),
+                    Strings.Format("RoomRematchToastBody", room),
+                    new[] { Inert("MpToastJoin", Join), Inert("RoomRematchNotNow", Solid) }, withMod: modId);
+                break;
+            case 2:
+                Card(info, Controls.AppToast.ToastIcon.Plus, Strings.Get("MpTeamsInviteToastTitle"),
+                    Strings.Format("MpTeamsInviteToastBody", "Tercios de Flandes"),
+                    new[] { Inert("MtToastDecline", Solid), Inert("MtToastView", Solid), Inert("MtToastAccept", Act) },
+                    crest: "TF");
+                Card(ok, Controls.AppToast.ToastIcon.Check, Strings.Format("MtToastJoinedTitle", "Tercios de Flandes"),
+                    Strings.Get("MtToastJoinedBody"), new[] { Inert("MtToastViewTeam", Solid) });
+                Card(neutral, Controls.AppToast.ToastIcon.Clock, Strings.Get("QmFindMatch"), Strings.Get("QmTimedOut"), none);
+                Card(neutral, Controls.AppToast.ToastIcon.Stop, Strings.Get("QmFindMatch"), Strings.Get("QmStoppedByGame"), none);
+                break;
+            case 3:
+                Card(info, Controls.AppToast.ToastIcon.Info, Strings.Get("QmFindMatch"), Strings.Format("QmOtherVersion", 2), none);
+                Card(warn, Controls.AppToast.ToastIcon.Warn, Strings.Get("QmRadminTitle"), Strings.Get("QmRadminNotice"),
+                    new[] { Inert("QmRadminOpen", Act) });
+                Card(ok, Controls.AppToast.ToastIcon.Download, Strings.Get("MpReplaySavedTitle"),
+                    Strings.Format("MpReplaySavedBody", modName), new[] { Inert("MpReplayShowInFolder", Act) });
+                Card(warn, Controls.AppToast.ToastIcon.Warn, Strings.Get("MpReplayDownloadFailedTitle"),
+                    Strings.Get("MpReplayDownloadFailed"), new[] { Inert("MpReplayRetry", Solid) }, closesItself: false);
+                break;
+            default:
+                foreach (var desktop in new[] { false, true })
+                    Card(ok, Controls.AppToast.ToastIcon.Swords, Strings.Get("QmFoundTitle"), Strings.Format("QmFoundBody", rival),
+                        new[] { Inert("QmFoundView", Act) }, desktop, important: true);
+                Card(warn, Controls.AppToast.ToastIcon.Warn, Strings.Get("QmRadminTitle"), Strings.Get("QmRadminNotice"),
+                    new[] { Inert("QmRadminOpen", Act) });
+                Card(info, Controls.AppToast.ToastIcon.Plus, Strings.Format("MpInviteToastTitle", rival), $"{room}  ·  {modName}",
+                    new[] { Inert("MpToastJoin", Join), Inert("MpToastMute", Solid) }, desktop: true, withMod: modId);
+                break;
+        }
+        DiagnosticLog.Write($"Toast preview: set {set} shown.");
     }
 
     /// <param name="bypassDoNotDisturb">The balloon ANSWERS the player (closing the window while a
@@ -8301,12 +8369,13 @@ public partial class MainWindow : Window
             DiagnosticLog.Write(
                 $"Interrupted {open.Operation} detected for '{profile.Id}' at '{path}' (started {open.StartedUtc:u}).");
             ShowAppToast(new Controls.AppToast.ToastOptions(
-                Icon: "⚠",
+                Tone: Controls.AppToast.ToastTone.Warn,
+                Icon: Controls.AppToast.ToastIcon.Warn,
                 Title: Strings.Get("InterruptedOperationTitle"),
                 Body: Strings.Format("InterruptedOperationBody", profile.DisplayName),
                 Actions: new[]
                 {
-                    new Controls.AppToast.ToastAction(Strings.Get("InterruptedOperationRepair"), true,
+                    new Controls.AppToast.ToastAction(Strings.Get("InterruptedOperationRepair"), Controls.AppToast.ToastButton.Action,
                         () => { BringToForeground(); _ = RepairInstallAsync(); }),
                 },
                 AutoDismissMs: 30000,
@@ -11483,18 +11552,19 @@ public partial class MainWindow : Window
     {
         var list = string.Join(Environment.NewLine, lines);
         ShowAppToast(new Controls.AppToast.ToastOptions(
-            Icon: "⚠",
+            Tone: Controls.AppToast.ToastTone.Warn,
+            Icon: Controls.AppToast.ToastIcon.Warn,
             Title: Strings.Format("ToastVerifyProblemsTitle", count),
             Body: verdict,
             Actions: new[]
             {
-                new Controls.AppToast.ToastAction(Strings.Get("ToastActionRepairNow"), IsPrimary: true, () =>
+                new Controls.AppToast.ToastAction(Strings.Get("ToastActionRepairNow"), Controls.AppToast.ToastButton.Action, () =>
                 {
                     if (_isBusy || !string.Equals(_updateService.Profile.Id, modId, StringComparison.OrdinalIgnoreCase))
                         return;
                     _ = RepairInstallAsync();
                 }),
-                new Controls.AppToast.ToastAction(Strings.Get("ToastActionCopyList"), IsPrimary: false, () =>
+                new Controls.AppToast.ToastAction(Strings.Get("ToastActionCopyList"), Controls.AppToast.ToastButton.Solid, () =>
                 {
                     try
                     {
@@ -13283,7 +13353,7 @@ public partial class MainWindow : Window
             SetStatus(Strings.Get("StatusGameLaunchCancelled"));
             if (!MaybeOfferCompatLayerFix(cancelled.ExePath))
                 ShowAppToast(new Controls.AppToast.ToastOptions(
-                    "⚠",
+                    Controls.AppToast.ToastTone.Warn, Controls.AppToast.ToastIcon.Warn,
                     Strings.Get("StatusGameLaunchCancelled"),
                     null,
                     Array.Empty<Controls.AppToast.ToastAction>(),
@@ -13377,7 +13447,8 @@ public partial class MainWindow : Window
                 string key = removed ? "StatusCompatLayerRemoved" : "StatusCompatLayerRemoveFailed";
                 SetStatus(Strings.Get(key));
                 ShowAppToast(new Controls.AppToast.ToastOptions(
-                    removed ? "✔" : "⚠",
+                    removed ? Controls.AppToast.ToastTone.Ok : Controls.AppToast.ToastTone.Warn,
+                    removed ? Controls.AppToast.ToastIcon.Check : Controls.AppToast.ToastIcon.Warn,
                     Strings.Get(key),
                     null,
                     Array.Empty<Controls.AppToast.ToastAction>(),
@@ -13798,7 +13869,7 @@ public partial class MainWindow : Window
         try
         {
             ShowAppToast(new Controls.AppToast.ToastOptions(
-                "⚠",
+                Controls.AppToast.ToastTone.Warn, Controls.AppToast.ToastIcon.Warn,
                 Strings.Get("StatusGameClosedImmediately"),
                 Strings.Get(missing == 0
                     ? "ToastGameClosedImmediatelyBodyFilesOk"

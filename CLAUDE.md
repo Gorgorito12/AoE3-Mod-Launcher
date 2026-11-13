@@ -727,6 +727,24 @@ rather than the reverse.
   <prototype> --block <id> [--title T] -- <launch args>` opens the launcher and leaves prototype,
   launcher and difference side by side, at 1.25, in `out/check`.
 
+- **Design 105 (`docs/design_avisos_flotantes`) SUPERSEDES what this file says about how a floating
+  notice LOOKS** (the 🎮/📨 icon, "reuses `MpAlertOverlay`'s card look", the green primary button). Every
+  `AppToast` card — in the launcher and on the desktop — is one `AppToast.Build`: a `ToastTone` (Ok,
+  Info, Warn, Neutral), a `ToastIcon` that is a DRAWN pictogram from `Styles/Toasts.xaml` (a character
+  is drawn black by Windows' symbol font and cannot take the tone — that was the bug), and buttons of a
+  `ToastButton` kind: `Action` (blue, the notice asks you to act), `Join` (green, ONLY "Join") and
+  `Solid` (everything else). `AppToast.ButtonKinds` keeps ONE coloured button per notice and draws any
+  other solid; the coloured one sits at the right end. `ModId` puts the mod's icon in the tile with the
+  pictogram as a badge; `Crest` a team's initials; `Important` (border and halo in the tone) is set by
+  the two "your rival came in" notices only — `AppToastTests` counts it. Compact by the maintainer's
+  call: 360 wide, not the design's 420 (see the design index). A card that closes by itself carries a
+  3-px time bar; `ToastCountdown` pauses the bar AND the close under the pointer, and its clock is
+  stopped through its controller. The shadow and the halo are clipped siblings, never an Effect over
+  text. The desktop card is solid (`ToastDesktopBg`) and says "AoE3 Mod Launcher" over its content.
+  Routing (`ShowAppToast`, `ToastRouting`, "Do not disturb") is unchanged. `--preview-toasts[=1|2|3]`
+  shows them, waiting up to 15 s for the window to be in front, since routing sends every card to the
+  desktop while nobody looks at the launcher.
+
 - **Screen 103 of `docs/design_base_launcher_2` SUPERSEDES what this file says about small dialogs,
   popups and menus.** Every small dialog derives from `Controls/BaseDialog` (bar of 40, a tone tile
   beside a serif headline, a footer with Cancel beside the one primary button), whose
@@ -7684,6 +7702,13 @@ the default, `InPlaceOverlay`), update mechanisms (`GitHubReleases` recommended,
 `DelegatedExternal`, `Manual`), and the tier-based auto-merge + SHA-256 security
 model enforced by the catalog repo's CI. The JSON schema lives at
 `aoe3-mods-catalog-template/schema/mod.schema.json`.
+**It is split in two since 2026-11-12:** `MODDING.md` is the reference (every field, what it
+is, when to set it, short), and `docs/MODDING-TROUBLESHOOTING.md` goes the other way, from a
+symptom a modder sees to the field that fixes it, with the real incident behind each field that
+exists because of a problem (marker, privateSetupPath, supersedeCompiledXml, userDataPayload…).
+A field that comes out of an incident gets a short row in `MODDING.md` and its why in the
+troubleshooting page; change both in the same edit. `MODDING.md`'s section numbers are cited
+from this file, the code and `package-mod-payload.ps1` — don't renumber them.
 
 **Per-mod OWNERSHIP gate in the catalog CI (governance, not consumed by the
 launcher).** The catalog's `classify_pr.py` now decides auto-merge by WHO opens

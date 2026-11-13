@@ -99,7 +99,7 @@ public static class TextScale
         "MpPageTitleSize", "MpRankNameSize", "MpRankSmallSize", "MpProfileNameSize", "MpProfileRatingSize",
         "MpProfileRecordSize", "MpHistoryDeltaSize", "RmListTitleSize", "RmNameSize", "RmHostSize", "RmButtonSize", "RmSmallSize", "RmCountSize", "RmChipSize", "RmRowNameSize", "RmRowHostSize", "RmRowSeatsSize", "RmRowButtonSize", "RmEmptyTitleSize", "QcTitleSizeCompact", "QcClockSize", "QcLineSize", "QcButtonSizeCompact", "QcButton2SizeCompact",
         "MpHistoryTitleSize", "MpHistoryMetaSize", "MpHistoryTrailSize",
-        "MpToastTitleSize", "MpMatchesEmptyTitleSize",
+        "ToastTitleSize", "ToastContextSize", "ToastBodySize", "ToastButtonSize", "ToastOwnerSize", "MpMatchesEmptyTitleSize",
         "MpHlTitleSize", "MpHlMetaSize", "MpHlNameSize", "MpHlFigureSize", "MpRefundGlyphSize",
         "MpProfileDashSize", "MpProfileStreakSize", "MpProfileH2HSize", "MpCountdownNumberSize",
         "MpResultPlacementTitleSize",

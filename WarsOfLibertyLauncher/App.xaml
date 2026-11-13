@@ -33,6 +33,9 @@
                 <!-- Badges.xaml: the rank badge's shield geometry and per-age brushes.
                      Self-contained (it references only itself), so its place is free. -->
                 <ResourceDictionary Source="/Styles/Badges.xaml"/>
+                <!-- The floating notices (design 105): their pictograms and button styles. Reads
+                     Colors.xaml and Tokens.xaml only. -->
+                <ResourceDictionary Source="/Styles/Toasts.xaml"/>
                 <!-- The Library's styles, which the window's XAML reaches with StaticResource. -->
                 <ResourceDictionary Source="/Styles/Library.xaml"/>
                 <!-- The small dialogs (design 103): BasedOn the Window* styles in Library.xaml. -->

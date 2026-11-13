@@ -94,7 +94,7 @@ public sealed class DesktopToastWindow : Window
                 s_instance.Show();
             }
 
-            AppToast.Show(s_instance._host, opts);
+            AppToast.Show(s_instance._host, opts, desktop: true);
             // Re-assert topmost: another app going full-screen can push us behind it.
             s_instance.Topmost = true;
         }

@@ -1172,11 +1172,50 @@
     <SolidColorBrush x:Key="MpReplayTipBg" Color="#1A2C48"/>
     <SolidColorBrush x:Key="MpReplayTipRim" Color="#3882AFFF"/>          <!-- .22 -->
     <SolidColorBrush x:Key="MpReplayTipBody" Color="#B9C9DC"/>
-    <SolidColorBrush x:Key="MpToastRim" Color="#3882AFFF"/>              <!-- .22 -->
-    <SolidColorBrush x:Key="MpToastBody" Color="#C3D2E5"/>
-    <SolidColorBrush x:Key="MpToastOkBg" Color="#294FD68A"/>             <!-- #4fd68a .16 -->
-    <SolidColorBrush x:Key="MpToastInfoBg" Color="#332F7FE0"/>           <!-- #2f7fe0 .20 -->
-    <SolidColorBrush x:Key="MpToastErrorBg" Color="#338C9CB1"/>          <!-- #8c9cb1 .20 -->
+    <!-- ============================================================
+         Floating notices (design 105, docs/design_avisos_flotantes): ONE card for every
+         toast, in-window and on the desktop. The four tones are the design base's fixed
+         ones and never take a mod's colour; each has its colour and the lighter one its
+         text and strokes are drawn in. Controls/AppToast.cs derives the tile, the corner
+         glow, the badge, the important rim and the time bar from these two per tone.
+         ============================================================ -->
+    <SolidColorBrush x:Key="ToastToneOk" Color="#4FD68A"/>
+    <SolidColorBrush x:Key="ToastToneOkText" Color="#7FE0A8"/>
+    <SolidColorBrush x:Key="ToastToneInfo" Color="#55ACEE"/>
+    <SolidColorBrush x:Key="ToastToneInfoText" Color="#A9D6F7"/>
+    <SolidColorBrush x:Key="ToastToneWarn" Color="#F4900C"/>
+    <SolidColorBrush x:Key="ToastToneWarnText" Color="#F5BD76"/>
+    <SolidColorBrush x:Key="ToastToneNeutral" Color="#8C9CB1"/>
+    <SolidColorBrush x:Key="ToastToneNeutralText" Color="#C3D2E5"/>
+    <SolidColorBrush x:Key="ToastRim" Color="#21FFFFFF"/>                <!-- white .13 -->
+    <SolidColorBrush x:Key="ToastEdgeLight" Color="#14FFFFFF"/>          <!-- white .08 -->
+    <SolidColorBrush x:Key="ToastEdgeLightImportant" Color="#1AFFFFFF"/> <!-- white .10 -->
+    <!-- The white sheen over the glass: 5 % at the top, gone at 60 % of the height. -->
+    <LinearGradientBrush x:Key="ToastSheen" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#0DFFFFFF" Offset="0"/>
+        <GradientStop Color="#00FFFFFF" Offset="0.6"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="ToastTitle" Color="#F4F8FC"/>
+    <SolidColorBrush x:Key="ToastContext" Color="#A8BCD2"/>
+    <SolidColorBrush x:Key="ToastBody" Color="#C3D2E5"/>
+    <SolidColorBrush x:Key="ToastNeutralTileBg" Color="#12FFFFFF"/>      <!-- white .07 -->
+    <SolidColorBrush x:Key="ToastNeutralTileRim" Color="#29FFFFFF"/>     <!-- white .16 -->
+    <SolidColorBrush x:Key="ToastModTileRim" Color="#29FFFFFF"/>         <!-- white .16 -->
+    <SolidColorBrush x:Key="ToastBadgeRing" Color="#101D31"/>
+    <SolidColorBrush x:Key="ToastBadgeInk" Color="#0F1C2E"/>
+    <SolidColorBrush x:Key="ToastCrestBg" Color="#4F6A8A"/>
+    <SolidColorBrush x:Key="ToastBarTrack" Color="#12FFFFFF"/>           <!-- white .07 -->
+    <!-- On the desktop the card is a window over anything: solid, no blur. -->
+    <SolidColorBrush x:Key="ToastDesktopBg" Color="#12213A"/>
+    <SolidColorBrush x:Key="ToastCloseInk" Color="#A8BCD2"/>
+    <SolidColorBrush x:Key="ToastCloseHover" Color="#1AFFFFFF"/>         <!-- white .10 -->
+    <!-- The three button classes: blue when the notice asks you to act, green ONLY for Join
+         (the RmJoin* of the rooms list), solid for everything else. -->
+    <SolidColorBrush x:Key="ToastSolidBg" Color="#1A2C48"/>
+    <SolidColorBrush x:Key="ToastSolidHover" Color="#22385A"/>
+    <SolidColorBrush x:Key="ToastSolidRim" Color="#3882AFFF"/>           <!-- rgba(130,175,255,.22) -->
+    <SolidColorBrush x:Key="ToastSolidText" Color="#DCE7F5"/>
+    <SolidColorBrush x:Key="ToastActionGlow" Color="#662F7FE0"/>         <!-- #2f7fe0 .40 -->
     <SolidColorBrush x:Key="MpMatchesLinkBg" Color="#1F2F7FE0"/>         <!-- #2f7fe0 .12 -->
     <SolidColorBrush x:Key="MpMatchesChipOnBg" Color="#2E2F7FE0"/>       <!-- #2f7fe0 .18 -->
     <SolidColorBrush x:Key="MpMatchesMoreRim" Color="#732F7FE0"/>        <!-- #2f7fe0 .45 -->

@@ -170,7 +170,7 @@ public partial class MultiplayerTab
             var api = _session?.Api;
             if (api == null || _session?.Status != MultiplayerSession.SessionStatus.SignedIn)
             {
-                ShowReplayToast(AppToast.ToastTone.Error, "MpReplayDownloadFailedTitle", Strings.Get("MpReplaySignInFirst"), target);
+                ShowReplayToast(AppToast.ToastTone.Warn, "MpReplayDownloadFailedTitle", Strings.Get("MpReplaySignInFirst"), target);
                 return;
             }
 
@@ -188,12 +188,12 @@ public partial class MultiplayerTab
                 {
                     // The year is over (the bucket deleted it) between the list and the click.
                     SetReplayState(id, ReplayButtonState.Expired);
-                    ShowReplayToast(AppToast.ToastTone.Error, "MpReplayGoneTitle", Strings.Get("MpReplayGoneBody"), target);
+                    ShowReplayToast(AppToast.ToastTone.Warn, "MpReplayGoneTitle", Strings.Get("MpReplayGoneBody"), target);
                 }
                 else if (ex.Status is 404 or 503)
                 {
                     SetReplayState(id, ReplayButtonState.Error);
-                    ShowReplayToast(AppToast.ToastTone.Error, "MpReplayDownloadFailedTitle",
+                    ShowReplayToast(AppToast.ToastTone.Warn, "MpReplayDownloadFailedTitle",
                         Strings.Get("MpReplayDownloadUnavailable"), target);
                 }
                 else
@@ -207,7 +207,7 @@ public partial class MultiplayerTab
             {
                 DiagnosticLog.Write($"MultiplayerTab: the server's download link for match {id} is not a storage URL - refused.");
                 SetReplayState(id, ReplayButtonState.Error);
-                ShowReplayToast(AppToast.ToastTone.Error, "MpReplayDownloadFailedTitle",
+                ShowReplayToast(AppToast.ToastTone.Warn, "MpReplayDownloadFailedTitle",
                     Strings.Get("MpReplayDownloadUnavailable"), target);
                 return;
             }
@@ -278,12 +278,12 @@ public partial class MultiplayerTab
                 ? (AppToast.ToastTone.Info, Strings.Format("MpReplaySavedNotInstalled", modName))
                 : (AppToast.ToastTone.Ok, Strings.Format("MpReplaySavedBody", modName));
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "",
+            tone,
+            tone == AppToast.ToastTone.Ok ? AppToast.ToastIcon.Download : AppToast.ToastIcon.Info,
             Strings.Get("MpReplaySavedTitle"),
             body,
-            new[] { new AppToast.ToastAction(Strings.Get("MpReplayShowInFolder"), true, () => FileReveal.Reveal(path)) },
+            new[] { new AppToast.ToastAction(Strings.Get("MpReplayShowInFolder"), AppToast.ToastButton.Action, () => FileReveal.Reveal(path)) },
             AutoDismissMs: 8000,
-            Tone: tone,
             Subtitle: target.MatchLine,
             // The answer to the download the player asked for: "Do not disturb" lets it through.
             Cause: Services.ToastCause.Answer));
@@ -294,24 +294,24 @@ public partial class MultiplayerTab
     {
         SetReplayState(target.MatchId, ReplayButtonState.Error);
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "",
+            AppToast.ToastTone.Warn,
+            AppToast.ToastIcon.Warn,
             Strings.Get("MpReplayDownloadFailedTitle"),
             Strings.Get("MpReplayDownloadFailed"),
-            new[] { new AppToast.ToastAction(Strings.Get("MpReplayRetry"), true, () => _ = DownloadReplayAsync(target, owner)) },
+            new[] { new AppToast.ToastAction(Strings.Get("MpReplayRetry"), AppToast.ToastButton.Solid, () => _ = DownloadReplayAsync(target, owner)) },
             AutoDismissMs: 0,
-            Tone: AppToast.ToastTone.Error,
             Subtitle: target.MatchLine,
             Cause: Services.ToastCause.Answer));
     }
 
     private void ShowReplayToast(AppToast.ToastTone tone, string titleKey, string body, ReplayTarget target)
         => _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "",
+            tone,
+            AppToast.ToastIcon.Warn,
             Strings.Get(titleKey),
             body,
             Array.Empty<AppToast.ToastAction>(),
             AutoDismissMs: 8000,
-            Tone: tone,
             Subtitle: target.MatchLine,
             Cause: Services.ToastCause.Answer));
 

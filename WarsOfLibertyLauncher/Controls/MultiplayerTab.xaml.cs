@@ -1837,12 +1837,12 @@ public partial class MultiplayerTab : UserControl
         CloseProfileWindow();
         _session?.ExpireSession(Strings.Get("MpSessionExpired"));
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "",
+            AppToast.ToastTone.Warn,
+            AppToast.ToastIcon.Warn,
             Strings.Get("MpSessionExpiredTitle"),
             Strings.Get("MpSessionExpired"),
             Array.Empty<AppToast.ToastAction>(),
-            AutoDismissMs: 12000,
-            Tone: AppToast.ToastTone.Info));
+            AutoDismissMs: 12000));
     }
 
     // ---------- Session renewal ----------
@@ -2107,6 +2107,7 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyIsCompetitive = false;
                 _currentLobbySpectatorSlots = 0;
                 _currentLobbyTournamentMatchId = null;
+                _currentLobbyMatchmaking = false;
                 _roomTeamsLocked = false;
                 _currentLobbyCreatedUtc = null;
                 // We are out of the room, so it can no longer be "in a match" as far as we're
@@ -4156,7 +4157,7 @@ public partial class MultiplayerTab : UserControl
     /// method further down: for anything post-match, the chat is the bonus and the toast is the
     /// delivery.</para>
     /// </summary>
-    private void AnnounceMatchOutcome(string body, string title, string icon)
+    private void AnnounceMatchOutcome(string body, string title, AppToast.ToastTone tone, AppToast.ToastIcon icon)
     {
         if (_lobbyWindow != null)
         {
@@ -4167,7 +4168,7 @@ public partial class MultiplayerTab : UserControl
         try
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
-                icon, title, body,
+                tone, icon, title, body,
                 System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 12000,
                 // The player's own match, and with the room window gone this card is the only
                 // place the outcome is said: "Do not disturb" lets it through.
@@ -4766,7 +4767,7 @@ public partial class MultiplayerTab : UserControl
         // new host and takes it away from the old one. Never in a TOURNAMENT room: its
         // name is composed by the server from the bracket (tournament, round, both
         // entrants) and the server refuses a rename there (`tournament_room_title`).
-        _lobbyWindow!.RenameRoomButton.Visibility = _isHostInCurrentRoom && !InTournamentRoom && !QuickSearchAlone
+        _lobbyWindow!.RenameRoomButton.Visibility = _isHostInCurrentRoom && !InTournamentRoom && !QuickSearchAlone && !_currentLobbyMatchmaking
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -5019,6 +5020,10 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>Whether the room on screen is one leg of a tournament bracket.</summary>
     private bool InTournamentRoom => !string.IsNullOrEmpty(_currentLobbyTournamentMatchId);
+
+    /// <summary>The room the quick-match queue opened for two matched players: nobody else may
+    /// enter it, so it offers no Invite, and its name says who plays.</summary>
+    private bool _currentLobbyMatchmaking;
 
     /// <summary>
     /// The server seated every player on his entrant's side and refuses any change
@@ -6641,7 +6646,10 @@ public partial class MultiplayerTab : UserControl
         if (n == null) return;
 
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "🏆",
+            n.Kind == "match_done" && n.YouWon == true || n.Kind is "entry_accepted" or "entry_promoted"
+                ? AppToast.ToastTone.Ok : AppToast.ToastTone.Info,
+            n.Kind == "match_done" && n.YouWon == true || n.Kind is "entry_accepted" or "entry_promoted"
+                ? AppToast.ToastIcon.Check : AppToast.ToastIcon.Swords,
             TournamentToastTitle(n),
             n.TournamentName ?? "",
             System.Array.Empty<AppToast.ToastAction>(),
@@ -9797,6 +9805,7 @@ public partial class MultiplayerTab : UserControl
         // Never a bracket slot: this path makes ordinary rooms, and a tournament room
         // is only ever minted by POST /tournaments/:id/matches/:mid/lobby.
         _currentLobbyTournamentMatchId = null;
+        _currentLobbyMatchmaking = false;
         _currentLobbyTournamentId = null;
         _pendingRoomTournamentId = null;
         _roomTournament = null;
@@ -11316,6 +11325,8 @@ public partial class MultiplayerTab : UserControl
                 {
                     case "global_state":
                         RenderGlobalChatState(e.Json);
+                        // The hello went through: a queued search re-enters the queue.
+                        OnGlobalSocketReady();
                         break;
                     case "chat":
                         if (e.Json.TryGetProperty("line", out var line))
@@ -11353,6 +11364,7 @@ public partial class MultiplayerTab : UserControl
                     case "lobbies_changed":
                         if (!_lobbiesChangedSeen) SetLobbiesChangedSeen(true);
                         QueueRoomsRefreshFromAnnouncement();
+                        OnQuickMatchListChanged();
                         break;
                     case "match_rated":
                         HandleMatchRatedFrame(e.Json);
@@ -11369,6 +11381,16 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "team_invite":
                         HandleTeamInviteFrame(e.Json.GetRawText());
+                        break;
+                    case "mm_queued":
+                    case "mm_searchers_changed":
+                    case "mm_found":
+                    case "mm_accept_progress":
+                    case "mm_cancelled":
+                    case "mm_room_ready":
+                    case "mm_left":
+                    case "mm_error":
+                        HandleMatchmakingFrame(e.Type, e.Json);
                         break;
                     case "error":
                         var code = e.Json.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
@@ -11466,27 +11488,28 @@ public partial class MultiplayerTab : UserControl
         if (string.Equals(fromId, _lastRivalUserId, StringComparison.Ordinal) && fromId.Length > 0)
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
-                "📨",
+                AppToast.ToastTone.Info, AppToast.ToastIcon.Swords,
                 Strings.Format("RoomRematchToastTitle", fromLogin),
                 Strings.Format("RoomRematchToastBody", roomName),
                 new[]
                 {
-                    new AppToast.ToastAction(Strings.Get("MpToastJoin"), true, () =>
+                    new AppToast.ToastAction(Strings.Get("MpToastJoin"), AppToast.ToastButton.Join, () =>
                     {
                         _bringMultiplayerToFront?.Invoke();
                         _ = JoinByLobbyIdAsync(lobbyId);
                     }),
-                    new AppToast.ToastAction(Strings.Get("RoomRematchNotNow"), false, () => { }),
+                    new AppToast.ToastAction(Strings.Get("RoomRematchNotNow"), AppToast.ToastButton.Solid, () => { }),
                 },
                 PreferDesktop: true,
-                Cause: Services.ToastCause.Request));
+                Cause: Services.ToastCause.Request,
+                ModId: modId));
             Services.SoundService.PlayConnect();
             return;
         }
 
         var muteLabel = fromLogin;   // capture for the confirmation toast
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "📨",   // 📨
+            AppToast.ToastTone.Info, AppToast.ToastIcon.Plus,
             Strings.Format("MpInviteToastTitle", fromLogin),
             body,
             new[]
@@ -11495,20 +11518,20 @@ public partial class MultiplayerTab : UserControl
                 // desktop), with the launcher minimised, in the tray or on another tab — and a join
                 // that happens where nobody can see it looks like a button that did nothing. The
                 // new-room card's Join does the same in MainWindow.
-                new AppToast.ToastAction(Strings.Get("MpToastJoin"), true, () =>
+                new AppToast.ToastAction(Strings.Get("MpToastJoin"), AppToast.ToastButton.Join, () =>
                 {
                     _bringMultiplayerToFront?.Invoke();
                     _ = JoinByLobbyIdAsync(lobbyId);
                 }),
                 // "Mute" silences this sender for the session (the ✕ / auto-dismiss
                 // still handle "ignore just this one").
-                new AppToast.ToastAction(Strings.Get("MpToastMute"), false, () =>
+                new AppToast.ToastAction(Strings.Get("MpToastMute"), AppToast.ToastButton.Solid, () =>
                 {
                     _ignoredInviters.Add(senderKey);
                     // On the desktop too: this is the reply to a button pressed on a
                     // desktop card, and it should appear where the hand already was.
                     _showAppToast?.Invoke(new AppToast.ToastOptions(
-                        "🔕", Strings.Format("MpInviteMutedConfirm", muteLabel), null,
+                        AppToast.ToastTone.Neutral, AppToast.ToastIcon.Stop, Strings.Format("MpInviteMutedConfirm", muteLabel), null,
                         System.Array.Empty<AppToast.ToastAction>(),
                         AutoDismissMs: 4000, PreferDesktop: true, Cause: Services.ToastCause.Answer));
                 }),
@@ -11520,7 +11543,8 @@ public partial class MultiplayerTab : UserControl
             // NOT silenced by "Do not disturb": an invitation exists nowhere but this card — no
             // bell entry, no list — so hiding it would discard it, and it already has its own
             // switch (ReceiveInvites, checked above).
-            Cause: Services.ToastCause.Request));
+            Cause: Services.ToastCause.Request,
+            ModId: modId));
         Services.SoundService.PlayConnect();
     }
 
@@ -11536,7 +11560,7 @@ public partial class MultiplayerTab : UserControl
         };
         EndRematchWait();
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "⚠", Strings.Get(key), null, System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 5000,
+            AppToast.ToastTone.Warn, AppToast.ToastIcon.Warn, Strings.Get(key), null, System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 5000,
             Cause: Services.ToastCause.Answer));
     }
 
@@ -11546,7 +11570,7 @@ public partial class MultiplayerTab : UserControl
         var login = json.TryGetProperty("login", out var l) ? (l.GetString() ?? "") : "";
         if (string.IsNullOrWhiteSpace(login)) return;
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "✉",   // ✉
+            AppToast.ToastTone.Ok, AppToast.ToastIcon.Check,
             Strings.Format("MpInviteSent", login),
             null,
             System.Array.Empty<AppToast.ToastAction>(),
@@ -12695,7 +12719,7 @@ public partial class MultiplayerTab : UserControl
     {
         DiagnosticLog.Write($"Invite to '{targetLogin}' not sent — they are in a match.");
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "⚠", Strings.Format("MpInviteTargetInGame", targetLogin), null,
+            AppToast.ToastTone.Warn, AppToast.ToastIcon.Warn, Strings.Format("MpInviteTargetInGame", targetLogin), null,
             System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 6000,
             Cause: Services.ToastCause.Answer));
     }
@@ -13284,6 +13308,7 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyIsCompetitive = lobby.Competitive;
                 _currentLobbySpectatorSlots = lobby.SpectatorSlots;
                 _currentLobbyTournamentMatchId = lobby.TournamentMatchId;
+                _currentLobbyMatchmaking = lobby.Matchmaking;
                 _currentLobbyTournamentId = lobby.TournamentId ?? _pendingRoomTournamentId;
                 // We joined from the browser summary, which carries the real open time.
                 _currentLobbyCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
@@ -15228,7 +15253,7 @@ public partial class MultiplayerTab : UserControl
         try
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
-                "⚠", Strings.Get("MpNoRecordingTitle"), body,
+                AppToast.ToastTone.Warn, AppToast.ToastIcon.Warn, Strings.Get("MpNoRecordingTitle"), body,
                 System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 12000,
                 // Why the player's own match has no result; the chat line beside it can be gone
                 // in a moment, so "Do not disturb" lets the card through.
@@ -15731,7 +15756,9 @@ public partial class MultiplayerTab : UserControl
             if (hostResult.HasValue)
                 recorded += " " + Strings.Get(
                     hostResult.Value > 0.5 ? "MpChatMatchResultWin" : "MpChatMatchResultLoss");
-            AnnounceMatchOutcome(recorded, Strings.Get("MpMatchReportedTitle"), "🏆");
+            AnnounceMatchOutcome(recorded, Strings.Get("MpMatchReportedTitle"),
+                hostResult is < 0.5 ? AppToast.ToastTone.Neutral : AppToast.ToastTone.Ok,
+                hostResult is < 0.5 ? AppToast.ToastIcon.Stop : AppToast.ToastIcon.Check);
 
             // The recording goes to the storage bucket for a competitive room, behind the
             // report and never in its way. This covers OnGameExitedAsync and the resumed-match
@@ -15750,7 +15777,8 @@ public partial class MultiplayerTab : UserControl
                 "the host role moved to another player during the match; they report it, and our " +
                 "reading goes to the server as a confirmation.");
             AnnounceMatchOutcome(
-                Strings.Get("MpChatMatchHostMoved"), Strings.Get("MpMatchHostMovedTitle"), "ℹ");
+                Strings.Get("MpChatMatchHostMoved"), Strings.Get("MpMatchHostMovedTitle"),
+                AppToast.ToastTone.Info, AppToast.ToastIcon.Info);
             return new ReportOutcome(false, null, HostRoleLost: true);
         }
         catch (LobbyApiException apiEx)
@@ -15763,7 +15791,7 @@ public partial class MultiplayerTab : UserControl
                 $"MultiplayerTab.TryReportMatchAsync: report FAILED status={apiEx.Status} code={apiEx.Code} — {apiEx.Message}");
             AnnounceMatchOutcome(
                 Strings.Format("MpChatMatchNotRecorded", apiEx.Status, apiEx.Code),
-                Strings.Get("MpMatchNotReportedTitle"), "⚠");
+                Strings.Get("MpMatchNotReportedTitle"), AppToast.ToastTone.Warn, AppToast.ToastIcon.Warn);
             return new ReportOutcome(false, null);   // failed → room open (caller sends game_ended)
         }
         catch (Exception ex)
@@ -15772,7 +15800,7 @@ public partial class MultiplayerTab : UserControl
             DiagnosticLog.Write($"MultiplayerTab.TryReportMatchAsync: report FAILED — {ex.Message}");
             AnnounceMatchOutcome(
                 Strings.Format("MpChatMatchNotRecorded", 0, "offline"),
-                Strings.Get("MpMatchNotReportedTitle"), "⚠");
+                Strings.Get("MpMatchNotReportedTitle"), AppToast.ToastTone.Warn, AppToast.ToastIcon.Warn);
             return new ReportOutcome(false, null);
         }
         // The context is deliberately NOT cleared here. A finally in this method sits below the
@@ -17449,7 +17477,19 @@ public partial class MultiplayerTab : UserControl
         try
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
-                "\U0001F3C1", Strings.Get("MpResultTitle"), body,
+                model.Verdict switch
+                {
+                    Services.Multiplayer.MatchVerdict.Win => AppToast.ToastTone.Ok,
+                    Services.Multiplayer.MatchVerdict.Loss => AppToast.ToastTone.Neutral,
+                    _ => AppToast.ToastTone.Info,
+                },
+                model.Verdict switch
+                {
+                    Services.Multiplayer.MatchVerdict.Win => AppToast.ToastIcon.Check,
+                    Services.Multiplayer.MatchVerdict.Loss => AppToast.ToastIcon.Stop,
+                    _ => AppToast.ToastIcon.Info,
+                },
+                Strings.Get("MpResultTitle"), body,
                 System.Array.Empty<AppToast.ToastAction>(),
                 AutoDismissMs: 12000, PreferDesktop: true));
         }
@@ -18372,7 +18412,7 @@ public partial class MultiplayerTab : UserControl
         try
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
-                "\uE7E8", Strings.Get("MpToastMatchResumedTitle"),
+                AppToast.ToastTone.Info, AppToast.ToastIcon.Clock, Strings.Get("MpToastMatchResumedTitle"),
                 Strings.Get(alive ? "MpToastMatchResumedBodyRunning" : "MpToastMatchResumedBodyReading"),
                 System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 12000));
         }

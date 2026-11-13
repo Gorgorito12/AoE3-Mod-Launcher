@@ -64,6 +64,7 @@ language.
 | `design_comunidad_bloque/` | Rooms: the month's highlights and the community's figures as ONE data strip inside the community block, open (60a) and folded to one line (60b); the separate highlights strip, the figures beside the title and the ACTIVITY bar are gone | 60a, 60b (built; the two-line strip under the title replaced by 61) |
 | `design_salas_filas/` | Rooms: each row of the list as a raised card tinted with its group's colour, the column headings as a bar, and drawn cells (host photo, a dot per seat, signal bars) | 104a, 104b (built; 104c and 104d are discarded alternatives). Kept over it: the host's rank badge. Changed: rows are 52 high with a 36-px icon and a 14-px name, the headings' bar 28, not 72/48/15/32 (the maintainer found them too big). The coloured shadow under each row and the glow under "Ver sala" are drawn as cached siblings, never an Effect on the row (that costs its text ClearType), and are off with the effects reduced. Not built: letter-spacing (WPF has none) |
 | `design_comunidad_compacta/` | Rooms: the community block compact and ANCHORED AT THE BOTTOM — the facts on the title line, one line each, dropped from the end when short; shorter cards (the matches two lines each, the maintainer's correction); the rooms take everything above, and an empty list centres its notice | 61a, 61b (built) |
+| `design_avisos_flotantes/` | Every floating notice (in the launcher and on the desktop) as ONE card: a tone, a drawn pictogram (never a character), one coloured button, the time bar; replaces 63c, 70b, 83l, 85j, 87m and 96e | 105a, 105b (built, COMPACT — see below) |
 | *(none — Claude Design only)* | Rooms: the row's action button in the Discord announcement's colours — green Join, blue In game, amber Full, each with a dot | 66 (built, colours only — see below) |
 
 ## Where design 66 was deliberately not followed
@@ -864,6 +865,27 @@ redesign needs (per-host Radmin addresses, `started_at`, `tournament_id`, `my_en
 invitations, 32 and 64 places) are listed, with their order, in the backend's `DEPLOY.md`. Only two
 real accounts can prove the rematch, an entry that needs approval, a real bracket match, a team
 invitation and the per-host ping between two PCs.
+
+## Where `design_avisos_flotantes/` was deliberately not followed
+
+- **Compact, by the maintainer's call (2026-11-12).** 360 wide, radius 12, 36-px tile (pictogram
+  20, badge 18 with the pictogram at 11), 28-px buttons (at least 84 wide, padding 12, radius 6),
+  margins 14/13/12/14, title 13.5, context 11.5, body 12.5, buttons 12, owner line 11; the design
+  draws 420 / 14 / 44 / 32 and 14.5 / 12 / 13 / 12.5 / 11.5. Shown the 420 version first, he found
+  the notices too big. With the narrower column the body may run to THREE lines, not two: the
+  longest bodies (Radmin, the missing recording) were cut after one.
+- **The glass is the launcher's floating glass** (`LibraryMenuBg`, which `GlassTheme` already sets per
+  level), not the design's .95 / .74 / .60 with a blur behind: WPF cannot blur what is under a card.
+  At Media and Maximum the page shows faintly through it, as it does through every menu.
+- **Three notices in its table do not exist in the code** ("No connection to the server", "{mod}
+  updated / installed", "You got {n} points back"), so nothing was built for them; the tones and
+  pictograms they would use (`offline`, `check` on a mod icon, `up`) are in place.
+- **Notices outside its table got the same card**, with tones and icons proposed on its criteria
+  (the table is in the plan of 2026-11-12 and in `Controls/AppToast.cs`'s callers): invitations blue,
+  confirmations green, refusals and errors amber, a search that simply stopped neutral.
+- Not built: letter-spacing (WPF has none). `--preview-toasts=1|2|3` shows the twelve notices that
+  exist, four at a time; bare, the review set (the rival found in the window AND on the desktop, the
+  amber Radmin one, an invitation).
 
 ## If you read them
 

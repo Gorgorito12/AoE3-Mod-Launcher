@@ -582,6 +582,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `CopyBtnGlyph.Text = ""` in both branches and look like a lost-literal bug. They are
   `\ue73e` and `\ue8c8` and the code is correct — check `repr()` before "fixing" it.
 
+- **A MULTIPLAYER NOTICE PASSES A TONE AND A DRAWN ICON, NEVER A CHARACTER (design 105, see the
+  `AppToast` bullet in `CLAUDE.md`).** The rival found (`QmFound*`) and the bracket rival who came in
+  (`OnBracketRivalJoined`) are the only `Important: true` cards. "Join" is the only green button
+  (`ToastButton.Join`): See room, Accept, Open the assistant and Show in folder are `Action` (blue), and
+  Ignore, Not now, Mute, Decline, View, Play and Retry are `Solid`. Invitations are Info, a search that
+  stopped is Neutral (`clock` when nobody came in 30 min, `stop` otherwise), refusals and errors Warn.
+  `AnnounceMatchOutcome` takes the tone and icon from the result: won Ok/check, lost Neutral/stop,
+  host moved Info, not reported Warn.
+
 - **THE ROOM WINDOW IS DESIGN 87, AND ITS BUTTONS ARE ONE DECISION: `Services/Multiplayer/RoomFooterState`.**
   Six methods used to set Start, Ready, Rejoin and Leave. `MultiplayerTab.RoomView.cs` builds the
   `RoomFacts`, asks `Evaluate` and paints; `RefreshRoomView` runs at the end of `RenderRoomPanel`,
@@ -8415,6 +8424,64 @@ longer has a season selector, season medals, a season bell or `--demo-seasons`, 
 no longer computes seasons. This heading is kept so links to it still land somewhere.
 
 ---
+
+## QUICK MATCH WITH THE SERVER'S QUEUE (2026-11-12) — HYBRID: A QUEUE, AND EVERY SEARCHER LISTED
+
+**A server that answers `GET /matchmaking/status` runs a queue, and the search goes there; a 404
+keeps the room-based phase 0 below, untouched, as the fallback.** Decided per search
+(`UseQueueAsync`): the global socket must be up and the server must say `enabled`; a queue that does
+not confirm the ticket (`mm_queued`) within 8 s also falls back. Launcher:
+`Controls/MultiplayerTab.Matchmaking.cs`, the rules in `Services/Multiplayer/QueueSearchers.cs`, the
+card `Controls/MatchFoundDialog.cs`. Backend (`wol-launcher-lobby-node`): `src/matchmaking/`
+(`pairing.ts` pure, `Matchmaker.ts` driven through `MmStore`/`MmTransport`/`MmClock` so the whole
+flow is tested with a fake clock, `store.ts` the database side, `rest.ts`), migration 0031.
+
+- **No room until two are matched.** A ticket is `(mod, version hash, kind)`; rated and casual never
+  meet, `either` meets both (and becomes casual on a mod with no ladder). The rating window is
+  `150 + 100 per 30 s` and unlimited from 2 min; a player being placed has no window of his own and
+  his number is never sent. No periodic timer on the server: pairing runs on events and on the
+  `mm_ping` each searcher sends every 15 s (which is also what widens the windows). A launcher that
+  stops pinging for 60 s leaves the queue; a dropped socket keeps the ticket 15 s, and the launcher
+  sends `mm_join` again on the next `global_state`, which keeps the place.
+- **The hybrid half: every searcher is a ROW of the rooms list**, built as a `QueueSearcherRow`
+  (a `LobbySummary` of one waiting player) so `RoomActionRule`, the grouping, the search box and the
+  host cell treat him exactly like a room. "Jugar" sends `mm_challenge`: a direct proposal with no
+  rating window, refused with a reason for another version, a busy target, a room or a strike. My own
+  row says "Dejar de buscar". The list arrives as `mm_searchers_changed` (debounced 400 ms, only to
+  sockets whose hello declared the `matchmaking` feature) and costs no request.
+- **Found = 20 s to accept, for both.** `MatchFoundDialog` is NOT modal (it must open from the tray),
+  never owned (an owned window that closes minimises its owner), placed over the launcher when it is
+  on screen and centred on the pointer's screen otherwise, with its own sound (`found.wav`,
+  `SoundKind.MatchFound`, never the "somebody joined" pop) and the taskbar flashing. Escape and the ✕
+  DECLINE; `CloseQuietly` is how the server's answer closes it without answering twice. A challenger
+  has accepted by challenging.
+- **Declining or letting the clock run out is a STRIKE** (`matchmaking_penalties`): the first only
+  warns, then 2, 10 and 30 minutes; one is forgiven every 6 h, lazily. Whoever accepted goes back to
+  the queue KEEPING his time. A launcher that vanished mid-proposal is not struck (a crash is not a
+  choice).
+- **Both accepted:** the server opens the room through `createLobby` (`announce: false`,
+  `matchmaking_match_id`) and records the two in `matchmaking_match_players`; `POST /lobbies/:id/join`
+  admits only them (`not_match_participant`), the same rule a tournament room has. Both launchers
+  enter through `JoinByLobbyIdAsync` (the host too), mark themselves READY (`MarkReadyWhenInAsync`),
+  and the host's ordinary auto-start runs — which in a rated room still asks the Record Game
+  confirmation first, on purpose. A matched room shows no Invite and no rename, and to everybody
+  else its row is "Llena". Somebody who never enters within 90 s: the room is closed, he is struck,
+  the other is told and searches again.
+- **Opening or joining a room by hand ends a search** (`ctx.matchmaker.leave(user, 'in_room')` in
+  `POST /lobbies` and after a successful join).
+- **Discord:** after 30 s alone, "X is looking for a 1v1" is posted to the same webhooks a room uses,
+  and DELETED when the search ends (`announceSearching` / `withdrawSearching`).
+- **"Tell me when someone looks for a 1v1"** (`LauncherConfig.NotifyQuickMatchSearchers`, off by
+  default, `ToastCause.News` so "Do not disturb" silences it): only a free stranger, in a mod
+  installed here, of a version KNOWN to be mine, once per ticket and once per person in 10 minutes
+  (`QueueSearchers.WorthNotifying`). The first list after connecting seeds the "seen" set silently;
+  a searcher whose mod's fingerprint is not worked out yet waits for it rather than being lost.
+- The bar gains `QuickCardState.Queued` ("Buscando rival", the clock, how many more search) and
+  `QuickCardWait.Searcher` ("X está buscando ahora"), which wins over a waiting room.
+- `--preview-dialog=matchfound[:host|guest|placing|challenge|casual]` paints the card. Verified live
+  against a local server with two accounts: search + search, challenge, accept, decline (requeued
+  with the original time), timeout (strike), the searcher card, Stop, and both launchers entering the
+  room ready and reaching the game launch.
 
 ## QUICK MATCH (phase 0, docs/DISENO-PARTIDA-RAPIDA.md) — NO SERVER SUPPORT
 

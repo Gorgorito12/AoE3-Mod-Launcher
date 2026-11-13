@@ -67,6 +67,9 @@ public partial class MainWindow
             case "teams":
                 PreviewMyTeams(variant);
                 break;
+            case "matchfound":
+                MultiplayerView?.PreviewMatchFound(variant);
+                break;
             case "matchwatch":
                 PreviewMatchWatch(variant);
                 break;
@@ -272,7 +275,7 @@ public partial class MainWindow
     {
         if (variant == "l")
         {
-            static AppToast.ToastAction Inert(string key, bool primary) => new(Strings.Get(key), primary, () => { });
+            static AppToast.ToastAction Inert(string key, bool primary) => new(Strings.Get(key), primary ? AppToast.ToastButton.Action : AppToast.ToastButton.Solid, () => { });
             const string sample = "Tercios de Flandes";
             ShowAppToast(MultiplayerTab.TeamDeclinedToast(sample) with { AutoDismissMs = 120000 });
             ShowAppToast(MultiplayerTab.TeamJoinedToast(sample, new[] { Inert("MtToastViewTeam", false) }) with { AutoDismissMs = 120000 });

@@ -1052,10 +1052,11 @@ public class RankingMatchesTests
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var card = AppToast.BuildToned(new AppToast.ToastOptions(
-                "", "Replay saved", "Open it in AoE3", new[] { new AppToast.ToastAction("Show in folder", true, () => { }) },
-                Tone: AppToast.ToastTone.Ok, Subtitle: "Aluclown vs Geaf_Argento · ESOC Indonesia"), AppToast.ToastTone.Ok, () => { });
-            Assert.Equal(360, card.Width);
+            var card = AppToast.Build(new AppToast.ToastOptions(
+                AppToast.ToastTone.Ok, AppToast.ToastIcon.Download, "Replay saved", "Open it in AoE3",
+                new[] { new AppToast.ToastAction("Show in folder", AppToast.ToastButton.Action, () => { }) },
+                Subtitle: "Aluclown vs Geaf_Argento · ESOC Indonesia"), () => { });
+            Assert.Equal(AppToast.CardWidth, card.Width);
             var texts = Walk(card).OfType<TextBlock>().Select(t => t.Text).ToList();
             Assert.Contains("Replay saved", texts);
             Assert.Contains("Aluclown vs Geaf_Argento · ESOC Indonesia", texts);

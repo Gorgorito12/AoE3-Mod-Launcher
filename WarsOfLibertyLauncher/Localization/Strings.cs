@@ -8261,6 +8261,17 @@ public static partial class Strings
             [LangEn] = "Join",
             [LangEs] = "Unirse",
         },
+        // Sample text for the notice previews (Settings → Developer, --preview-toasts).
+        ["PreviewToastSampleUser"] = new()
+        {
+            [LangEn] = "Kanchay",
+            [LangEs] = "Kanchay",
+        },
+        ["PreviewToastSampleRoom"] = new()
+        {
+            [LangEn] = "Sample room",
+            [LangEs] = "Sala de ejemplo",
+        },
         ["MpToastIgnore"] = new()
         {
             [LangEn] = "Ignore",
@@ -10253,8 +10264,8 @@ public static partial class Strings
         },
         ["ToastActionCopied"] = new()
         {
-            [LangEn] = "Copied ✓",
-            [LangEs] = "Copiada ✓",
+            [LangEn] = "Copied",
+            [LangEs] = "Copiada",
         },
         ["StatusVerifyListCopied"] = new()
         {
