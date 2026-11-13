@@ -9,6 +9,11 @@ It assumes you already have a working build of your mod — files in a
 folder, ideally a `.zip` published somewhere — and want to be listed
 officially. With that in hand, an afternoon is enough.
 
+This page is the reference. **Something not working?** Start from the symptom in
+[`MODDING-TROUBLESHOOTING.md`](MODDING-TROUBLESHOOTING.md): it says why it happens,
+which field fixes it, and the real case behind each field that exists because of
+a problem.
+
 ---
 
 ## 1. The picture in one diagram
@@ -334,51 +339,26 @@ max per language.
 |---|---|
 | `type` | `IsolatedFolder` or `InPlaceOverlay`. **Read §4.0 first** — the wrong type is the top cause of "my mod won't open". Details in §4. |
 | `defaultFolder` | Where the install dialog suggests installing when AoE3 is NOT detected. When AoE3 is detected the mod goes INSIDE the AoE3 folder, as `<AoE3 folder>\\<cleaned displayName>`, and this field is not used. Empty for `InPlaceOverlay` — the launcher uses the detected AoE3 path. It must be a FULL path (`C:\\Program Files (x86)\\My Mod`) made of valid folder names, or the launcher ignores it and suggests `Program Files (x86)\\<cleaned displayName>` instead. |
-| `probeFile` | Relative path the launcher checks to confirm the mod is installed at a given location (`File.Exists(install + probeFile)`). Pick something **unique** to your mod — `age3y.exe` exists in vanilla AoE3 too. ⚠ **Unique is not enough on its own; declare a `marker` too.** An `IsolatedFolder` install is a CLONE of the player's AoE3 folder, so anything sitting loose in that folder — including a stray leftover of *your own* executable from an older install — is copied into **every** mod folder on the machine. Napoleonic Era declared probe `age3n.exe` with no marker on the reasoning that its own exe was exclusive; one orphan `age3n.exe` in the AoE3 root made every cloned mod folder look like a Napoleonic Era install, and the launcher deleted a user's Struggle of Indonesia while reporting it was uninstalling Napoleonic Era. |
-| `marker` | **Declare one.** Relative path (file **or** directory) unique to your mod and absent from vanilla AoE3. It is what lets the launcher detect your mod **by content in a folder with any name**, and what tells a real install apart from a folder that merely happens to hold your probe file. WoL uses `art\\zulushield`. ⚠ **"My probe is my own `.exe`, so I don't need one" is how a real incident happened** — see the warning under `probeFile`. Prefer a **data** file your mod ships (e.g. `data\\myproto.xml`) over the executable. |
+| `probeFile` | Relative path the launcher checks to confirm the mod is installed at a given location (`File.Exists(install + probeFile)`). Pick something **unique** to your mod — `age3y.exe` exists in vanilla AoE3 too. Unique is not enough on its own: declare a `marker` too ([why](MODDING-TROUBLESHOOTING.md#3-the-launcher-takes-another-folder-for-your-mod-or-uninstalls-the-wrong-one)). |
+| `marker` | **Declare one**, even if your `probeFile` looks exclusive. Relative path (file **or** directory) unique to your mod and absent from vanilla AoE3. It lets the launcher detect your mod **by content in a folder with any name**, and tells a real install apart from a folder that merely holds your probe file. WoL uses `art\\zulushield`. Prefer a **data** file your mod ships (e.g. `data\\myproto.xml`) over the executable ([why](MODDING-TROUBLESHOOTING.md#3-the-launcher-takes-another-folder-for-your-mod-or-uninstalls-the-wrong-one)). |
 | `executable` | Filename of the .exe that launches the game (`age3y.exe` for WoL, `age3m.exe` for Improvement Mod). The launcher looks for it inside the install folder. |
 | `arguments` | Extra args the launcher appends when running. Usually empty. |
 | `privateSetupPath` | *Optional, default false.* Set `true` for a **stock-exe replacement** total conversion (§4.3): at install the launcher points the player's own copy of your exe at a registry key of its own, so it loads your data instead of the base game's and both stay playable. Only meaningful with `type: IsolatedFolder`. Costs one admin prompt at install and caps `displayName` at 33 characters. Don't set it for a UHC mod or an additive `InPlaceOverlay` mod. |
 | `setupPathRedirect` | *Optional, default false.* **Legacy** — the junction-based predecessor of `privateSetupPath` (§4.3). Still supported, but it renames the player's `bin` while your mod runs. Don't use it for a new mod. |
-| `multiplayerProbeFiles` | *Optional.* Array of install-relative files that identify your mod's **version** for the multiplayer join check. Declare **only** if your mod ships its own data files instead of overwriting the base `y` files (`data\\protoy.xml` / `techtreey.xml` / `stringtabley.xml`) — e.g. Napoleonic Era's `data\\proton.xml` + `data\\techtreen.xml`. Omit for a normal mod: the launcher default is correct. This is a **critical** field — wrong values let two different versions share a match and desync. |
+| `multiplayerProbeFiles` | *Optional.* Array of install-relative files that identify your mod's **version** for the multiplayer join check. Declare **only** if your mod ships its own data files instead of overwriting the base `y` files (`data\\protoy.xml` / `techtreey.xml` / `stringtabley.xml`) — e.g. Napoleonic Era's `data\\proton.xml` + `data\\techtreen.xml`. Omit for a normal mod: the launcher default is correct. This is a **critical** field — wrong values let two different versions share a match and desync ([details](MODDING-TROUBLESHOOTING.md#7-two-different-versions-get-into-the-same-match-and-go-out-of-sync)). |
 | `userDataRedirect` | *Optional, default false.* Set `true` if your mod writes saves to the **shared** `My Games\\Age of Empires 3` folder (instead of its own); the launcher junctions that folder at your `userDataFolder` around launch. A stock-exe replacement TC (§4.3) usually needs this too. |
-| `userDataPayload` | *Optional.* Name of a **second asset on the same release** (e.g. `userdata.zip`) holding a small tree to seed into `Documents\\My Games\\<userDataFolder>` — the folder skeleton, AI personalities or a starter profile. Use it only if your mod **will not start** without those folders already there. The launcher only ADDS what is missing: a file the player already has is never overwritten, and uninstall (opt-in) can only take back files still byte-identical to what it wrote. Requires a non-empty `userDataFolder` — the destination has to be declared, never guessed — and `update.mechanism: GitHubReleases`. Different from `userDataRedirect`, which changes *where* the game writes; this decides *what must already be there*. **Attach it to every release.** The launcher looks for it on the release it is installing first; if it is not there it falls back to your `approvedReleaseTag`, and then to the newest release that does carry it (stable before prerelease). So forgetting once no longer breaks anyone — but the fallback is written to the diagnostic log naming both tags, which is the only way you find out, so treat it as a safety net rather than a workflow. Players who already installed are unaffected either way: their seed is recorded in the install manifest and is never re-fetched. |
+| `userDataPayload` | *Optional.* Name of a **second asset on the same release** (e.g. `userdata.zip`) holding a small tree to seed into `Documents\\My Games\\<userDataFolder>` — the folder skeleton, AI personalities or a starter profile. Use it only if your mod **will not start** without those folders already there. The launcher only ADDS what is missing: a file the player already has is never overwritten, and uninstall (opt-in) can only take back files still byte-identical to what it wrote. Requires a non-empty `userDataFolder` — the destination has to be declared, never guessed — and `update.mechanism: GitHubReleases`. Different from `userDataRedirect`, which changes *where* the game writes; this decides *what must already be there*. **Attach it to every release** ([why](MODDING-TROUBLESHOOTING.md#5-the-mod-wont-start-without-its-folders-in-my-games)). |
 | `supersedeCompiledXml` | *Optional, default false.* Remove the base game's compiled `data\<name>.xml.XMB` where your mod ships its own `<name>.xml` and no compiled twin. Set it **only** if your mod is distributed as a complete game folder carrying no compiled tables of its own; leave it off for a mod that installs over the player's AoE3. Only meaningful with `type: IsolatedFolder`. See the note under this table — getting it backwards causes LAN version mismatches. |
 
-> **If you ship `data\*.xml` without their compiled `.XMB`, the player's own copies win — set
-> `install.supersedeCompiledXml`.** Age of Empires III reads the compiled `data\<name>.xml.XMB`
-> in preference to the loose `<name>.xml`, and an `IsolatedFolder` install is a **clone of the
-> player's own game**. So a mod that ships modded `.xml` files and no compiled twins installs with
-> THEIR compiled tables sitting on top of yours — in their language, with the base game's data.
-> Measured on *Knights and Barbarians*: seven files, including `stringtable*` (a Spanish owner got
-> Spanish menus while the author's own folder runs entirely in English) and `protoy`/`techtreey`,
-> which are **simulation** data.
+> **If you ship `data\*.xml` without their compiled `.XMB`, the player's own compiled copies win**,
+> in their language and with the base game's data. Two cases:
 >
-> **Which way to go depends on how your mod is distributed, and the launcher cannot work it out
-> for you** — packaging drops whatever is identical to the base game, so "I ship no such file"
-> and "my file equals the base game's" look the same from outside:
+> - **A complete game folder** that carries no compiled tables: set `install.supersedeCompiledXml: true`.
+> - **An overlay onto the player's AoE3** (Wars of Liberty's shape): leave it off.
 >
-> - **A COMPLETE game folder** that deliberately carries no compiled tables (K&B's shape): set
->   `install.supersedeCompiledXml: true`. A canonical install of your mod has none of those files
->   either, so the launcher removing them reproduces exactly what running your folder directly
->   does. It only ever removes a compiled file whose `.xml` **you** shipped and whose `.XMB` you
->   did **not** — so if you ship both halves, nothing is touched.
-> - **An overlay onto the player's AoE3** (Wars of Liberty's shape): leave it off. Every canonical
->   peer keeps the base game's compiled files, and removing them would diverge from all of them —
->   the engine uses `.xml.xmb` for its LAN version check, which is what caused version mismatches
->   and out-of-syncs when this was tried for WoL.
->
-> `package-mod-payload.ps1` lists the affected files in its report, so you find out before you
-> publish rather than from a player reporting the wrong language.
->
-> **The publish wizard asks this as a plain question** — step 3, under the install type: *"My mod
-> ships as a complete game folder, with no compiled .xml.XMB tables of its own"*. It appears only
-> for the two isolated-folder options, and ticking it is what writes the field. You never have to
-> add it to the JSON by hand.
->
-> **If you DO ship a compiled table, the packager keeps it even when it matches the base game's,
-> and the launcher then leaves it alone.** Its presence in the payload is exactly what says "the
-> author has this one" — which is why it is never dropped as redundant.
+> The publish wizard asks this as a plain question in step 3, so you never add it by hand. Why each
+> case goes the way it does, and the mod that taught us:
+> [`MODDING-TROUBLESHOOTING.md` §4](MODDING-TROUBLESHOOTING.md#4-the-mod-shows-the-players-language-or-the-base-games-data).
 
 > **Where the initial payload actually comes from:** GitHubReleases mods get it from the
 > release asset on `approvedReleaseTag` (or `externalAssetUrlTemplate`); WolPatcher mods get it
@@ -463,8 +443,9 @@ Then pick your model:
 
 If a stock-exe mod is installed as a plain `IsolatedFolder` clone, it will fail to
 open or launch vanilla — because the engine keeps loading the base game's data from
-the real `…\bin`, never your clone. §4.2 and §4.3 are the two fixes; §9 has the
-troubleshooting entry.
+the real `…\bin`, never your clone. §4.2 and §4.3 are the two fixes; the
+troubleshooting entry is
+[`MODDING-TROUBLESHOOTING.md` §1](MODDING-TROUBLESHOOTING.md#1-the-mod-wont-open-or-it-opens-the-base-game).
 
 > **Don't UHC-patch the exe yourself to "fix" this.** It needs a custom exe, which
 > **forks multiplayer compatibility** — players on your custom exe can't play with
@@ -570,24 +551,14 @@ of Indonesia (`mods/struggle-of-indonesia/mod.json`).
 - The patch invalidates the executable's Authenticode signature. It is applied to
   the player's local copy only; no modified binary is distributed.
 
-> **Don't ship a pre-patched exe in your payload.** It looks like it would save the
-> launcher a step, and it doesn't work: the patched exe is useless without its
-> registry key, and that key cannot be packaged — its `setuppath` is *that player's*
-> install folder, and the licence values in it (`pid`, `digitalproductid`,
-> `doublehash`) are *that player's* licence. A shipped exe with no key lands the
-> player straight in the product-key dialog. It would also mean redistributing
-> Microsoft's executable. Let the launcher patch the player's own copy; the key it
-> creates is cloned from that machine's base game, so your mod's licence state always
-> matches their vanilla — if their AoE3 opens without asking for a key, so does your
-> mod.
+> **Don't ship a pre-patched exe in your payload.** It needs a registry key that
+> cannot be packaged, so the player lands in the product-key dialog
+> ([why](MODDING-TROUBLESHOOTING.md#2-the-game-asks-for-a-product-key)). Let the
+> launcher patch the player's own copy.
 
-> **Legacy: `setupPathRedirect`.** The earlier answer to the same problem: around
-> launch the launcher junctioned the folder `setuppath` points at (the real `…\bin`)
-> to your clone folder, and restored it afterwards. It needed no admin, but it
-> renamed the player's `bin` while the mod ran — making your mod and vanilla
-> mutually exclusive during a session, and leaving the folder renamed until the
-> launcher next started if the game crashed. It still works, and installs made with
-> it keep being restored correctly, but **don't choose it for a new mod.**
+> **Legacy: `setupPathRedirect`.** The earlier answer to the same problem. It still
+> works, but it renames the player's `bin` while your mod runs, so **don't choose it
+> for a new mod** ([details](MODDING-TROUBLESHOOTING.md#1-the-mod-wont-open-or-it-opens-the-base-game)).
 
 ---
 
@@ -707,6 +678,8 @@ Rules and trade-offs:
   when the launcher has never resolved your latest (e.g. offline) and is
   the fallback whenever the GitHub API is unreachable. Keep it pointing
   at a known-good version; you don't need to bump it every release.
+  Without follow-latest, renaming or deleting that tag on GitHub breaks every
+  new install ([details](MODDING-TROUBLESHOOTING.md#8-installs-fail-for-everybody-after-you-renamed-a-release-tag)).
 - **Keep shipping the full `.zip` on every release** — follow-latest
   changes which tag is targeted, not what's downloaded. The exception is
   delta patches (§ below): with those on you ship the full `.zip` only on a
@@ -1305,12 +1278,10 @@ replace; anything newer than the payload still arrives as patches after the inst
 | PR not auto-merging even though you only changed `displayName` | First-time submission — always tier 3 for safety | Wait for the maintainer; later cosmetic PRs auto-merge |
 | Launcher doesn't show my mod after merge | 24 h cache hasn't expired yet | Delete `%LocalAppData%\AoE3ModLauncher\catalog-cache.json` to force a refresh |
 
-**Runtime — "my mod won't open" (`Could not load … .bar`, or it launches vanilla):**
-this is almost always the wrong `install.type` for a **non-UHC** mod, not a CI/PR
-problem. The engine is loading the base game's data from the real `…\bin` instead of
-your clone. Read **§4.0** and switch to the model that matches your mod: additive →
-`InPlaceOverlay` (§4.2), stock-exe replacement → `IsolatedFolder` +
-`privateSetupPath: true` (§4.3).
+**Problems once the mod is installed** — it won't open, wrong language, saves in the
+wrong folder, desyncs — are not CI problems. They are listed by symptom in
+[`MODDING-TROUBLESHOOTING.md`](MODDING-TROUBLESHOOTING.md); "my mod won't open" is
+[its first entry](MODDING-TROUBLESHOOTING.md#1-the-mod-wont-open-or-it-opens-the-base-game).
 
 ---
 
@@ -1429,14 +1400,10 @@ with **zero extra config**:
 
 ### Switched on by one `mod.json` field
 
-- `install.marker` — a file/dir unique to your mod (see §3.4 / §4). ⚠ **Declare
-  one even when your probe file looks exclusive.** This bullet used to say a
-  marker was needed *only* when the probe also shipped in vanilla, and gave "your
-  own `.exe`" as the example of when you could skip it — that advice caused a real
-  incident. An `IsolatedFolder` install clones the player's AoE3 folder, so one
-  stray leftover of your exe in that folder propagates into every mod folder on
-  the machine and they all start looking like your install. Prefer a data file
-  your mod ships over the executable.
+- `install.marker` — a file/dir unique to your mod (see §3.4 / §4). **Declare
+  one even when your probe file looks exclusive**, and prefer a data file your
+  mod ships over the executable
+  ([why](MODDING-TROUBLESHOOTING.md#3-the-launcher-takes-another-folder-for-your-mod-or-uninstalls-the-wrong-one)).
 - `update.github.followLatest` — track the modder's newest stable GitHub release
   instead of the catalog-pinned tag (§5.1).
 - `update.github.deltaPatches` — ship optional "changed-files-only" incremental

@@ -141,6 +141,9 @@ pipeline, see [docs/BUILDING.md](docs/BUILDING.md).
   the release / signing pipeline.
 - **[docs/MODDING.md](docs/MODDING.md)** — authoritative `mod.json` / catalog
   spec for mod authors.
+- **[docs/MODDING-TROUBLESHOOTING.md](docs/MODDING-TROUBLESHOOTING.md)** — for mod
+  authors, from a symptom ("my mod won't open", "wrong language") to the field that
+  fixes it, with the real case behind each one.
 - **[INSTALL.md](WarsOfLibertyLauncher/INSTALL.md)** — end-user install +
   SmartScreen guide.
 - **[docs/ELO.md](docs/ELO.md)** — player guide to the multiplayer rating:
