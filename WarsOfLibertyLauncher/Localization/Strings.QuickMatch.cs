@@ -102,13 +102,13 @@ public static partial class Strings
         },
         ["QmModMissing"] = new()
         {
-            [LangEn] = "The quick match plays your active mod, and it isn't installed. Install it from the Library first.",
-            [LangEs] = "La partida rápida juega con tu mod activo, y no está instalado. Instálalo primero desde la Biblioteca.",
+            [LangEn] = "The mod chosen for the quick match isn't installed. Install it from the Library first.",
+            [LangEs] = "El mod elegido para la partida rápida no está instalado. Instálalo primero desde la Biblioteca.",
         },
         ["QmModMissingNamed"] = new()
         {
-            [LangEn] = "The quick match plays your active mod, and {0} isn't installed. Install it from the Library first.",
-            [LangEs] = "La partida rápida juega con tu mod activo, y {0} no está instalado. Instálalo primero desde la Biblioteca.",
+            [LangEn] = "{0}, the mod chosen for the quick match, isn't installed. Install it from the Library first.",
+            [LangEs] = "{0}, el mod elegido para la partida rápida, no está instalado. Instálalo primero desde la Biblioteca.",
         },
         // {0} is the server's or the network's message.
         ["QmFailed"] = new()

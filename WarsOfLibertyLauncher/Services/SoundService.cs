@@ -52,7 +52,7 @@ public static class SoundService
     /// notify.wav and is the most frequent case, so it is reused rather than duplicated
     /// under a second name.
     /// </summary>
-    public enum SoundKind { Chat, Notification, Connect, Success, Error }
+    public enum SoundKind { Chat, Notification, Connect, Success, Error, MatchFound }
 
     // Cached WAV bytes per resource path (loaded once from the pack resource).
     private static readonly ConcurrentDictionary<string, byte[]?> s_cache = new();
@@ -72,6 +72,9 @@ public static class SoundService
             // and a fresh install can finish into an immediate update-finished.
             [SoundKind.Success]      = ("Assets/Sounds/success.wav", 900),
             [SoundKind.Error]        = ("Assets/Sounds/error.wav",   900),
+            // A quick match found a rival: the one sound that has to be heard from across the
+            // room, since the answer has 20 s. Its own tone, never the "somebody joined" pop.
+            [SoundKind.MatchFound]   = ("Assets/Sounds/found.wav",   1500),
         };
 
     // Last-played tick (ms) per category, for the anti-spam throttle.
@@ -91,6 +94,8 @@ public static class SoundService
     public static void PlaySuccess() => Play(SoundKind.Success);
     /// <summary>An operation failed. Not a notification kind — failures leave no bell item.</summary>
     public static void PlayError() => Play(SoundKind.Error);
+
+    public static void PlayMatchFound() => Play(SoundKind.MatchFound);
 
     /// <summary>
     /// Play the sound for <paramref name="kind"/> if sounds are enabled, it is not an

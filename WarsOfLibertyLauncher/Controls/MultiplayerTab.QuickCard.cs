@@ -138,6 +138,9 @@ public partial class MultiplayerTab
         {
             case QuickMatchStage.Looking:
                 return new QuickCardFacts(QuickCardState.Looking, QuickCardWait.Unknown, _qmModName ?? mod, _qmKind);
+            case QuickMatchStage.Queued:
+                return new QuickCardFacts(QuickCardState.Queued, QuickCardWait.Unknown, _qmModName ?? mod, _qmKind,
+                    Searching: CompatibleSearchers(_qmModId ?? "", _qmModHash, _qmKind).Count);
             case QuickMatchStage.Waiting:
                 if (RoomPlayerCount() >= 2)
                 {
@@ -182,6 +185,16 @@ public partial class MultiplayerTab
         var hash = _demoRooms ? RoomListDemoData.MyHash : KnownModHash(modId);
         if (rooms == null || hash == null)
             return new QuickCardFacts(QuickCardState.Ready, QuickCardWait.Unknown, mod, kind, Peak: peak);
+
+        // Somebody in the server's queue comes first: a search is matched with him at once.
+        var searchers = CompatibleSearchers(modId, hash, kind);
+        if (searchers.Count > 0)
+        {
+            var first = searchers[0];
+            return new QuickCardFacts(QuickCardState.Ready, QuickCardWait.Searcher, mod, kind,
+                Host: string.IsNullOrWhiteSpace(first.DisplayName) ? "—" : first.DisplayName,
+                Searching: searchers.Count, Peak: peak);
+        }
 
         var join = QuickMatchPlanner.RoomsToJoin(rooms, myId, modId, hash, _cachedStanding?.Rating, kind);
         if (join.Count > 0)

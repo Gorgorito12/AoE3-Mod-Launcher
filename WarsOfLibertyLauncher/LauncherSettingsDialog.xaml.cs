@@ -273,6 +273,9 @@ public partial class LauncherSettingsDialog : Window
         SoundsTitle.Text = Strings.Get("DlgSettingsSounds");
         SoundsHint.Text = Strings.Get("DlgSettingsSoundsHint");
         SetTip(SoundsCheck, "DlgSettingsSoundsTip");
+        NotifySearchersTitle.Text = Strings.Get("DlgSettingsNotifySearchers");
+        NotifySearchersHint.Text = Strings.Get("DlgSettingsNotifySearchersHint");
+        SetTip(NotifySearchersCheck, "DlgSettingsNotifySearchersTip");
         ReceiveInvitesTitle.Text = Strings.Get("DlgSettingsReceiveInvites");
         ReceiveInvitesHint.Text = Strings.Get("DlgSettingsReceiveInvitesHint");
         SetTip(ReceiveInvitesCheck, "DlgSettingsReceiveInvitesTip");
@@ -514,6 +517,7 @@ public partial class LauncherSettingsDialog : Window
         NotifyNewRoomsCheck.IsChecked = _config.NotifyNewRooms;
         SoundsCheck.IsChecked = _config.EnableSounds;
         ReceiveInvitesCheck.IsChecked = _config.ReceiveInvites;
+        NotifySearchersCheck.IsChecked = _config.NotifyQuickMatchSearchers;
         DoNotDisturbCheck.IsChecked = _config.DoNotDisturb;
         DeveloperModeCheck.IsChecked = _config.DeveloperMode;
         ApplyDeveloperModeVisibility();
@@ -880,6 +884,7 @@ public partial class LauncherSettingsDialog : Window
             ["closeOnGame"] = B(CloseOnGameCheck),
             ["notifyRooms"] = B(NotifyNewRoomsCheck),
             ["receiveInvites"] = B(ReceiveInvitesCheck),
+            ["notifySearchers"] = B(NotifySearchersCheck),
             // Without its key here the switch would change nothing the footer compares, and so
             // would never be applied or saved.
             ["doNotDisturb"] = B(DoNotDisturbCheck),
@@ -2269,6 +2274,7 @@ public partial class LauncherSettingsDialog : Window
         _config.EnableSounds = SoundsCheck.IsChecked == true;
         Services.SoundService.Enabled = _config.EnableSounds;
         _config.ReceiveInvites = ReceiveInvitesCheck.IsChecked == true;
+        _config.NotifyQuickMatchSearchers = NotifySearchersCheck.IsChecked == true;
         // Read live by MainWindow's pop-up routing (same config instance); the ambient sounds
         // need the static flag, like SoundService.Enabled above.
         _config.DoNotDisturb = DoNotDisturbCheck.IsChecked == true;

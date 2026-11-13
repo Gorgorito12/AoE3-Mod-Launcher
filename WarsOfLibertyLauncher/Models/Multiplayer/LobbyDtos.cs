@@ -228,6 +228,11 @@ public class LobbySummary
     [JsonPropertyName("tournament_id")]
     public string? TournamentId { get; set; }
 
+    /// <summary>A room the quick-match queue opened for two matched players: only they may enter,
+    /// so the row shows the QUICK MATCH chip and no Join. False from a server without the queue.</summary>
+    [JsonPropertyName("matchmaking")]
+    public bool Matchmaking { get; set; }
+
     [JsonPropertyName("spectators_present")]
     public int SpectatorsPresent { get; set; }
 

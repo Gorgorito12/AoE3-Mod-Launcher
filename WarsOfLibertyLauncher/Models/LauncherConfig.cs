@@ -1611,6 +1611,14 @@ public class LauncherConfig
     public bool NotifyNewRooms { get; set; } = true;
 
     /// <summary>
+    /// A card when somebody starts a quick-match search in a mod installed here, of my version, with
+    /// a Play button that challenges him. OFF by default: it is news nobody asked for until they
+    /// do, and "Do not disturb" silences it like any other news (ToastCause.News).
+    /// </summary>
+    [JsonPropertyName("notifyQuickMatchSearchers")]
+    public bool NotifyQuickMatchSearchers { get; set; }
+
+    /// <summary>
     /// The player's choice for the Rooms page's community panel (design handoff turns 38-39,
     /// which ask for it to be REMEMBERED): true shown, false folded to its 40-px bar, null
     /// never chosen — then the cards show whenever they fit under the list

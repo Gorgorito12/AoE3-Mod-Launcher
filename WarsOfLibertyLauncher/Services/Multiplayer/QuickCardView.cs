@@ -26,6 +26,8 @@ internal enum QuickCardState
     NotRanked,
     /// <summary>Already in another room: searching would leave it.</summary>
     InOtherRoom,
+    /// <summary>In the server's queue: no room until a rival is matched.</summary>
+    Queued,
 }
 
 /// <summary>What the list says about a rival before searching, in the Ready state.</summary>
@@ -39,6 +41,9 @@ internal enum QuickCardWait
     OtherVersion,
     /// <summary>The list or my copy's fingerprint is not known yet.</summary>
     Unknown,
+    /// <summary>Somebody of this mod, version and kind is searching in the server's queue right
+    /// now: a search is matched with him at once.</summary>
+    Searcher,
 }
 
 /// <summary>What the bar's buttons do. <see cref="SwitchMod"/> is the "Change" link of the notice
@@ -70,7 +75,8 @@ internal sealed record QuickCardFacts(
     QuickCardState State, QuickCardWait Wait, string Mod,
     QuickMatchKind Kind = QuickMatchKind.Ranked,
     string? Host = null, int Minutes = 0, bool RoomCasual = false, int OtherRooms = 0, string? Peak = null,
-    string? Rival = null, bool Hosting = false, string? RoomName = null, string? ElsewhereMod = null);
+    string? Rival = null, bool Hosting = false, string? RoomName = null, string? ElsewhereMod = null,
+    int Searching = 0);
 
 /// <summary>
 /// The quick match bar's words and buttons, one state at a time (2026-11-10: a one-line bar of about
@@ -114,6 +120,15 @@ internal static class QuickCardView
                 buttons.Add(B(QuickCardAction.ViewRoom, "QcViewRoom", false));
                 buttons.Add(B(QuickCardAction.Stop, "QcStop", false));
                 break;
+            case QuickCardState.Queued:
+                mark = QuickCardMark.Pulse;
+                title = Strings.Get("QcQueuedTitle");
+                clock = true;
+                line = f.Searching > 0
+                    ? Strings.Format(f.Searching == 1 ? "QcQueuedLineOne" : "QcQueuedLineMany", f.Searching, f.Mod, KindText(f.Kind))
+                    : Strings.Format("QcQueuedLineAlone", f.Mod, KindText(f.Kind));
+                buttons.Add(B(QuickCardAction.Stop, "QcStop", false));
+                break;
             case QuickCardState.Found:
                 mark = QuickCardMark.Found;
                 title = Strings.Format("QcFoundTitle", f.Rival ?? "");
@@ -141,6 +156,9 @@ internal static class QuickCardView
                 pickers = true;
                 line = f.Wait switch
                 {
+                    QuickCardWait.Searcher => f.Searching > 1
+                        ? Strings.Format("QcWaitSearcherMany", f.Host ?? "", f.Searching - 1)
+                        : Strings.Format("QcWaitSearcher", f.Host ?? ""),
                     QuickCardWait.Room => f.RoomCasual
                         ? Strings.Format("QcWaitRoomCasual", f.Host ?? "", f.Minutes)
                         : Strings.Format("QcWaitRoom", f.Host ?? "", f.Minutes),

@@ -493,6 +493,21 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="NotifySearchersTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="NotifySearchersHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="NotifySearchersCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
                                             <TextBlock x:Name="ReceiveInvitesTitle" Style="{StaticResource SetRowTitle}"/>
                                             <TextBlock x:Name="ReceiveInvitesHint" Style="{StaticResource SetRowDesc}"/>
                                         </StackPanel>

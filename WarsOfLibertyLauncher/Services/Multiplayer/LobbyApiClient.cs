@@ -234,6 +234,23 @@ public class LobbyApiClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether the server runs the quick-match queue, and how many search per mod. Null when the
+    /// server predates it (404): the launcher then keeps the room-based quick match.
+    /// </summary>
+    public async Task<MatchmakingStatusResponse?> GetMatchmakingStatusAsync(CancellationToken ct = default)
+    {
+        try { return await GetAsync<MatchmakingStatusResponse>("matchmaking/status", requireAuth: false, ct); }
+        catch (LobbyApiException ex) when (ex.Status is 404 or 405) { return null; }
+    }
+
+    /// <summary>Who is searching now. Empty from a server without the queue.</summary>
+    public async Task<List<QueueSearcher>> GetQueueSearchersAsync(CancellationToken ct = default)
+    {
+        try { return (await GetAsync<QueueSearchersResponse>("matchmaking/searchers", requireAuth: false, ct))?.Searchers ?? new(); }
+        catch (LobbyApiException ex) when (ex.Status is 404 or 405) { return new(); }
+    }
+
     public Task<CreateLobbyResponse> CreateLobbyAsync(CreateLobbyRequest req, CancellationToken ct = default)
         => PostAsync<CreateLobbyResponse>("lobbies", req, requireAuth: true, ct);
 

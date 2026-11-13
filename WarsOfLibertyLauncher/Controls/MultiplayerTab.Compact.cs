@@ -538,7 +538,8 @@ public partial class MultiplayerTab
         // A list to draw means the problem message, if any, is over.
         RoomsErrorBox.Visibility = Visibility.Collapsed;
 
-        var rooms = all ?? (IReadOnlyList<LobbySummary>)Array.Empty<LobbySummary>();
+        // The players searching in the server's queue are rows too, under the same rule (Matchmaking.cs).
+        var rooms = (all ?? (IReadOnlyList<LobbySummary>)Array.Empty<LobbySummary>()).Concat(SearcherRows()).ToList();
         // Design 86 orders by what the viewer can DO (RoomActionRule.Rank) and keeps the server's
         // order inside each rank — the sort is stable. Filter first, then rank.
         var ordered = RoomSearchFilter.Apply(rooms, _roomsQuery)

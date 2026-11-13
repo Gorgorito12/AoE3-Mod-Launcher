@@ -48,10 +48,13 @@ public partial class MultiplayerTab
     {
         var seats = RoomFormats.SeatsOf(lobby.MaxPlayers, lobby.SpectatorSlots, lobby.CurrentPlayers, lobby.SpectatorsPresent);
         var installed = RoomModInstalled(lobby.ModId);
+        var mine = IsMyRoom(lobby);
+        // A room the queue opened is for the two it matched: to anybody else it is taken.
+        var offer = lobby.Matchmaking && !mine ? RoomOffer.Full : RoomFormats.OfferFor(seats, ObserversUnlocked);
         return new RoomRowFacts(
-            IsMyRoom(lobby),
+            mine,
             lobby.Status == "in_game",
-            RoomFormats.OfferFor(seats, ObserversUnlocked),
+            offer,
             installed,
             installed && RoomVersionDiffers(lobby));
     }
@@ -103,6 +106,8 @@ public partial class MultiplayerTab
         _roomModHashes[profile.Id] = (path, string.IsNullOrWhiteSpace(hash) ? null : hash);
         // The quick match card can now say who waits — or that nobody does.
         RenderQuickCard();
+        // A searcher of this mod may have been waiting for this answer to earn his card.
+        if (_mmSearchersSeeded) MaybeNotifySearchers(_mmSearchers);
         // Only a hash that could change a row is worth a repaint.
         if (hash != null && _lastBrowserList?.Any(l => string.Equals(l.ModId, profile.Id, StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(l.ModCombinedHash)) == true)
@@ -244,6 +249,8 @@ public partial class MultiplayerTab
         var facts = RoomFactsOf(lobby);
         var action = RoomActionRule.Decide(facts);
         var mine = action == RoomAction.OpenMine;
+        // A player searching in the queue, drawn as a room of one waiting player (Matchmaking.cs).
+        var searcher = (lobby as QueueSearcherRow)?.Searcher;
         var group = RoomGroupBrushes(RoomActionRule.GroupOf(action));
 
         // Design 104a: the card's face comes from the style; the group's colour is its rim and
@@ -300,7 +307,7 @@ public partial class MultiplayerTab
         var roomText = new StackPanel { Margin = new Thickness(RoomColumnGap, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         var name = new TextBlock
         {
-            Text = lobby.Title,
+            Text = searcher != null ? Strings.Get("MmRowTitle") : lobby.Title,
             Foreground = Rm("RmTextStrong"),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -311,7 +318,7 @@ public partial class MultiplayerTab
         // ONE line of chips. A WrapPanel in a 22-px clip: a chip that does not fit wraps onto a
         // line nobody sees, so it leaves WHOLE rather than cut in half.
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
-        foreach (var chip in RoomChipsOf(lobby, facts)) chips.Children.Add(chip);
+        foreach (var chip in searcher != null ? SearcherChipsOf(searcher, facts) : RoomChipsOf(lobby, facts)) chips.Children.Add(chip);
         var chipLine = new Grid { ClipToBounds = true, Height = 22, Margin = new Thickness(0, 3, 0, 0) };
         chipLine.Children.Add(chips);
         roomText.Children.Add(chipLine);
@@ -395,28 +402,41 @@ public partial class MultiplayerTab
             Tag = lobby,
         };
         players.SetResourceReference(TextBlock.FontSizeProperty, "RmRowSeatsSize");
-        players.MouseEnter += (_, _) => players.TextDecorations = TextDecorations.Underline;
-        players.MouseLeave += (_, _) => players.TextDecorations = null;
-        players.MouseLeftButtonUp += PlayersPeek_Click;
+        if (searcher == null)
+        {
+            players.MouseEnter += (_, _) => players.TextDecorations = TextDecorations.Underline;
+            players.MouseLeave += (_, _) => players.TextDecorations = null;
+            players.MouseLeftButtonUp += PlayersPeek_Click;
+        }
+        else
+        {
+            // Nobody to peek at: there is no room yet.
+            players.Cursor = null;
+        }
         // The whole cell carries the tooltip (a tooltip on the digits alone is a small target),
         // and a transparent fill so the gaps between the dots answer the pointer too.
         var playersCell = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
             Background = Brushes.Transparent,
-            ToolTip = TooltipHelper.Wrap(Strings.Format("RmPlayersTip", seats.PlayersSeated, seats.PlayerSeats)
-                                         + "\n" + Strings.Get("MpRoomPeekTooltip")),
+            ToolTip = TooltipHelper.Wrap(searcher != null
+                ? Strings.Get("MmRowPlayersTip")
+                : Strings.Format("RmPlayersTip", seats.PlayersSeated, seats.PlayerSeats)
+                  + "\n" + Strings.Get("MpRoomPeekTooltip")),
         };
         playersCell.Children.Add(players);
         playersCell.Children.Add(BuildSeatDots(seats.PlayersSeated, seats.PlayerSeats));
         PlaceRoomCell(grid, RoomColumn.Players, playersCell, gap: true);
 
         // === PING: to this host over Radmin, only when the server publishes hosts' addresses ===
-        if (HostPingColumnShown)
+        if (HostPingColumnShown && searcher == null)
             PlaceRoomCell(grid, RoomColumn.Ping, BuildHostPingCell(lobby), gap: true);
 
         // === ACTION ===
-        var actionCell = BuildRoomAction(lobby, action, out var fire);
+        Action? fire;
+        var actionCell = searcher != null
+            ? BuildSearcherAction(searcher, action, out fire)
+            : BuildRoomAction(lobby, action, out fire);
         PlaceRoomCell(grid, RoomColumn.Action, actionCell, gap: true);
 
         // A double click does what the button does, through the button, so the row can never do
@@ -575,6 +595,63 @@ public partial class MultiplayerTab
         if (seats.WatchSeats > 0) yield return RoomChip(Strings.Format("RmChipObservers", seats.Watching, seats.WatchSeats), "RmDotPassword", "RmTextHost");
         if (facts.Mine)
             yield return RoomChip(Strings.Get(IsHostedByMe(lobby) ? "RmChipYours" : "RmChipInside"), "RmChipMineDot", "RmChipMineText", fillKey: "RmChipMineBg", rimKey: null);
+    }
+
+    /// <summary>A searcher's chips: what he searches, how long he has waited, and the two states a
+    /// room row has too (another version, mine).</summary>
+    private IEnumerable<FrameworkElement> SearcherChipsOf(QueueSearcher s, RoomRowFacts facts)
+    {
+        var kind = QueueSearchers.KindOf(s.Kind);
+        yield return kind switch
+        {
+            QuickMatchKind.Casual => RoomChip(Strings.Format("RmChipCasual", "1v1"), "RmDotCasual", "RmTextHost", Strings.Get("MpRoomCasualTooltip")),
+            QuickMatchKind.Either => RoomChip(Strings.Get("MmChipEither"), "RmDotRanked", "RmTextHost", Strings.Get("MmChipEitherTip")),
+            _ => RoomChip(Strings.Format("RmChipRanked", "1v1"), "RmDotRanked", "RmTextHost", Strings.Get("MpRoomCompetitiveTooltip")),
+        };
+        var minutes = QueueSearchers.MinutesWaiting(s, DateTime.UtcNow);
+        yield return RoomChip(minutes is int m ? Strings.Format("MmChipWaiting", m) : Strings.Get("MmChipQuick"),
+            "RmGroupOpen", "RmGroupOpenText", Strings.Get("MmChipQuickTip"), pulse: true);
+        if (facts.VersionDiffers)
+            yield return RoomChip(Strings.Get("RmChipOtherVersion"), "RmGroupOff", "RmGroupOffText", fillKey: "RmChipWarnBg", rimKey: "RmChipWarnRim");
+        if (facts.Mine)
+            yield return RoomChip(Strings.Get("MmChipYourSearch"), "RmChipMineDot", "RmChipMineText", fillKey: "RmChipMineBg", rimKey: null);
+    }
+
+    /// <summary>A searcher's one action: Play (challenge him), Stop searching on my own row, or the
+    /// same mod and version steps a room row offers.</summary>
+    private FrameworkElement BuildSearcherAction(QueueSearcher s, RoomAction action, out Action? fire)
+    {
+        var (key, style) = action switch
+        {
+            RoomAction.OpenMine => ("QcStop", "RmRowButton"),
+            RoomAction.Join => ("MmPlay", "RmRowButtonJoin"),
+            _ => (RoomActionRule.CaptionKey(action), "RmRowButton"),
+        };
+        var caption = Strings.Get(key);
+        var btn = new Button { Style = (Style)Application.Current.FindResource(style), Content = caption };
+        AutomationProperties.SetAutomationId(btn, "SearcherAction:" + s.TicketId);
+        AutomationProperties.SetName(btn, caption);
+        switch (action)
+        {
+            case RoomAction.OpenMine:
+                btn.Click += (_, _) => _ = CancelQuickMatchAsync(Strings.Get("QmCancelled"));
+                break;
+            case RoomAction.Join:
+                btn.ToolTip = TooltipHelper.Wrap(Strings.Format("MmPlayTip", string.IsNullOrWhiteSpace(s.DisplayName) ? "—" : s.DisplayName));
+                btn.Click += (_, _) => _ = ChallengeAsync(s);
+                break;
+            case RoomAction.InstallMod:
+                btn.Click += (_, _) => { if (ModRegistry.Find(s.ModId) is { } p) _openModInLibrary?.Invoke(p); };
+                break;
+            case RoomAction.CheckMyCopy:
+                btn.Click += (_, _) => { if (ModRegistry.Find(s.ModId) is { } p) _openModSettings?.Invoke(p, "local-files"); };
+                break;
+            default:
+                btn.IsEnabled = false;
+                break;
+        }
+        fire = () => btn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        return btn;
     }
 
     /// <summary>A 22-px chip: a 6-px dot and a short label, on a faint fill with a rim. A chip

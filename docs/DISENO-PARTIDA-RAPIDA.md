@@ -1,5 +1,15 @@
 # Diseño · Partida rápida (matchmaking)
 
+> **Actualización 2026-11-12 — Fase 1 construida, en versión HÍBRIDA.** La cola del servidor de §7
+> existe (`wol-launcher-lobby-node/src/matchmaking`, migración 0031) con aceptar en 20 s, faltas y
+> sala solo para los dos emparejados. Lo que añade a §7: **quien busca aparece en la lista de Salas**
+> con un botón «Jugar» que lo reta directamente (`mm_challenge`, sin ventana de ELO), un aviso
+> opcional «X busca rival 1v1», y un mensaje en Discord a los 30 s que se borra al terminar la
+> búsqueda. Diferencias con §7: los dos quedan **listos solos** al entrar a la sala, la sala no
+> ofrece Invitar ni renombrar, y `matches.origin` no se añadió (la sala ya lleva
+> `matchmaking_match_id`). Un servidor sin la cola (404) sigue usando la Fase 0 de abajo. Reglas y
+> trampas: `.claude/rules/multiplayer.md`, sección «QUICK MATCH WITH THE SERVER'S QUEUE».
+
 > **Estado:** **Fase 0 implementada** («unirse o crear» sobre las salas existentes, sin cambios en
 > el backend), pendiente de publicar, con una **interfaz provisional** hecha con estilos y tokens
 > existentes porque no hay handoff de diseño. Las Fases 1 y 2 quedan diseñadas para cuando la

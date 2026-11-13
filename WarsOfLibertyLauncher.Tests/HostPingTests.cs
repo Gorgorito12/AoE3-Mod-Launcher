@@ -79,7 +79,8 @@ public class HostPingTests
         Assert.Contains(RoomsTableLayout.Resolve(2400, includePing: true), c => c.Column == RoomColumn.Ping);
 
         var rows = File.ReadAllText(UiThreadAttributionTests.LauncherFile("Controls/MultiplayerTab.RoomRows.cs"));
-        Assert.Contains("if (HostPingColumnShown)\n            PlaceRoomCell(grid, RoomColumn.Ping", rows.Replace("\r\n", "\n"));
+        // A searcher's row (the server's quick-match queue) has no host to ping, so it adds none either.
+        Assert.Contains("if (HostPingColumnShown && searcher == null)\n            PlaceRoomCell(grid, RoomColumn.Ping", rows.Replace("\r\n", "\n"));
     }
 
     /// <summary>An older server answers /lobbies/radmin as the room called "radmin": a 404, which

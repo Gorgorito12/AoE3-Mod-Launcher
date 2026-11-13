@@ -25,6 +25,7 @@ public static partial class Strings
         // (Strings.QuickMatch.cs), merged the same way.
         foreach (var kv in PlacementTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in QuickMatchTable) Table.Add(kv.Key, kv.Value);
+        foreach (var kv in MatchmakingTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in LibraryTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in SmallDialogsTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in RoomTable) Table.Add(kv.Key, kv.Value);
