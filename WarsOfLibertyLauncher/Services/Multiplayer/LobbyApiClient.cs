@@ -500,9 +500,19 @@ public class LobbyApiClient : IDisposable
     public Task<TournamentListResponse> ListTournamentsAsync(CancellationToken ct = default)
         => GetAsync<TournamentListResponse>("tournaments", requireAuth: false, ct);
 
-    public Task<TournamentDetail> GetTournamentAsync(string id, CancellationToken ct = default)
+    /// <param name="inviteCode">A private tournament's code, for somebody not in it yet. The
+    /// server answers 404 to a stranger without it.</param>
+    public Task<TournamentDetail> GetTournamentAsync(
+        string id, string? inviteCode = null, CancellationToken ct = default)
         => GetAsync<TournamentDetail>(
-            $"tournaments/{Uri.EscapeDataString(id)}", requireAuth: false, ct);
+            $"tournaments/{Uri.EscapeDataString(id)}"
+            + (string.IsNullOrEmpty(inviteCode) ? "" : $"?code={Uri.EscapeDataString(inviteCode)}"),
+            requireAuth: false, ct);
+
+    /// <summary>The private tournament an invite code opens. A 404 means no such code.</summary>
+    public Task<TournamentByCode> FindTournamentByCodeAsync(string code, CancellationToken ct = default)
+        => GetAsync<TournamentByCode>(
+            $"tournaments/by-code/{Uri.EscapeDataString(code)}", requireAuth: false, ct);
 
     public Task<TournamentSummary> CreateTournamentAsync(object req, CancellationToken ct = default)
         => PostAsync<TournamentSummary>("tournaments", req, requireAuth: true, ct);

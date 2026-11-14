@@ -1,0 +1,19 @@
+<controls:BaseDialog x:Class="WarsOfLibertyLauncher.JoinTournamentCodeDialog"
+                     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
+                     Width="440">
+    <StackPanel>
+        <TextBlock x:Name="FieldLabel" Style="{StaticResource WindowFieldLabel}"/>
+        <Border Style="{StaticResource DialogFieldBox}" Margin="0,6,0,0">
+            <TextBox x:Name="CodeEntry" Style="{StaticResource DialogBareText}"
+                     MaxLength="16" VerticalAlignment="Center" CharacterCasing="Upper"
+                     FontFamily="Consolas, Courier New, monospace"
+                     TextChanged="CodeEntry_TextChanged"/>
+        </Border>
+        <TextBlock x:Name="PromptText" Style="{StaticResource DialogHint}" Margin="0,6,0,0"/>
+        <!-- What went wrong, in the dialog itself: the code stays there to be corrected. -->
+        <TextBlock x:Name="ErrorText" Style="{StaticResource DialogHint}" Margin="0,6,0,0"
+                   Foreground="#F5BD76" Visibility="Collapsed"/>
+    </StackPanel>
+</controls:BaseDialog>

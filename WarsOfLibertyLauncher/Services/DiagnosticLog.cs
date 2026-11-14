@@ -315,21 +315,21 @@ public static class DiagnosticLog
         // slow ones turns "4 s went somewhere" into a method name.
         try
         {
-            var started = new System.Runtime.CompilerServices.ConditionalWeakTable<
-                System.Windows.Threading.DispatcherOperation,
-                System.Runtime.CompilerServices.StrongBox<(long Ticks, TimeSpan Gc)>>();
+            // A stack, never a ConditionalWeakTable: one add and one remove per operation churned
+            // the table's internal containers and leaked ~235 MB an hour while anything animated.
+            // See InFlightOperations.
+            var started = new InFlightOperations<System.Windows.Threading.DispatcherOperation, (long Ticks, TimeSpan Gc)>();
+            s_inFlightCount = () => started.Count;
 
             // The GC pause total is sampled at the start too — a few nanoseconds on EVERY
             // operation, which is the cost of being able to say how much of a slow one was GC.
             dispatcher.Hooks.OperationStarted += (_, a) =>
-                started.AddOrUpdate(a.Operation, new System.Runtime.CompilerServices.StrongBox<(long, TimeSpan)>(
-                    (Environment.TickCount64, GC.GetTotalPauseDuration())));
+                started.Start(a.Operation, (Environment.TickCount64, GC.GetTotalPauseDuration()));
 
             dispatcher.Hooks.OperationCompleted += (_, a) =>
             {
-                if (!started.TryGetValue(a.Operation, out var box)) return;
-                started.Remove(a.Operation);
-                var ms = Environment.TickCount64 - box.Value.Ticks;
+                if (!started.TryComplete(a.Operation, out var box)) return;
+                var ms = Environment.TickCount64 - box.Ticks;
                 // Every redraw is counted, however fast, for the layout-storm watch: a frame that
                 // costs 3 ms on a fast PC is the same frame that costs 300 on a slow one.
                 if (IsRenderOperation(a.Operation))
@@ -339,7 +339,7 @@ public static class DiagnosticLog
                     s_renderMsThisSecond += ms;
                 }
                 if (ms < thresholdMs) return;
-                var gcMs = (long)(GC.GetTotalPauseDuration() - box.Value.Gc).TotalMilliseconds;
+                var gcMs = (long)(GC.GetTotalPauseDuration() - box.Gc).TotalMilliseconds;
                 Write(FormatSlowOp(ms, DescribeOperation(a.Operation), gcMs));
             };
         }
@@ -357,6 +357,12 @@ public static class DiagnosticLog
     private static readonly System.Reflection.FieldInfo? s_operationMethod =
         typeof(System.Windows.Threading.DispatcherOperation).GetField(
             "_method", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+    /// <summary>How many dispatcher operations the "UI OP" timing holds right now; a test reads it to
+    /// prove the set does not grow with the number of operations run.</summary>
+    internal static int InFlightOperationCount => s_inFlightCount?.Invoke() ?? 0;
+
+    private static Func<int>? s_inFlightCount;
 
     private static int s_layoutPassesThisSecond;
     private static int s_rendersThisSecond;

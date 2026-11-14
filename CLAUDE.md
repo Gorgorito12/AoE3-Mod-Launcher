@@ -1971,20 +1971,20 @@ rather than the reverse.
   folder) and no separate clean AoE3 correctly finds nothing to clone — the existing
   WoL is recognized by the mod-detection path instead; this is intended, not a miss.
 
-- **The top nav tab ORDER is runtime-driven, not the XAML order.** The three
-  tabs (LIBRARY / WORKSHOP / MULTIPLAYER) are declared in a fixed left-to-right
-  order in `MainWindow.xaml` (`TopTabBar` StackPanel), but that's just the
-  default-config order. On startup `ApplyTopTabOrder(switchToFirst: true)`
-  re-parents the button children to match `LauncherConfig.TopTabOrder` (stable
-  ids `"library"/"workshop"/"multiplayer"`) and opens the **first** tab in that
-  order — the user's "opens on launch" choice. Users reorder via Launcher
-  Settings → Interface (↑/↓ buttons). **Never read `TopTabOrder` raw** — go
-  through `LauncherConfig.GetTopTabOrder()`, which sanitises a stale/corrupt/
-  hand-edited value (drops unknown ids, de-dupes, appends any missing canonical
-  tab) so a bad config can't permanently hide a tab. After a Settings save the
-  bar re-orders via `ApplyTopTabOrder(switchToFirst: false)` (reorder only — it
-  does NOT yank the user off their current tab; "first opens" is a launch-time
-  rule only).
+- **The nav bar's ORDER and the tab that OPENS are two settings (2026-11-13).**
+  `LauncherConfig.TopTabBarOrder` is where each tab sits (Settings → Interface → "Tab order",
+  Library · Multiplayer by default), and the first entry of `TopTabOrder` is the tab that opens on
+  launch ("Tab on opening"). Each segment moves its own list only (`_barOrder` / `_tabOrder` in
+  `LauncherSettingsDialog`), so moving the tabs never changes which one opens and the reverse.
+  The bar used to be drawn Multiplayer · Library whatever the config said (design 68a fixed it),
+  so nobody ever chose that order and a config without `topTabBarOrder` simply gets the default.
+  `ApplyTopTabOrder(switchToFirst)` refills `TopTabBar` from `GetTopTabBarOrder()` at startup and
+  through `LauncherSettingsDialog.TabOrderChanged` the moment the order changes; only at startup
+  does it switch to the tab that opens. **Never read either array raw** — go through
+  `GetTopTabOrder()` / `GetTopTabBarOrder()`, which share `SanitizeTabOrder` (drops unknown ids,
+  de-dupes, appends any missing tab) so a bad config can never hide a tab. The Workshop stays in
+  both lists although its button is hidden. Pinned by `TopTabOrderTests` and
+  `DialogXamlTests.TheTabOrderAndTheTabThatOpensNeverMoveEachOther`.
 
 - **MainWindow is THREE rows: title bar (36) / nav (54) / content — the SAME three rows
   on a laptop window, only lower (34 / 42) — and the tabs have now moved between them four
@@ -7877,6 +7877,18 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   queue. `PerfCounters` count `OpenLobbyWindow`, `RefreshFromSession` and `RenderRoomPanel`, so a
   `LAYOUT STORM` line can name a re-render loop. The Radmin assistant's auto-open runs at
   ApplicationIdle (it used to run inside the startup Show when Multiplayer was the first tab).
+  **⚠ `UI OP` keeps the operations in flight in `Services/InFlightOperations` — a STACK, never a
+  `ConditionalWeakTable` (2026-11-13).** The table took one add and one remove per dispatcher
+  operation, hundreds a second while anything animates, and a weak table does not reuse a removed
+  slot: it resizes into new internal containers and leaves the old ones behind. Measured on the
+  testbed's 30-minute tab-switching soak, private memory climbed 213 → 339 MB (~235 MB/h, a heap
+  diff showed 90,000 such containers gained in ten minutes) in every launcher from v1.0.14h on;
+  with the stack it stays flat at 210-237 MB. Operations on one dispatcher only NEST, never
+  interleave, so a stack is exact; one that never completes is dropped with the one below it, and
+  `Capacity` bounds the rest. Pinned by `InFlightOperationsTests` (a million operations leave
+  nothing, and the real hooks on a real dispatcher). **The 60-s `idle` scenario cannot see a leak
+  like this; `perf soak` (30 min) can — run it after touching anything that runs per operation or
+  per frame.**
   **The UI thread is watched three ways**, all started there: `UI STALL` (the dispatcher could
   not run for N ms), `UI OP` (which operation held it), and **`LAYOUT STORM`**
   (`StartLayoutStormWatch` → the pure `Services/LayoutStormDetector`). The first two only see an

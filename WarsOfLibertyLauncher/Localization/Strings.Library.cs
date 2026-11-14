@@ -112,6 +112,14 @@ public static partial class Strings
         ["DlgSetModListAuto"] = new() { [LangEn] = "Automatic", [LangEs] = "Automática" },
         ["DlgSetModListOpen"] = new() { [LangEn] = "Unfolded", [LangEs] = "Desplegada" },
         ["DlgSetModListClosed"] = new() { [LangEn] = "Folded", [LangEs] = "Plegada" },
+        ["DlgSetTabBarOrderTitle"] = new() { [LangEn] = "Tab order", [LangEs] = "Orden de las pestañas" },
+        ["DlgSetTabBarOrderHint"] = new()
+        {
+            [LangEn] = "Which tab goes first in the bar. It does not change which one opens.",
+            [LangEs] = "Cuál va primero en la barra. No cambia cuál se abre al iniciar.",
+        },
+        ["DlgSetTabBarLibraryFirst"] = new() { [LangEn] = "Library · Multiplayer", [LangEs] = "Biblioteca · Multijugador" },
+        ["DlgSetTabBarMultiplayerFirst"] = new() { [LangEn] = "Multiplayer · Library", [LangEs] = "Multijugador · Biblioteca" },
         ["DlgSetStartTabTitle"] = new() { [LangEn] = "Tab on opening", [LangEs] = "Pestaña al abrir" },
         ["DlgSetStartTabHint"] = new()
         {

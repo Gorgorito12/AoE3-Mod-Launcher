@@ -2024,12 +2024,13 @@ public class LauncherConfig
     public string LastActiveTab { get; set; } = "Noticias";
 
     /// <summary>
-    /// Left-to-right order of the three top navigation tabs, as stable
-    /// tab ids: "library", "workshop", "multiplayer". User-reorderable
-    /// from Launcher Settings → Interface. The FIRST entry is also the
-    /// tab that opens on launch — the user's mental model is "put the
-    /// tab I want first, and it opens first", so order + startup are one
-    /// setting, not two.
+    /// Which top tab OPENS on launch: the first entry, as a stable tab id ("library",
+    /// "workshop", "multiplayer"). Set from Launcher Settings → Interface → "Tab on opening".
+    ///
+    /// <para>It used to order the bar too. Since design 68a the bar's order is its own setting,
+    /// <see cref="TopTabBarOrder"/>, so choosing which tab opens never moves the tabs and
+    /// moving the tabs never changes which one opens. The field keeps its name and shape so a
+    /// player's existing choice carries over.</para>
     ///
     /// Never read this raw — go through <see cref="GetTopTabOrder"/>,
     /// which sanitises a hand-edited / stale / corrupt value (drops
@@ -2040,22 +2041,47 @@ public class LauncherConfig
     [JsonPropertyName("topTabOrder")]
     public string[] TopTabOrder { get; set; } = { "library", "workshop", "multiplayer" };
 
+    /// <summary>
+    /// Left-to-right order of the tabs in the nav bar, as stable tab ids. Set from Launcher
+    /// Settings → Interface → "Tab order". The Workshop is hidden (it lives inside the Library
+    /// since design 68a) but stays in the list so the sanitised value is always the whole set.
+    ///
+    /// <para>Library first by default. The bar used to be drawn Multiplayer · Library whatever
+    /// the config said, so nobody ever CHOSE that order and nothing needs migrating: a config
+    /// without this key gets the default.</para>
+    ///
+    /// Never read this raw — go through <see cref="GetTopTabBarOrder"/>.
+    /// </summary>
+    [JsonPropertyName("topTabBarOrder")]
+    public string[] TopTabBarOrder { get; set; } = { "library", "multiplayer", "workshop" };
+
     /// <summary>The canonical set of top-tab ids, in their default order.</summary>
     public static readonly string[] CanonicalTopTabs = { "library", "workshop", "multiplayer" };
 
     /// <summary>
     /// Returns <see cref="TopTabOrder"/> sanitised against
-    /// <see cref="CanonicalTopTabs"/>: keeps the saved order for ids we
-    /// recognise (case-insensitive, de-duplicated), then appends any
-    /// canonical tab the saved list omitted. Guarantees the result is
-    /// exactly the canonical set, permuted — so the nav bar always shows
-    /// all three tabs regardless of what's on disk.
+    /// <see cref="CanonicalTopTabs"/> — see <see cref="SanitizeTabOrder"/>.
     /// </summary>
-    public string[] GetTopTabOrder()
+    public string[] GetTopTabOrder() => SanitizeTabOrder(TopTabOrder, CanonicalTopTabs);
+
+    /// <summary>
+    /// Returns <see cref="TopTabBarOrder"/> sanitised, with the bar's own default order as the
+    /// fallback for anything missing.
+    /// </summary>
+    public string[] GetTopTabBarOrder()
+        => SanitizeTabOrder(TopTabBarOrder, new[] { "library", "multiplayer", "workshop" });
+
+    /// <summary>
+    /// Keeps the saved order for ids we recognise (case-insensitive, de-duplicated), then
+    /// appends any canonical tab the saved list omitted, in <paramref name="fallback"/>'s order.
+    /// Guarantees the result is exactly the canonical set, permuted — so the nav bar always
+    /// shows every tab regardless of what's on disk.
+    /// </summary>
+    internal static string[] SanitizeTabOrder(string[]? saved, string[] fallback)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<string>(CanonicalTopTabs.Length);
-        foreach (var id in TopTabOrder ?? Array.Empty<string>())
+        foreach (var id in saved ?? Array.Empty<string>())
         {
             if (string.IsNullOrWhiteSpace(id)) continue;
             var norm = id.Trim().ToLowerInvariant();
@@ -2064,6 +2090,8 @@ public class LauncherConfig
         }
         // Append any canonical tab the saved order forgot (e.g. config
         // written before a new tab existed, or a hand-deleted entry).
+        foreach (var id in fallback)
+            if (Array.IndexOf(CanonicalTopTabs, id) >= 0 && seen.Add(id)) result.Add(id);
         foreach (var id in CanonicalTopTabs)
             if (seen.Add(id)) result.Add(id);
         return result.ToArray();

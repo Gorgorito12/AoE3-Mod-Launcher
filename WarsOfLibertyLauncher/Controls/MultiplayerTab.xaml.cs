@@ -869,6 +869,7 @@ public partial class MultiplayerTab : UserControl
 
     private void OnHostWindowStateChanged(object? sender, EventArgs e)
     {
+        CatchUpAfterRestore();
         if (_radminTimer == null) return;
         if (ShouldPollBanner(IsVisible, IsHostWindowMinimized()))
         {
@@ -883,6 +884,33 @@ public partial class MultiplayerTab : UserControl
             _radminTimer.Stop();
         }
     }
+
+    /// <summary>
+    /// The window came back from minimized: everything the timers skipped while it was down is asked
+    /// for ONCE, now, for the page on screen. Each fetch keeps its own window, so a restore within a
+    /// minute of the last answer costs little or nothing.
+    /// </summary>
+    private void CatchUpAfterRestore()
+    {
+        if (IsHostWindowMinimized() || !IsVisible) return;
+        if (_session?.Status != MultiplayerSession.SessionStatus.SignedIn) return;
+        if (_demoRooms || _demoStats) return;
+        _ = RefreshQuotaAsync();
+        if (_activeSubtab == Subtab.Rooms) _ = RefreshRoomsListAsync(quiet: true);
+        _ = RefreshActivityStripAsync();
+        if (_activeSubtab == Subtab.Stats) RefreshStatsForMod();
+        if (_activeSubtab == Subtab.Ranking) MaybeRefreshMatchesOnEntry();
+    }
+
+    /// <summary>Whether the live channel is announcing rooms right now, which makes the 90-s new-room
+    /// poll redundant (<see cref="Services.Multiplayer.RoomsPageRefresh.ShouldPollForNewRooms"/>).
+    /// Set by the channel's <c>global_state</c> greeting, not by the first <c>lobbies_changed</c>: that
+    /// one only comes once somebody opens or closes a room, and measured, a quiet tray kept polling
+    /// every ~100 s until then. Any server that greets also pushes <c>lobby_created</c>.</summary>
+    internal bool LiveRoomPushActive => _liveChannelUp || _lobbiesChangedSeen;
+
+    /// <summary>The live channel greeted us and has not dropped since.</summary>
+    private bool _liveChannelUp;
 
     /// <summary>
     /// Refreshes the banner at ApplicationIdle — after the startup work and the first paint —
@@ -1404,7 +1432,12 @@ public partial class MultiplayerTab : UserControl
         {
             Interval = TimeSpan.FromSeconds(60),
         };
-        _quotaTimer.Tick += async (_, _) => await RefreshQuotaAsync();
+        // Not for a minimized window, which keeps IsVisible: restoring it asks at once.
+        _quotaTimer.Tick += async (_, _) =>
+        {
+            if (IsHostWindowMinimized()) return;
+            await RefreshQuotaAsync();
+        };
 
         // Subscribe once. Multiple calls to Attach are guarded by
         // the unsubscribe step on the previous session above, but
@@ -1504,7 +1537,8 @@ public partial class MultiplayerTab : UserControl
             if (_activeSubtab != Subtab.Rooms) return;
             UpdateRoomsUpdatedLabel();
             if (!Services.Multiplayer.RoomsPageRefresh.ShouldTickCells(
-                    onRooms: true, roomWindowOpen: _lobbyWindow != null, launcherActive: LauncherIsActive()))
+                    onRooms: true, roomWindowOpen: _lobbyWindow != null, launcherActive: LauncherIsActive(),
+                    windowMinimized: IsHostWindowMinimized()))
                 return;
             KickConnectionPing(); RefreshMyPing(); RefreshActivityAgeCells(); MaybeMeasureHostPings();
         });
@@ -1534,7 +1568,8 @@ public partial class MultiplayerTab : UserControl
                     signedIn: _session?.Status == MultiplayerSession.SessionStatus.SignedIn,
                     onRooms: _activeSubtab == Subtab.Rooms,
                     roomWindowOpen: _lobbyWindow != null,
-                    launcherActive: LauncherIsActive()))
+                    launcherActive: LauncherIsActive(),
+                    windowMinimized: IsHostWindowMinimized()))
                 return;
 
             _ = RefreshRoomsListAsync(quiet: true);
@@ -6076,12 +6111,13 @@ public partial class MultiplayerTab : UserControl
     /// listing is public, so it succeeds even signed out — and one in flight when a real
     /// session takes over would paint sample data into it.</para>
     /// </summary>
-    private async Task RefreshTournamentsAsync(bool force = false)
+    private async Task RefreshTournamentsAsync(bool force = false, bool isRetry = false)
     {
         if (TournamentApiOrNull is not { } api) return;
         if (!force && DateTime.UtcNow - _tournamentsFetchedUtc < TournamentsRefreshWindow) return;
 
         bool Current() => ReferenceEquals(api, TournamentApiOrNull);
+        bool failed = false;
 
         try
         {
@@ -6118,10 +6154,15 @@ public partial class MultiplayerTab : UserControl
             _tournaments = null;
             _tournamentDetail = null;
         }
-        catch
+        catch (Exception ex)
         {
-            // Anything else: keep whatever we had and say nothing. The subtab is not
-            // load-bearing enough to interrupt somebody over.
+            // Keep whatever we had and interrupt nobody — but SAY it in the log. This catch
+            // used to be bare, so "Couldn't load the tournaments" reached a player with no trace
+            // of why anywhere, and a bundle could not tell a 429 from a 500 from a parse error.
+            failed = true;
+            Services.DiagnosticLog.Write(ex is LobbyApiException api2
+                ? $"Tournaments: the list failed - HTTP {api2.Status} {api2.Code}: {api2.Message}"
+                : $"Tournaments: the list failed - {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
@@ -6129,7 +6170,24 @@ public partial class MultiplayerTab : UserControl
         }
 
         if (Current() && _activeSubtab == Subtab.Tournaments) RenderTournamentsTab(onlyIfChanged: true);
+
+        // The notice says they "will be asked for again shortly", so they are: once, a few
+        // seconds later, and only while the page is on screen. One retry, never a loop — the
+        // per-IP budget is shared behind a Radmin NAT.
+        if (failed && !isRetry && Current() && _tournaments == null && !_tournamentRetryQueued)
+        {
+            _tournamentRetryQueued = true;
+            await Task.Delay(TournamentsRetryDelay);
+            _tournamentRetryQueued = false;
+            if (Current() && _activeSubtab == Subtab.Tournaments && IsVisible)
+                await RefreshTournamentsAsync(force: true, isRetry: true);
+        }
     }
+
+    /// <summary>A retry of a failed list is queued; stops two from stacking.</summary>
+    private bool _tournamentRetryQueued;
+
+    private static readonly TimeSpan TournamentsRetryDelay = TimeSpan.FromSeconds(8);
 
     /// <summary>What the page was last drawn from. Going back to the tab, or a poll that brings the
     /// same answer, must not rebuild a 63-card bracket: what the viewer changed on the page itself
@@ -6174,6 +6232,16 @@ public partial class MultiplayerTab : UserControl
             UpdateMyTeamsButton();
             TournamentsMyTeamsButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpTeamsButtonTip"));
             TournamentsMyTeamsButton.Visibility = TournamentCreateButton?.Visibility ?? Visibility.Collapsed;
+        }
+        if (TournamentJoinCodeButton != null)
+        {
+            TournamentJoinCodeButton.Content = Strings.Get("TpJoinWithCode");
+            TournamentJoinCodeButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TpJoinWithCodeTip"));
+            // Collapsed, not Hidden: against a server without private tournaments the row is not
+            // there at all, instead of leaving a gap the size of a button.
+            TournamentJoinCodeButton.Visibility =
+                TournamentCreateButton.Visibility == Visibility.Visible && _tournaments?.PrivateTournaments == true
+                    ? Visibility.Visible : Visibility.Collapsed;
         }
 
         RenderTournamentsList();
@@ -6710,7 +6778,8 @@ public partial class MultiplayerTab : UserControl
         var mods = ModRegistry.All.ToList();
         if (!mods.Contains(profile)) mods.Insert(0, profile);
         var dlg = new CreateTournamentDialog(profile.DisplayName, mods, profile,
-            p => !string.IsNullOrEmpty(GetInstallPath(p)), _tournaments?.MaxCapacity);
+            p => !string.IsNullOrEmpty(GetInstallPath(p)), _tournaments?.MaxCapacity,
+            privateSupported: _tournaments?.PrivateTournaments == true);
         try { dlg.Owner = Window.GetWindow(this); } catch { /* off-tree */ }
         if (dlg.ShowDialog() != true) return;
 
@@ -6726,6 +6795,9 @@ public partial class MultiplayerTab : UserControl
                 team_source = dlg.TeamSource,
                 entry_mode = dlg.EntryMode,
                 capacity = dlg.Capacity,
+                // Sent only when private: an older server reads no field it does not know, and a
+                // public tournament is what it would make anyway.
+                visibility = dlg.TournamentVisibility,
             });
 
             // It is born a draft, which the public list hides. Selecting it is what stops
@@ -11300,7 +11372,11 @@ public partial class MultiplayerTab : UserControl
     {
         // Without the live channel nothing announces a change: back to the 5-s poll.
         if (ReferenceEquals(sender, _globalChatSocket))
-            Dispatcher.InvokeAsync(() => { if (_lobbiesChangedSeen) SetLobbiesChangedSeen(false); });
+            Dispatcher.InvokeAsync(() =>
+            {
+                _liveChannelUp = false;
+                if (_lobbiesChangedSeen) SetLobbiesChangedSeen(false);
+            });
         var description = (sender as LobbyWebSocket)?.LastCloseDescription;
         var replaced = reason == "server_close:4007"
             ? " — another launcher or PC signed in with this account took over the presence socket"
@@ -11324,6 +11400,9 @@ public partial class MultiplayerTab : UserControl
                 switch (e.Type)
                 {
                     case "global_state":
+                        // The live channel is up: from here every new public room arrives as
+                        // lobby_created, so the 90-s new-room poll has nothing to add.
+                        _liveChannelUp = true;
                         RenderGlobalChatState(e.Json);
                         // The hello went through: a queued search re-enters the queue.
                         OnGlobalSocketReady();
@@ -11624,7 +11703,8 @@ public partial class MultiplayerTab : UserControl
                 onRooms: _activeSubtab == Subtab.Rooms,
                 tabVisible: IsVisible,
                 roomWindowOpen: _lobbyWindow != null,
-                launcherActive: LauncherIsActive()))
+                launcherActive: LauncherIsActive(),
+                windowMinimized: IsHostWindowMinimized()))
             return;
         if (_roomsAnnounceTimer == null)
         {

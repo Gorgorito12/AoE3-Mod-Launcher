@@ -12,6 +12,9 @@ public partial class LauncherSettingsDialog
     /// <summary>Set by MainWindow: repaints the Library once a change is in the config.</summary>
     public Action? AppearanceChanged { get; set; }
 
+    /// <summary>Set by MainWindow: re-orders the nav bar once a new order is in the config.</summary>
+    public Action? TabOrderChanged { get; set; }
+
     private bool _loadingAppearance;
 
     private void ApplyAppearanceStrings()
@@ -37,6 +40,10 @@ public partial class LauncherSettingsDialog
         ModListAutoOption.Content = Strings.Get("DlgSetModListAuto");
         ModListOpenOption.Content = Strings.Get("DlgSetModListOpen");
         ModListClosedOption.Content = Strings.Get("DlgSetModListClosed");
+        TabBarOrderTitle.Text = Strings.Get("DlgSetTabBarOrderTitle");
+        TabBarOrderHint.Text = Strings.Get("DlgSetTabBarOrderHint");
+        BarLibraryFirstOption.Content = Strings.Get("DlgSetTabBarLibraryFirst");
+        BarMultiplayerFirstOption.Content = Strings.Get("DlgSetTabBarMultiplayerFirst");
         StartTabTitle.Text = Strings.Get("DlgSetStartTabTitle");
         StartTabHint.Text = Strings.Get("DlgSetStartTabHint");
         StartMultiplayerOption.Content = Strings.Get("DlgSetStartMultiplayer");
@@ -62,6 +69,9 @@ public partial class LauncherSettingsDialog
         var multiplayerFirst = _tabOrder.FirstOrDefault() == "multiplayer";
         StartMultiplayerOption.IsChecked = multiplayerFirst;
         StartLibraryOption.IsChecked = !multiplayerFirst;
+        var barMultiplayerFirst = BarFirst(_barOrder) == "multiplayer";
+        BarMultiplayerFirstOption.IsChecked = barMultiplayerFirst;
+        BarLibraryFirstOption.IsChecked = !barMultiplayerFirst;
         _loadingAppearance = false;
         RefreshAppearancePreview();
     }
@@ -110,14 +120,26 @@ public partial class LauncherSettingsDialog
     private void AppearanceOption_Changed(object sender, RoutedEventArgs e)
     {
         if (_loadingAppearance) return;
+        // Each segment moves its own list and nothing else: which tab opens and where the tabs
+        // sit are two settings, and touching one must never move the other.
         var start = StartMultiplayerOption.IsChecked == true ? "multiplayer" : "library";
         if (_tabOrder.FirstOrDefault() != start)
         {
             _tabOrder.Remove(start);
             _tabOrder.Insert(0, start);
         }
+        var barFirst = BarMultiplayerFirstOption.IsChecked == true ? "multiplayer" : "library";
+        if (BarFirst(_barOrder) != barFirst)
+        {
+            _barOrder.Remove(barFirst);
+            _barOrder.Insert(0, barFirst);
+        }
         RefreshAppearancePreview();
     }
+
+    /// <summary>The first VISIBLE tab of a bar order; the Workshop is hidden since design 68a.</summary>
+    private static string? BarFirst(System.Collections.Generic.IEnumerable<string> order)
+        => order.FirstOrDefault(id => id != "workshop");
 
     private void ResetAppearanceButton_Click(object sender, RoutedEventArgs e)
     {
@@ -127,6 +149,7 @@ public partial class LauncherSettingsDialog
         EffectsAutoOption.IsChecked = true;
         ModListAutoOption.IsChecked = true;
         StartLibraryOption.IsChecked = true;
+        BarLibraryFirstOption.IsChecked = true;
     }
 
     private void RefreshAppearancePreview()

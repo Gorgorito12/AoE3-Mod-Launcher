@@ -696,6 +696,11 @@ def perf_scenarios():
         "roomsscroll": {"runs": 3, "seconds": 20, "args": ["--demo-rooms=86a"], "drive": "scroll"},
         "resize": {"runs": 1, "seconds": 20, "args": [], "drive": "resize"},
         "mods": {"runs": 1, "seconds": 30, "args": [], "drive": "mods"},
+        # Long runs, for what only time shows: memory that grows a little on every tab switch,
+        # and a launcher left in the tray that slowly starts costing CPU. The probe's per-second
+        # rows are the evidence; read their first and last minutes, not the summary alone.
+        "soak": {"runs": 1, "seconds": 1800, "args": ["--demo-tournaments=teams", "--demo-elo"], "drive": "switches"},
+        "soaktray": {"runs": 1, "seconds": 1800, "args": ["--minimized"]},
     }
 
 
