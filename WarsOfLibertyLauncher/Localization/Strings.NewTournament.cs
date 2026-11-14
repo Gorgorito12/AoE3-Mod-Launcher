@@ -44,6 +44,15 @@ public static partial class Strings
         ["NtEntryOpen"] = new() { [LangEn] = "First come, first served", [LangEs] = "Por orden de llegada" },
         ["NtEntryApproval"] = new() { [LangEn] = "With approval", [LangEs] = "Con aprobación" },
         ["NtWhyEntryOpen"] = new() { [LangEn] = "They get in as they arrive until the places are full.", [LangEs] = "Entran por orden de llegada hasta llenar las plazas." },
+        ["NtLabelVisibility"] = new() { [LangEn] = "WHO SEES IT", [LangEs] = "QUIÉN LO VE" },
+        ["NtVisibilityPublic"] = new() { [LangEn] = "Public", [LangEs] = "Público" },
+        ["NtVisibilityPrivate"] = new() { [LangEn] = "Private", [LangEs] = "Privado" },
+        ["NtWhyPublic"] = new() { [LangEn] = "Anyone can see it and enter it from the list.", [LangEs] = "Cualquiera lo ve y se inscribe desde la lista." },
+        ["NtWhyPrivate"] = new()
+        {
+            [LangEn] = "Only you, your co-organisers and the players see it. Others get in with a code you share.",
+            [LangEs] = "Solo lo ven tú, tus coorganizadores y los jugadores. Los demás entran con un código que compartes.",
+        },
         ["NtWhyEntryApproval"] = new() { [LangEn] = "Each entry waits for you to accept it.", [LangEs] = "Cada inscripción espera a que la aceptes." },
 
         ["NtMathPlayers"] = new() { [LangEn] = "players", [LangEs] = "jugadores" },

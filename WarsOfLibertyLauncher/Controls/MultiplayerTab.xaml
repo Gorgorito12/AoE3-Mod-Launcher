@@ -1952,6 +1952,11 @@
                                     <Button x:Name="TournamentsMyTeamsButton" Grid.Column="2" Click="TournamentsMyTeams_Click" Height="32" MinWidth="0" Padding="10,0"
                                             Style="{DynamicResource WindowSecondaryButton}" FontSize="{DynamicResource SetRowDescSize}"/>
                                 </Grid>
+                                <!-- A private tournament is in no list until you are in it: this is the
+                                     way in. Only against a server that has private tournaments. -->
+                                <Button x:Name="TournamentJoinCodeButton" Click="TournamentJoinCode_Click" Height="32" MinWidth="0"
+                                        Padding="10,0" Margin="0,8,0,0" Visibility="Collapsed"
+                                        Style="{DynamicResource WindowSecondaryButton}" FontSize="{DynamicResource SetRowDescSize}"/>
                                 <WrapPanel x:Name="TournamentsFilters" Margin="0,10,0,0"/>
                             </StackPanel>
                         </Border>

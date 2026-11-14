@@ -46,6 +46,9 @@ public partial class CreateTournamentDialog : Window
     public string Format { get; private set; } = "1v1";
     public string TeamSource { get; private set; } = "solo";
     public string EntryMode { get; private set; } = "open";
+
+    /// <summary>"public" or "private". Named so because <c>Visibility</c> is the window's own.</summary>
+    public string TournamentVisibility { get; private set; } = "public";
     public int Capacity { get; private set; } = 16;
 
     /// <summary>Whether to open registration right after creating it. Otherwise it stays a draft.</summary>
@@ -68,6 +71,7 @@ public partial class CreateTournamentDialog : Window
 
     private string _format = "1v1";
     private string _entry = "open";
+    private string _visibility = "public";
     private string _source = "registered";
     private int? _capacity;
     private Color _accent = Color.FromRgb(0x2F, 0x7F, 0xE0);
@@ -83,21 +87,25 @@ public partial class CreateTournamentDialog : Window
     /// <param name="initiallySelected">Which one to start on: the launcher's active mod.</param>
     /// <param name="isInstalled">Which of them are on this PC. Null counts all of them.</param>
     /// <param name="serverMaxCapacity">The server's <c>max_capacity</c>, null when it predates it.</param>
+    /// <param name="privateSupported">The server's <c>private_tournaments</c>: whether to offer a
+    /// private tournament at all. An older server would make it public without a word.</param>
     public CreateTournamentDialog(
         string? modName = null,
         IReadOnlyList<ModProfile>? profiles = null,
         ModProfile? initiallySelected = null,
         Func<ModProfile, bool>? isInstalled = null,
-        int? serverMaxCapacity = null)
+        int? serverMaxCapacity = null,
+        bool privateSupported = false)
     {
         InitializeComponent();
+        VisibilityBlock.Visibility = privateSupported ? Visibility.Visible : Visibility.Collapsed;
         _profiles = profiles ?? Array.Empty<ModProfile>();
         _isInstalled = isInstalled ?? (_ => true);
         _capacities = CapacitiesFor(serverMaxCapacity);
 
         ApplyStrings();
-        ModDialogChrome.SetTightLine(1, ModLabel, NameLabel, NameCount, FormatLabel, TeamSourceLabel, EntryModeLabel, CapacityLabel);
-        ModDialogChrome.SetTightLine(1.45, NameProblem, FormatWhy, EntryWhy, WaitlistHint, OpenWhy);
+        ModDialogChrome.SetTightLine(1, ModLabel, NameLabel, NameCount, FormatLabel, TeamSourceLabel, EntryModeLabel, CapacityLabel, VisibilityLabel);
+        ModDialogChrome.SetTightLine(1.45, NameProblem, FormatWhy, EntryWhy, WaitlistHint, OpenWhy, VisibilityWhy);
         ModDialogChrome.SetTightLine(1.3, OpenTitle, MathPlayersWord, MathRoundsWord, MathRoomsWord);
         ModDialogChrome.SetTightLine(1, MathPlayers, MathRounds, MathRooms);
         FitToScreen();
@@ -140,6 +148,7 @@ public partial class CreateTournamentDialog : Window
         FormatLabel.Text = Strings.Get("NtLabelFormat");
         TeamSourceLabel.Text = Strings.Get("NtLabelSource");
         EntryModeLabel.Text = Strings.Get("NtLabelEntry");
+        VisibilityLabel.Text = Strings.Get("NtLabelVisibility");
         WaitlistHint.Text = Strings.Get("NtWaitlist");
         OpenTitle.Text = Strings.Get("NtOpenTitle");
         CancelButton.Content = Strings.Get("MpCreateDialogCancel");
@@ -176,6 +185,18 @@ public partial class CreateTournamentDialog : Window
             Refresh();
         };
 
+        VisibilityRow.SetOptions(new[]
+        {
+            new SegmentOption("public", Strings.Get("NtVisibilityPublic")),
+            new SegmentOption("private", Strings.Get("NtVisibilityPrivate")),
+        });
+        VisibilityRow.Selected = _visibility;
+        VisibilityRow.Picked += key =>
+        {
+            _visibility = (string)key;
+            Refresh();
+        };
+
         CapacityRow.SetOptions(_capacities.Select(n => new SegmentOption(n, n.ToString())).ToList());
         CapacityRow.Selected = PlacesNow();
         CapacityRow.Picked += key =>
@@ -186,6 +207,7 @@ public partial class CreateTournamentDialog : Window
 
         var body = (FontFamily)FindResource("BodyFont");
         foreach (var button in EntryRow.Buttons) button.FontFamily = body;
+        foreach (var button in VisibilityRow.Buttons) button.FontFamily = body;
 
         foreach (var key in Sources) SourceRows.Children.Add(BuildSourceRow(key));
     }
@@ -283,6 +305,7 @@ public partial class CreateTournamentDialog : Window
         _refrost?.Invoke();
         FormatRow.Accent = _accent;
         EntryRow.Accent = _accent;
+        VisibilityRow.Accent = _accent;
         CapacityRow.Accent = _accent;
 
         if (string.IsNullOrEmpty(NameEntry.Text) || string.Equals(NameEntry.Text, _proposedName, StringComparison.Ordinal))
@@ -369,6 +392,7 @@ public partial class CreateTournamentDialog : Window
         TeamSourceBlock.Visibility = team ? Visibility.Visible : Visibility.Collapsed;
         FormatWhy.Text = team ? Strings.Format("NtWhyTeam", roster) : Strings.Get("NtWhySolo");
         EntryWhy.Text = Strings.Get(_entry == "approval" ? "NtWhyEntryApproval" : "NtWhyEntryOpen");
+        VisibilityWhy.Text = Strings.Get(_visibility == "private" ? "NtWhyPrivate" : "NtWhyPublic");
         CapacityLabel.Text = Strings.Get(team ? "NtLabelPlacesTeams" : "NtLabelPlaces");
         foreach (var (key, button, dot) in _sourceRows) PaintSource(key, button, dot);
 
@@ -413,6 +437,7 @@ public partial class CreateTournamentDialog : Window
         // 'solo' is the only value a 1v1 may carry, and the server enforces that too.
         TeamSource = _format == "1v1" ? "solo" : _source;
         EntryMode = _entry;
+        TournamentVisibility = VisibilityBlock.Visibility == Visibility.Visible ? _visibility : "public";
         Capacity = PlacesNow();
         OpenRegistration = OpenToggle.IsChecked == true;
 

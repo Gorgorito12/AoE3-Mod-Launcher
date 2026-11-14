@@ -88,7 +88,7 @@ internal static class TournamentPage
             .Where(e => !string.IsNullOrEmpty(e.TournamentId))
             .ToDictionary(e => e.TournamentId, StringComparer.Ordinal);
         var rows = new List<TournamentListRow>();
-        foreach (var t in Listed(list))
+        foreach (var t in Listed(list, open))
         {
             if (filter != "all" && t.Status != filter) continue;
             bool mine = TournamentPermissions.IsOwner(t, me);
@@ -137,10 +137,20 @@ internal static class TournamentPage
     /// <summary>Every tournament the list shows: the caller's drafts, the public ones, and the ended
     /// ones only the caller still sees (<c>mine</c>), each once.</summary>
     internal static IEnumerable<TournamentSummary> Listed(TournamentListResponse? list)
+        => Listed(list, null);
+
+    /// <summary>
+    /// Every tournament the list holds, once — and the OPEN one when it is in none of its parts.
+    /// That is a private tournament opened with its invite code: it is in no list until its
+    /// player enters, and without this its row would vanish the moment it was opened.
+    /// </summary>
+    internal static IEnumerable<TournamentSummary> Listed(TournamentListResponse? list, TournamentDetail? open)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var t in (list?.Drafts ?? new()).Concat(list?.Tournaments ?? new()).Concat(list?.Mine ?? new()))
             if (seen.Add(t.Id)) yield return t;
+        if (open != null && open.IsPrivate && !string.IsNullOrEmpty(open.Id) && seen.Add(open.Id))
+            yield return open;
     }
 
     private static string SubLine(TournamentSummary t, TournamentDetail? detail)

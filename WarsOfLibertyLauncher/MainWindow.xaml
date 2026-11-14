@@ -840,9 +840,10 @@
                      MainWindow's namescope - the same reason TitleBar is a templated
                      ContentControl.
 
-                     The left-to-right child order is re-applied at startup from
-                     LauncherConfig.TopTabOrder; the order here is just the default for
-                     a fresh config. -->
+                     The left-to-right child order is re-applied at startup, and whenever
+                     Settings changes it, from LauncherConfig.TopTabBarOrder (Library first by
+                     default); the order here is only what shows before that runs. Which tab
+                     OPENS is a separate setting, TopTabOrder. -->
                 <StackPanel x:Name="TopTabBar"
                             Grid.Column="0"
                             Orientation="Horizontal"

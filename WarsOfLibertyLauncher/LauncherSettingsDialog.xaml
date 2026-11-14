@@ -891,6 +891,26 @@
                                               SelectionChanged="TextScaleCombo_SelectionChanged"/>
                                 </Grid>
                             </Border>
+                            <!-- Where each tab sits. A setting of its own, separate from which
+                                 tab opens below: moving one never changes the other. -->
+                            <Border Style="{StaticResource SetRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="TabBarOrderTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="TabBarOrderHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource SetSegment}" Grid.Column="1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="BarLibraryFirstOption" GroupName="TabBarOrder" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                                <RadioButton x:Name="BarMultiplayerFirstOption" GroupName="TabBarOrder" Style="{StaticResource SetSegmentItem}" Checked="AppearanceOption_Changed"/>
+                                            </StackPanel>
+                                        </Border>
+                                </Grid>
+                            </Border>
                             <Border Style="{StaticResource SetRowLast}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>

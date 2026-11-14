@@ -116,6 +116,14 @@
                         <controls:SegmentRow x:Name="EntryRow" Raised="True" SegmentHeight="36" Margin="0,6,0,0"/>
                         <TextBlock x:Name="EntryWhy" Style="{DynamicResource GlassHint}" Margin="0,6,0,0" Foreground="#A8BCD2"/>
 
+                        <!-- Public or private (2026-11-13). Collapsed against a server that does not
+                             say it understands it, which would make a private request public. -->
+                        <StackPanel x:Name="VisibilityBlock" Visibility="Collapsed">
+                            <TextBlock x:Name="VisibilityLabel" Style="{DynamicResource WindowCardLabel}" Margin="0,14,0,0"/>
+                            <controls:SegmentRow x:Name="VisibilityRow" Raised="True" SegmentHeight="36" Margin="0,6,0,0"/>
+                            <TextBlock x:Name="VisibilityWhy" Style="{DynamicResource GlassHint}" Margin="0,6,0,0" Foreground="#A8BCD2"/>
+                        </StackPanel>
+
                         <TextBlock x:Name="CapacityLabel" Style="{DynamicResource WindowCardLabel}" Margin="0,14,0,0"/>
                         <controls:SegmentRow x:Name="CapacityRow" Raised="True" SegmentHeight="36" Margin="0,6,0,0"/>
 

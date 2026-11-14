@@ -157,7 +157,9 @@ public partial class MultiplayerTab
 
         var me = TournamentViewerId(_tournamentDetail);
         var rows = TournamentPage.Rows(_tournaments, me, _tournamentDetail, _tournamentFilter);
-        TournamentsTitleCount.Text = ((_tournaments?.Drafts?.Count ?? 0) + (_tournaments?.Tournaments?.Count ?? 0)).ToString();
+        // Every tournament the list draws, private ones from `mine` included, so the heading and
+        // the "All" filter cannot disagree.
+        TournamentsTitleCount.Text = TournamentPage.Listed(_tournaments, _tournamentDetail).Count().ToString();
         RenderTournamentFilters();
 
         if (rows.Count == 0)
@@ -307,6 +309,13 @@ public partial class MultiplayerTab
         Grid.SetColumn(words, 1);
 
         var flags = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        if (t.IsPrivate)
+        {
+            var tag = PrivateTournamentTag();
+            tag.HorizontalAlignment = HorizontalAlignment.Right;
+            tag.Margin = new Thickness(0, 0, 0, row.Mine || row.Alert != null ? 6 : 0);
+            flags.Children.Add(tag);
+        }
         if (row.Mine)
         {
             flags.Children.Add(new Border
@@ -352,6 +361,63 @@ public partial class MultiplayerTab
         System.Windows.Automation.AutomationProperties.SetName(button, t.Name);
         button.Click += (_, _) => _ = SelectTournamentAsync(t.Id);
         return button;
+    }
+
+    /// <summary>
+    /// The "Private" chip of a private tournament (2026-11-13), in the purple a password room
+    /// already wears, so the two kinds of "not for everybody" read as one family.
+    /// </summary>
+    internal static Border PrivateTournamentTag()
+    {
+        var text = new TextBlock
+        {
+            Text = Strings.Get("TpPrivateTag"),
+            FontWeight = FontWeights.Bold,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        text.SetResourceReference(TextBlock.FontSizeProperty, "MpTagSize");
+        text.SetResourceReference(TextBlock.ForegroundProperty, "MpPrivateText");
+        var tag = new Border
+        {
+            Height = 20,
+            Padding = new Thickness(8, 0, 8, 0),
+            CornerRadius = new CornerRadius(10),
+            BorderThickness = new Thickness(1),
+            Child = text,
+            ToolTip = TooltipHelper.Wrap(Strings.Get("TpPrivateTagTip")),
+        };
+        tag.SetResourceReference(Border.BackgroundProperty, "MpPrivateBg");
+        tag.SetResourceReference(Border.BorderBrushProperty, "MpPrivateRim");
+        return tag;
+    }
+
+    /// <summary>
+    /// "Join with code": the way into a private tournament nobody can see yet. The dialog looks the
+    /// code up itself, so a wrong one is said beside the field, and the API remembers the code
+    /// for the rest of the session so the detail and the entry carry it.
+    /// </summary>
+    private void TournamentJoinCode_Click(object sender, RoutedEventArgs e)
+    {
+        if (TournamentApiOrNull is not { } api) return;
+        var dlg = new JoinTournamentCodeDialog(async code =>
+        {
+            try
+            {
+                var found = await api.FindTournamentByCodeAsync(code);
+                return (found.Id, null);
+            }
+            catch (LobbyApiException ex) when (ex.Code == "not_found" || ex.Status == 404)
+            {
+                return (null, Strings.Get("TpJoinCodeNotFound"));
+            }
+            catch (Exception ex)
+            {
+                Services.DiagnosticLog.Write($"Tournaments: looking up an invite code failed - {ex.GetType().Name}: {ex.Message}");
+                return (null, Strings.Get("TpJoinCodeFailed"));
+            }
+        });
+        if (dlg.ShowOver(Window.GetWindow(this)) != true || dlg.FoundTournamentId is not { } id) return;
+        _ = SelectTournamentAsync(id);
     }
 
     private Button BuildCollapsedTournament(TournamentListRow row)
@@ -548,6 +614,15 @@ public partial class MultiplayerTab
         var stateChip = Pill(state, 26, 11, 11, chipFill, chipRim, 13);
         stateChip.Margin = new Thickness(0, 0, 8, 6);
         chips.Children.Add(stateChip);
+        if (t.IsPrivate)
+        {
+            var tag = PrivateTournamentTag();
+            tag.Height = 26;
+            tag.CornerRadius = new CornerRadius(13);
+            tag.Padding = new Thickness(10, 0, 10, 0);
+            tag.Margin = new Thickness(0, 0, 8, 6);
+            chips.Children.Add(tag);
+        }
         if (TournamentPermissions.IsOwner(t, me))
         {
             var chip = Pill(Say(Strings.Get("TpOrganisingTag"), "SetCaptionSize", "#DCE7F5", FontWeights.Bold), 26, 10, 10, chipFill, chipRim, 13);
@@ -2268,6 +2343,24 @@ public partial class MultiplayerTab
         }
 
         var rim = Frozen(0x1A, 0xFF, 0xFF, 0xFF);
+        // A private tournament's code: the only way somebody new finds it. The server sends it to
+        // the owner and the co-organisers alone, so its presence is the permission.
+        if (t.IsPrivate && !string.IsNullOrEmpty(t.InviteCode))
+        {
+            var code = t.InviteCode!;
+            var codeText = Say(code, "SetRowTitleSize", "#E2D5F7", FontWeights.Bold, new Thickness(0, 12, 0, 0));
+            codeText.FontFamily = new FontFamily("Consolas, Courier New, monospace");
+            codeText.IsHitTestVisible = true;
+            System.Windows.Automation.AutomationProperties.SetAutomationId(codeText, "TournamentInviteCode");
+            Button? copy = null;
+            copy = Secondary(Strings.Get("TpOrgCodeCopy"), () =>
+            {
+                try { Clipboard.SetText(code); } catch { return; }
+                if (copy != null) copy.Content = Strings.Get("TpOrgCodeCopied");
+            });
+            Tile(Strings.Get("TpOrgCode"), "#CBA7F2", Strings.Get("TpOrgCodeBody"),
+                Frozen(0x4D, 0xA0, 0x6E, 0xF0), codeText, copy);
+        }
         if (TournamentPermissions.CanAppointManagers(t, me) || t.Managers is { Count: > 0 })
         {
             var add = TournamentPermissions.CanAppointManagers(t, me) ? new[] { Secondary(Strings.Get("TpOrgAddManager"), () => _ = AddManagerAsync(t, me)) } : Array.Empty<Button>();

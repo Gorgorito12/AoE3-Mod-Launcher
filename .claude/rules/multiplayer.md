@@ -263,6 +263,28 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Old launchers ignore the frame (`OnGlobalChatFrame` has no default case). Pinned by
   `MatchesChangedTests` and the backend's `matchesChanged.test.ts`.
 
+- **A MINIMIZED LAUNCHER ASKS THE SERVER FOR NOTHING (2026-11-13).** Reported as "people open
+  rooms and play, and that counts as calls from my launcher while I am not using it". The cause:
+  WPF keeps a minimized window's content `IsVisible`, so every gate written as "the tab is on
+  screen" was true for a minimized window. Minimized on Multiplayer › Rooms, the launcher polled
+  `GET /lobbies` every 5-15 s, asked it again for every `lobby_created`/`lobbies_changed`, fetched
+  `/stats/community` after every `matches_changed`, `GET /quota` every 60 s and the host pings
+  every few seconds. Now `RoomsPageRefresh.ShouldPollList` / `ShouldTickCells` /
+  `ShouldRefreshOnAnnouncement` take `windowMinimized`, the quota tick and
+  `RefreshAfterMatchesChanged` check `IsHostWindowMinimized()`, and restoring the window runs
+  `CatchUpAfterRestore` once (each fetch keeps its own window). **Use `IsVisible &&
+  !IsHostWindowMinimized()`, never `IsVisible` alone, for anything that asks the server.**
+  Separately, `MainWindow.PollNewRoomsAsync` (the 90-s "a new room opened" poll, which runs in the
+  tray too, ~960 requests a day per launcher) is skipped while the live channel announces rooms
+  (`RoomsPageRefresh.ShouldPollForNewRooms(LiveRoomPushActive)`): `lobby_created` already brings
+  each room. The flag is set by the channel's `global_state` greeting (`_liveChannelUp`), NOT by the
+  first `lobbies_changed` — that only arrives once somebody opens or closes a room, and measured, a
+  quiet tray kept polling every ~100 s until then. The channel dropping clears both flags and brings
+  the poll back. What
+  still runs minimized or in the tray on purpose: the presence socket (pushes cost no request),
+  a quick-match search, a room or match in progress, and the 30-min session renewal check. Pinned
+  by `RoomsPageRefreshTests.THE_ONE_THAT_MATTERS_AMinimizedWindowAsksTheServerForNothing`.
+
 - **The game-launch `OverrideAddress` injection binds to the Radmin ADAPTER IP,
   NOT the readiness-gated `RadminStatus.AdapterIp` — and a launch that can't bind
   it WARNS in the chat instead of failing silently.** The MP launch
@@ -684,8 +706,25 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   (2026-11-11).** The server decides who sees what (`lifecycle.ts`, `publicWhereClause`): a draft
   only its owner, a cancelled/abandoned one without games only its owner for 7 days (then the
   startup sweep deletes it), one with games everybody for 7 days and then it stays in the database,
-  a finished one everybody for 30 days and then only who took part (`GET /tournaments` → `mine`,
-  which `TournamentPage.Listed` folds into the list once). `POST /tournaments/:id/delete` is the
+  and **a finished one everybody, for good** (2026-11-13; it used to leave the public list after 30
+  days). The list puts live tournaments first (`LIST_ORDER`), so history can never push a live one
+  off the 50-row page. `GET /tournaments` → `mine` carries what only the caller sees, which
+  `TournamentPage.Listed` folds into the list once.
+  (5b) **PRIVATE TOURNAMENTS (2026-11-13; server migration 0032, `visibility` + `invite_code`).** A
+  private one is never in the public list, in any state; its owner, co-organisers and entrants
+  (not rejected, not withdrawn) get it in `mine`, finished included. Its detail and its entry answer
+  **404** to anybody else (never 403, which would confirm it exists) unless they bring the code
+  (`?code=` / `invite_code`); `GET /tournaments/by-code/:code` says which one a code opens. The code
+  is sent only to the owner and co-organisers. Its rooms are left out of `GET /lobbies` (they were
+  already never announced), and `TOURNAMENT_REF_JOIN` names no private tournament, so its games
+  show as ordinary competitive games in every public match list. The launcher offers "Private"
+  (`CreateTournamentDialog.VisibilityBlock`) and "Join with code" (`JoinTournamentCodeDialog`)
+  **only when the list says `private_tournaments: true`**: an older server would make a private
+  request public in silence. `LiveTournamentApi` remembers a code it looked up for the session and
+  adds it to the detail and the entry by itself; `TournamentPage.Listed(list, open)` keeps a private
+  tournament opened by code on the list until its player is in it. The code card is in Organise.
+  Pinned by the server's `privacy.test.ts` (the refusals are the point) and `PrivateTournamentTests`.
+  **Not done:** changing a tournament's visibility after creating it, and renewing a leaked code. `POST /tournaments/:id/delete` is the
   owner's, refused for a live one and for one with a game (`has_games`, a game decided OR merely
   reported from one of its rooms). `TournamentPermissions.CanDelete` needs `HasGames == false`, so a
   server that does not send it offers no Delete. Delete is the red primary of the ended card, the

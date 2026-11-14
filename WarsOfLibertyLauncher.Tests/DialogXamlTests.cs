@@ -5173,6 +5173,49 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// "Tab order" and "Tab on opening" are TWO settings (2026-11-13): moving the tabs never
+    /// changes which one opens, choosing which one opens never moves the tabs, and the bar order
+    /// applies the instant it is touched, telling MainWindow so it can re-order the bar.
+    /// </summary>
+    [Fact]
+    public void TheTabOrderAndTheTabThatOpensNeverMoveEachOther()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var config = new LauncherConfig();
+            var dlg = new LauncherSettingsDialog(config);
+            int barMoves = 0;
+            dlg.TabOrderChanged = () => barMoves++;
+
+            // Defaults: Library first in the bar, Library opens.
+            Assert.True(dlg.BarLibraryFirstOption.IsChecked);
+            Assert.True(dlg.StartLibraryOption.IsChecked);
+
+            // Moving the bar: instant, signalled, and the tab that opens stays where it was.
+            dlg.BarMultiplayerFirstOption.IsChecked = true;
+            Assert.Equal("multiplayer", config.GetTopTabBarOrder()[0]);
+            Assert.Equal("library", config.GetTopTabOrder()[0]);
+            Assert.True(dlg.StartLibraryOption.IsChecked);
+            Assert.Equal(1, barMoves);
+
+            // Choosing which tab opens: the bar stays as it is and nobody re-orders it.
+            dlg.StartMultiplayerOption.IsChecked = true;
+            Assert.Equal("multiplayer", config.GetTopTabOrder()[0]);
+            Assert.Equal("multiplayer", config.GetTopTabBarOrder()[0]);
+            dlg.BarLibraryFirstOption.IsChecked = true;
+            Assert.Equal("library", config.GetTopTabBarOrder()[0]);
+            Assert.Equal("multiplayer", config.GetTopTabOrder()[0]);
+            Assert.Equal(2, barMoves);
+
+            // Neither waits for Save.
+            Assert.Equal(Visibility.Collapsed, dlg.SaveButton.Visibility);
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// "Do not disturb" (2026-10-28) starts OFF, says what it is in both languages, and applies the
     /// instant it is touched — the setting AND the static flag the ambient sounds read — never
     /// waiting for a Save. Its fingerprint key is what makes that happen; without it the switch

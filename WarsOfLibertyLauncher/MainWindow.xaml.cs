@@ -1032,6 +1032,10 @@ public partial class MainWindow : Window
         if (!_config.NotifyNewRooms || !_config.CheckUpdatesOnStartup) return;
         if (_multiplayerSession.Status != Services.Multiplayer.MultiplayerSession.SessionStatus.SignedIn)
             return;
+        // The fallback for the live channel: while it announces rooms itself, asking every 90 s is a
+        // request for rooms already announced. Back on as soon as the channel drops.
+        if (!Services.Multiplayer.RoomsPageRefresh.ShouldPollForNewRooms(MultiplayerView?.LiveRoomPushActive == true))
+            return;
 
         try
         {
@@ -2185,6 +2189,9 @@ public partial class MainWindow : Window
         // restart. activeOnly:false covers the Workshop grid too.
         dialog.AssetsCleared = () => _ = RevalidateVisibleAssetsAsync(activeOnly: false);
         dialog.AppearanceChanged = ApplyLibraryAppearance;
+        // The bar moves the moment the order changes, not when Settings closes: the setting
+        // applies instantly like every other one in that window.
+        dialog.TabOrderChanged = () => ApplyTopTabOrder(switchToFirst: false);
 
         // Adding or removing a local mod.json re-merges the catalog, so the Workshop
         // shows the change while Settings is still open. force:true because the catalog
@@ -5980,11 +5987,11 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Re-order the top nav bar's tab buttons left-to-right to match the
-    /// user's saved <see cref="LauncherConfig.TopTabOrder"/>. Called once
-    /// at startup (with <paramref name="switchToFirst"/>=true so the first
-    /// tab in the order is the one that opens) and again after the user
-    /// reorders from Launcher Settings (with false, so the bar re-orders
-    /// but we DON'T yank them away from whatever tab they're on).
+    /// user's saved <see cref="LauncherConfig.TopTabBarOrder"/>. Called once
+    /// at startup (with <paramref name="switchToFirst"/>=true so the tab
+    /// <see cref="LauncherConfig.TopTabOrder"/> names is the one that opens) and
+    /// again whenever Launcher Settings changes the order (with false, so the
+    /// bar re-orders but we DON'T yank them away from whatever tab they're on).
     ///
     /// Settings is NOT part of this set — it lives behind the gear menu,
     /// not in the nav bar — so it never appears in TopTabOrder.
@@ -6003,10 +6010,10 @@ public partial class MainWindow : Window
             ["multiplayer"] = TopTabMultiplayer,
         };
 
-        // The bar's order is fixed (design 68a). The saved order only says which tab opens first,
-        // which is what Settings › Interface › "Tab on opening" sets.
+        // Two settings, never one: TopTabBarOrder says where each tab sits (Settings › Interface
+        // › "Tab order"), TopTabOrder only which one opens ("Tab on opening").
         TopTabBar.Children.Clear();
-        foreach (var id in new[] { "multiplayer", "library", "workshop" })
+        foreach (var id in _config.GetTopTabBarOrder())
             if (byId.TryGetValue(id, out var btn))
                 TopTabBar.Children.Add(btn);
 

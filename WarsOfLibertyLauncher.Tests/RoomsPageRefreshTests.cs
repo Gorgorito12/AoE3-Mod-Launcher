@@ -49,6 +49,63 @@ public class RoomsPageRefreshTests
         bool roomWindowOpen, bool launcherActive, bool expected)
         => Assert.Equal(expected, RoomsPageRefresh.ShouldRefreshOnAnnouncement(signedIn, onRooms, tabVisible, roomWindowOpen, launcherActive));
 
+    /// <summary>
+    /// THE MINIMIZED WINDOW (2026-11-13). It keeps IsVisible, so a launcher minimized on the Rooms
+    /// page polled the list, re-asked it for every announced room and counted it all against the
+    /// server's budget for nobody. Every rule now says no for it, whatever else is true.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_AMinimizedWindowAsksTheServerForNothing()
+    {
+        Assert.False(RoomsPageRefresh.ShouldPollList(true, true, false, true, windowMinimized: true));
+        Assert.False(RoomsPageRefresh.ShouldTickCells(true, false, true, windowMinimized: true));
+        Assert.False(RoomsPageRefresh.ShouldRefreshOnAnnouncement(true, true, true, false, true, windowMinimized: true));
+        // ...and the same window restored asks again.
+        Assert.True(RoomsPageRefresh.ShouldPollList(true, true, false, true, windowMinimized: false));
+    }
+
+    [Theory]
+    [InlineData(true, false)]   // the live channel announces rooms: the 90-s poll would only repeat it
+    [InlineData(false, true)]   // no channel, or an older server: the poll is the only way to know
+    public void TheNewRoomPollIsOnlyAFallbackForTheLiveChannel(bool livePushActive, bool expected)
+        => Assert.Equal(expected, RoomsPageRefresh.ShouldPollForNewRooms(livePushActive));
+
+    /// <summary>
+    /// The poll is off as soon as the live channel GREETS, not after the first lobbies_changed —
+    /// measured, a quiet tray polled every ~100 s until somebody happened to open a room — and back
+    /// on the moment the channel drops.
+    /// </summary>
+    [Fact]
+    public void TheLiveChannelsGreetingTurnsThePollOffAndItsDropTurnsItBackOn()
+    {
+        var src = File.ReadAllText(UiThreadAttributionTests.LauncherFile("Controls/MultiplayerTab.xaml.cs"));
+        Assert.Contains("_liveChannelUp = true;", Slice(src, "case \"global_state\":", "break;"));
+        Assert.Contains("_liveChannelUp = false;", Slice(src, "private void OnGlobalChatDisconnected(", "DiagnosticLog.Write("));
+        Assert.Contains("internal bool LiveRoomPushActive => _liveChannelUp || _lobbiesChangedSeen;", src);
+    }
+
+    /// <summary>Every caller passes the window's state, and the two fetches the rules do not cover —
+    /// the online count and the refresh after a finished match — check it themselves.</summary>
+    [Fact]
+    public void EveryTimerAndPushHandlerAsksWhetherTheWindowIsMinimized()
+    {
+        var src = File.ReadAllText(UiThreadAttributionTests.LauncherFile("Controls/MultiplayerTab.xaml.cs"));
+        Assert.Contains("windowMinimized: IsHostWindowMinimized()", Slice(src, "_roomsPingTimer.Tick +=", "});"));
+        Assert.Contains("windowMinimized: IsHostWindowMinimized()", Slice(src, "_roomsListTimer.Tick +=", "});"));
+        Assert.Contains("windowMinimized: IsHostWindowMinimized()",
+            Slice(src, "private void QueueRoomsRefreshFromAnnouncement()", "if (_roomsAnnounceTimer == null)"));
+        Assert.Contains("if (IsHostWindowMinimized()) return;", Slice(src, "_quotaTimer.Tick +=", "};"));
+        Assert.Contains("CatchUpAfterRestore();", Slice(src, "private void OnHostWindowStateChanged(", "\n    }"));
+
+        var fresh = File.ReadAllText(UiThreadAttributionTests.LauncherFile("Controls/MultiplayerTab.Freshness.cs"));
+        Assert.Contains("if (!IsVisible || IsHostWindowMinimized()) return;",
+            Slice(fresh, "private void RefreshAfterMatchesChanged(", "\n    }"));
+
+        var main = File.ReadAllText(UiThreadAttributionTests.LauncherFile("MainWindow.xaml.cs"));
+        Assert.Contains("RoomsPageRefresh.ShouldPollForNewRooms",
+            Slice(main, "private async Task PollNewRoomsAsync()", "ListLobbiesAsync"));
+    }
+
     /// <summary>The frame handler queues the request instead of fetching per frame: a burst is one.</summary>
     [Fact]
     public void ABurstOfAnnouncementsIsOneRequest()

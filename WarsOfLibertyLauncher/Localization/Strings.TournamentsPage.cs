@@ -23,6 +23,48 @@ public static partial class Strings
         ["TpGroupOrganising"] = new() { [LangEn] = "ORGANISING", [LangEs] = "ORGANIZAS" },
         ["TpGroupOthers"] = new() { [LangEn] = "OTHER TOURNAMENTS", [LangEs] = "OTROS TORNEOS" },
         ["TpMineTag"] = new() { [LangEn] = "MINE", [LangEs] = "MÍO" },
+
+        // Private tournaments (2026-11-13).
+        ["TpPrivateTag"] = new() { [LangEn] = "PRIVATE", [LangEs] = "PRIVADO" },
+        ["TpPrivateTagTip"] = new()
+        {
+            [LangEn] = "Only its organisers and players see it. Others get in with its code.",
+            [LangEs] = "Solo lo ven sus organizadores y jugadores. Los demás entran con su código.",
+        },
+        ["TpJoinWithCode"] = new() { [LangEn] = "Join with code", [LangEs] = "Unirme con código" },
+        ["TpJoinWithCodeTip"] = new()
+        {
+            [LangEn] = "Open a private tournament with the code its organiser gave you.",
+            [LangEs] = "Abre un torneo privado con el código que te dio su organizador.",
+        },
+        ["TpJoinCodeTitle"] = new() { [LangEn] = "Private tournament", [LangEs] = "Torneo privado" },
+        ["TpJoinCodeHeadline"] = new() { [LangEn] = "Enter the invite code", [LangEs] = "Escribe el código de invitación" },
+        ["TpJoinCodeLabel"] = new() { [LangEn] = "CODE", [LangEs] = "CÓDIGO" },
+        ["TpJoinCodeHint"] = new()
+        {
+            [LangEn] = "Eight letters and numbers, as the organiser sent it. You can enter once it is open.",
+            [LangEs] = "Ocho letras y números, tal como te lo envió el organizador. Podrás inscribirte cuando lo abras.",
+        },
+        ["TpJoinCodeOpen"] = new() { [LangEn] = "Open tournament", [LangEs] = "Abrir torneo" },
+        ["TpJoinCodeLooking"] = new() { [LangEn] = "Looking…", [LangEs] = "Buscando…" },
+        ["TpJoinCodeNotFound"] = new()
+        {
+            [LangEn] = "No tournament has that code. Check it with the organiser.",
+            [LangEs] = "Ningún torneo tiene ese código. Compruébalo con el organizador.",
+        },
+        ["TpJoinCodeFailed"] = new()
+        {
+            [LangEn] = "Couldn't reach the server. Try again in a moment.",
+            [LangEs] = "No se pudo contactar con el servidor. Inténtalo de nuevo en un momento.",
+        },
+        ["TpOrgCode"] = new() { [LangEn] = "INVITE CODE", [LangEs] = "CÓDIGO DE INVITACIÓN" },
+        ["TpOrgCodeBody"] = new()
+        {
+            [LangEn] = "This tournament is private. Share this code with the players you want: they open it with \"Join with code\".",
+            [LangEs] = "Este torneo es privado. Comparte este código con los jugadores que quieras: lo abren con «Unirme con código».",
+        },
+        ["TpOrgCodeCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
+        ["TpOrgCodeCopied"] = new() { [LangEn] = "Copied", [LangEs] = "Copiado" },
         ["TpOrganisingTag"] = new() { [LangEn] = "YOU ORGANISE", [LangEs] = "ORGANIZAS TÚ" },
         ["TpAlertPlay"] = new() { [LangEn] = "Your turn to play", [LangEs] = "Te toca jugar" },
         ["TpAlertJoin"] = new() { [LangEn] = "Your rival is waiting", [LangEs] = "Tu rival te espera" },

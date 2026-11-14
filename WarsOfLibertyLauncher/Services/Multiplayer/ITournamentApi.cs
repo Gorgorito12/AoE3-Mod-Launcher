@@ -28,6 +28,13 @@ internal interface ITournamentApi
 
     Task<TournamentDetail> GetTournamentAsync(string id, CancellationToken ct = default);
 
+    /// <summary>
+    /// The private tournament an invite code opens (2026-11-13). The implementation REMEMBERS
+    /// the code for the session, so the detail and the entry that follow carry it without every
+    /// caller threading it through: a stranger is answered 404 without it.
+    /// </summary>
+    Task<TournamentByCode> FindTournamentByCodeAsync(string code, CancellationToken ct = default);
+
     Task<TournamentSummary> CreateTournamentAsync(object req, CancellationToken ct = default);
 
     Task<TournamentEntryResponse> EnterTournamentAsync(
@@ -103,15 +110,43 @@ internal sealed class LiveTournamentApi : ITournamentApi
     public Task<TournamentListResponse> ListTournamentsAsync(CancellationToken ct = default)
         => Client.ListTournamentsAsync(ct);
 
+    /// <summary>Codes this session used, by tournament id. Only the codes a person typed, for
+    /// the tournaments they opened with them; forgotten when the launcher closes.</summary>
+    private readonly Dictionary<string, string> _codes = new(StringComparer.Ordinal);
+
     public Task<TournamentDetail> GetTournamentAsync(string id, CancellationToken ct = default)
-        => Client.GetTournamentAsync(id, ct);
+        => Client.GetTournamentAsync(id, CodeFor(id), ct);
+
+    public async Task<TournamentByCode> FindTournamentByCodeAsync(string code, CancellationToken ct = default)
+    {
+        var found = await Client.FindTournamentByCodeAsync(code, ct).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(found.Id)) lock (_codes) _codes[found.Id] = code;
+        return found;
+    }
+
+    private string? CodeFor(string id)
+    {
+        lock (_codes) return _codes.TryGetValue(id, out var code) ? code : null;
+    }
+
+    /// <summary>The entry body with the remembered code added, or the body untouched.</summary>
+    internal static object? WithInviteCode(object? body, string? code)
+    {
+        if (string.IsNullOrEmpty(code)) return body;
+        var node = body == null
+            ? new System.Text.Json.Nodes.JsonObject()
+            : JsonSerializer.SerializeToNode(body) as System.Text.Json.Nodes.JsonObject
+              ?? new System.Text.Json.Nodes.JsonObject();
+        node["invite_code"] = code;
+        return node;
+    }
 
     public Task<TournamentSummary> CreateTournamentAsync(object req, CancellationToken ct = default)
         => Client.CreateTournamentAsync(req, ct);
 
     public Task<TournamentEntryResponse> EnterTournamentAsync(
         string id, object? req = null, CancellationToken ct = default)
-        => Client.EnterTournamentAsync(id, req, ct);
+        => Client.EnterTournamentAsync(id, WithInviteCode(req, CodeFor(id)), ct);
 
     public Task<object> WithdrawFromTournamentAsync(string id, string entrantId, CancellationToken ct = default)
         => Client.WithdrawFromTournamentAsync(id, entrantId, ct);
@@ -241,6 +276,10 @@ internal sealed class PreviewTournamentApi : ITournamentApi
 
     public Task<TournamentDetail> GetTournamentAsync(string id, CancellationToken ct = default)
         => Answer(() => Simulator.Detail(id)
+                        ?? throw new LobbyApiException(404, "not_found", "Tournament not found.", null));
+
+    public Task<TournamentByCode> FindTournamentByCodeAsync(string code, CancellationToken ct = default)
+        => Answer(() => Simulator.FindByCode(code)
                         ?? throw new LobbyApiException(404, "not_found", "Tournament not found.", null));
 
     public Task<TournamentSummary> CreateTournamentAsync(object req, CancellationToken ct = default)

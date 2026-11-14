@@ -2186,6 +2186,19 @@ public class TournamentSummary
     [JsonPropertyName("has_games")]
     public bool? HasGames { get; set; }
 
+    /// <summary>"public" or "private" (2026-11-13). Null from an older server, which had only
+    /// public ones — read through <see cref="IsPrivate"/>.</summary>
+    [JsonPropertyName("visibility")]
+    public string? Visibility { get; set; }
+
+    /// <summary>A private tournament's invite code. Sent only to its owner and co-organisers,
+    /// and in the answer that creates it.</summary>
+    [JsonPropertyName("invite_code")]
+    public string? InviteCode { get; set; }
+
+    [JsonIgnore]
+    public bool IsPrivate => string.Equals(Visibility, "private", StringComparison.OrdinalIgnoreCase);
+
     [JsonPropertyName("created_at")]
     public string? CreatedAt { get; set; }
 
@@ -2232,6 +2245,24 @@ public class TournamentListResponse
     /// </summary>
     [JsonPropertyName("mine")]
     public List<TournamentSummary>? Mine { get; set; }
+
+    /// <summary>True when the server understands private tournaments and invite codes. Null from
+    /// an older one, which would turn a private request into a public tournament in silence.</summary>
+    [JsonPropertyName("private_tournaments")]
+    public bool? PrivateTournaments { get; set; }
+}
+
+/// <summary>What <c>GET /tournaments/by-code/:code</c> answers: the tournament a code opens.</summary>
+public class TournamentByCode
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
 }
 
 /// <summary>One side of a bracket match: a player in a 1v1, a whole team in a 3v3.</summary>

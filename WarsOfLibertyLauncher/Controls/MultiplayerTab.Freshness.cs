@@ -107,9 +107,10 @@ public partial class MultiplayerTab
         // The profile is its own window and can be open over any tab, or with this one hidden.
         if (includesMe && _profileWindow != null) _ = RefreshHistoryAsync();
 
-        // Nothing else is on screen while the tab is hidden; the marks above make the next show
-        // ask past the minute's window.
-        if (!IsVisible) return;
+        // Nothing else is on screen while the tab is hidden - or its window minimized, which keeps
+        // IsVisible: every finished match used to cost a minimized launcher a request. The marks
+        // above make the next show, or the restore, ask past the minute's window.
+        if (!IsVisible || IsHostWindowMinimized()) return;
 
         // The community payload: the Rooms block, the ranking table and its match list, and the
         // statistics totals all repaint from it when it lands.
@@ -141,7 +142,7 @@ public partial class MultiplayerTab
         if (DateTime.UtcNow - _subpagesPrefetchedUtc < TimeSpan.FromMinutes(1)) return;
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() =>
         {
-            if (!IsVisible || _demoStats || _eloPreview) return;
+            if (!IsVisible || IsHostWindowMinimized() || _demoStats || _eloPreview) return;
             if (_session?.Status != MultiplayerSession.SessionStatus.SignedIn) return;
             _subpagesPrefetchedUtc = DateTime.UtcNow;
             DiagnosticLog.Write("Multiplayer: fetching Statistics and Matches ahead of a click.");

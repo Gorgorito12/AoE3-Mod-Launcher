@@ -67,6 +67,7 @@ python -I tools/testbed/testbed.py sidebyside out.png tools/testbed/out/shot.png
 | `idle`, `tray` | 60 s doing nothing, visible and in the tray |
 | `workshop`, `multiplayer`, `settings`, `modsettings` | a screen left open |
 | `tabs`, `scroll`, `resize` | the launcher made to work |
+| `soak`, `soaktray` | 30 min switching tabs, and 30 min in the tray: what only time shows (a leak, a creeping CPU); read the per-second rows, not the summary alone |
 
 An A/B against an older commit: build it apart (`git archive <commit> WarsOfLibertyLauncher | tar -x`
 in a scratch folder, `dotnet build -c Release`) and run the same scenario with `AOE3ML_TESTBED_EXE`

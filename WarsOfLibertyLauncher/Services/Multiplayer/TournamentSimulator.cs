@@ -201,7 +201,9 @@ internal sealed class TournamentSimulator
         return new TournamentListResponse
         {
             MaxCapacity = MaxCapacity,
-            Tournaments = _store.Where(t => t.Status != "draft").Select(Summary).ToList(),
+            // As the server: a private tournament is never in the public part.
+            PrivateTournaments = true,
+            Tournaments = _store.Where(t => t.Status != "draft" && !t.IsPrivate).Select(Summary).ToList(),
             MyEntries = _store.Where(t => TournamentPermissions.MyEntrant(t, viewer) != null).Select(t => new MyTournamentEntry
             {
                 TournamentId = t.Id,
@@ -217,9 +219,22 @@ internal sealed class TournamentSimulator
                             && string.Equals(t.OwnerUserId, viewer, StringComparison.Ordinal))
                 .Select(Summary)
                 .ToList(),
-            // Present, as a server that can delete sends it; the samples keep everything public.
-            Mine = new List<TournamentSummary>(),
+            // The private ones the viewer runs or plays in, as the server's `mine` carries them.
+            Mine = _store
+                .Where(t => t.IsPrivate && t.Status != "draft"
+                            && (TournamentPermissions.IsOwnerOrManager(t, viewer)
+                                || TournamentPermissions.MyEntrant(t, viewer) != null))
+                .Select(Summary)
+                .ToList(),
         };
+    }
+
+    /// <summary>The private tournament a code opens, shaped like <c>GET /tournaments/by-code</c>.</summary>
+    internal TournamentByCode? FindByCode(string code)
+    {
+        var t = _store.FirstOrDefault(x => x.IsPrivate
+            && string.Equals(x.InviteCode, code?.Trim(), StringComparison.OrdinalIgnoreCase));
+        return t == null ? null : new TournamentByCode { Id = t.Id, Name = DisplayNameOf(t), Status = t.Status };
     }
 
     /// <summary>
@@ -335,6 +350,7 @@ internal sealed class TournamentSimulator
         var teamSource = OneOf(Str("team_source") ?? "solo",
                                new[] { "solo", "registered", "adhoc", "draft" }, "team_source");
         var entryMode = OneOf(Str("entry_mode") ?? "open", new[] { "open", "approval" }, "entry_mode");
+        var visibility = OneOf(Str("visibility") ?? "public", new[] { "public", "private" }, "visibility");
         if (!TournamentRules.TeamSourceAllowed(format, teamSource))
             throw BadRequest($"team_source {teamSource} is not valid for a {format}");
 
@@ -359,6 +375,9 @@ internal sealed class TournamentSimulator
             TeamSource = teamSource,
             EntryMode = entryMode,
             Status = "draft",
+            Visibility = visibility,
+            // Eight characters of the server's alphabet, so the preview's code reads like a real one.
+            InviteCode = visibility == "private" ? $"PRV{_created:00000}" : null,
             Capacity = capacity,
             ConfirmedCount = 0,
             Entrants = new List<TournamentEntrant>(),
@@ -1348,6 +1367,7 @@ internal sealed class TournamentSimulator
         PendingCount = Entrants(t).Count(e => e.Status == "pending"),
         RosterSize = TournamentRules.RosterSizeFor(t.Format),
         HasGames = HasGames(t),
+        Visibility = t.Visibility,
         CreatedAt = t.CreatedAt,
         LastActivityAt = t.LastActivityAt,
     };

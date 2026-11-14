@@ -118,13 +118,16 @@ public partial class LauncherSettingsDialog : Window
         ModRegistry.Find(_config.ActiveModId)?.Translations?.FolderRepo ?? "";
 
     /// <summary>
-    /// In-memory working copy of the top-tab order (tab ids). Seeded
-    /// from <see cref="LauncherConfig.GetTopTabOrder"/> in
-    /// <see cref="LoadFromConfig"/>, mutated by the ↑/↓ buttons, and
-    /// written back to <see cref="LauncherConfig.TopTabOrder"/> only on
-    /// Save — so Cancel discards the reorder like every other edit.
+    /// Working copy of <see cref="LauncherConfig.TopTabOrder"/>, whose first entry is the tab
+    /// that opens on launch. Seeded in <see cref="LoadFromConfig"/>, moved by "Tab on opening".
     /// </summary>
     private readonly System.Collections.Generic.List<string> _tabOrder = new();
+
+    /// <summary>
+    /// Working copy of <see cref="LauncherConfig.TopTabBarOrder"/>, the bar's left-to-right
+    /// order. Moved by "Tab order" and by nothing else, so the two settings stay independent.
+    /// </summary>
+    private readonly System.Collections.Generic.List<string> _barOrder = new();
 
     /// <summary>
     /// Working copy of the translation sources the player added: GitHub repositories here,
@@ -565,6 +568,8 @@ public partial class LauncherSettingsDialog : Window
         // value and render the reorderable rows.
         _tabOrder.Clear();
         _tabOrder.AddRange(_config.GetTopTabOrder());
+        _barOrder.Clear();
+        _barOrder.AddRange(_config.GetTopTabBarOrder());
         LoadAppearance();
 
         // Catalog source: map the three-way config ("" / "none" / repo)
@@ -897,6 +902,7 @@ public partial class LauncherSettingsDialog : Window
             ["recordReminder"] = B(RecordReminderCheck),
             ["textScale"] = T(TextScaleCombo),
             ["tabOrder"] = string.Join(",", _tabOrder),
+            ["barOrder"] = string.Join(",", _barOrder),
             ["appearance"] = AppearanceKey(),
             ["autoCheck"] = B(AutoCheckCheck),
             ["openPostUpdate"] = B(OpenPostUpdateCheck),
@@ -2325,11 +2331,12 @@ public partial class LauncherSettingsDialog : Window
             _config.TextScaleExplicitlyChosen = true;
         _config.TextScale = pickedScale;
 
-        // Top-tab order (Interface section). Persist the working copy;
-        // MainWindow re-applies it to the nav bar on the post-save
-        // refresh (ApplyTopTabOrder), and the FIRST entry becomes the
-        // tab that opens on the next launch.
+        // Interface section. TopTabOrder's first entry is the tab that opens on the next
+        // launch; TopTabBarOrder is where the tabs sit, and the bar moves at once.
         _config.TopTabOrder = _tabOrder.ToArray();
+        var barChanged = !_config.GetTopTabBarOrder().SequenceEqual(_barOrder);
+        _config.TopTabBarOrder = _barOrder.ToArray();
+        if (barChanged) TabOrderChanged?.Invoke();
         WriteAppearance();
 
         // Radmin assistant mode — keep "Auto" as the fallback if for
