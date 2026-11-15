@@ -6555,10 +6555,105 @@ public static partial class Strings
             [LangEn] = "Could not spawn the game process.",
             [LangEs] = "No se pudo iniciar el proceso del juego.",
         },
+        ["MpCreateDialogRules"] = new()
+        {
+            [LangEn] = "GAME RULES",
+            [LangEs] = "REGLAS DE LA PARTIDA",
+        },
+        ["MpCreateDialogRulesStandard"] = new()
+        {
+            [LangEn] = "Standard",
+            [LangEs] = "Estándar",
+        },
+        ["MpCreateDialogRulesClassic"] = new()
+        {
+            [LangEn] = "Classic",
+            [LangEs] = "Clásico",
+        },
+        ["MpCreateDialogRulesTreaty10"] = new()
+        {
+            [LangEn] = "10 min. Treaty",
+            [LangEs] = "Tratado de 10 min.",
+        },
+        ["MpCreateDialogRulesTreaty20"] = new()
+        {
+            [LangEn] = "20 min. Treaty",
+            [LangEs] = "Tratado de 20 min.",
+        },
+        ["MpCreateDialogRulesTreaty30"] = new()
+        {
+            [LangEn] = "30 min. Treaty",
+            [LangEs] = "Tratado de 30 min.",
+        },
+        ["MpCreateDialogRulesTreaty40"] = new()
+        {
+            [LangEn] = "40 min. Treaty",
+            [LangEs] = "Tratado de 40 min.",
+        },
+        ["MpCreateDialogRulesTreatyNoBlockade"] = new()
+        {
+            [LangEn] = "Treaty - No Blockade",
+            [LangEs] = "Tratado: sin bloqueo",
+        },
+        ["MpCreateDialogRulesTreatyHint"] = new()
+        {
+            [LangEn] = "Some mods, such as Wars of Liberty, mark the treaties as not supported.",
+            [LangEs] = "Algunos mods, como Wars of Liberty, marcan los tratados como no admitidos.",
+        },
+        ["MpCreateDialogRulesStandardDesc"] = new()
+        {
+            [LangEn] = "The usual game: no treaty, and the Trade Monopoly victory is allowed.",
+            [LangEs] = "La partida de siempre: sin tratado, y se puede ganar por monopolio comercial.",
+        },
+        ["MpCreateDialogRulesClassicDesc"] = new()
+        {
+            [LangEn] = "No treaty, and no Trade Monopoly victory: you win only by defeating the enemy.",
+            [LangEs] = "Sin tratado y sin victoria por monopolio comercial: solo se gana derrotando al rival.",
+        },
+        ["MpCreateDialogRulesTreatyDesc"] = new()
+        {
+            [LangEn] = "Treaty: for the first {0} minutes nobody can attack and building near the enemy is restricted, so everyone builds up their economy and army. No Trade Monopoly victory.",
+            [LangEs] = "Tratado: durante los primeros {0} minutos nadie puede atacar y construir cerca del rival está limitado, así que todos desarrollan su economía y su ejército. Sin victoria por monopolio comercial.",
+        },
+        ["MpCreateDialogRulesTreatyNoBlockadeDesc"] = new()
+        {
+            [LangEn] = "A 40-minute treaty, like the others, and the Blockade tech cannot be researched either. No Trade Monopoly victory.",
+            [LangEs] = "Un tratado de 40 minutos, como los demás, y además no se puede investigar el Bloqueo. Sin victoria por monopolio comercial.",
+        },
+        ["MpCreateDialogRulesKothDesc"] = new()
+        {
+            [LangEn] = "King of the Hill: a fort stands in the middle of the map; whoever captures it and holds it long enough wins.",
+            [LangEs] = "Rey de la colina: hay un fuerte en el centro del mapa; quien lo capture y lo mantenga el tiempo suficiente gana.",
+        },
+        ["MpCreateDialogKindTipCasual"] = new()
+        {
+            [LangEn] = "A friendly game: nothing is rated, any number of players from 2 to 8, and you can leave without penalty.",
+            [LangEs] = "Una partida amistosa: no cuenta para el ELO, de 2 a 8 jugadores, y puedes salir sin penalización.",
+        },
+        ["MpCreateDialogKindTip1v1"] = new()
+        {
+            [LangEn] = "One against one. The result counts for both players' 1v1 ELO.",
+            [LangEs] = "Uno contra uno. El resultado cuenta para el ELO de 1v1 de los dos.",
+        },
+        ["MpCreateDialogKindTipTeams"] = new()
+        {
+            [LangEn] = "Teams of {0}. The teams are chosen in the room, and the result counts for everyone's team ELO.",
+            [LangEs] = "Equipos de {0}. Los equipos se eligen en la sala, y el resultado cuenta para el ELO de equipos de todos.",
+        },
+        ["MpCreateDialogRulesKoth"] = new()
+        {
+            [LangEn] = "King of the Hill",
+            [LangEs] = "Rey de la colina",
+        },
+        ["MpCreateDialogRulesHint"] = new()
+        {
+            [LangEn] = "Set by itself when the game opens the LAN room, in mods that support it. You can still change it there.",
+            [LangEs] = "Se elige sola cuando el juego abre la sala LAN, en los mods que lo admiten. Puedes cambiarla ahí.",
+        },
         ["MpChatGameLaunched"] = new()
         {
-            [LangEn] = "Game launched. In AoE3: Multiplayer → LAN.",
-            [LangEs] = "Partida lanzada. En AoE3: Multijugador → LAN.",
+            [LangEn] = "Game launched. If it doesn't open the LAN game by itself: Multiplayer → LAN.",
+            [LangEs] = "Partida lanzada. Si no entra sola a la partida LAN: Multijugador → LAN.",
         },
         ["MpChatRadminNoAdapter"] = new()
         {
@@ -7058,8 +7153,8 @@ public static partial class Strings
         ["MpCreateDialogKindRanked"] = new() { [LangEn] = "competitive", [LangEs] = "competitiva" },
         ["MpCreateDialogKindHintCasual"] = new()
         {
-            [LangEn] = "No ELO. You choose how many seats the room has.",
-            [LangEs] = "Sin ELO. Eliges cuántas plazas tiene la sala.",
+            [LangEn] = "A friendly game: it doesn't count for ELO. You choose how many seats the room has.",
+            [LangEs] = "Partida amistosa: no cuenta para el ELO. Eliges cuántas plazas tiene la sala.",
         },
         ["MpCreateDialogKindHintRanked"] = new()
         {

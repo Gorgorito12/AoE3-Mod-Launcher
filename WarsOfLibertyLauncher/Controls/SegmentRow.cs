@@ -27,8 +27,10 @@ internal sealed class SegmentRow : Grid
 
     public double SegmentHeight { get; set; } = 34;
 
-    /// <summary>The look of the new-tournament window (81): unselected segments stand out of the
-    /// card, and the selected one says so with its weight as well.</summary>
+    /// <summary>The look of the new-tournament window (81, 108): unselected segments stand out of the
+    /// card, the selected one glows in the mod's colour, and a segment GROWS with its text
+    /// (<c>MinHeight</c>, wrapped lines) instead of cutting it. The weight never changes with the
+    /// selection: that is what pushed "First come, first served" past its box (design 108).</summary>
     public bool Raised { get; set; }
 
     /// <summary>Raised when the player picks a segment, not when the code does.</summary>
@@ -81,7 +83,13 @@ internal sealed class SegmentRow : Grid
 
     private Button Build(SegmentOption option)
     {
-        var button = new Button { Height = SegmentHeight };
+        var button = new Button();
+        if (Raised)
+        {
+            button.MinHeight = SegmentHeight;
+            button.Padding = option.Sub == null ? new Thickness(4, 0, 4, 0) : new Thickness(6, 7, 6, 7);
+        }
+        else button.Height = SegmentHeight;
         button.SetResourceReference(StyleProperty, "SegmentButton");
         var key = option.Key;
         button.Click += (_, _) =>
@@ -94,9 +102,17 @@ internal sealed class SegmentRow : Grid
             button.Content = option.Text;
             return button;
         }
-        var title = new TextBlock { Text = option.Text, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
+        var title = new TextBlock
+        {
+            Text = option.Text, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
+        };
         title.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeBody");
-        var sub = new TextBlock { Text = option.Sub, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
+        var sub = new TextBlock
+        {
+            Text = option.Sub, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0),
+            TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
+        };
         sub.SetResourceReference(TextBlock.FontSizeProperty, "SetCaptionSize");
         ModDialogChrome.SetTightLine(1.1, title, sub);
         var stack = new StackPanel();
@@ -119,8 +135,10 @@ internal sealed class SegmentRow : Grid
         var look = raised ? RaisedLook(on, accent) : Look(gold, on, accent);
         if (raised)
         {
-            button.FontWeight = on ? FontWeights.Bold : FontWeights.Normal;
+            // Fill, rim and glow say which one is chosen; the weight stays put (design 108).
+            button.FontWeight = FontWeights.SemiBold;
             button.BorderThickness = new Thickness(on ? 1.5 : 1);
+            ChoiceGlow.SetBrush(button, ChoiceGlow.For(on, accent));
         }
         button.Background = look.Fill;
         button.BorderBrush = new SolidColorBrush(look.Rim);
@@ -130,7 +148,7 @@ internal sealed class SegmentRow : Grid
             ((TextBlock)stack.Children[0]).Foreground = button.Foreground;
             if (raised)
             {
-                ((TextBlock)stack.Children[0]).FontWeight = button.FontWeight;
+                ((TextBlock)stack.Children[0]).FontWeight = FontWeights.SemiBold;
                 ((TextBlock)stack.Children[1]).FontWeight = FontWeights.Normal;
             }
             ((TextBlock)stack.Children[1]).Foreground = new SolidColorBrush(look.Sub);

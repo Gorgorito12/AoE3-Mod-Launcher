@@ -579,7 +579,10 @@ rather than the reverse.
   (7) **Header:** title bar 40 and nav 56 in BOTH layouts; the old compact heights (34 / 42) and the
   `NavTabButtonCompact` swap below are history. The main bar carries the mod's tint (`ModTitleBar`)
   **in the Library only**: `SwitchTopTab` points it back at `GlassTitleBar` on every other tab, where
-  the tint used to stay behind; secondary windows keep one uniform colour (BASE.md). **No line between the title bar and the tabs**
+  the tint used to stay behind; secondary windows keep one uniform colour (BASE.md). The tab
+  underline follows the same rule (the button's `BorderBrush`, set in `SwitchTopTab`), and the quick
+  match's button is the launcher's blue (2026-11-14): outside the Library nothing follows the mod open
+  there (`OutsideLibraryColourTests`). **No line between the title bar and the tabs**
   (`TitleBar.ShowBottomLine="False"`; every other window keeps its bar's line), and the
   launcher-update pill is in the title bar beside the bell (title-bar column 4, hit-testable in the
   caption region), where the maintainer wants it rather than where 77k drew it.
@@ -626,7 +629,13 @@ rather than the reverse.
   keeps the serif** and passes `topGlow: true` to `AttachPicked` (its image, fade and glow are not 88's).
   A layer of that chassis may never carry a `Height` it does not need: it spans the window, so in a
   `SizeToContent` dialog it is a floor (the glow's 580 px made 81a 85 px too tall). `SegmentRow.Raised`
-  and `Controls/ModSearchPopup` are 81's; `--preview-dialog=newtournament:a|b|c|pick`, and
+  and `Controls/ModSearchPopup` are 81's. **Design 108 (docs/design_14nov) re-lays 81 out:** 780 wide,
+  the tournament on the left and the registration on the right at one height, teams and the summary
+  strip under them, and the choices with a sentence as `Controls/OptionRows` (circle, title, meaning
+  inside the row). **A choice never changes weight or size when picked** — fill, rim and a blurred
+  glow sibling (`ChoiceGlow.Brush`) say it — and a raised segment has `MinHeight`, never `Height`:
+  bold "First come, first served" ran past its box in English. Pinned by `NewTournamentLayoutTests`.
+  `--preview-dialog=newtournament:a|b|c|soi|pick`, and
   `--preview-dialog=enroll:a..l` for 82, the enrol window (`EnrollDialog` + the pure
   `Services/Multiplayer/EnrollView`), and `--preview-dialog=teams:a..m` for 83, My teams
   (`MyTeamsWindow` + the pure `Services/Multiplayer/MyTeamsView`). `teams:l` is the toast: the
@@ -2206,11 +2215,18 @@ rather than the reverse.
   **The update pill went further and has no forever animation at all** (2026-11-11): a running
   clock makes WPF draw every frame even while the value it holds is still, and the pill's
   "rest" between pulses was exactly that — measured 65 redraws a second with the window idle.
-  `PulseLauncherUpdatePill` plays one FINITE breath (`BreatheLauncherUpdatePill`, 680 ms,
-  `FillBehavior.Stop`, 30 fps, its two clocks still kept and stopped through their controller)
-  and a `_pillBreathTimer` (3.6 s) starts the next; `StopLauncherUpdatePillPulse` stops the timer
-  and the clocks. Measured after: 16 redraws a second, CPU 4.6 % → 3.3 %. Between breaths nothing
-  is drawn. `App.ShowMainWindow` also tells `RankBadge.SetAppActive` the window's real focus right
+  `PulseLauncherUpdatePill` plays one FINITE breath (`BreatheLauncherUpdatePill`,
+  `FillBehavior.Stop`, 30 fps, its clocks kept and stopped through their controller) and a
+  `_pillBreathTimer` starts the next; `StopLauncherUpdatePillPulse` stops the timer and the clocks.
+  Measured after: 16 redraws a second, CPU 4.6 % → 3.3 %. Between breaths nothing is drawn.
+  **Since design 110 (2026-11-14) the pill is solid GOLD, and it BEATS with its halo**: the
+  design's 2.4-s halo breath alone read as too quiet, so (the maintainer's call, the same day) the
+  old double pulse of its size (1.08 then 1.05, 680 ms on `LauncherUpdatePillScale`) came back with
+  the ring and glow flaring in step (two siblings behind the face — the Effect is on a shape with
+  no text, and is never animated, because an Effect inside a template is frozen), one beat every
+  3.6 s. The rest between beats is the forever-clock rule above. It holds still under the pointer and with the effects reduced, and
+  the arrow is a drawn `Path` (`Tag="ready"` draws the restart arrow). Pinned by
+  `LauncherUpdatePillTests`, which lifts the button out of `MainWindow.xaml` and builds it. `App.ShowMainWindow` also tells `RankBadge.SetAppActive` the window's real focus right
   after `Show()`: a window shown without focus never raises `Deactivated`, so lights kept running
   for nobody.
   A FINITE animation (a fade, the bell shake) ends on its own and needs none of this. Two more

@@ -686,6 +686,50 @@ public static class GameSettingsStore
         }
     }
 
+    /// <summary>
+    /// Ticks the Record Game box of the lobby the HOST is about to open, by setting
+    /// <c>gamerecordgame</c> in the profile's <c>MultiplayerGameSettings</c>: the game restores
+    /// that block when it hosts a LAN game, and the host's value is the game's for every player.
+    /// Needs no DLL, so it works for every mod.
+    ///
+    /// <para>Only ever writes <c>true</c>, and only when it is not already true: a casual room
+    /// leaves whatever the player last chose. Best-effort; a launch never fails over it.</para>
+    /// </summary>
+    public static bool EnsureLobbyRecordGame(ModProfile profile, LauncherConfig config)
+    {
+        try
+        {
+            var profilePath = ResolveRecordingProfilePath(profile, config);
+            if (profilePath == null)
+            {
+                DiagnosticLog.Write($"LobbyRecordGame: no profile for '{profile.DisplayName}' yet - the box stays as the game leaves it.");
+                return false;
+            }
+            var current = ReadProfile(profilePath);
+            if (string.Equals(GameSettingsSync.ReadSetting(current,
+                    GameSettingsSync.MultiplayerGameSettingsSection, GameSettingsSync.LobbyRecordGameSetting),
+                    "true", StringComparison.Ordinal))
+                return true;
+
+            var updated = GameSettingsSync.EnsureSetting(current,
+                GameSettingsSync.MultiplayerGameSettingsSection, GameSettingsSync.LobbyRecordGameSetting, "true");
+            if (updated == null)
+            {
+                DiagnosticLog.Write($"LobbyRecordGame: could not set it in '{profile.DisplayName}' ({profilePath}) - left alone.");
+                return false;
+            }
+            BackUpOnce(profilePath);
+            File.WriteAllText(profilePath, updated, Encoding.Unicode);
+            DiagnosticLog.Write($"LobbyRecordGame: set {GameSettingsSync.LobbyRecordGameSetting}=true for '{profile.DisplayName}' in {profilePath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"LobbyRecordGame: '{profile.DisplayName}' failed: {ex.Message}");
+            return false;
+        }
+    }
+
     private static void SaveQuietly(LauncherConfig config)
     {
         try { config.Save(); }

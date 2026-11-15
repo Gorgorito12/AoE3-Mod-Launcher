@@ -2078,16 +2078,11 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Filled from code, like the bracket and for the same reason. The right
-                         column's width and the gutters come from StatsPageLayout. -->
+                    <!-- Filled from code, like the bracket and for the same reason. Design 109: one
+                         column - the activity strip, a wrapping row of cards, the decks - where
+                         there used to be a fixed right column (StatsPageLayout). -->
                     <Grid x:Name="StatsColumns">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition x:Name="StatsColumnsGap" Width="12"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel x:Name="StatsLeftColumn" Grid.Column="0"/>
-                        <StackPanel x:Name="StatsRightColumn" Grid.Column="2" Width="300"/>
+                        <StackPanel x:Name="StatsLeftColumn"/>
                     </Grid>
 
                 </StackPanel>

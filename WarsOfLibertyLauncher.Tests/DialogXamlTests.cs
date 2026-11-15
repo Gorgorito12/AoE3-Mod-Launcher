@@ -975,8 +975,8 @@ public class DialogXamlTests
                     {
                         var tab = new MultiplayerTab();
                         tab.ShowDemoStats(scenario);
+                        // Design 109: one column - the activity strip, the row of cards, the decks.
                         Assert.NotEmpty(tab.StatsLeftColumn.Children);
-                        Assert.NotEmpty(tab.StatsRightColumn.Children);
 
                         // And the MOD picker, which is what replaced the viewer scope. On a
                         // machine with one installed mod it draws as a label rather than a row
@@ -2958,7 +2958,7 @@ public class DialogXamlTests
                     .ToList();
                 var band = new DeckBand(4, 67, cards);
 
-                var panel = (StackPanel)MultiplayerTab.BuildDeckBand(
+                var panel = (Panel)MultiplayerTab.BuildDeckBand(
                     band, VocabularyWith(), "Alemanes", 6, "Germans",
                     consensus: false, first: true);
                 panel.Measure(new Size(900, double.PositiveInfinity));
@@ -2971,13 +2971,13 @@ public class DialogXamlTests
                     .ToList();
                 Assert.Equal(11, tiles.Count);
 
-                // The heading is one line: nothing in it may wrap, and its height is one line
-                // of the largest type in it, not two.
-                var heading = (Grid)panel.Children[0];
+                // The band's mark (design 109) is one line: nothing in it may wrap, and its height
+                // is one line of the largest type in it, not two.
+                var heading = (FrameworkElement)panel.Children[0];
                 Assert.All(VisualsUnder(heading).OfType<TextBlock>(),
                     t => Assert.Equal(TextWrapping.NoWrap, t.TextWrapping));
-                var headline = (double)Application.Current.FindResource("MpFigureHeadlineSize");
-                Assert.True(heading.ActualHeight < headline * 1.8,
+                // Design 109 fixes the mark at 28, the cards' own height: taller means it wrapped.
+                Assert.True(heading.ActualHeight <= 28.5,
                     $"the band heading is {heading.ActualHeight:F0} px tall at 900 wide - "
                     + "something in it has wrapped onto a second line.");
             }

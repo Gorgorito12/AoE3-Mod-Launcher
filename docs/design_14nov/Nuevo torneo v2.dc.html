@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+<section id="t81" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t81" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">81</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Nuevo torneo, con la base de la Biblioteca unificada</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">Es un diálogo de un mod, así que lleva la franja con su imagen, el resplandor de su color, la barra de título teñida y su color en lo elegido y en «Crear torneo». Al cambiar de mod, todo eso cambia con él. Pasa de 470 a 560 de ancho y se agrupa en tres tarjetas: qué torneo (mod y nombre), cómo se juega (formato y, en equipos, cómo se forman) y quién entra (inscripción y plazas). Se mantiene lo del turno 8: el contador y el aviso del nombre en el campo, los segmentados con una línea de consecuencia debajo, cómo se forman los equipos solo en 2v2 y 3v3, y la primaria como único botón sólido. Cambios: el mod se elige con su icono en vez de un desplegable; las plazas suben a 32 y 64; la cuenta de las plazas pasa a tres cifras (jugadores, rondas y salas a la vez); y «Crear torneo» desactivado dice qué falta. Los textos de cómo se forman los equipos son los de las notas de la v1.0.16e. Para que quepa en un portátil, pasa a dos columnas (760 de ancho y menos de 650 de alto incluso en 3v3). Al final, «Abrir la inscripción al crearlo» ahorra un paso, y el botón dice lo que va a pasar: «Crear y abrir inscripción» o «Crear como borrador».</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px 36px;align-items:flex-start">
+    <div id="81a" style="display:flex;flex-direction:column;gap:10px;width:760px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#81a" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">81a</a><span>1v1 de Wars of Liberty, con el nombre que se propone solo. Prueba a cambiar de mod, de formato y de plazas.</span></div><dc-import name="NuevoTorneo" mod="wol" formato="1v1" transparencia="{{ tr }}" hint-size="760px,560px"></dc-import></div>
+    <div id="81b" style="display:flex;flex-direction:column;gap:10px;width:760px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#81b" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">81b</a><span>3v3 de Hundred Days: aparece cómo se forman los equipos y las plazas cuentan equipos.</span></div><dc-import name="NuevoTorneo" mod="hundred-days" formato="3v3" transparencia="{{ tr }}" hint-size="760px,640px"></dc-import></div>
+    <div id="81c" style="display:flex;flex-direction:column;gap:10px;width:760px"><div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#81c" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">81c</a><span>Nombre demasiado corto, en Improvement Mod (sin imagen: solo el resplandor). «Crear torneo» desactivado con el motivo.</span></div><dc-import name="NuevoTorneo" mod="improvement-mod" formato="1v1" nombre="Co" transparencia="{{ tr }}" hint-size="760px,560px"></dc-import></div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;transparencia&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sólida&quot;,&quot;Media&quot;,&quot;Máxima&quot;],&quot;default&quot;:&quot;Media&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() { return { tr: this.props.transparencia ?? 'Media' }; }
+}
+</script>
+</body>
+</html>

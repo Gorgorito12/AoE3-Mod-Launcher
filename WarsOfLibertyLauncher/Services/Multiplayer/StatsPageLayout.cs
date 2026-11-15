@@ -1,41 +1,56 @@
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
 /// <summary>
-/// How the Statistics page divides a given width (design 98).
+/// How the Statistics page divides a given width (design 109, `docs/design_14nov`).
 ///
-/// <para>The prototype says this in CSS: a gutter that changes at 1600, a right column of
-/// <c>clamp(300px, 24cqw, 380px)</c>, and two tables under
-/// <c>repeat(auto-fit, minmax(560px, 1fr))</c>. WPF has none of the three, so the arithmetic lives
-/// here where it can be pinned, and the page only re-renders when one of the answers changes.</para>
+/// <para>The page is a strip of activity at full width, then ONE wrapping row of cards - Balance,
+/// Matchups (and "Played together" in Teams), Maps - then the decks at full width. It used to keep
+/// a fixed right column and reserve the matchups' place even when there were none to show, which
+/// left a hole in the middle of a wide screen.</para>
 /// </summary>
-public readonly record struct StatsPageLayout(
-    double Gutter,
-    double RightColumn,
-    double RowHeight,
-    bool SideBySide,
-    bool Wide)
+public readonly record struct StatsPageLayout(double Gutter, double RowHeight, bool Wide)
 {
-    public const double RightColumnMin = 300;
-    public const double RightColumnMax = 380;
-    public const double RightColumnShare = .24;
+    /// <summary>One column of the balance table, at its narrowest, and the space between two.</summary>
+    public const double BalanceColumnWidth = 450, BalanceColumnGap = 28, CardPadding = 32;
 
-    /// <summary>The narrowest a table may get before the two stop sharing a row.</summary>
-    public const double TableMinWidth = 560;
+    /// <summary>The bases of the other cards in the row (design 109).</summary>
+    public const double MatchupsBasis = 400, AlliesBasis = 380, MapsBasis = 340;
+
+    /// <summary>A balance table opens another column only once every column would hold this many.</summary>
+    public const int RowsPerBalanceColumn = 5;
+
+    /// <summary>At most three columns of balance.</summary>
+    public const int MaxBalanceColumns = 3;
+
+    /// <summary>The maps shown before the fold.</summary>
+    public const int MapsShown = 12;
 
     public static StatsPageLayout For(double width)
+        => new(PageSpacing.For(width), 34, width >= PageSpacing.WideFrom);
+
+    /// <summary>The width the cards share: the page less its own margins.</summary>
+    public double Inner(double width) => Math.Max(0, width - Gutter * 2);
+
+    /// <summary>
+    /// How many columns the balance takes: the least of three, of one per five civilizations shown,
+    /// and of how many fit at 450 beside the maps and the matchups (when there are matchups), and
+    /// at least one.
+    /// </summary>
+    public int BalanceColumns(double width, int civsShown, double pairsBasis)
     {
-        bool wide = width >= PageSpacing.WideFrom;
-        double gutter = PageSpacing.For(width);
-        double right = Math.Clamp(width * RightColumnShare, RightColumnMin, RightColumnMax);
-
-        // What the two tables have once the page's own gutters and the right column are gone.
-        double left = width - gutter * 2 - right - gutter;
-
-        return new StatsPageLayout(
-            gutter,
-            right,
-            wide ? 44 : 40,
-            left >= TableMinWidth * 2 + gutter,
-            wide);
+        double free = Inner(width) - MapsBasis - Gutter - CardPadding - (pairsBasis > 0 ? pairsBasis + Gutter : 0);
+        int fit = (int)Math.Floor((free + BalanceColumnGap) / (BalanceColumnWidth + BalanceColumnGap));
+        return Math.Max(1, Math.Min(MaxBalanceColumns, Math.Min(civsShown / RowsPerBalanceColumn, fit)));
     }
+
+    /// <summary>The balance card's basis for <paramref name="columns"/> columns.</summary>
+    public static double BalanceBasis(int columns)
+        => columns * BalanceColumnWidth + (columns - 1) * BalanceColumnGap + CardPadding;
+
+    /// <summary>
+    /// In Teams, "Played together" sits beside Matchups when all four cards fit on one line;
+    /// otherwise under it (design 109).
+    /// </summary>
+    public bool AlliesBeside(double width)
+        => BalanceBasis(1) + AlliesBasis * 2 + MapsBasis + Gutter * 3 <= Inner(width);
 }

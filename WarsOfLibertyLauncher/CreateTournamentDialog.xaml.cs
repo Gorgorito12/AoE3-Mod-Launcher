@@ -15,7 +15,7 @@ using WarsOfLibertyLauncher.Services;
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Asks for the shape of a new tournament (design 81).
+/// Asks for the shape of a new tournament (design 81, laid out again by design 108).
 ///
 /// <para>Unlike <c>CreateLobbyDialog</c> it does NOT perform the POST itself: creating a tournament
 /// can be refused for reasons the caller already knows how to explain, and a copy of that handling
@@ -79,7 +79,6 @@ public partial class CreateTournamentDialog : Window
     private Action? _refrost;
 
     private static readonly string[] Sources = { "registered", "adhoc", "draft" };
-    private readonly List<(string Key, Button Button, Ellipse Dot)> _sourceRows = new();
 
     /// <param name="modName">The mod to propose a name from, when <paramref name="profiles"/> names
     /// none. Null keeps an empty field and the visible <c>NameProblem</c>.</param>
@@ -105,9 +104,8 @@ public partial class CreateTournamentDialog : Window
 
         ApplyStrings();
         ModDialogChrome.SetTightLine(1, ModLabel, NameLabel, NameCount, FormatLabel, TeamSourceLabel, EntryModeLabel, CapacityLabel, VisibilityLabel);
-        ModDialogChrome.SetTightLine(1.45, NameProblem, FormatWhy, EntryWhy, WaitlistHint, OpenWhy, VisibilityWhy);
-        ModDialogChrome.SetTightLine(1.3, OpenTitle, MathPlayersWord, MathRoundsWord, MathRoomsWord);
-        ModDialogChrome.SetTightLine(1, MathPlayers, MathRounds, MathRooms);
+        ModDialogChrome.SetTightLine(1.45, NameProblem, FormatWhy, WaitlistHint, OpenWhy);
+        ModDialogChrome.SetTightLine(1.3, OpenTitle);
         FitToScreen();
         BuildRows();
 
@@ -124,7 +122,7 @@ public partial class CreateTournamentDialog : Window
 
         Refresh();
 
-        FrameworkElement[] cards = { WhatCard, HowCard, WhoCard };
+        FrameworkElement[] cards = { WhatCard, WhoCard, TeamSourceBlock, MathStrip };
         void Frost() => ModDialogChrome.FrostCards(Root, cards);
         foreach (var card in cards) card.SizeChanged += (_, _) => Frost();
         Scroller.ScrollChanged += (_, _) => Frost();
@@ -175,8 +173,8 @@ public partial class CreateTournamentDialog : Window
 
         EntryRow.SetOptions(new[]
         {
-            new SegmentOption("open", Strings.Get("NtEntryOpen")),
-            new SegmentOption("approval", Strings.Get("NtEntryApproval")),
+            new OptionRow("open", Strings.Get("NtEntryOpen"), Strings.Get("NtWhyEntryOpen")),
+            new OptionRow("approval", Strings.Get("NtEntryApproval"), Strings.Get("NtWhyEntryApproval")),
         });
         EntryRow.Selected = _entry;
         EntryRow.Picked += key =>
@@ -187,8 +185,8 @@ public partial class CreateTournamentDialog : Window
 
         VisibilityRow.SetOptions(new[]
         {
-            new SegmentOption("public", Strings.Get("NtVisibilityPublic")),
-            new SegmentOption("private", Strings.Get("NtVisibilityPrivate")),
+            new OptionRow("public", Strings.Get("NtVisibilityPublic"), Strings.Get("NtWhyPublic")),
+            new OptionRow("private", Strings.Get("NtVisibilityPrivate"), Strings.Get("NtWhyPrivate")),
         });
         VisibilityRow.Selected = _visibility;
         VisibilityRow.Picked += key =>
@@ -205,48 +203,18 @@ public partial class CreateTournamentDialog : Window
             Refresh();
         };
 
-        var body = (FontFamily)FindResource("BodyFont");
-        foreach (var button in EntryRow.Buttons) button.FontFamily = body;
-        foreach (var button in VisibilityRow.Buttons) button.FontFamily = body;
-
-        foreach (var key in Sources) SourceRows.Children.Add(BuildSourceRow(key));
-    }
-
-    private Button BuildSourceRow(string key)
-    {
-        var (title, text) = key switch
+        SourceRows.SetOptions(Sources.Select(key => key switch
         {
-            "adhoc" => ("NtSourceAdhoc", "NtSourceAdhocBody"),
-            "draft" => ("NtSourceDraft", "NtSourceDraftBody"),
-            _ => ("NtSourceRegistered", "NtSourceRegisteredBody"),
-        };
-        var dot = new Ellipse { Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) };
-        var head = new TextBlock { Text = Strings.Get(title), TextWrapping = TextWrapping.Wrap };
-        head.SetResourceReference(StyleProperty, "GlassRowTitle");
-        head.SetResourceReference(TextBlock.FontSizeProperty, "DialogBodySize");
-        var line = new TextBlock { Text = Strings.Get(text), Margin = new Thickness(0, 3, 0, 0) };
-        line.SetResourceReference(StyleProperty, "GlassHint");
-        line.Foreground = new SolidColorBrush(Color.FromRgb(0xA8, 0xBC, 0xD2));
-        ModDialogChrome.SetTightLine(1.3, head);
-        ModDialogChrome.SetTightLine(1.45, line);
-        var words = new StackPanel();
-        words.Children.Add(head);
-        words.Children.Add(line);
-        Grid.SetColumn(words, 1);
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.Children.Add(dot);
-        grid.Children.Add(words);
-        var row = new Button { Content = grid, Margin = new Thickness(0, 0, 0, key == Sources[^1] ? 0 : 6) };
-        row.SetResourceReference(StyleProperty, "GlassChoiceRow");
-        row.Click += (_, _) =>
+            "adhoc" => new OptionRow(key, Strings.Get("NtSourceAdhoc"), Strings.Get("NtSourceAdhocBody")),
+            "draft" => new OptionRow(key, Strings.Get("NtSourceDraft"), Strings.Get("NtSourceDraftBody")),
+            _ => new OptionRow(key, Strings.Get("NtSourceRegistered"), Strings.Get("NtSourceRegisteredBody")),
+        }).ToList());
+        SourceRows.Selected = _source;
+        SourceRows.Picked += key =>
         {
-            _source = key;
+            _source = (string)key;
             Refresh();
         };
-        _sourceRows.Add((key, row, dot));
-        return row;
     }
 
     /// <summary>The proposal, cut to what the field accepts: <c>MaxNameLength</c> and the XAML's
@@ -281,11 +249,11 @@ public partial class CreateTournamentDialog : Window
         popup.Closed += (_, _) =>
         {
             _modPopup = null;
-            ModChevron.Text = "▾";
+            ModChevronTurn.Angle = 0;
             ModPickButton.ClearValue(BorderBrushProperty);
         };
         _modPopup = popup;
-        ModChevron.Text = "▴";
+        ModChevronTurn.Angle = 180;
         ModPickButton.BorderBrush = new SolidColorBrush(_accent);
         popup.IsOpen = true;
     }
@@ -307,6 +275,7 @@ public partial class CreateTournamentDialog : Window
         EntryRow.Accent = _accent;
         VisibilityRow.Accent = _accent;
         CapacityRow.Accent = _accent;
+        SourceRows.Accent = _accent;
 
         if (string.IsNullOrEmpty(NameEntry.Text) || string.Equals(NameEntry.Text, _proposedName, StringComparison.Ordinal))
             ProposeNameFor(profile.DisplayName);
@@ -391,10 +360,10 @@ public partial class CreateTournamentDialog : Window
         var roster = RosterSize();
         TeamSourceBlock.Visibility = team ? Visibility.Visible : Visibility.Collapsed;
         FormatWhy.Text = team ? Strings.Format("NtWhyTeam", roster) : Strings.Get("NtWhySolo");
-        EntryWhy.Text = Strings.Get(_entry == "approval" ? "NtWhyEntryApproval" : "NtWhyEntryOpen");
-        VisibilityWhy.Text = Strings.Get(_visibility == "private" ? "NtWhyPrivate" : "NtWhyPublic");
+        EntryRow.Selected = _entry;
+        VisibilityRow.Selected = _visibility;
+        SourceRows.Selected = _source;
         CapacityLabel.Text = Strings.Get(team ? "NtLabelPlacesTeams" : "NtLabelPlaces");
-        foreach (var (key, button, dot) in _sourceRows) PaintSource(key, button, dot);
 
         var places = PlacesNow();
         CapacityRow.Selected = places;
@@ -406,25 +375,12 @@ public partial class CreateTournamentDialog : Window
         MathRoundsWord.Text = Strings.Get(rounds == 1 ? "NtMathRoundOne" : "NtMathRounds");
         MathRooms.Text = rooms.ToString();
         MathRoomsWord.Text = Strings.Get(rooms == 1 ? "NtMathRoomOne" : "NtMathRooms");
-        var fill = new SolidColorBrush(Color.FromArgb(0x1A, _accent.R, _accent.G, _accent.B));
-        var rim = new SolidColorBrush(Color.FromArgb(0x59, _accent.R, _accent.G, _accent.B));
-        foreach (var card in new[] { MathPlayersCard, MathRoundsCard, MathRoomsCard })
-        {
-            card.Background = fill;
-            card.BorderBrush = rim;
-        }
+        // The strip: the mod's colour at .10, its rim at .35 (design 108).
+        MathStrip.Background = new SolidColorBrush(Color.FromArgb(0x1A, _accent.R, _accent.G, _accent.B));
+        MathStrip.BorderBrush = new SolidColorBrush(Color.FromArgb(0x59, _accent.R, _accent.G, _accent.B));
 
         OpenWhy.Text = Strings.Get(open ? "NtOpenYes" : "NtOpenNo");
         OpenToggle.Foreground = new SolidColorBrush(open ? ModAccent.OnAccent(_accent) : Color.FromRgb(0x8E, 0xA4, 0xC0));
-    }
-
-    private void PaintSource(string key, Button row, Ellipse dot)
-    {
-        var on = key == _source;
-        row.Background = new SolidColorBrush(on ? ModAccent.SelectionFill(_accent) : Color.FromRgb(0x1A, 0x2C, 0x48));
-        row.BorderBrush = new SolidColorBrush(on ? Color.FromArgb(0xF2, _accent.R, _accent.G, _accent.B) : Color.FromArgb(0x38, 0x82, 0xAF, 0xFF));
-        dot.StrokeThickness = on ? 5 : 1.5;
-        dot.Stroke = new SolidColorBrush(on ? Colors.White : Color.FromArgb(0x80, 0x82, 0xAF, 0xFF));
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)

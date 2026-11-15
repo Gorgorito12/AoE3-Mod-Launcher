@@ -60,6 +60,23 @@ public class GameSettingsSyncTests
     }
 
     [Fact]
+    public void TheLobbyRecordGameIsWrittenInTheMultiplayerBlockAndNowhereElse()
+    {
+        // The lobby's Record Game box reads gamerecordgame from MultiplayerGameSettings; the
+        // Options screen's optionrecordgame is a different setting the box does not inherit.
+        var updated = GameSettingsSync.EnsureSetting(Profile(record: "false"),
+            GameSettingsSync.MultiplayerGameSettingsSection, GameSettingsSync.LobbyRecordGameSetting, "true")!;
+
+        Assert.Equal("true", GameSettingsSync.ReadSetting(updated,
+            GameSettingsSync.MultiplayerGameSettingsSection, GameSettingsSync.LobbyRecordGameSetting));
+        Assert.Equal("false", GameSettingsSync.ReadSetting(updated,
+            GameSettingsSync.GameOptionsSection, GameSettingsSync.RecordGameSetting));
+        Assert.Null(GameSettingsSync.ReadSetting(updated, "RandomMapGameSettings", GameSettingsSync.LobbyRecordGameSetting));
+        Assert.Equal("Andes", Section(Parse(updated), "MultiplayerGameSettings")!
+            .SelectSingleNode("Settings/Setting[@Name='map']")!.InnerText);
+    }
+
+    [Fact]
     public void Graft_BringsOverTheSettingsSections()
     {
         var shared = GameSettingsSync.ExtractSections(Profile(volume: "2"))!;

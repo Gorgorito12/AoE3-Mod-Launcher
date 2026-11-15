@@ -41,6 +41,25 @@ public class HostPingTests
     public void ARoomWhoseHostIsNotPublishedSaysSo()
         => Assert.Equal(HostPingKind.NotPublished, K(published: false, hostIp: false));
 
+    /// <summary>
+    /// A room behind a password is published once the server says it includes them
+    /// (<c>private_rooms</c>, 2026-11-14); against an older server it keeps saying "not published",
+    /// never "the host is not on Radmin". A tournament match is never published, and its tooltip
+    /// then names only tournaments.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_APasswordRoomIsPublishedOnlyWhenTheServerSaysSo()
+    {
+        Assert.True(HostPing.IsPublished(isPrivate: false, tournamentMatchId: null, privateRoomsPublished: false));
+        Assert.False(HostPing.IsPublished(isPrivate: true, tournamentMatchId: null, privateRoomsPublished: false));
+        Assert.True(HostPing.IsPublished(isPrivate: true, tournamentMatchId: null, privateRoomsPublished: true));
+        Assert.False(HostPing.IsPublished(isPrivate: false, tournamentMatchId: "m1", privateRoomsPublished: true));
+        Assert.False(HostPing.IsPublished(isPrivate: true, tournamentMatchId: "m1", privateRoomsPublished: true));
+
+        Assert.Equal("RmPingTipNotPublished", HostPing.TipKey(HostPingKind.NotPublished));
+        Assert.Equal("RmPingTipTournament", HostPing.TipKey(HostPingKind.NotPublished, privateRoomsPublished: true));
+    }
+
     [Fact]
     public void AHostWithoutAnAddressIsNotOnRadmin()
         => Assert.Equal(HostPingKind.HostNotOnRadmin, K(hostIp: false));
@@ -113,7 +132,25 @@ public class HostPingTests
             var session = new MultiplayerSession(config);
             var hosts = await session.Api.GetHostRadminIpsAsync();
             Assert.NotNull(hosts);
-            Assert.Equal("26.1.2.3", hosts!["ABC123"]);
+            Assert.Equal("26.1.2.3", hosts!.Hosts["ABC123"]);
+            // A server before 2026-11-14 does not say it includes password rooms.
+            Assert.False(hosts.PrivateRooms);
+        }
+        finally { await SessionRefreshTests.Finish(stop, server); }
+    }
+
+    [Fact]
+    public async Task AServerThatIncludesPasswordRoomsSaysSo()
+    {
+        var (url, server, stop, _) = SessionRefreshTests.Serve(_ => (200, "OK",
+            "{\"hosts\":{\"ABC123\":\"26.1.2.3\"},\"private_rooms\":true}"));
+        try
+        {
+            var config = SessionRefreshTests.SignedIn(url, "token", DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 3600);
+            var session = new MultiplayerSession(config);
+            var hosts = await session.Api.GetHostRadminIpsAsync();
+            Assert.NotNull(hosts);
+            Assert.True(hosts!.PrivateRooms);
         }
         finally { await SessionRefreshTests.Finish(stop, server); }
     }

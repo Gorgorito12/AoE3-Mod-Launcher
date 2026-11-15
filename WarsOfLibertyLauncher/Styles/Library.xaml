@@ -1027,7 +1027,8 @@
     </Style>
     <!-- ============================== STATISTICS (design 98) ============================== -->
     <SolidColorBrush x:Key="StatsCardRim"    Color="#1AFFFFFF"/>
-    <SolidColorBrush x:Key="StatsLabel"      Color="#61779A"/>
+    <!-- #8C9CB1 since design 109: #61779A did not read on the navy. -->
+    <SolidColorBrush x:Key="StatsLabel"      Color="#8C9CB1"/>
     <SolidColorBrush x:Key="StatsNote"       Color="#8C9CB1"/>
     <SolidColorBrush x:Key="StatsProse"      Color="#A8BCD2"/>
     <SolidColorBrush x:Key="StatsSoft"       Color="#C3D2E5"/>

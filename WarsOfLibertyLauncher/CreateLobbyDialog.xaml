@@ -191,6 +191,21 @@
                             </StackPanel>
                         </Border>
 
+                        <Border x:Name="GameCard" Style="{DynamicResource WindowCard}" Padding="16,14" Margin="0,14,0,0">
+                            <StackPanel>
+                                <TextBlock x:Name="GameRulesLabel" Style="{DynamicResource WindowCardLabel}"/>
+                                <ComboBox x:Name="GameRulesCombo" Style="{StaticResource SetCompactCombo}"
+                                          Margin="0,7,0,0" HorizontalAlignment="Stretch"
+                                          Background="{DynamicResource MpAppBg}"
+                                          BorderBrush="{DynamicResource MpMatchesFieldRim}"
+                                          Foreground="{DynamicResource UiTextStrong}"
+                                          FontSize="{DynamicResource FontSizeBody}"
+                                          SelectionChanged="GameRulesCombo_SelectionChanged"/>
+                                <TextBlock x:Name="GameRulesDescription" Style="{DynamicResource GlassRowBody}" Margin="0,8,0,0"/>
+                                <TextBlock x:Name="GameHint" Style="{DynamicResource GlassHint}" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+
                         <Border x:Name="NetCard" Style="{DynamicResource WindowCard}" Padding="16,14" Margin="0,14,0,0">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">

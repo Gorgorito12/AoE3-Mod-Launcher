@@ -216,17 +216,18 @@ public class LobbyApiClient : IDisposable
         => GetAsync<LobbyListResponse>("lobbies", requireAuth: false, ct);
 
     /// <summary>
-    /// The Radmin address of each public room's host, for the rooms list's per-host ping. Null
+    /// The Radmin address of each room's host (password rooms too, when the answer says
+    /// <c>private_rooms</c>), for the rooms list's per-host ping. Null
     /// from a server that does not have the route (a 404 or 405 — an older server answers
     /// <c>/lobbies/radmin</c> as the room called "radmin"), which the list reads as "no PING
     /// column". Any other failure throws, like every other call here.
     /// </summary>
-    public async Task<Dictionary<string, string>?> GetHostRadminIpsAsync(CancellationToken ct = default)
+    public async Task<HostRadminResponse?> GetHostRadminIpsAsync(CancellationToken ct = default)
     {
         try
         {
-            var r = await GetAsync<HostRadminResponse>("lobbies/radmin", requireAuth: true, ct);
-            return r?.Hosts ?? new Dictionary<string, string>();
+            return await GetAsync<HostRadminResponse>("lobbies/radmin", requireAuth: true, ct)
+                   ?? new HostRadminResponse();
         }
         catch (LobbyApiException ex) when (ex.Status is 404 or 405)
         {

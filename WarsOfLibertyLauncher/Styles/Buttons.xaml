@@ -667,6 +667,11 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource UiMutedText}"/>
         <Setter Property="BorderThickness" Value="0"/>
+        <!-- The underline's colour (the template draws it from the button's BorderBrush): the
+             launcher's blue, and the mod's colour only in the Library, where MainWindow.SwitchTopTab
+             points it at ModAccent. It followed the Library's mod on every tab, so Multiplayer wore
+             Wars of Liberty's red whatever was being played there. -->
+        <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
         <!-- Design 68a: the underline is as wide as the word, 30 between tabs. -->
         <Setter Property="Padding" Value="0"/>
         <Setter Property="Margin" Value="0,0,30,0"/>
@@ -704,7 +709,8 @@
                             <Setter Property="Foreground" Value="{DynamicResource ChromeTextSoft}"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="active">
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ModAccent}"/>
+                            <Setter TargetName="border" Property="BorderBrush"
+                                    Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}"/>
                             <Setter Property="Foreground" Value="#FFFFFF"/>
                             <Setter Property="FontWeight" Value="SemiBold"/>
                         </Trigger>
@@ -986,9 +992,11 @@
         </Style.Triggers>
     </Style>
 
+    <!-- The quick match's button: the launcher's blue, like "+ Crear sala". It used to wear the
+         Library's mod colour, which said nothing about the mod chosen in the bar beside it. -->
     <Style x:Key="QcButtonPrimary" TargetType="Button">
-        <Setter Property="Background" Value="{DynamicResource ModAccent}"/>
-        <Setter Property="Foreground" Value="{DynamicResource ModOnAccent}"/>
+        <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
@@ -998,7 +1006,7 @@
                         <Border CornerRadius="10" Background="{TemplateBinding Background}">
                             <Border.Effect>
                                 <DropShadowEffect ShadowDepth="6" BlurRadius="20" Opacity="0.35"
-                                                  Color="{DynamicResource ModAccentGlowColor}"/>
+                                                  Color="#2F7FE0"/>
                             </Border.Effect>
                             <Border.CacheMode>
                                 <BitmapCache/>

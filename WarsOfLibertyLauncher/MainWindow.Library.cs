@@ -39,7 +39,9 @@ public partial class MainWindow
     private readonly List<ImageBrush> _libraryCoverBrushes = new();
     private string _libraryRailKey = "";
     private string _libraryCoverKey = "";
-    private bool? _libraryRailOpen;
+    /// <summary>How the list was last DRAWN: open (names) or folded (icons). Null before the first
+    /// drawing, and again whenever a refresh ran with the page hidden.</summary>
+    private bool? _libraryRailDrawnOpen;
     private bool _libraryClipQueued;
 
     /// <summary><c>--preview-dialog=name:variant</c>: paints one state of a dialog and nothing more.</summary>
@@ -148,6 +150,7 @@ public partial class MainWindow
                 _previewPendingUpdate = true;
                 ApplyLauncherUpdatePillText(_pendingLauncherUpdate, staged: variant == "ready");
                 LauncherUpdatePill.Visibility = Visibility.Visible;
+                RefreshPillPulse();
                 break;
         }
     }
@@ -412,11 +415,16 @@ public partial class MainWindow
     {
         ModProfile Mod(string id) => ModRegistry.Find(id) ?? ModRegistry.Default;
         var here = new[] { "wol", "aoe3-tad", "age-of-dynasties-remake", "hundred-days", "improvement-mod" };
-        var mod = Mod(variant switch { "b" => "hundred-days", "c" => "improvement-mod", _ => "wol" });
+        // Design 108: a and soi are the long English entry option, b is 3v3, c is 2v2 with a name too short.
+        var mod = Mod(variant switch { "b" => "hundred-days", "c" => "improvement-mod", "soi" => "struggle-of-indonesia", _ => "wol" });
         var mods = ModRegistry.All.OrderBy(m => !here.Contains(m.Id)).ToList();
-        var dialog = new CreateTournamentDialog(mod.DisplayName, mods, mod, m => here.Contains(m.Id), 64) { Owner = this };
+        var dialog = new CreateTournamentDialog(mod.DisplayName, mods, mod, m => here.Contains(m.Id), 64, privateSupported: true) { Owner = this };
         if (variant == "b") dialog.PickFormat("3v3");
-        if (variant == "c") dialog.NameEntry.Text = "Co";
+        if (variant == "c")
+        {
+            dialog.PickFormat("2v2");
+            dialog.NameEntry.Text = "Co";
+        }
         if (variant == "pick") dialog.Loaded += (_, _) => OpenPreviewPopup(dialog.OpenModList);
         dialog.ShowDialog();
     }
@@ -658,9 +666,18 @@ public partial class MainWindow
             var s = StateOf(m);
             return $"{g.Kind}:{m.Id}:{s.Status}:{s.CurrentVersion}:{_config.IsFavoriteMod(m.Id)}:{SubtitleFor(m)}:{m.ResolveIconSource()}";
         }))) + $"|{open}|{metrics.RowHeight:0.0}|{Strings.Language}|{_libraryFilter}";
-        if (railKey != _libraryRailKey)
+        if (width <= 0)
+        {
+            // The Library is hidden (another tab): a width of 0 would draw the list folded and with
+            // the smallest rows. Leave it as it is and draw it when the page has a size again
+            // (ApplyLibraryLayout asks, through LibraryMetrics.RailNeedsDrawing).
+            _libraryRailKey = "";
+            _libraryRailDrawnOpen = null;
+        }
+        else if (railKey != _libraryRailKey)
         {
             _libraryRailKey = railKey;
+            _libraryRailDrawnOpen = open;
             LibraryRail.Show(groups, StateOf, _config.IsFavoriteMod, profile.Id, CurrentRailOperation(),
                 open, metrics, LibraryEmptyTitle(), LibraryEmptyBody(), SubtitleFor);
         }
@@ -1093,12 +1110,12 @@ public partial class MainWindow
         var m = LibraryMetrics.For(width, TextScale.CurrentFactor);
         var open = LibraryMetrics.RailOpen(_config.ModListMode, width);
         LibraryRail.ApplyMetrics(m);
-        if (_libraryRailOpen != open)
-        {
-            // Crossing 1400 px folds or opens the list, and nothing else would ask for that.
-            _libraryRailOpen = open;
-            ScheduleLibraryRefresh();
-        }
+        // Crossing 1400 px folds or opens the list, and coming back from another tab finds a list
+        // that was not drawn (or was drawn at width 0): either way it is drawn again for this width.
+        // Before the next frame (Loaded), not at Background like an ordinary refresh: back on the tab
+        // the list would otherwise stay EMPTY for as long as other work keeps the dispatcher busy.
+        if (LibraryMetrics.RailNeedsDrawing(width, _libraryRailDrawnOpen, open))
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(RefreshLibrary));
 
         LibraryRailColumn.Width = new GridLength(open ? m.RailWidth : LibraryMetrics.FoldedRailWidth);
         LibraryGapColumn.Width = new GridLength(m.ColumnGap);

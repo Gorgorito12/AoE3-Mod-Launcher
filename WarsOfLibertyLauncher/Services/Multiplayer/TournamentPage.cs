@@ -432,7 +432,7 @@ internal static class TournamentPage
     {
         var matches = t.Matches;
         if (matches == null || matches.Count == 0 || e.Status != "confirmed" && e.Status != "disqualified") return null;
-        if (t.WinnerEntrantId == e.Id) return new EntrantFate(Strings.Get("TpFateChampion"), "ok");
+        if (t.WinnerEntrantId == e.Id) return new EntrantFate(Strings.Get("TpFateChampion"), "champion");
         var lost = matches.FirstOrDefault(m => m.Status == "done" && !string.IsNullOrEmpty(m.WinnerEntrantId)
             && m.WinnerEntrantId != e.Id && (m.Entrant1Id == e.Id || m.Entrant2Id == e.Id));
         if (lost != null)

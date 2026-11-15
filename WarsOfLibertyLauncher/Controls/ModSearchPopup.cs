@@ -202,8 +202,15 @@ internal static class ModSearchPopup
         line.Children.Add(name);
         if (on)
         {
-            var check = new TextBlock { Text = "✓", FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
-            check.SetResourceReference(TextBlock.FontSizeProperty, "SetControlSize");
+            // A drawn tick (design 108), never the character.
+            var check = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M4.5 10.5l3.8 3.8 7.2-8.3"),
+                Stroke = Brushes.White, StrokeThickness = 2.4,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
+                Width = 14, Height = 14, Stretch = Stretch.None, VerticalAlignment = VerticalAlignment.Center,
+                RenderTransform = new ScaleTransform(0.7, 0.7),
+            };
             Grid.SetColumn(check, 2);
             line.Children.Add(check);
         }

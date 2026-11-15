@@ -30,6 +30,7 @@ public static partial class Strings
         ["RmPingTipMeasuring"] = new() { [LangEn] = "Measuring your ping to the host over Radmin…", [LangEs] = "Midiendo tu ping al anfitrión por Radmin…" },
         ["RmPingTipNoRadmin"] = new() { [LangEn] = "Connect Radmin to measure your ping to the host.", [LangEs] = "Conecta Radmin para medir tu ping al anfitrión." },
         ["RmPingTipNotPublished"] = new() { [LangEn] = "This room's host isn't published (password or tournament). You'll see the ping once you're in the room.", [LangEs] = "El anfitrión de esta sala no se publica (contraseña o torneo). Verás el ping al entrar en la sala." },
+        ["RmPingTipTournament"] = new() { [LangEn] = "A tournament match's host isn't published. You'll see the ping once you're in the room.", [LangEs] = "El anfitrión de una partida de torneo no se publica. Verás el ping al entrar en la sala." },
         ["RmPingTipHostNoRadmin"] = new() { [LangEn] = "The host isn't on Radmin yet, so there's nothing to measure.", [LangEs] = "El anfitrión aún no está en Radmin, así que no hay nada que medir." },
         ["RmPingTipNoAnswer"] = new() { [LangEn] = "The host doesn't answer the ping. His firewall often blocks it, and the match can still play fine.", [LangEs] = "El anfitrión no responde al ping. Su firewall suele bloquearlo, y la partida puede ir bien igualmente." },
         ["RmPingTipUnmeasured"] = new() { [LangEn] = "Ping not measured", [LangEs] = "Ping sin medir" },

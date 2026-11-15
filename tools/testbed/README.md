@@ -68,6 +68,15 @@ python -I tools/testbed/testbed.py sidebyside out.png tools/testbed/out/shot.png
 | `workshop`, `multiplayer`, `settings`, `modsettings` | a screen left open |
 | `tabs`, `scroll`, `resize` | the launcher made to work |
 | `soak`, `soaktray` | 30 min switching tabs, and 30 min in the tray: what only time shows (a leak, a creeping CPU); read the per-second rows, not the summary alone |
+| `pill`, `tournaments` | 60 s on the update pill breathing and on a running 32-place bracket (its beating dots) |
+
+**A looping light runs only while the launcher is the foreground application**, and `perf` does not
+bring it to the front: measured that way, the pill and the bracket show 0 redraws a second, which
+proves nothing. Raise the window first (the `SetForegroundWindow` trick `shot --top` uses) when the
+question is what an animation costs. Measured so on 2026-11-14, hardware rendering: the bracket
+2.2 % CPU, the Rooms page 2.5 %, the pill 0.8 %. The `redraws` figure counts dispatcher render
+operations, about 1.5 per frame, so a 30-fps light reads ~44 a second; compare it against another
+screen, never against 30.
 
 An A/B against an older commit: build it apart (`git archive <commit> WarsOfLibertyLauncher | tar -x`
 in a scratch folder, `dotnet build -c Release`) and run the same scenario with `AOE3ML_TESTBED_EXE`

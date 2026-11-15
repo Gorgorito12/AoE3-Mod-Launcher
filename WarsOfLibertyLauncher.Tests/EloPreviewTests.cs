@@ -96,7 +96,10 @@ public class EloPreviewTests
 
                 var rows = tab.RankingBody.Children.OfType<Border>().ToList();
                 var ranked = rows.Where(b => b.Tag is LeaderboardRow).ToList();
-                var placing = rows.Where(b => b.Tag is PlacementRow).ToList();
+                // The players being placed are tiles in a grid of their own (design 107).
+                var placing = tab.RankingBody.Children.OfType<Panel>()
+                    .Where(p => Equals(p.Tag, MultiplayerTab.PlacementTilesTag))
+                    .SelectMany(p => p.Children.OfType<Border>()).Where(b => b.Tag is PlacementRow).ToList();
                 var table = StatsDemoData.DemoLadder().Skip(RankingGroups.PodiumPlaces).ToList();
                 Assert.Equal(table.Count, ranked.Count);
                 Assert.Equal(StatsDemoData.DemoPlacement().Count, placing.Count);
@@ -141,18 +144,20 @@ public class EloPreviewTests
 
                 var children = tab.RankingBody.Children.OfType<Border>().ToList();
                 Assert.Equal("RankingEmptyPlacement", children[0].Tag);
-                Assert.All(children.Skip(1), b => Assert.IsType<PlacementRow>(b.Tag));
-                // Design 93d keeps the column headings over the notice; there is no podium.
-                Assert.Single(tab.RankingHeaderHost.Children);
+                // Design 107: the headings name the RANKED rows' columns, so with nobody ranked
+                // there are none; there is no podium.
+                Assert.Empty(tab.RankingHeaderHost.Children);
                 Assert.Equal(Visibility.Collapsed, tab.RankingPodiumHost.Visibility);
 
-                // Nobody ranked means no peak on this ladder, so the table has three columns —
-                // and is still the WIDE one: the long "Placement 6/10", not 55b's "6/10".
-                foreach (var b in children.Skip(1))
+                // Everybody being placed is a tile saying "6/10".
+                var tiles = tab.RankingBody.Children.OfType<Panel>()
+                    .Single(p => Equals(p.Tag, MultiplayerTab.PlacementTilesTag)).Children.OfType<Border>().ToList();
+                Assert.NotEmpty(tiles);
+                foreach (var b in tiles)
                 {
                     var p = (PlacementRow)b.Tag;
                     Assert.Contains(AllText(b), t => t.Contains(
-                        Strings.Format("MpPlacementProgress", p.PlacementPlayed, p.PlacementRequired)));
+                        Strings.Format("MpPlacementProgressShort", p.PlacementPlayed, p.PlacementRequired)));
                 }
             }
         });

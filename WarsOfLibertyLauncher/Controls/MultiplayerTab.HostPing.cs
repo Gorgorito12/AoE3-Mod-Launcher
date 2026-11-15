@@ -33,6 +33,9 @@ public partial class MultiplayerTab
     /// <summary>The last addresses the server gave, by lobby id.</summary>
     private Dictionary<string, string> _hostRadminIps = new(StringComparer.Ordinal);
 
+    /// <summary>The server's last answer said it includes rooms behind a password.</summary>
+    private bool _privateRoomsPublished;
+
     /// <summary>One host's readings: the last answer and how many probes in a row went unanswered.</summary>
     private sealed class HostPingState
     {
@@ -59,20 +62,22 @@ public partial class MultiplayerTab
     /// <summary>The facts one row's cell is decided from.</summary>
     private HostPingFacts HostPingFactsFor(LobbySummary lobby)
     {
-        var published = !lobby.IsPrivate && string.IsNullOrEmpty(lobby.TournamentMatchId);
+        var published = HostPing.IsPublished(lobby.IsPrivate, lobby.TournamentMatchId, _demoRooms || _privateRoomsPublished);
         if (_demoRooms)
         {
             var ms = RoomListDemoData.HostPingMs(lobby.Id);
             return new HostPingFacts(IsMyRoom(lobby), IHaveRadmin: true, published, HostHasIp: ms.HasValue,
-                LastMs: ms is >= 0 ? ms : null, Fails: ms is < 0 ? HostPing.FailsBeforeNoAnswer : 0);
+                LastMs: ms is >= 0 ? ms : null, Fails: ms is < 0 ? HostPing.FailsBeforeNoAnswer : 0,
+                PrivateRoomsPublished: true);
         }
         // Before the first round nothing is known yet: a published room reads as being measured,
         // never as "the host is not on Radmin", which would be a guess.
         if (!_myRadminKnown)
-            return new HostPingFacts(IsMyRoom(lobby), IHaveRadmin: true, published, HostHasIp: true, LastMs: null, Fails: 0);
+            return new HostPingFacts(IsMyRoom(lobby), IHaveRadmin: true, published, HostHasIp: true, LastMs: null, Fails: 0,
+                PrivateRoomsPublished: _privateRoomsPublished);
         _hostPings.TryGetValue(lobby.Id, out var st);
         return new HostPingFacts(IsMyRoom(lobby), _iHaveRadmin, published,
-            _hostRadminIps.ContainsKey(lobby.Id), st?.LastMs, st?.Fails ?? 0);
+            _hostRadminIps.ContainsKey(lobby.Id), st?.LastMs, st?.Fails ?? 0, _privateRoomsPublished);
     }
 
     /// <summary>The PING cell of a new row, registered so the measurement can repaint it in place.</summary>
@@ -125,7 +130,7 @@ public partial class MultiplayerTab
         var colourKey = kind == HostPingKind.Answered ? RoomActionRule.PingBrushKey(facts.LastMs) : "RmPingUnknown";
         tb.Text = HostPing.Text(kind, facts.LastMs);
         tb.Foreground = Rm(colourKey);
-        var tip = TooltipHelper.Wrap(Strings.Get(HostPing.TipKey(kind) ?? "RmPingTipUnmeasured"));
+        var tip = TooltipHelper.Wrap(Strings.Get(HostPing.TipKey(kind, facts.PrivateRoomsPublished) ?? "RmPingTipUnmeasured"));
         tb.ToolTip = tip;
         if (tb.Tag is StackPanel bars)
         {
@@ -162,7 +167,7 @@ public partial class MultiplayerTab
         _hostPingAt = DateTime.UtcNow;
         try
         {
-            Dictionary<string, string>? ips;
+            HostRadminResponse? ips;
             try { ips = await _session.Api.GetHostRadminIpsAsync(); }
             catch (Exception ex)
             {
@@ -182,7 +187,14 @@ public partial class MultiplayerTab
                 ApplyRoomColumns();
             }
             if (ips == null) return;
-            _hostRadminIps = new Dictionary<string, string>(ips, StringComparer.Ordinal);
+            _hostRadminIps = new Dictionary<string, string>(ips.Hosts, StringComparer.Ordinal);
+            if (ips.PrivateRooms != _privateRoomsPublished)
+            {
+                _privateRoomsPublished = ips.PrivateRooms;
+                DiagnosticLog.Write(ips.PrivateRooms
+                    ? "Host ping: the server includes rooms behind a password."
+                    : "Host ping: the server publishes public rooms only.");
+            }
 
             var mine = await Task.Run(RadminVpnService.TryGetAdapterIp);
             _myRadminKnown = true;
@@ -208,7 +220,7 @@ public partial class MultiplayerTab
                     _hostPingLogAsked++;
                 }
             }
-            _hostPingLogNoIp += rows.Count(l => !l.IsPrivate && string.IsNullOrEmpty(l.TournamentMatchId)
+            _hostPingLogNoIp += rows.Count(l => HostPing.IsPublished(l.IsPrivate, l.TournamentMatchId, _privateRoomsPublished)
                                                 && !_hostRadminIps.ContainsKey(l.Id));
 
             // Rooms that left the list take their readings with them.

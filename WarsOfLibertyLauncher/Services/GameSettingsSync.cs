@@ -302,6 +302,20 @@ public static class GameSettingsSync
     public const string RecordGameSetting = "optionrecordgame";
 
     /// <summary>
+    /// The last settings the player used in a multiplayer lobby. The game restores them when it
+    /// hosts a LAN game (0x704D7E copies each one into the new game's settings), so a value
+    /// written here is what the host's lobby opens with.
+    /// </summary>
+    public const string MultiplayerGameSettingsSection = "MultiplayerGameSettings";
+
+    /// <summary>
+    /// The lobby's Record Game box, game setting 17h. Unlike <see cref="RecordGameSetting"/> (which
+    /// the box does NOT inherit, measured), this one IS the box: the host's lobby opened ticked
+    /// with it set to true, and the host's value is the game's, sent to every player.
+    /// </summary>
+    public const string LobbyRecordGameSetting = "gamerecordgame";
+
+    /// <summary>
     /// The raw text of one setting, or <b>null</b> when the profile, the section, the
     /// <c>Settings</c> container or the setting itself is missing.
     ///

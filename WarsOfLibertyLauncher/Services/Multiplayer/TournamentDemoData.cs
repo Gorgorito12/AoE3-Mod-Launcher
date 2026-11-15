@@ -497,7 +497,8 @@ internal static class TournamentDemoData
         {
             Id = FinishedId,
             Name = Strings.Get("MpTournamentDemoFinishedName"),
-            ModId = null,
+            // Wars of Liberty, red: the case design 106 was drawn from (a champion in a red mod read as an error).
+            ModId = "wol",
             OwnerUserId = "u9",
             Format = "1v1",
             TeamSource = "solo",

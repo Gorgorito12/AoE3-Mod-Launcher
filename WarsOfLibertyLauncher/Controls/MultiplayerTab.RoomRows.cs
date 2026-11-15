@@ -581,7 +581,10 @@ public partial class MultiplayerTab
             yield return RoomChip(label != null ? Strings.Format("RmChipCasual", label) : Strings.Format("RmChipCasualPlayers", size),
                 "RmDotCasual", "RmTextHost", Strings.Get("MpRoomCasualTooltip"));
         }
-        if (lobby.IsPrivate && !facts.Mine) yield return RoomChip(Strings.Get("RmChipPassword"), "RmDotPassword", "RmTextHost");
+        // Purple, the colour a password room wears everywhere else (the create dialog, the room).
+        if (lobby.IsPrivate && !facts.Mine)
+            yield return RoomChip(Strings.Get("RmChipPassword"), "MpPrivate", "MpPrivateText",
+                fillKey: "MpPrivateBg", rimKey: "MpPrivateRim");
         if (facts.InGame)
         {
             var started = RoomAgeFormat.ParseCreatedUtc(lobby.StartedAt ?? "");
@@ -682,7 +685,7 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// The "in a match" dot breathes (1.6 s, opacity 1 to 0.4 and scale 1 to 0.7) only while
+    /// The "in a match" dot breathes (1.6 s, opacity 1 to 0.45 and scale 1 to 0.72, design 14nov) only while
     /// somebody can see it and effects are on (<see cref="RankBadge.MayRunOn"/>). The clocks live
     /// with the dot: started when it is loaded, STOPPED through their controller when it leaves
     /// the tree or the conditions change - detaching alone would leave them ticking.
@@ -719,9 +722,9 @@ public partial class MultiplayerTab
                 clocks.Add(c);
                 return c;
             }
-            dot.ApplyAnimationClock(OpacityProperty, Clock(0.4));
-            scale.ApplyAnimationClock(ScaleTransform.ScaleXProperty, Clock(0.7));
-            scale.ApplyAnimationClock(ScaleTransform.ScaleYProperty, Clock(0.7));
+            dot.ApplyAnimationClock(OpacityProperty, Clock(0.45));
+            scale.ApplyAnimationClock(ScaleTransform.ScaleXProperty, Clock(0.72));
+            scale.ApplyAnimationClock(ScaleTransform.ScaleYProperty, Clock(0.72));
         }
         dot.Loaded += (_, _) => { RankBadge.RunConditionsChanged += Sync; Sync(); };
         dot.Unloaded += (_, _) => { RankBadge.RunConditionsChanged -= Sync; Stop(); };

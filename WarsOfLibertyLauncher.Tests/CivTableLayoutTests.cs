@@ -38,14 +38,14 @@ public class CivTableLayoutTests
     /// a piece of data. This table has no bar and its numbers are short and fixed, so the only
     /// thing worth growing is the name.</para>
     /// </summary>
+    /// <summary>Design 109: the name and the bar share what the figures leave, 1.4 to 1, each
+    /// with a floor, so a narrow column of the balance still holds both.</summary>
     [Fact]
-    public void OnlyTheNameColumnIsFlexible()
+    public void TheNameAndTheBarShareTheRest()
     {
-        var flexible = CivTableLayout.All.Where(c => c.FixedWidth == null).ToList();
-
-        var only = Assert.Single(flexible);
-        Assert.Equal(CivColumn.Civ, only.Column);
-        Assert.NotNull(only.MaxWidth);
+        var flexible = CivTableLayout.All.Where(c => c.FixedWidth == null).Select(c => c.Column).ToList();
+        Assert.Equal(new[] { CivColumn.Civ, CivColumn.WinBar }, flexible);
+        Assert.All(CivTableLayout.All.Where(c => c.FixedWidth == null), c => Assert.True(c.MinWidth > 0));
     }
 
     /// <summary>
@@ -83,44 +83,15 @@ public class CivTableLayoutTests
     [Fact]
     public void TheGapIsARealGap() => Assert.True(CivTableLayout.ColumnGap > 0);
 
-    /// <summary>
-    /// The matchup table's columns are DERIVED from the civ table's, not written out again.
-    ///
-    /// <para>The two tables are stacked on the same page, so their columns have to line up. With
-    /// two hand-written lists a later tweak to one width misaligns them by a few pixels — which
-    /// reads as a rendering fault rather than as an edit somebody made, and nothing would fail.</para>
-    /// </summary>
+    /// <summary>The matchup table has the columns it has data for, and its name column takes the
+    /// rest (design 109: it is a card of its own now, beside the balance, not under it).</summary>
     [Fact]
-    public void TheMatchupColumnsAreTheCivColumnsMinusTheOnesItHasNoDataFor()
+    public void TheMatchupColumnsAreThePairAndThreeFigures()
     {
-        var civ = CivTableLayout.All;
         var matchup = CivTableLayout.Matchups;
-
-        // Two are dropped: the duration, because the mean length of one pairing over three
-        // games is noise, and the win bar, because a matchup row already IS one side's record
-        // against the other and a bar of it would draw the same figure twice.
-        Assert.DoesNotContain(matchup, c => c.Column == CivColumn.Length);
-        Assert.DoesNotContain(matchup, c => c.Column == CivColumn.WinBar);
-        Assert.Equal(civ.Count - 2, matchup.Count);
-
-        // Compared BY ROLE rather than by position, and that is the change the win bar forced:
-        // it sits in the middle of the civ table, so the two lists no longer share an index for
-        // the columns they do share. What still has to hold — and is the whole reason Matchups
-        // is derived instead of written out again — is that a column present in both is the
-        // same column: same width, same cap, same alignment. Two hand-written lists drifting on
-        // one of those numbers reads as a rendering fault rather than as an edit.
-        foreach (var spec in matchup)
-        {
-            var twin = civ.Single(c => c.Column == spec.Column);
-            Assert.Equal(twin.FixedWidth, spec.FixedWidth);
-            Assert.Equal(twin.MaxWidth, spec.MaxWidth);
-            Assert.Equal(twin.RightAligned, spec.RightAligned);
-        }
-
-        // And in the same order, so neither table reads back to front.
-        var sharedOrder = civ.Where(c => matchup.Any(m => m.Column == c.Column))
-                             .Select(c => c.Column);
-        Assert.Equal(sharedOrder, matchup.Select(m => m.Column));
+        Assert.Equal(new[] { CivColumn.Civ, CivColumn.Played, CivColumn.Record, CivColumn.Percent },
+            matchup.Select(c => c.Column));
+        Assert.Null(matchup[0].FixedWidth);
     }
 
     /// <summary>

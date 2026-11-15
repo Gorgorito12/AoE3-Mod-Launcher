@@ -29,7 +29,9 @@ public readonly record struct CivColumnSpec(
     CivColumn Column,
     double? FixedWidth,
     bool RightAligned,
-    double? MaxWidth = null);
+    double? MaxWidth = null,
+    double Star = 1,
+    double MinWidth = 0);
 
 /// <summary>
 /// Where the civilization table's columns are, in one place, so its header and its rows cannot
@@ -59,14 +61,19 @@ public static class CivTableLayout
     /// <para>The bar was added when the table gained one; the paragraph above used to say this
     /// table had none, which stopped being true.</para>
     /// </summary>
+    /// <remarks>
+    /// Design 109 (`docs/design_14nov`): the balance splits into up to three columns of ~450, so
+    /// the figures went narrow (PART. 40, RECORD 54, % 46, DUR. 54, 10 apart) and the name and the
+    /// bar share the rest, 1.4 to 1, with a floor each. Supersedes the 74/86/150/58/72 above.
+    /// </remarks>
     public static readonly IReadOnlyList<CivColumnSpec> All = new[]
     {
-        new CivColumnSpec(CivColumn.Civ, null, RightAligned: false, MaxWidth: CivMaxWidth),
-        new CivColumnSpec(CivColumn.Played, 74, RightAligned: true),
-        new CivColumnSpec(CivColumn.Record, 86, RightAligned: true),
-        new CivColumnSpec(CivColumn.WinBar, WinBarWidth, RightAligned: false),
-        new CivColumnSpec(CivColumn.Percent, 58, RightAligned: true),
-        new CivColumnSpec(CivColumn.Length, 72, RightAligned: true),
+        new CivColumnSpec(CivColumn.Civ, null, RightAligned: false, Star: 1.4, MinWidth: 110),
+        new CivColumnSpec(CivColumn.Played, 40, RightAligned: true),
+        new CivColumnSpec(CivColumn.Record, 54, RightAligned: true),
+        new CivColumnSpec(CivColumn.WinBar, null, RightAligned: false, Star: 1, MinWidth: 56),
+        new CivColumnSpec(CivColumn.Percent, 46, RightAligned: true),
+        new CivColumnSpec(CivColumn.Length, 54, RightAligned: true),
     };
 
     /// <summary>
@@ -83,21 +90,37 @@ public static class CivTableLayout
     /// for the same reason: a matchup row already IS a pair of records, and a bar of one side
     /// of it against the other would be the same figure drawn twice.</para>
     /// </summary>
-    public static readonly IReadOnlyList<CivColumnSpec> Matchups =
-        All.Where(c => c.Column is not (CivColumn.Length or CivColumn.WinBar)).ToArray();
+    /// <remarks>Design 109: the pairs card is its own card now, beside the balance rather than
+    /// under it, so its columns no longer have to line up with the balance's; they narrow so both
+    /// names fit (pair 1 part, PART. 34, RECORD 54, % 46).</remarks>
+    public static readonly IReadOnlyList<CivColumnSpec> Matchups = new[]
+    {
+        new CivColumnSpec(CivColumn.Civ, null, RightAligned: false),
+        new CivColumnSpec(CivColumn.Played, 34, RightAligned: true),
+        new CivColumnSpec(CivColumn.Record, 54, RightAligned: true),
+        new CivColumnSpec(CivColumn.Percent, 46, RightAligned: true),
+    };
 
-    /// <summary>The gap between columns, matching the ladder's.</summary>
-    public const double ColumnGap = 12;
+    /// <summary>The gap between columns (design 109).</summary>
+    public const double ColumnGap = 10;
 
     public static string HeaderKey(CivColumn column) => column switch
     {
         CivColumn.Civ => "MpCivColCiv",
-        CivColumn.Played => "MpCivColPlayed",
+        CivColumn.Played => "MpStatsColPlayedShort",
         CivColumn.Record => "MpStatsColRecord",
         CivColumn.WinBar => "MpStatsColWins",
         CivColumn.Percent => "MpActivityRankColPct",
-        CivColumn.Length => "MpCivColLength",
+        CivColumn.Length => "MpStatsColLengthShort",
         _ => "",
+    };
+
+    /// <summary>The tooltip of a shortened heading (design 109): PART. and DUR.</summary>
+    public static string? HeaderTipKey(CivColumn column) => column switch
+    {
+        CivColumn.Played => "MpStatsColPlayedTip",
+        CivColumn.Length => "MpStatsColLengthTip",
+        _ => null,
     };
 
     /// <summary>

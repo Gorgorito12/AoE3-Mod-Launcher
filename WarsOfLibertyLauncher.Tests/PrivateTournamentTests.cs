@@ -122,7 +122,7 @@ public class PrivateTournamentTests
             var newer = new CreateTournamentDialog(privateSupported: true);
             Assert.Equal(Visibility.Visible, newer.VisibilityBlock.Visibility);
             Assert.Equal(2, newer.VisibilityRow.Buttons.Count());
-            Assert.Equal(Strings.Get("NtWhyPublic"), newer.VisibilityWhy.Text);
+            Assert.Equal(Strings.Get("NtWhyPublic"), newer.VisibilityRow.SelectedDescription);
             older.Close();
             newer.Close();
         });

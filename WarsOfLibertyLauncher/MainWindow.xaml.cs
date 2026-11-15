@@ -6066,6 +6066,10 @@ public partial class MainWindow : Window
         // The mod's colour on the bar belongs to the Library (design 68a); every other tab wears
         // the plain glass bar every other window has.
         MainTitleBar.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, tab == TopTab.Play ? "ModTitleBar" : GlassTheme.TitleBarKey);
+        // The same rule for the tab underline: the mod's colour in the Library, blue elsewhere.
+        var underline = tab == TopTab.Play ? "ModAccent" : "MpAction";
+        foreach (var button in new[] { TopTabPlay, TopTabMods, TopTabMultiplayer })
+            button.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, underline);
         UpdateTournamentBackdrop();
         PlayView.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
         ModsBrowserView.Visibility = tab == TopTab.Mods ? Visibility.Visible : Visibility.Collapsed;
@@ -10133,55 +10137,71 @@ public partial class MainWindow : Window
     private void ApplyLauncherUpdatePillText(LauncherUpdateService.UpdateCheckResult update, bool? staged = null)
     {
         var ready = staged ?? LauncherUpdateService.IsStaged(update.RemoteTag);
-        LauncherUpdatePill.Tag = ready ? "\u21BB" : "\u2191";
+        // The template draws the arrow; Tag="ready" swaps in the restart one (design 110).
+        LauncherUpdatePill.Tag = ready ? "ready" : null;
         LauncherUpdatePill.Content = Strings.Get(ready ? "LauncherUpdatePillReady" : "LauncherUpdatePill");
         LauncherUpdatePill.ToolTip = Strings.Get(ready ? "LauncherUpdatePillReadyTooltip" : "LauncherUpdatePillTooltip");
     }
 
     /// <summary>
-    /// Gentle scale "breath" on the update pill to draw the eye. LOOPS while the
-    /// pill is shown: a short double-pulse occupies the first ~700 ms of each
-    /// ~3.6 s cycle (long idle gap between breaths), repeated forever. The bounded
-    /// 3× version "fired once at startup then settled forever", so a user who
-    /// looked at the pill later only ever saw it static — it read as broken. The
-    /// long idle gap keeps it a nudge, not a harassment. Stopped on hide via
-    /// <see cref="StopLauncherUpdatePillPulse"/>. Mirrors
-    /// <see cref="PulseNotificationBell"/> but scales instead of rotating.
+    /// The pill beats (2026-11-14, the maintainer's call over design 110's halo alone, which read
+    /// as too quiet): a double pulse of its size (1.08, then 1.05) with the halo breathing at the
+    /// same time, 680 ms, then rest until the next beat 3.6 s later. Each beat is a FINITE
+    /// animation and a timer starts the next: a clock that never stops makes WPF draw every frame
+    /// for nobody (measured 2026-11-11, 65 redraws a second with the window idle). Stopped on hide
+    /// via <see cref="StopLauncherUpdatePillPulse"/>.
     /// </summary>
     private void PulseLauncherUpdatePill()
     {
         StopLauncherUpdatePillPulse();
-        // One breath now and one every 3.6 s, each a FINITE animation. It used to be a single
-        // forever clock whose cycle was a 0.7 s double pulse and a 2.9 s hold, and WPF draws every
-        // frame while a clock runs, held or not: ~60 redraws a second, four in five of them of a
-        // pill that was not moving. A finished breath asks for no frame until the next one.
         BreatheLauncherUpdatePill();
-        _pillBreathTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(3600) };
+        _pillBreathTimer = new System.Windows.Threading.DispatcherTimer { Interval = PillBreathPeriod };
         _pillBreathTimer.Tick += (_, _) => BreatheLauncherUpdatePill();
         _pillBreathTimer.Start();
     }
 
+    /// <summary>One beat, then rest until the next.</summary>
+    internal static readonly TimeSpan PillBreathLength = TimeSpan.FromMilliseconds(680);
+    internal static readonly TimeSpan PillBreathPeriod = TimeSpan.FromMilliseconds(3600);
+
     private void BreatheLauncherUpdatePill()
     {
         StopPillBreathClocks();
-        var pulse = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames
+        System.Windows.Media.Animation.AnimationClock Beat(params (double Value, double Ms)[] keys)
         {
-            Duration = TimeSpan.FromMilliseconds(680),
-            // Back to the pill's own 1.0 when the breath ends, and nothing left running.
-            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
-        };
-        void Key(double scale, double ms) => pulse.KeyFrames.Add(
-            new System.Windows.Media.Animation.EasingDoubleKeyFrame(
-                scale, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms))));
-        Key(1.0, 0); Key(1.08, 160); Key(1.0, 340); Key(1.05, 500); Key(1.0, 680);
-        // Same frame-rate cap as the rank badges.
-        System.Windows.Media.Animation.Timeline.SetDesiredFrameRate(pulse, WarsOfLibertyLauncher.Controls.RankBadge.FrameRate);
+            var a = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames
+            {
+                Duration = PillBreathLength,
+                // Back to the resting value when the beat ends, and nothing left running.
+                FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+            };
+            var ease = new System.Windows.Media.Animation.SineEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
+            foreach (var (value, ms) in keys)
+                a.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(value,
+                    System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms)), ease));
+            // Same frame-rate cap as the rank badges.
+            System.Windows.Media.Animation.Timeline.SetDesiredFrameRate(a, WarsOfLibertyLauncher.Controls.RankBadge.FrameRate);
+            return a.CreateClock();
+        }
         // Owned clocks, stopped through their controller (the animation-clock rule in CLAUDE.md).
-        _pillPulseClocks = new[] { pulse.CreateClock(), pulse.Clone().CreateClock() };
-        LauncherUpdatePillScale.ApplyAnimationClock(
-            System.Windows.Media.ScaleTransform.ScaleXProperty, _pillPulseClocks[0]);
-        LauncherUpdatePillScale.ApplyAnimationClock(
-            System.Windows.Media.ScaleTransform.ScaleYProperty, _pillPulseClocks[1]);
+        var clocks = new System.Collections.Generic.List<System.Windows.Media.Animation.AnimationClock>();
+        (double, double)[] size = { (1.0, 0), (1.08, 160), (1.0, 340), (1.05, 500), (1.0, 680) };
+        var grow = Beat(size);
+        var growToo = Beat(size);
+        LauncherUpdatePillScale.ApplyAnimationClock(System.Windows.Media.ScaleTransform.ScaleXProperty, grow);
+        LauncherUpdatePillScale.ApplyAnimationClock(System.Windows.Media.ScaleTransform.ScaleYProperty, growToo);
+        clocks.Add(grow);
+        clocks.Add(growToo);
+        foreach (var part in PillHaloParts())
+        {
+            // The halo flares with each pulse (the ring from .16 up to .30) and the glow dips between them.
+            var clock = part.Name == "PillRing"
+                ? Beat((0.16, 0), (0.30, 160), (0.16, 340), (0.26, 500), (0.16, 680))
+                : Beat((1.0, 0), (0.55, 340), (0.85, 500), (1.0, 680));
+            part.ApplyAnimationClock(UIElement.OpacityProperty, clock);
+            clocks.Add(clock);
+        }
+        _pillPulseClocks = clocks.ToArray();
     }
 
     /// <summary>The breath being drawn, or null.</summary>
@@ -10206,6 +10226,9 @@ public partial class MainWindow : Window
             _pillPulseHooked = true;
             IsVisibleChanged += (_, _) => RefreshPillPulse();
             StateChanged += (_, _) => RefreshPillPulse();
+            // Under the pointer the halo holds still at its hover strength (design 110).
+            LauncherUpdatePill.MouseEnter += (_, _) => RefreshPillPulse();
+            LauncherUpdatePill.MouseLeave += (_, _) => RefreshPillPulse();
             if (Application.Current != null)
             {
                 // After App's own handlers, which set RankBadge.AppActive: subscribed later.
@@ -10217,6 +10240,7 @@ public partial class MainWindow : Window
         }
 
         var run = LauncherUpdatePill?.Visibility == Visibility.Visible
+                  && !LauncherUpdatePill.IsMouseOver
                   && !WarsOfLibertyLauncher.Controls.RankBadge.ReducedEffects
                   && WarsOfLibertyLauncher.Controls.RankBadge.ShouldRun(
                       WarsOfLibertyLauncher.Controls.RankBadge.AppActive, IsLoaded, IsVisible, WindowState);
@@ -10225,7 +10249,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Stops the looping pill breath and returns the scale to its 1.0 base. Called
+    /// Stops the looping pill breath and returns the halo to its resting strength. Called
     /// when the pill is hidden so no animation clock lingers on a Collapsed element —
     /// which only holds because the clocks are STOPPED here, not merely detached.
     /// </summary>
@@ -10241,10 +10265,20 @@ public partial class MainWindow : Window
         foreach (var clock in _pillPulseClocks ?? Array.Empty<System.Windows.Media.Animation.AnimationClock>())
             clock.Controller?.Stop();
         _pillPulseClocks = null;
-        LauncherUpdatePillScale.ApplyAnimationClock(
-            System.Windows.Media.ScaleTransform.ScaleXProperty, null);
-        LauncherUpdatePillScale.ApplyAnimationClock(
-            System.Windows.Media.ScaleTransform.ScaleYProperty, null);
+        LauncherUpdatePillScale?.ApplyAnimationClock(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+        LauncherUpdatePillScale?.ApplyAnimationClock(System.Windows.Media.ScaleTransform.ScaleYProperty, null);
+        foreach (var part in PillHaloParts())
+            part.ApplyAnimationClock(UIElement.OpacityProperty, null);
+    }
+
+    /// <summary>The ring and the glow inside the pill's template, or none before it is applied.</summary>
+    private FrameworkElement[] PillHaloParts()
+    {
+        if (LauncherUpdatePill == null) return Array.Empty<FrameworkElement>();
+        LauncherUpdatePill.ApplyTemplate();
+        return new[] { "PillRing", "PillGlow" }
+            .Select(n => LauncherUpdatePill.Template?.FindName(n, LauncherUpdatePill) as FrameworkElement)
+            .Where(e => e != null).Select(e => e!).ToArray();
     }
 
     private async Task CheckAsync(string? forceInstallPath = null)

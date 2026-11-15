@@ -28,6 +28,12 @@
            Fg*           = hover/active foreground tones
          ================================================================ -->
 
+    <!-- The ONE gold of the launcher's states (docs/design_14nov): champion, finished tournament,
+         best mark, competitive, and "a newer launcher exists". Every gold brush below points here,
+         so the colour is declared once. It never takes a mod's colour. -->
+    <Color x:Key="UiGoldColor">#E6C06A</Color>
+
+
     <!-- =========================================================
          CORE SURFACES — the darkest backdrop progressively lifted
          through panel / panel-alt / neutral layers. Cool-grey-blue
@@ -550,7 +556,7 @@
     <SolidColorBrush x:Key="RmButtonHover" Color="#24FFFFFF"/>
     <SolidColorBrush x:Key="RmButtonRim" Color="#29FFFFFF"/>
     <SolidColorBrush x:Key="RmPrimaryHover" Color="#348CF6"/>
-    <SolidColorBrush x:Key="RmDotRanked" Color="#E6C06A"/>
+    <SolidColorBrush x:Key="RmDotRanked" Color="{StaticResource UiGoldColor}"/>
     <SolidColorBrush x:Key="RmDotCasual" Color="#8C9CB1"/>
     <SolidColorBrush x:Key="RmDotPassword" Color="#A8BCD2"/>
     <SolidColorBrush x:Key="RmDotBlue" Color="#55ACEE"/>
@@ -723,7 +729,7 @@
          «Latest matches», the Rooms page's community card and the profile History: the
          competitive gold of designs 57 and 59 (#e6c06a) and 57's casual grey-blue (#a8bcd2).
          Separate from MpCompetitiveTitle, which the create-room dialog keeps. -->
-    <SolidColorBrush x:Key="MpMatchLabelCompetitive" Color="#E6C06A"/>
+    <SolidColorBrush x:Key="MpMatchLabelCompetitive" Color="{StaticResource UiGoldColor}"/>
     <SolidColorBrush x:Key="MpMatchLabelCasual" Color="#A8BCD2"/>
     <!-- The tick INSIDE a filled gold box. White on #C9A227 is about 2.5:1 and reads as
          a smudge; gold is a light fill and wants dark ink, which is the same call PLAY
@@ -958,7 +964,38 @@
     <SolidColorBrush x:Key="UiInfo"         Color="#55ACEE"/>
     <SolidColorBrush x:Key="UiError"        Color="#F4900C"/>
     <SolidColorBrush x:Key="UiErrorText"    Color="#F5BD76"/>
-    <SolidColorBrush x:Key="UiFavorite"     Color="#E6C06A"/>
+    <SolidColorBrush x:Key="UiFavorite"     Color="{StaticResource UiGoldColor}"/>
+    <!-- Gold as a state (design 14nov): the colour and the text drawn in it. -->
+    <SolidColorBrush x:Key="UiGold"         Color="{StaticResource UiGoldColor}"/>
+    <SolidColorBrush x:Key="UiGoldText"     Color="#F3D995"/>
+    <!-- The launcher-update pill (design 110): the one solid, gold piece of the title bar. -->
+    <LinearGradientBrush x:Key="UiGoldPillFill" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0"    Color="#F6DF9E"/>
+        <GradientStop Offset="0.55" Color="{StaticResource UiGoldColor}"/>
+        <GradientStop Offset="1"    Color="#D2A54A"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="UiGoldPillFillHover" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0"    Color="#FBEAB8"/>
+        <GradientStop Offset="0.55" Color="#EDCB7C"/>
+        <GradientStop Offset="1"    Color="#DDB25A"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="UiGoldPillFillPressed" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#D9B55E"/>
+        <GradientStop Offset="1" Color="#C4973D"/>
+    </LinearGradientBrush>
+    <!-- Pressed: the inner shadow 0 2 4 rgba(60,40,5,.35), as a short fade from the top edge. -->
+    <LinearGradientBrush x:Key="UiGoldPillPressedShade" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0"    Color="#593C2805"/>
+        <GradientStop Offset="0.22" Color="#003C2805"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="UiGoldPillInk"        Color="#2B1F06"/>
+    <SolidColorBrush x:Key="UiGoldPillRim"        Color="#8CFFF3CF"/>   <!-- .55 -->
+    <SolidColorBrush x:Key="UiGoldPillRimHover"   Color="#B3FFF3CF"/>   <!-- .70 -->
+    <SolidColorBrush x:Key="UiGoldPillRimPressed" Color="#66FFF3CF"/>   <!-- .40 -->
+    <SolidColorBrush x:Key="UiGoldPillSheen"      Color="#73FFFFFF"/>   <!-- .45, the 1-px light along the top -->
+    <SolidColorBrush x:Key="UiGoldPillSheenHover" Color="#8CFFFFFF"/>   <!-- .55 -->
+    <SolidColorBrush x:Key="UiGoldPillFocusGap"   Color="#0F1C2E"/>
+    <SolidColorBrush x:Key="UiGoldPillFocusRing"  Color="#D9FFFFFF"/>   <!-- .85 -->
     <SolidColorBrush x:Key="UiVersionIcon"  Color="#7EE08B"/>
     <SolidColorBrush x:Key="UiTitleText"    Color="#F4F8FC"/>
     <SolidColorBrush x:Key="UiHeadText"     Color="#F0F5FB"/>

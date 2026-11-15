@@ -269,9 +269,11 @@ public partial class MultiplayerTab
         pedestal.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         pedestal.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         pedestal.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // The place in gold, silver and bronze, white fading into it by 62 % (design 107). It used
+        // to take the age's colour, which made 2nd and 3rd the same as the rows below them.
         var numberBrush = new LinearGradientBrush { StartPoint = new Point(0.5, 0), EndPoint = new Point(0.5, 1) };
-        numberBrush.GradientStops.Add(new GradientStop(Colors.White, 0.2));
-        numberBrush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(light), 1));
+        numberBrush.GradientStops.Add(new GradientStop(Colors.White, 0));
+        numberBrush.GradientStops.Add(new GradientStop(RankingGroups.PodiumMetal(row.Rank), 0.62));
         pedestal.Children.Add(new TextBlock
         {
             Text = row.Rank.ToString(),
@@ -305,12 +307,13 @@ public partial class MultiplayerTab
                 Text = Strings.Format("RkPeakShort", PlacementView.RatingText(peak)),
                 FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
                 FontSize = (double)Application.Current.FindResource("MpLabelSize"),
-                Foreground = Solid("#C3D2E5"),
+                // Gold while the player stands at his best (design 107).
+                Foreground = Solid(RankingGroups.AtPeak(row.Rating, peak) ? "#F3D995" : "#C3D2E5"),
                 VerticalAlignment = VerticalAlignment.Center,
                 Tag = RankingPeakTag,
             };
             if (ShortDate.Parse(row.RatingPeakAt) is { } when)
-                max.ToolTip = TooltipHelper.Wrap(Strings.Format("MpRankPeakTip", ShortDate.Format(when)));
+                max.ToolTip = TooltipHelper.Wrap(Strings.Format(RankingGroups.AtPeak(row.Rating, peak) ? "RkPeakAtBestTip" : "MpRankPeakTip", ShortDate.Format(when)));
             pedestal.Children.Add(WithColumn(max, 3));
         }
         var pedestalBand = new Border
@@ -480,6 +483,8 @@ public partial class MultiplayerTab
         YourStanding you, bool team, HighlightPlayer? climb, string? month, IReadOnlyList<PlacementResultEntry>? results)
     {
         var (main, light) = RankAgeColors.Of(you.Age);
+        // Being placed is blue, "in progress" (design 107), not the grey of Discovery.
+        if (!you.Ranked) (main, light) = ("#55ACEE", "#A9D6F7");
         var (name, avatar) = RankingViewerFace(you.Neighbours);
         if (name.Length == 0)
         {
@@ -644,7 +649,9 @@ public partial class MultiplayerTab
         layers.Children.Add(new Border
         {
             CornerRadius = new CornerRadius(13),
-            Background = Diagonal((Rgba(main, .3), 0), (Rgba(main, .07), 0.5), (Rgba(main, 0), 0.85)),
+            Background = you.Ranked
+                ? Diagonal((Rgba(main, .3), 0), (Rgba(main, .07), 0.5), (Rgba(main, 0), 0.85))
+                : Diagonal((Rgba(main, .32), 0), (Rgba(main, .08), 0.5), (Rgba(main, 0), 0.85)),
             IsHitTestVisible = false,
         });
         layers.Children.Add(body);

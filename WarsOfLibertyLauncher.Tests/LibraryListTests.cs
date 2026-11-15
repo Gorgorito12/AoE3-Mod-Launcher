@@ -143,4 +143,19 @@ public class LibraryListTests
     [InlineData("closed", 2560, false)]
     public void ThePlayersChoiceBeatsTheWidth(string? mode, double width, bool open)
         => Assert.Equal(open, LibraryMetrics.RailOpen(mode, width));
+
+    /// <summary>
+    /// The list and its column are decided together (2026-11-14): a refresh while the Library was
+    /// hidden drew the list folded at width 0, and back on the tab the column opened wide around
+    /// the icons. A hidden page never draws; a list drawn folded under a wide page is drawn again.
+    /// </summary>
+    [Theory]
+    [InlineData(0, null, true, false)]      // hidden: nothing is drawn, whatever it asks for
+    [InlineData(0, false, true, false)]
+    [InlineData(1700, null, true, true)]    // back on the tab with nothing drawn: draw it
+    [InlineData(1700, false, true, true)]   // THE BUG: drawn folded, the page is wide
+    [InlineData(1700, true, true, false)]   // already right: nothing to do
+    [InlineData(1200, true, false, true)]   // the window narrowed past 1400
+    public void THE_ONE_THAT_MATTERS_TheListIsDrawnForTheWidthItIsShownAt(double width, bool? drawn, bool open, bool redraw)
+        => Assert.Equal(redraw, LibraryMetrics.RailNeedsDrawing(width, drawn, open));
 }

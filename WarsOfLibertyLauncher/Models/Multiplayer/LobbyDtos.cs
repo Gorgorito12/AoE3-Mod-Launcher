@@ -304,6 +304,11 @@ public class HostRadminResponse
 {
     [JsonPropertyName("hosts")]
     public Dictionary<string, string> Hosts { get; set; } = new();
+
+    /// <summary>True from a server that includes rooms behind a password (2026-11-14). Absent from
+    /// an older one, which publishes public rooms only.</summary>
+    [JsonPropertyName("private_rooms")]
+    public bool PrivateRooms { get; set; }
 }
 
 /// <summary>One member in a lobby's roster (from GET /lobbies/:id), used by the
