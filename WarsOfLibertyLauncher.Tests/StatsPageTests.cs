@@ -183,4 +183,23 @@ public class StatsPageTests
             Assert.DoesNotContain("285", tab.StatsCountsText.Text);
             Assert.Contains(Strings.Get("MpStatsModeSolo"), tab.StatsCountsText.Text);
         });
+
+    /// <summary>
+    /// Design 109: the cards of one line are equally tall. Matchups alone (a 1v1) used to sit
+    /// inside a StackPanel, which kept its own height and stopped short of the balance and the maps
+    /// beside it, leaving the hole the design exists to remove.
+    /// </summary>
+    [Fact]
+    public void EveryCardOfALineIsAsTallAsTheTallest()
+        => WithPage("full", tab =>
+        {
+            var row = Under<FlexGrowPanel>(tab.StatsLeftColumn)
+                .Single(p => !Equals(p.Tag, "ActivityStrip"));
+            row.Measure(new Size(1500, double.PositiveInfinity));
+            row.Arrange(new Rect(0, 0, 1500, row.DesiredSize.Height));
+            var cards = row.Children.OfType<FrameworkElement>().ToList();
+            Assert.Equal(3, cards.Count);
+            Assert.All(cards, c => Assert.True(c is Border, $"{c.GetType().Name} is not the card itself"));
+            Assert.All(cards, c => Assert.Equal(cards[0].RenderSize.Height, c.RenderSize.Height, 1));
+        });
 }

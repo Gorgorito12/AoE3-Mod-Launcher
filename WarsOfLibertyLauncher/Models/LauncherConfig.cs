@@ -2152,6 +2152,10 @@ public class LauncherConfig
     /// see <see cref="Services.Multiplayer.RoomFormats.KindToken"/>.</summary>
     public string LastRoomKind { get; set; } = "casual";
 
+    /// <summary>The Game Rules entry last chosen when creating a room, which the dialog opens on:
+    /// see <see cref="Services.Multiplayer.LanAutoStartArgs.OfferedRules"/>. 0 = Standard.</summary>
+    public int LastRoomGameRules { get; set; }
+
     /// <summary>What the quick match looks for: <c>ranked</c> (the default, what it always did),
     /// <c>casual</c> or <c>either</c>. A mod with no ladder searches casual whatever this says.</summary>
     [JsonPropertyName("quickMatchKind")]

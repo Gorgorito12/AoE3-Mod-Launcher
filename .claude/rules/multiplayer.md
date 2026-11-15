@@ -441,9 +441,44 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   has no load hook either — all 18 `<command>` blocks in `uipregamenew.xml` hang off a
   `stateButton`, so a mod cannot make the menu advance by itself.
 
-  **Even with dispatcher access the ceiling is the LAN SCREEN, never the join.** `doMPSetup` is
-  the ONLY multiplayer-entering command in the table; there is no `joinLANGame` / `hostGame` /
-  `connectTo`. Picking a game out of the LAN list is not exposed as a command at all.
+  **Commands alone stop at the LAN SCREEN.** `doMPSetup` is the ONLY multiplayer-entering command
+  in the table; there is no `joinLANGame` / `hostGame` / `connectTo`.
+
+  **CORRECTION (2026-11-15): code INSIDE the game goes the whole way, and that is what now does
+  it — `lanAutoStart` in things-new's `UHC.dll`.** It runs `doMPSetup(false)` through the console,
+  switches to the login screen, waits for the LAN / Direct IP dialog and calls the routines its
+  Host and Join IP buttons call (filling Direct IP first), writing no byte of the exe. The launcher
+  passes `+uhcLanHost` to the host and `uhcLanJoin="<host's Radmin address>"` to everyone else
+  (`Services/Multiplayer/LanAutoStartArgs`, appended in `BuildMultiplayerLaunchArgs`; the address
+  is the host's `member_net` one from `_roomMembers`, never the player's own; no address → no
+  argument). **The launcher writes no file into the mod**: a mod opts in by shipping that DLL with
+  `lanAutoStart` in its cfg. Every other DLL ignores the arguments — measured on Wars of Liberty's
+  own `uhc.dll` (`C:\WoL-Test`, both arguments: WoL's main menu as always) and on the stock game —
+  so they go to every room without a catalog field. Confirmed in a copy of WoL with things-new's
+  DLL: host lands in the hosted lobby showing the Radmin address; a joiner fills Direct IP and
+  presses Connect, again every 6 s while the host's game is not up yet. **Not yet seen: a join
+  between two machines** (two copies on one PC share the game's ports). Pinned by
+  `LanAutoStartArgsTests`; the key's own docs are in things-new (`how-it-works.md`, lanAutoStart).
+
+  **Game Rules are chosen in the create-room dialog**, a dropdown (`GameRulesCombo`) with the game's
+  eight entries in its order: Standard, Classic, the four treaties, Treaty - No Blockade, King of the
+  Hill (kept in `LauncherConfig.LastRoomGameRules`). Wars of Liberty's string table labels the
+  treaties "Not supported" — its team's word, not the engine's: the stock game hosted 10 min, 40 min
+  and No Blockade (measured), and the dialog says some mods mark them so. They reach only the room's
+  CREATOR as `uhcLanRules=N`
+  (`_currentLobbyGameRules`; a joined or inherited room is Standard and passes nothing). Standard is
+  never passed. The Game Type was dropped on purpose (the maintainer's call): its Deathmatch needs a
+  Deathmatch home city in WoL and in the stock game, and forces its own rules. The joiner's DLL waits
+  5 s before its first Connect, then never presses while the game's own 15-s wait runs; the "No game
+  was found" message is one dialog that each failure rewrites, never a stack.
+
+  **Record Game is ticked WITHOUT the DLL, for every mod: the lobby's box is the host's game setting
+  `gamerecordgame`, which the game restores from the profile's `MultiplayerGameSettings` block** when it
+  hosts (measured: `true` there → the hosted lobby opened ticked). That is a different setting from
+  `optionrecordgame`, which the box does NOT inherit. `GameSettingsStore.EnsureLobbyRecordGame` writes
+  it before the launch, only for the HOST of a COMPETITIVE room, only `true` and only when it is not
+  already true (a casual room keeps what the player last chose). The host's value is the game's for
+  every player, so guests need nothing.
 
 - **GameRanger does NOT auto-join AoE3 — this launcher already passes strictly more than it
   does. But the "it drops you straight into the game" reports are TRUE for other titles, and
@@ -731,6 +766,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   secondary beside "Open registration" on a draft, and a button in Organise's danger zone; it asks
   first and then opens the first tournament left. The list row of a cancelled/abandoned one says so
   (it read "· 1v1"), and requests are counted on a row only while registration is open.
+  (5c) **COLOUR IS STATE, NOT MOD (design 106, `docs/design_14nov`, 2026-11-14).** The mod's colour
+  stays on what is the viewer's: the selected list row, his match (cell, versus card, disc, "YOU",
+  his path) and the primary button. Everything else uses `Services/Multiplayer/StateColors` (the
+  Rooms page's green/blue/amber/red, the one gold, a neutral grey): a tournament's state is
+  `StateColors.ForTournament` in the chip, the list dot, the filters and the one-capsule steps bar
+  (registration GREEN, being played BLUE with the beating dot of `AttachChipPulse`, finished GOLD);
+  the champion — card, cell, shield, path, column title, the final's row, his Participants tile —
+  is gold whatever the mod (a red mod's champion read as an error). Results are squares
+  (`ResultSquare`: green 1, quiet 0, a drawn tick for a win nobody played, gold for the final of a
+  finished tournament), and **each tag sits on the row it is about**: ABSENT on who did not come,
+  DQ on who was disqualified (it used to sit on the WINNER's row; `BracketLayout.LoserMarkerFor`
+  now returns `AbsentTag`/`DqTag`). A card being played is blue with a halo, your card has a halo in
+  the mod's colour — both blurred SIBLINGS on the sheet (`CardHalo`), never an Effect on the card,
+  and none with the effects reduced. A sheet shorter than 200 is centred in 200 and moved down so
+  the champion's card is never cut against the round titles. The legend draws the same pieces.
+  Pinned by `StateColorsTests` and `BracketLayoutTests`.
   (6) **Faces and badges**: the detail carries each player's `avatar_url` and his place on the
   tournament's ladder (`ladder_rank` / `ladder_rank_team`, absent while being placed). A solo entrant's
   disc shows the photo over its letter (`LetterWithPhoto`; a team keeps its crest, its members' dots
@@ -846,8 +897,11 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   row, which beside a room read as the host's; that figure is now said ONCE above the list ("Tu
   conexión · 18 ms", `RoomsMyPingText`, hidden while unmeasured). The addresses come from
   `GET /lobbies/radmin` (backend `src/lobbies/hostRadmin.ts`): signed-in callers only — the
-  `/lobbies` body is one anonymous memo — public rooms only (never a password or tournament room),
-  and the LIVE room's host, never the row's. A server without the route answers 404 (an old server
+  `/lobbies` body is one anonymous memo — never a tournament room, and since 2026-11-14 rooms
+  behind a PASSWORD too (the maintainer's call: the ping is what a player needs to decide whether to
+  ask for the password; the answer says `private_rooms: true`, and against an older server a
+  password room keeps saying "not published", `HostPing.IsPublished`), and the LIVE room's host,
+  never the row's. A server without the route answers 404 (an old server
   reads it as the room called "radmin"), `GetHostRadminIpsAsync` returns null and **the list stays
   exactly as without the feature: no column** (`RoomsTableLayout.Resolve(width, includePing)`;
   `THE_ONE_THAT_MATTERS_NoPingColumnWithoutTheServer`). Measured every 10 s on the rooms tick's own
@@ -858,6 +912,21 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   once a minute `Host ping: N of M probes answered`, and that number decides whether the column
   stays. Verified live against a local server: an answering host, a silent one, a password room and
   a host without Radmin.
+
+- **THE STATISTICS PAGE IS DESIGN 109 (`docs/design_14nov`, 2026-11-14): the same content, no
+  holes.** One column (`StatsLeftColumn`; the fixed right column and `StatsRightColumn` are gone):
+  ACTIVITY as a full-width strip (`BuildActivityStrip`: the total and its 30 days, three figures in
+  their colours with the long sentence in the tooltip, the peak hours), then ONE wrapping row of
+  cards in a `Controls/FlexGrowPanel` (CSS flex-wrap with a basis and a grow each, every card of a
+  line as tall as the tallest) - Balance (basis `BalanceBasis(N)`, grows N), Matchups (400; in Teams
+  with "Played together" beside it when all four fit, 760 + gap, grows 2) and Maps (340) - then the
+  decks. **Matchups takes no room when there are none**: that empty column was the hole. The balance
+  splits into N = min(3, civilizations shown / 5, what fits at 450) columns
+  (`StatsPageLayout.BalanceColumns`, part of the paint key through `_statsShape`), rows of 34, the
+  figures narrow (`CivTableLayout`: PART. 40, RECORD 54, % 46, DUR. 54, the name and the bar 1.4 to
+  1). Maps are one line of 30 and the first twelve; the decks are ONE wrapping block where each band
+  opens with its percentage (`AppendDeckBand`). `StatsLabel` is #8C9CB1. Pinned by
+  `StatsPageLayoutTests` and `CivTableLayoutTests`.
 
 - **STATISTICS, RANKING AND MATCHES OPEN WITH ONE BUILD; AN ANSWER REBUILDS ONLY WHAT MOVED
   (2026-11-11).** Measured against a local server (`SETTLE`, see CLAUDE.md): opening Statistics
@@ -934,6 +1003,21 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   so a window crossing 1600 px gets it at once. Highlights (93f): a card per ~300 px
   (`LeaderColumns`), the first row of each in soft gold, the viewer's own blue with a rim.
   `--demo-elo=93a..93f` opens each block; 93e is the empty ladder.
+
+- **RANKING IN COLOUR (design 107, `docs/design_14nov`, 2026-11-14), on top of design 93.** The
+  column headings are a BAR like the Rooms page's (30 high, `BodyInset` + 1 rim + `RowPadding` =
+  `SidePadding`, so they still line up) and exist only once somebody is RANKED. Players being placed
+  are no longer rows of the table: they are blue TILES in an `AutoFillPanel` (min 250, gap 6, Tag
+  `PlacementTilesTag`) under a blue "IN PLACEMENT" heading — avatar, name, "YOU", streak, "8/10",
+  a square per match (blue played, faint to play; the VIEWER's own green win / red loss), no badge
+  and no peak; another player's tile still shows no number (`HiddenPlacementTag`). "Your position"
+  while placing is blue. The podium's number is gold / silver / bronze (`RankingGroups.PodiumMetal`)
+  and a peak is gold while ELO ≥ peak (`RankingGroups.AtPeak`). Only «Latest matches» passes
+  `stated: true` to `BuildRankingMatchRow`: a green / amber (competitive that did not count) / grey
+  dot, "beat" in green with the loser dimmed, the mode as a pill (gold when it counted), the mod's
+  ICON instead of its name, "no result" amber when it was competitive, and no empty flag slot when
+  nobody's civilization is known. The Matches view and the Rooms card keep the old row. Pinned by
+  `RankingColourTests`.
 
 - **A LANGUAGE CHANGE REPAINTS ALL FOUR SUBTABS, AND THE RENDER MUST BE SEPARABLE FROM THE
   FETCH.** `ApplyStrings` assigns the fixed labels and then calls `RefreshActiveSubtabStrings`,

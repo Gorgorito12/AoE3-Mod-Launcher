@@ -315,7 +315,7 @@ public partial class MultiplayerTab
         {
             _quickCardClock = new TextBlock { FontFamily = MonoFont, FontWeight = FontWeights.SemiBold, Margin = new Thickness(-4, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
             _quickCardClock.SetResourceReference(TextBlock.FontSizeProperty, "QcClockSize");
-            _quickCardClock.SetResourceReference(TextBlock.ForegroundProperty, "ModAccentText");
+            _quickCardClock.SetResourceReference(TextBlock.ForegroundProperty, "MpActionText");
             head.Children.Add(_quickCardClock);
         }
         if (m.ShowPickers)
@@ -511,7 +511,7 @@ public partial class MultiplayerTab
                 Height = 12,
                 RenderTransformOrigin = new Point(0.5, 0.5),
             };
-            arc.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "ModAccentText");
+            arc.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "MpActionText");
             var host = new Grid { Width = 12, Height = 12 };
             host.Children.Add(ring);
             host.Children.Add(arc);
@@ -531,7 +531,7 @@ public partial class MultiplayerTab
         {
             var dot = new System.Windows.Shapes.Ellipse { Width = 8, Height = 8 };
             if (mark == QuickCardMark.Found) dot.Fill = Rm("RmDotGreen");
-            else dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "ModAccentText");
+            else dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "MpActionText");
             if (mark == QuickCardMark.Pulse && !still)
             {
                 var pulse = new DoubleAnimation(1, 0.35, TimeSpan.FromSeconds(0.8)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };

@@ -630,62 +630,135 @@
 
 
                 <!-- Persistent, non-invasive launcher self-update reminder.
-                     Replaces the old auto-modal that got permanently silenced
-                     on Cancel (SkippedLauncherTag). Shown whenever a newer
-                     launcher version exists; stays visible on EVERY launch until
-                     the user updates (no permanent dismiss). Click opens the
-                     existing download/restart dialog. Blue, the shape of the
-                     "Connected" chip (design 77k); says "restart" once downloaded.
-                     It sits in the TITLE BAR beside the bell, where it always was: design
-                     77k moved it to the tab row and the maintainer brought it back here
-                     (2026-11-10). 26 px tall for the 40-px bar, and hit-testable in the
-                     caption region, or a click would drag the window.
-                     Self-contained template so the global Button style doesn't
-                     flatten the pill look. Text + tooltip
-                     are localized from code-behind. -->
+                     Shown whenever a newer launcher exists, on every launch until the user
+                     updates (no permanent dismiss); a click opens the download/restart dialog.
+                     Design 110 (docs/design_14nov): the ONE solid, gold piece of the bar, so it
+                     reads as something to do rather than as one more status like "Connected".
+                     Always the same gold, whatever the mod. 30 px tall in the 40-px title bar,
+                     where the maintainer wants it (2026-11-10), and hit-testable in the caption
+                     region, or a click would drag the window.
+                     The halo is two SIBLINGS behind the pill (a ring and a glow), never an Effect
+                     on the pill itself, which would take ClearType off its text. Code breathes it
+                     (BreatheLauncherUpdatePill) and finds the two by name in the template.
+                     Tag "ready" swaps the drawn arrow for the restart arrow. -->
                 <Button x:Name="LauncherUpdatePill"
                         Grid.Column="4"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True"
                         Visibility="Collapsed"
                         Cursor="Hand"
                         VerticalAlignment="Center"
-                        Margin="0,0,8,0"
+                        Margin="4,0,10,0"
+                        FocusVisualStyle="{x:Null}"
                         FontFamily="{DynamicResource BodyFont}"
-                        FontSize="{DynamicResource SetRowDescSize}"
+                        FontSize="12.5"
                         Click="LauncherUpdatePill_Click"
                         RenderTransformOrigin="0.5,0.5">
+                    <!-- The heartbeat: the pill grows and settles with its halo (2026-11-14). -->
                     <Button.RenderTransform>
                         <ScaleTransform x:Name="LauncherUpdatePillScale" ScaleX="1" ScaleY="1"/>
                     </Button.RenderTransform>
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <!-- The text comes from the Button's Content (set in
-                                 code-behind) via the ContentPresenter — x:Name'd
-                                 elements inside a ControlTemplate live in their own
-                                 namescope and aren't reachable from code-behind, so
-                                 we drive the label through Content instead. -->
-                            <Border x:Name="pillBorder"
-                                    Background="#2455ACEE"
-                                    BorderBrush="#7355ACEE"
-                                    BorderThickness="1"
-                                    Height="26"
-                                    CornerRadius="13"
-                                    Padding="12,0">
-                                <StackPanel Orientation="Horizontal"
-                                            VerticalAlignment="Center"
-                                            TextElement.Foreground="#9FD2F6"
-                                            TextElement.FontWeight="SemiBold">
-                                    <TextBlock Text="{TemplateBinding Tag}"
-                                               FontSize="12"
-                                               FontWeight="Bold"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,7,0"/>
-                                    <ContentPresenter VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
+                            <Grid>
+                                <!-- Glow: 0 0 18px gold at .45. A shape with no text, so its Effect is harmless.
+                                     The breath fades this element (Opacity), never the Effect: an Effect
+                                     inside a template is frozen and cannot be animated. Hover swaps in
+                                     the stronger glow below instead of changing this one. -->
+                                <Border x:Name="PillGlow" CornerRadius="15" Background="{DynamicResource UiGold}"
+                                        CacheMode="BitmapCache">
+                                    <Border.Effect>
+                                        <DropShadowEffect ShadowDepth="0" BlurRadius="18" Opacity="0.45"
+                                                          Color="{StaticResource UiGoldColor}"/>
+                                    </Border.Effect>
+                                </Border>
+                                <!-- Hover glow: 0 0 24px gold at .60, still. -->
+                                <Border x:Name="PillGlowHover" CornerRadius="15" Background="{DynamicResource UiGold}"
+                                        CacheMode="BitmapCache"
+                                        Visibility="Collapsed">
+                                    <Border.Effect>
+                                        <DropShadowEffect ShadowDepth="0" BlurRadius="24" Opacity="0.6"
+                                                          Color="{StaticResource UiGoldColor}"/>
+                                    </Border.Effect>
+                                </Border>
+                                <!-- Ring: 0 0 0 3px gold at .16. -->
+                                <Border x:Name="PillRing"
+                                        Margin="-3"
+                                        CornerRadius="18"
+                                        BorderThickness="3"
+                                        BorderBrush="{DynamicResource UiGold}"
+                                        Opacity="0.16"/>
+                                <!-- Keyboard focus: 2 px of navy, then 2 px of white at .85, outside. -->
+                                <Border x:Name="PillFocus"
+                                        Margin="-4"
+                                        CornerRadius="19"
+                                        BorderThickness="2"
+                                        BorderBrush="{DynamicResource UiGoldPillFocusRing}"
+                                        Visibility="Collapsed">
+                                    <Border CornerRadius="17" BorderThickness="2"
+                                            BorderBrush="{DynamicResource UiGoldPillFocusGap}"/>
+                                </Border>
+                                <Border x:Name="PillFace"
+                                        Height="30"
+                                        CornerRadius="15"
+                                        Background="{DynamicResource UiGoldPillFill}"
+                                        BorderBrush="{DynamicResource UiGoldPillRim}"
+                                        BorderThickness="1"
+                                        SnapsToDevicePixels="True">
+                                    <Grid>
+                                        <Border x:Name="PillShade" CornerRadius="14"
+                                                Background="{DynamicResource UiGoldPillPressedShade}"
+                                                Visibility="Collapsed"/>
+                                        <!-- The 1-px light along the top edge. -->
+                                        <Border x:Name="PillSheen" CornerRadius="14" BorderThickness="0,1,0,0"
+                                                BorderBrush="{DynamicResource UiGoldPillSheen}"/>
+                                        <StackPanel Orientation="Horizontal"
+                                                    VerticalAlignment="Center"
+                                                    Margin="10,0,13,0"
+                                                    TextElement.Foreground="{DynamicResource UiGoldPillInk}"
+                                                    TextElement.FontWeight="SemiBold">
+                                            <!-- A drawn arrow (13 px, from a 14-px box), never the character. -->
+                                            <Viewbox Width="13" Height="13" Margin="0,0,7,0" VerticalAlignment="Center">
+                                                <Canvas Width="14" Height="14">
+                                                    <Path x:Name="PillArrow"
+                                                          Data="M7 11.8V2.6M3.1 6.4 7 2.5l3.9 3.9"
+                                                          Stroke="{DynamicResource UiGoldPillInk}" StrokeThickness="2"
+                                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                          StrokeLineJoin="Round"/>
+                                                </Canvas>
+                                            </Viewbox>
+                                            <ContentPresenter VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </Grid>
                             <ControlTemplate.Triggers>
+                                <!-- Downloaded and checked: a circular "restart" arrow, drawn the same way. -->
+                                <Trigger Property="Tag" Value="ready">
+                                    <Setter TargetName="PillArrow" Property="Data"
+                                            Value="M11.7 7.6A4.7 4.7 0 1 1 10.1 3.4M10.5 1.1 10.2 3.6 12.6 4"/>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="PillRing" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="PillFocus" Property="Visibility" Value="Visible"/>
+                                </Trigger>
+                                <!-- Hover: lighter, and a stronger halo that holds still (the breath stops). -->
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="pillBorder" Property="Opacity" Value="0.88"/>
+                                    <Setter TargetName="PillFace" Property="Background" Value="{DynamicResource UiGoldPillFillHover}"/>
+                                    <Setter TargetName="PillFace" Property="BorderBrush" Value="{DynamicResource UiGoldPillRimHover}"/>
+                                    <Setter TargetName="PillSheen" Property="BorderBrush" Value="{DynamicResource UiGoldPillSheenHover}"/>
+                                    <Setter TargetName="PillRing" Property="Opacity" Value="0.26"/>
+                                    <Setter TargetName="PillGlow" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="PillGlowHover" Property="Visibility" Value="Visible"/>
+                                </Trigger>
+                                <!-- Pressed: darker, no halo, a shadow inside. -->
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="PillFace" Property="Background" Value="{DynamicResource UiGoldPillFillPressed}"/>
+                                    <Setter TargetName="PillFace" Property="BorderBrush" Value="{DynamicResource UiGoldPillRimPressed}"/>
+                                    <Setter TargetName="PillSheen" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="PillShade" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="PillRing" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="PillGlow" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="PillGlowHover" Property="Visibility" Value="Collapsed"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

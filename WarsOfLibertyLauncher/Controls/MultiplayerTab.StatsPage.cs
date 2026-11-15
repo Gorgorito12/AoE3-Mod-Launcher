@@ -41,9 +41,8 @@ public partial class MultiplayerTab
     private void StatsView_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         var next = StatsPageLayout.For(StatsView.ActualWidth);
-        bool rebuild = next.Gutter != _statsLayout.Gutter
-                       || next.RowHeight != _statsLayout.RowHeight
-                       || next.SideBySide != _statsLayout.SideBySide;
+        var shape = StatsShapeFor(StatsView.ActualWidth, next);
+        bool rebuild = next.Gutter != _statsLayout.Gutter || shape != _statsShape;
 
         ApplyStatsLayout();
 
@@ -54,13 +53,27 @@ public partial class MultiplayerTab
     private void ApplyStatsLayout()
     {
         _statsLayout = StatsPageLayout.For(StatsView.ActualWidth);
-
-        StatsRightColumn.Width = _statsLayout.RightColumn;
-        StatsColumnsGap.Width = new GridLength(_statsLayout.Gutter);
         StatsColumns.Margin = new Thickness(0, _statsLayout.Gutter, 0, 0);
 
         StatsTitleText.SetResourceReference(TextBlock.FontSizeProperty,
             _statsLayout.Wide ? "StatsTitleSize" : "StatsTitleSizeCompact");
+    }
+
+    /// <summary>What the row of cards looks like at this width: how many columns the balance
+    /// takes and whether "Played together" sits beside Matchups. Part of the page's paint key.</summary>
+    private (int Columns, bool AlliesBeside, bool Pairs) _statsShape;
+
+    private bool StatsHasMatchups => StatsLoading || _matchups?.Matchups is { Count: > 0 };
+    private bool StatsHasAllies => !StatsLoading && _matchups?.Allies is { Count: > 0 };
+
+    private (int Columns, bool AlliesBeside, bool Pairs) StatsShapeFor(double width, StatsPageLayout layout)
+    {
+        bool matchups = StatsHasMatchups, allies = StatsHasAllies;
+        bool beside = matchups && allies && layout.AlliesBeside(width);
+        double pairs = !matchups && !allies ? 0
+            : beside ? StatsPageLayout.AlliesBasis * 2 + layout.Gutter
+            : StatsPageLayout.MatchupsBasis;
+        return (layout.BalanceColumns(width, CivRowsShown().Count, pairs), beside, matchups || allies);
     }
 
     private void ApplyStatsAccent()
@@ -118,11 +131,15 @@ public partial class MultiplayerTab
         StatsCountsText.Text = string.Join(" · ", parts);
     }
 
-    /// <summary>Fill the page.</summary>
+    /// <summary>
+    /// Fill the page (design 109): the activity strip at full width, ONE wrapping row of cards -
+    /// Balance, Matchups (and "Played together" in Teams), Maps - and the decks at full width. The
+    /// cards of a line share its height. Matchups takes no room when there are none: that empty
+    /// column in the middle of a wide screen is what this layout replaced.
+    /// </summary>
     private void RenderStatsColumns()
     {
         StatsLeftColumn.Children.Clear();
-        StatsRightColumn.Children.Clear();
 
         StatsErrorBox.Visibility = _statsLoadFailed ? Visibility.Visible : Visibility.Collapsed;
         StatsColumns.Visibility = _statsLoadFailed ? Visibility.Collapsed : Visibility.Visible;
@@ -135,38 +152,65 @@ public partial class MultiplayerTab
         }
 
         double gap = _statsLayout.Gutter;
+        _statsShape = StatsShapeFor(StatsView.ActualWidth, _statsLayout);
 
-        var pairs = new StackPanel();
-        AddSpaced(pairs, BuildPairCard(_matchups?.Matchups, StatsTeamMode()
-            ? "MpStatsRivalsHint" : "MpStatsMatchupsHint"), gap);
+        AddSpaced(StatsLeftColumn, BuildActivityStrip(), gap);
+
+        var row = new FlexGrowPanel { Gap = gap };
+        var balance = BuildCivTableCard(_statsShape.Columns);
+        FlexGrowPanel.SetBasis(balance, StatsPageLayout.BalanceBasis(_statsShape.Columns));
+        FlexGrowPanel.SetGrow(balance, _statsShape.Columns);
+        row.Children.Add(balance);
+
+        var matchups = BuildPairCard(_matchups?.Matchups, StatsTeamMode() ? "MpStatsRivalsHint" : "MpStatsMatchupsHint");
         // Only in team mode: nobody has an ally in a 1v1.
-        AddSpaced(pairs, BuildAlliesCard(), gap);
-
-        var top = new Grid();
-        var balance = BuildCivTableCard();
-        if (pairs.Children.Count > 0 && _statsLayout.SideBySide)
+        var allies = BuildAlliesCard();
+        if (matchups != null || allies != null)
         {
-            top.ColumnDefinitions.Add(new ColumnDefinition());
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(gap) });
-            top.ColumnDefinitions.Add(new ColumnDefinition());
-            // Each card its own height: the prototype aligns them to the start.
-            balance.VerticalAlignment = VerticalAlignment.Top;
-            top.Children.Add(WithColumn(balance, 0));
-            top.Children.Add(WithColumn(pairs, 2));
-        }
-        else
-        {
-            var stacked = new StackPanel();
-            AddSpaced(stacked, balance, gap);
-            AddSpaced(stacked, pairs, gap);
-            top.Children.Add(stacked);
+            FrameworkElement pairs;
+            if (matchups != null && allies != null && _statsShape.AlliesBeside)
+            {
+                var both = new Grid();
+                both.ColumnDefinitions.Add(new ColumnDefinition());
+                both.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(gap) });
+                both.ColumnDefinitions.Add(new ColumnDefinition());
+                both.Children.Add(WithColumn((FrameworkElement)matchups, 0));
+                both.Children.Add(WithColumn((FrameworkElement)allies, 2));
+                pairs = both;
+                FlexGrowPanel.SetBasis(pairs, StatsPageLayout.AlliesBasis * 2 + gap);
+                FlexGrowPanel.SetGrow(pairs, 2);
+            }
+            else if (matchups == null || allies == null)
+            {
+                // One card alone goes in as itself: wrapped in a StackPanel it kept its own height
+                // and stopped short of the cards beside it, which the line makes equally tall.
+                pairs = (FrameworkElement)(matchups ?? allies)!;
+                FlexGrowPanel.SetBasis(pairs, StatsPageLayout.MatchupsBasis);
+            }
+            else
+            {
+                // Stacked, the second card takes what is left of the line's height.
+                var stacked = new Grid();
+                stacked.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                stacked.RowDefinitions.Add(new RowDefinition { Height = new GridLength(gap) });
+                stacked.RowDefinitions.Add(new RowDefinition());
+                var first = (FrameworkElement)matchups;
+                var second = (FrameworkElement)allies;
+                Grid.SetRow(second, 2);
+                stacked.Children.Add(first);
+                stacked.Children.Add(second);
+                pairs = stacked;
+                FlexGrowPanel.SetBasis(pairs, StatsPageLayout.MatchupsBasis);
+            }
+            row.Children.Add(pairs);
         }
 
-        AddSpaced(StatsLeftColumn, top, gap);
+        var maps = BuildMapCard();
+        FlexGrowPanel.SetBasis(maps, StatsPageLayout.MapsBasis);
+        row.Children.Add(maps);
+
+        AddSpaced(StatsLeftColumn, row, gap);
         AddSpaced(StatsLeftColumn, BuildDeckCard(), gap);
-
-        AddSpaced(StatsRightColumn, BuildActivityCard(), gap);
-        AddSpaced(StatsRightColumn, BuildMapCard(), gap);
     }
 
     // ---------------------------------------------------------------- answers
@@ -376,7 +420,21 @@ public partial class MultiplayerTab
             .Select(c => (c.Civ ?? "", StatsCivLabel(c.Civ), c.Played, c.Wins, c.Losses))
             .ToList();
 
-    private FrameworkElement BuildCivTableCard()
+    /// <summary>The civilizations the balance shows: past the fold, or all of them when open.</summary>
+    private List<(string Civ, string Label, int Played, int Wins, int Losses)> CivRowsShown()
+    {
+        var ordered = CivRows()
+            .OrderByDescending(r => r.Played)
+            .ThenBy(r => r.Label, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        // If nothing clears the bar, the most-played handful anyway: an empty table under a
+        // heading that says there is data reads as a fault rather than as a shortage.
+        var kept = ordered.Where(r => r.Played > CivTailMaxPlayed).ToList();
+        if (kept.Count == 0) kept = ordered.Take(6).ToList();
+        return _statsCivsExpanded ? ordered : kept;
+    }
+
+    private FrameworkElement BuildCivTableCard(int columns = 1)
     {
         var stack = new StackPanel();
         var rows = CivRows();
@@ -401,23 +459,31 @@ public partial class MultiplayerTab
             Strings.Get("MpCivsTitle"),
             total > 0 ? Strings.Format("MpStatsCivsScope", with, total) : null,
             10));
-        stack.Children.Add(BuildCivHeader());
+        var shown = CivRowsShown();
+        var kept = shown;
+        bool wasExpanded = _statsCivsExpanded;
+        _statsCivsExpanded = false;
+        int folded = rows.Count - CivRowsShown().Count;
+        _statsCivsExpanded = wasExpanded;
 
-        var ordered = rows
-            .OrderByDescending(r => r.Played)
-            .ThenBy(r => r.Label, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
-
-        // If nothing clears the bar, the most-played handful anyway: an empty table under a
-        // heading that says there is data reads as a fault rather than as a shortage.
-        var kept = ordered.Where(r => r.Played > CivTailMaxPlayed).ToList();
-        if (kept.Count == 0) kept = ordered.Take(6).ToList();
-        int folded = ordered.Count - kept.Count;
-
-        foreach (var row in _statsCivsExpanded ? ordered : kept)
-            stack.Children.Add(BuildCivRow(row.Label, row.Played, row.Wins, row.Losses,
-                                           AvgSecondsFor(row.Civ), _statsLayout.RowHeight,
-                                           DeckCardNames.Peek(StatsModId())?.CivIconOf(row.Civ)));
+        // Design 109: 1, 2 or 3 equal columns, each with its own headings, 28 apart, filled in
+        // order, the first column first.
+        columns = Math.Max(1, Math.Min(columns, shown.Count));
+        int perColumn = (int)Math.Ceiling(shown.Count / (double)columns);
+        var table = new Grid();
+        for (int c = 0; c < columns; c++)
+        {
+            if (c > 0) table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(StatsPageLayout.BalanceColumnGap) });
+            table.ColumnDefinitions.Add(new ColumnDefinition());
+            var column = new StackPanel { Tag = "BalanceColumn" };
+            column.Children.Add(BuildCivHeader());
+            foreach (var row in shown.Skip(c * perColumn).Take(perColumn))
+                column.Children.Add(BuildCivRow(row.Label, row.Played, row.Wins, row.Losses,
+                                                AvgSecondsFor(row.Civ), _statsLayout.RowHeight,
+                                                DeckCardNames.Peek(StatsModId())?.CivIconOf(row.Civ)));
+            table.Children.Add(WithColumn(column, c * 2));
+        }
+        stack.Children.Add(table);
 
         if (folded > 0)
         {
@@ -528,11 +594,12 @@ public partial class MultiplayerTab
     private static Grid BuildCivTableGrid(IReadOnlyList<CivColumnSpec> specs, string[] titles)
     {
         var grid = BuildCivGrid(specs);
-        grid.Height = 30;
+        grid.Height = 28;
 
         for (int i = 0; i < specs.Count; i++)
         {
             var title = StatsText(titles[i], "StatsHeaderSize", "StatsLabel", FontWeights.Bold);
+            title.Background = Brushes.Transparent;
             title.TextTrimming = TextTrimming.CharacterEllipsis;
             title.HorizontalAlignment = specs[i].RightAligned
                 ? HorizontalAlignment.Right
@@ -554,10 +621,13 @@ public partial class MultiplayerTab
     private static FrameworkElement BuildCivHeader()
     {
         var specs = CivTableLayout.All;
-        return StatsRule(
-            BuildCivTableGrid(specs, specs
-                .Select(s => Strings.Get(CivTableLayout.HeaderKey(s.Column))).ToArray()),
-            "StatsHeadRule");
+        var grid = BuildCivTableGrid(specs, specs
+            .Select(s => Strings.Get(CivTableLayout.HeaderKey(s.Column))).ToArray());
+        // PART. and DUR. say the whole word on hover (design 109).
+        for (int i = 0; i < specs.Count; i++)
+            if (CivTableLayout.HeaderTipKey(specs[i].Column) is { } tip && grid.Children[i] is FrameworkElement title)
+                title.ToolTip = TooltipHelper.Wrap(Strings.Get(tip));
+        return StatsRule(grid, "StatsHeadRule");
     }
 
     private static FrameworkElement BuildMatchupHeader(string pairColumnKey)
@@ -940,70 +1010,180 @@ public partial class MultiplayerTab
 
     private const int ActivityDays = 30;
 
-    private UIElement BuildActivityCard()
+    /// <summary>
+    /// ACTIVITY as a strip across the page (design 109), where it used to be a card in a fixed
+    /// right column: the total and its 30 days, three figures, and the peak hours, each block
+    /// separated from the one before by a 1-px rule and wrapping onto a new line when narrow.
+    /// The long explanations moved to the tooltips.
+    /// </summary>
+    private UIElement BuildActivityStrip()
     {
-        var stack = new StackPanel();
         var totals = _statsCommunity?.Totals;
         int windowDays = totals?.WindowDays is > 0 ? totals.WindowDays : ActivityDays;
+        var blocks = new FlexGrowPanel { Gap = 0, Tag = "ActivityStrip" };
 
-        stack.Children.Add(StatsHead(Strings.Get("MpStatsActivityTitle"),
-                                     Strings.Format("MpStatsWindowDays", windowDays), 12));
+        void Add(FrameworkElement content, double basis, double grow)
+        {
+            var block = new Border
+            {
+                Padding = new Thickness(16, 0, 16, 0),
+                Margin = new Thickness(0, 4, 0, 4),
+                BorderThickness = new Thickness(blocks.Children.Count == 0 ? 0 : 1, 0, 0, 0),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+                Child = content,
+            };
+            FlexGrowPanel.SetBasis(block, basis);
+            FlexGrowPanel.SetGrow(block, grow);
+            blocks.Children.Add(block);
+        }
 
         if (StatsLoading)
         {
-            stack.Children.Add(StatsSkeleton(180, 26, 0x14));
-            var chart = StatsSkeleton(double.NaN, 44, 0x0D);
-            chart.HorizontalAlignment = HorizontalAlignment.Stretch;
-            chart.Margin = new Thickness(0, 10, 0, 0);
-            stack.Children.Add(chart);
-            return StatsPanel(stack);
+            foreach (var (basis, grow) in new[] { (340.0, 2.4), (150.0, 1.0), (150.0, 1.0), (150.0, 1.0), (300.0, 1.7) })
+            {
+                var placeholder = StatsSkeleton(double.NaN, 58, 0x0D);
+                placeholder.HorizontalAlignment = HorizontalAlignment.Stretch;
+                Add(placeholder, basis, grow);
+            }
+            return ActivityStripCard(blocks);
         }
+        if (totals == null) return ActivityStripCard(blocks);
 
-        if (totals == null) return StatsPanel(stack);
-
-        var figure = new StackPanel { Orientation = Orientation.Horizontal };
-        var count = StatsText(totals.Matches.ToString("N0", Strings.Culture),
-                              _statsLayout.Wide ? "StatsFigureSize" : "StatsFigureSizeCompact",
-                              "StatsStrong", FontWeights.SemiBold);
-        figure.Children.Add(count);
-        var unit = StatsText(Strings.Get("MpStatsActivityMatches"), "StatsBodySize", "StatsProse",
-                             FontWeights.Normal);
-        unit.VerticalAlignment = VerticalAlignment.Bottom;
-        unit.Margin = new Thickness(8, 0, 0, 5);
-        figure.Children.Add(unit);
-        stack.Children.Add(figure);
-
-        var days = DayBars(totals.MatchesPerDay, windowDays);
-        if (days != null)
+        // The total, and the 30 days beside it.
+        var total = new Grid();
+        total.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        total.ColumnDefinitions.Add(new ColumnDefinition());
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
+        words.Children.Add(StatsText(Strings.Get("MpStatsActivityTitle").ToUpper(Strings.Culture), "StatsLabelSize", "StatsLabel", FontWeights.Bold));
+        var count = StatsMono(totals.Matches.ToString("N0", Strings.Culture),
+            _statsLayout.Wide ? "StatsFigureSize" : "StatsFigureSizeCompact", "StatsStrong", FontWeights.SemiBold);
+        count.Margin = new Thickness(0, 4, 0, 0);
+        words.Children.Add(count);
+        words.Children.Add(StatsText(Strings.Format("MpStatsStripMatches", windowDays), "StatsNoteSize", "StatsProse", FontWeights.Normal));
+        total.Children.Add(words);
+        if (DayBars(totals.MatchesPerDay, windowDays) is { } days)
         {
-            days.Margin = new Thickness(0, 12, 0, 0);
-            stack.Children.Add(days);
+            days.Height = 52;
+            days.VerticalAlignment = VerticalAlignment.Center;
+            total.Children.Add(WithColumn(days, 1));
         }
+        Add(total, 340, 2.4);
 
-        var facts = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
+        // Three figures, in the colour of what they are.
         if (totals.Rated is int rated)
         {
-            facts.Children.Add(ActivityFact(Strings.Get("MpStatsActivityRated"), rated));
-
-            // In the words of the server when the launcher knows no better: it is an identifier
-            // somebody can grep for, and a sentence invented for it would say less.
-            if (!string.IsNullOrWhiteSpace(totals.UnratedTopReason)
-                && totals.UnratedTopReasonMatches is int n && n > 0)
+            Add(ActivityFigure(rated, "#7FE0A8", Strings.Get("MpStatsFigRated"), Strings.Get("MpStatsFigRatedTip")), 150, 1);
+            if (!string.IsNullOrWhiteSpace(totals.UnratedTopReason) && totals.UnratedTopReasonMatches is int n && n > 0)
             {
-                facts.Children.Add(ActivityFact(UnratedReasonText(totals.UnratedTopReason!), n));
+                var reason = totals.UnratedTopReason!;
+                Add(ActivityFigure(n, "#F5BD76",
+                    reason == "no_decided_result" ? Strings.Get("MpStatsFigNoResult") : UnratedReasonText(reason),
+                    Strings.Format("MpStatsFigNoResultTip", reason)), 150, 1);
             }
         }
         if (totals is { Players: > 0, PlayersWindowDays: > 0 })
+            Add(ActivityFigure(totals.Players, "#F0F5FB",
+                Strings.Format("MpStatsFigPlayers", totals.PlayersWindowDays),
+                Strings.Format("MpStatsFigPlayersTip", totals.PlayersWindowDays)), 150, 1);
+
+        if (BuildPeakBlock(windowDays) is { } peak) Add(peak, 300, 1.7);
+        return ActivityStripCard(blocks);
+    }
+
+    private static Border ActivityStripCard(UIElement blocks)
+    {
+        var card = StatsPanel(blocks, 12);
+        card.Padding = new Thickness(2, 12, 2, 12);
+        return card;
+    }
+
+    /// <summary>A figure of the strip: the number in its colour over a short line, the long
+    /// explanation on hover.</summary>
+    private static FrameworkElement ActivityFigure(int value, string ink, string line, string tip)
+    {
+        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
+        var number = StatsMono(value.ToString("N0", Strings.Culture), "MpRatingSize", "StatsStrong", FontWeights.SemiBold);
+        number.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(ink));
+        stack.Children.Add(number);
+        var words = StatsText(line, "StatsNoteSize", "UiMutedText", FontWeights.Normal);
+        words.TextWrapping = TextWrapping.Wrap;
+        words.Margin = new Thickness(0, 2, 0, 0);
+        stack.Children.Add(words);
+        stack.ToolTip = TooltipHelper.Wrap(tip);
+        return stack;
+    }
+
+    /// <summary>
+    /// PEAK HOURS, in the viewer's own hours. Under the sample the hours are not drawn and the
+    /// block says why: the tallest of twenty-four bars over a dozen rooms is noise.
+    /// </summary>
+    private FrameworkElement? BuildPeakBlock(int windowDays)
+    {
+        var activity = _statsCommunity?.Activity;
+        if (activity?.Hours == null || activity.Hours.Count == 0) return null;
+
+        var utc = new int[24];
+        foreach (var hour in activity.Hours)
+            if (hour.Hour is >= 0 and < 24) utc[hour.Hour] += hour.Count;
+
+        var local = CommunityStatsView.ToLocalHours(
+            utc, TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow));
+        int rooms = local.Sum();
+        int? start = CommunityStatsView.PeakWindow(local, rooms);
+
+        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        if (start == null)
         {
-            facts.Children.Add(ActivityFact(
-                Strings.Format("MpStatsActivePlayers", totals.PlayersWindowDays), totals.Players));
+            stack.Children.Add(StatsText(Strings.Get("MpStatsPeakTitle").ToUpper(Strings.Culture), "StatsLabelSize", "StatsLabel", FontWeights.Bold));
+            var none = StatsProse(Strings.Format("MpStatsPeakNoSample", CommunityStatsView.MinSampleRooms, windowDays),
+                                  "StatsNoteSize", "StatsNote");
+            none.Margin = new Thickness(0, 6, 0, 0);
+            stack.Children.Add(none);
+            return stack;
         }
-        if (facts.Children.Count > 0) stack.Children.Add(facts);
 
-        var peak = BuildPeakHours(windowDays);
-        if (peak != null) stack.Children.Add(peak);
+        int first = start.Value;
+        bool InPeak(int hour)
+        {
+            for (int i = 0; i < CommunityStatsView.PeakWindowHours; i++)
+                if ((first + i) % 24 == hour) return true;
+            return false;
+        }
 
-        return StatsPanel(stack);
+        var head = new Grid { Margin = new Thickness(0, 0, 0, 6), Background = Brushes.Transparent };
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition());
+        var label = StatsText(Strings.Get("MpStatsPeakTitle").ToUpper(Strings.Culture), "StatsLabelSize", "StatsLabel", FontWeights.Bold);
+        label.Margin = new Thickness(0, 0, 8, 0);
+        head.Children.Add(label);
+        head.Children.Add(WithColumn(StatsMono(
+            $"{first:00}:00–{(first + CommunityStatsView.PeakWindowHours) % 24:00}:00",
+            "StatsSubtitleSize", "StatsStrong", FontWeights.SemiBold), 1));
+        var where = StatsText(Strings.Format("MpStatsPeakShort", rooms), "StatsNoteSize", "StatsNote", FontWeights.Normal);
+        where.HorizontalAlignment = HorizontalAlignment.Right;
+        where.Margin = new Thickness(8, 0, 0, 0);
+        where.TextTrimming = TextTrimming.CharacterEllipsis;
+        head.Children.Add(WithColumn(where, 2));
+        head.ToolTip = TooltipHelper.Wrap(Strings.Format("MpStatsPeakCaption", rooms, windowDays));
+        stack.Children.Add(head);
+
+        var chart = BarChart(local, 30, (hour, value) => value == 0
+            ? "StatsEmptyBar"
+            : InPeak(hour) ? "MpAction" : "StatsDimBar");
+        stack.Children.Add(chart);
+
+        var axis = new Grid { Margin = new Thickness(0, 6, 0, 0) };
+        string[] marks = { "0 h", "6 h", "12 h", "18 h", "24 h" };
+        for (int i = 0; i < marks.Length; i++)
+        {
+            axis.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            if (i < marks.Length - 1) axis.ColumnDefinitions.Add(new ColumnDefinition());
+            axis.Children.Add(WithColumn(
+                StatsMono(marks[i], "StatsHeaderSize", "StatsLabel", FontWeights.Normal), i * 2));
+        }
+        stack.Children.Add(axis);
+        return stack;
     }
 
     private static string UnratedReasonText(string reason)
@@ -1074,81 +1254,6 @@ public partial class MultiplayerTab
         return chart;
     }
 
-    /// <summary>
-    /// When the rooms open, in the viewer's own hours. Under the sample the hours are not drawn
-    /// and the card says why: the tallest of twenty-four bars over a dozen rooms is noise.
-    /// </summary>
-    private UIElement? BuildPeakHours(int windowDays)
-    {
-        var activity = _statsCommunity?.Activity;
-        if (activity?.Hours == null || activity.Hours.Count == 0) return null;
-
-        var utc = new int[24];
-        foreach (var hour in activity.Hours)
-            if (hour.Hour is >= 0 and < 24) utc[hour.Hour] += hour.Count;
-
-        var local = CommunityStatsView.ToLocalHours(
-            utc, TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow));
-        int rooms = local.Sum();
-        int? start = CommunityStatsView.PeakWindow(local, rooms);
-
-        var stack = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
-        var rule = new Border { Height = 1, Margin = new Thickness(0, 0, 0, 10) };
-        rule.SetResourceReference(Border.BackgroundProperty, "StatsRowRule");
-        stack.Children.Add(rule);
-
-        if (start == null)
-        {
-            stack.Children.Add(StatsProse(
-                Strings.Format("MpStatsPeakNoSample", CommunityStatsView.MinSampleRooms, windowDays),
-                "StatsNoteSize", "StatsNote"));
-            return stack;
-        }
-
-        int first = start.Value;
-        bool InPeak(int hour)
-        {
-            for (int i = 0; i < CommunityStatsView.PeakWindowHours; i++)
-                if ((first + i) % 24 == hour) return true;
-            return false;
-        }
-
-        var head = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-        head.ColumnDefinitions.Add(new ColumnDefinition());
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var label = StatsText(Strings.Get("MpStatsPeakTitle").ToUpper(Strings.Culture),
-                              "StatsHeaderSize", "StatsNote", FontWeights.Bold);
-        label.Margin = new Thickness(0, 0, 8, 0);
-        head.Children.Add(label);
-        head.Children.Add(WithColumn(StatsMono(
-            $"{first:00}:00–{(first + CommunityStatsView.PeakWindowHours) % 24:00}:00",
-            "StatsBodySize", "StatsStrong", FontWeights.SemiBold), 1));
-        stack.Children.Add(head);
-
-        var chart = BarChart(local, 30, (hour, value) => value == 0
-            ? "StatsEmptyBar"
-            : InPeak(hour) ? "MpAction" : "StatsDimBar");
-        chart.ToolTip = TooltipHelper.Wrap(Strings.Get("MpStatsHoursTip"));
-        stack.Children.Add(chart);
-
-        var axis = new Grid { Margin = new Thickness(0, 8, 0, 0) };
-        string[] marks = { "0 h", "6 h", "12 h", "18 h", "24 h" };
-        for (int i = 0; i < marks.Length; i++)
-        {
-            axis.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            if (i < marks.Length - 1) axis.ColumnDefinitions.Add(new ColumnDefinition());
-            axis.Children.Add(WithColumn(
-                StatsMono(marks[i], "StatsHeaderSize", "StatsLabel", FontWeights.Normal), i * 2));
-        }
-        stack.Children.Add(axis);
-
-        var caption = StatsProse(Strings.Format("MpStatsPeakCaption", rooms, windowDays),
-                                 "StatsNoteSize", "StatsNote");
-        caption.Margin = new Thickness(0, 8, 0, 0);
-        stack.Children.Add(caption);
-        return stack;
-    }
-
     // ---------------------------------------------------------------- maps
 
     /// <summary>The map rows the server sent for this mod.</summary>
@@ -1182,22 +1287,24 @@ public partial class MultiplayerTab
             return StatsPanel(stack, 10);
         }
 
-        // Folded only when there are at least two: a fold that hides one row hides nothing.
-        var once = all.Where(m => m.Matches < MapRowMinMatches).ToList();
-        bool foldable = once.Count >= 2;
-        var shown = foldable && !_statsMapsExpanded
+        // Design 109: the first twelve of the maps with two matches or more (of all of them when
+        // fewer than two maps have two); the rest folded under one line.
+        var candidates = all.Count(m => m.Matches >= MapRowMinMatches) >= 2
             ? all.Where(m => m.Matches >= MapRowMinMatches).ToList()
             : all;
+        var first = candidates.Take(StatsPageLayout.MapsShown).ToList();
+        int rest = all.Count - first.Count;
+        var shown = _statsMapsExpanded ? all : first;
 
         int max = all.Max(m => m.Matches);
         for (int i = 0; i < shown.Count; i++)
             stack.Children.Add(BuildMapRow(i + 1, shown[i].Map, shown[i].Matches, max));
 
-        if (foldable)
+        if (rest > 0)
         {
             stack.Children.Add(StatsFoldRow(
-                Strings.Format(_statsMapsExpanded ? "MpStatsTailMapsOpen" : "MpStatsTailMaps",
-                               once.Count),
+                _statsMapsExpanded ? Strings.Format("MpStatsTailMapsAll", all.Count)
+                                   : Strings.Format("MpStatsTailMapsFew", rest),
                 Strings.Get(_statsMapsExpanded ? "MpStatsSeeLess" : "MpStatsSeeAll"),
                 () =>
                 {
@@ -1216,31 +1323,31 @@ public partial class MultiplayerTab
         return StatsPanel(stack, 10);
     }
 
-    /// <summary>A rank, the map with its pack as a tag, a proportional bar and the count.</summary>
+    /// <summary>
+    /// One map on ONE line of 30 (design 109): the rank, the name with its pack's chip right after
+    /// it (the name trims), the bar, the count. It used to be 40 or more, the bar under the name.
+    /// </summary>
     internal UIElement BuildMapRow(int rank, string rawName, int count, int max)
     {
         var (name, pack) = LocalMatchView.MapLabel(rawName);
 
-        var grid = new Grid { MinHeight = 40 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+        var grid = new Grid { MinHeight = 30 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18 + 10) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.9, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 36 + 10 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30 + 10) });
 
-        grid.Children.Add(StatsMono(rank.ToString(), "StatsNoteSize",
-            rank == 1 ? "MpActionText" : "StatsNote", FontWeights.SemiBold));
+        var place = StatsMono(rank.ToString(), "StatsNoteSize",
+            rank == 1 ? "MpActionText" : "StatsNote", FontWeights.SemiBold);
+        grid.Children.Add(place);
 
-        var middle = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var title = new Grid { Margin = new Thickness(0, 0, 0, 5) };
+        // The name trims inside its star column; the chip sits right after it.
+        var title = new Grid { Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
         var mapName = StatsText(name, "StatsBodySize", "StatsStrong", FontWeights.SemiBold);
         mapName.TextTrimming = TextTrimming.CharacterEllipsis;
-        // An Auto column measures at infinity and an ellipsis never fires, so the ceiling goes on
-        // the text: the card's width less its padding, the rank, the count and the pack's tag.
-        mapName.MaxWidth = Math.Max(60, _statsLayout.RightColumn - 34 - 78 - (pack != null ? 58 : 0));
         title.Children.Add(mapName);
-
         if (pack != null)
         {
             var tag = new Border
@@ -1249,26 +1356,31 @@ public partial class MultiplayerTab
                 Padding = new Thickness(5, 0, 5, 0),
                 CornerRadius = new CornerRadius(4),
                 Margin = new Thickness(7, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
                 Child = StatsText(pack, "StatsTagSize", "StatsProse", FontWeights.Bold),
                 ToolTip = TooltipHelper.Wrap(Strings.Get("MpStatsMapPackTip")),
             };
             tag.SetResourceReference(Border.BackgroundProperty, "StatsTagFill");
             title.Children.Add(WithColumn(tag, 1));
         }
-        middle.Children.Add(title);
-        middle.Children.Add(BuildProportionBar(count, max, rank == 1));
-        grid.Children.Add(WithColumn(middle, 1));
+        grid.Children.Add(WithColumn(title, 1));
+
+        var bar = (FrameworkElement)BuildProportionBar(count, max, rank == 1);
+        bar.Margin = new Thickness(0, 0, 10, 0);
+        bar.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(WithColumn(bar, 2));
 
         grid.Children.Add(WithColumn(RightCell(
             StatsMono(count.ToString("N0", Strings.Culture), "StatsBodySize", "StatsFigure",
-                      FontWeights.SemiBold), 0, 1), 2));
+                      FontWeights.SemiBold), 0, 1), 3));
 
         return StatsRule(grid);
     }
 
     private static UIElement BuildProportionBar(int value, int max, bool leader)
     {
-        var track = new Border { Height = 4, CornerRadius = new CornerRadius(2) };
+        // Design 109: 5 high, radius 3.
+        var track = new Border { Height = 5, CornerRadius = new CornerRadius(3) };
         track.SetResourceReference(Border.BackgroundProperty, "StatsTrack");
 
         var host = new Grid();
@@ -1362,10 +1474,12 @@ public partial class MultiplayerTab
         }
         else
         {
-            foreach (var band in group.Bands)
-                stack.Children.Add(StatsBandRow(
-                    BuildDeckBand(band, vocabulary, group.CivLabel, group.Decks, group.Civ,
-                                  consensus: false, first: false)));
+            // Design 109: every card flows in ONE wrapping block, each band opening with its
+            // percentage; a band used to be a full-width row even when it held one card.
+            var flow = new WrapPanel { Margin = new Thickness(0, 12, -6, -6), Tag = "DeckFlow" };
+            for (int b = 0; b < group.Bands.Count; b++)
+                AppendDeckBand(flow, group.Bands[b], vocabulary, group.Decks, group.Civ, consensus: false, first: b == 0);
+            stack.Children.Add(flow);
             stack.Children.Add(StatsBandRow(BuildDeckTailRow(group)));
         }
 
@@ -1491,6 +1605,7 @@ public partial class MultiplayerTab
     /// support.</para>
     /// </summary>
     /// <remarks><c>internal static</c> so the tests can build the real band.</remarks>
+    /// <summary>One band on its own: the block of <see cref="AppendDeckBand"/>, for a test.</summary>
     internal static FrameworkElement BuildDeckBand(
         DeckBand band,
         DeckCardNames.Vocabulary vocabulary,
@@ -1500,36 +1615,67 @@ public partial class MultiplayerTab
         bool consensus,
         bool first)
     {
-        var panel = new StackPanel();
+        var flow = new WrapPanel { Margin = new Thickness(0, 0, -6, -6) };
+        AppendDeckBand(flow, band, vocabulary, decks, civ, consensus, first);
+        return flow;
+    }
 
-        var head = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.ColumnDefinitions.Add(new ColumnDefinition());
-
+    /// <summary>
+    /// A band's mark and its cards, into the shared block (design 109). The mark is text without a
+    /// box, 28 high to sit with the cards: the percentage, then "18 of 19" (or "all 19"); the
+    /// sentence it replaces ("in 18 of the 19 decks") is its tooltip. From the second band on, a
+    /// 1-px rule in front of it says where one band ends.
+    /// </summary>
+    internal static void AppendDeckBand(
+        Panel flow,
+        DeckBand band,
+        DeckCardNames.Vocabulary vocabulary,
+        int decks,
+        string? civ,
+        bool consensus,
+        bool first)
+    {
+        var mark = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Height = 28,
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = Brushes.Transparent,
+            Tag = "DeckBandMark",
+        };
         if (band.Percent != null)
         {
             var percent = StatsMono(Strings.Format("MpStatsDecksBandPercent", band.Percent.Value),
-                                    "StatsBandSize", "StatsStrong", FontWeights.SemiBold);
-            percent.Margin = new Thickness(0, 0, 8, 0);
-            head.Children.Add(WithColumn(percent, 0));
+                                    "StatsSubtitleSize", "StatsStrong", FontWeights.Bold);
+            percent.Margin = new Thickness(0, 0, 6, 0);
+            mark.Children.Add(percent);
         }
+        bool every = band.Players >= decks;
+        var count = StatsText(every ? Strings.Format("MpStatsBandEveryShort", decks)
+                                    : Strings.Format("MpStatsBandOfShort", band.Players, decks),
+                              "StatsNoteSize", "UiMutedText", FontWeights.Normal);
+        mark.Children.Add(count);
+        mark.ToolTip = TooltipHelper.Wrap(every ? Strings.Format("MpStatsDecksBandEvery", decks)
+                                                : Strings.Format("MpStatsDecksBandOf", band.Players, decks));
 
-        head.Children.Add(WithColumn(StatsText(
-            band.Players >= decks
-                ? Strings.Format("MpStatsDecksBandEvery", decks)
-                : Strings.Format("MpStatsDecksBandOf", band.Players, decks),
-            "StatsProseSize", "StatsProse", FontWeights.Normal), 1));
-        panel.Children.Add(head);
+        FrameworkElement head = mark;
+        if (!first)
+        {
+            head = new Border
+            {
+                Child = mark,
+                Margin = new Thickness(8, 0, 6, 6),
+                Padding = new Thickness(14, 0, 0, 0),
+                BorderThickness = new Thickness(1, 0, 0, 0),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x38, 0xFF, 0xFF, 0xFF)),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+        }
+        else mark.Margin = new Thickness(0, 0, 6, 6);
+        flow.Children.Add(head);
 
-        // Each card carries its gap right and below; the panel's negative margin takes it back,
-        // so the gap is BETWEEN cards and the band ends flush with its heading.
-        var cards = new WrapPanel { Margin = new Thickness(0, 0, -6, -6) };
         foreach (var card in band.Cards)
-            cards.Children.Add(BuildDeckTile(card, vocabulary, consensus, civ));
-        panel.Children.Add(cards);
-
-        return panel;
+            flow.Children.Add(BuildDeckTile(card, vocabulary, consensus, civ));
     }
 
     /// <summary>

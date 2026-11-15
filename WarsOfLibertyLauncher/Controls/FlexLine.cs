@@ -146,3 +146,99 @@ public sealed class AutoFillPanel : Panel
         return finalSize;
     }
 }
+
+/// <summary>
+/// CSS <c>display:flex; flex-wrap:wrap; align-items:stretch</c> with each child's
+/// <c>flex: GROW 1 BASIS</c> (design 109, the Statistics page): children are placed in order on a
+/// line while their bases and the gaps fit; the width left on that line is shared out by
+/// <see cref="GrowProperty"/>; every child of a line is as tall as the tallest. A child whose basis
+/// alone is wider than the panel gets a line of its own at the panel's width.
+/// </summary>
+public sealed class FlexGrowPanel : Panel
+{
+    public static readonly DependencyProperty BasisProperty = DependencyProperty.RegisterAttached(
+        "Basis", typeof(double), typeof(FlexGrowPanel),
+        new FrameworkPropertyMetadata(200.0, FrameworkPropertyMetadataOptions.AffectsParentMeasure));
+
+    public static readonly DependencyProperty GrowProperty = DependencyProperty.RegisterAttached(
+        "Grow", typeof(double), typeof(FlexGrowPanel),
+        new FrameworkPropertyMetadata(1.0, FrameworkPropertyMetadataOptions.AffectsParentMeasure));
+
+    public static double GetBasis(DependencyObject e) => (double)e.GetValue(BasisProperty);
+    public static void SetBasis(DependencyObject e, double value) => e.SetValue(BasisProperty, value);
+    public static double GetGrow(DependencyObject e) => (double)e.GetValue(GrowProperty);
+    public static void SetGrow(DependencyObject e, double value) => e.SetValue(GrowProperty, value);
+
+    public double Gap { get; set; } = 12;
+
+    /// <summary>The lines: which children, and the width each gets. Pure, so it can be pinned.</summary>
+    internal static List<List<(int Index, double Width)>> Lines(IReadOnlyList<(double Basis, double Grow)> items, double width, double gap)
+    {
+        var lines = new List<List<(int, double)>>();
+        int i = 0;
+        while (i < items.Count)
+        {
+            int start = i;
+            double used = items[i].Basis;
+            i++;
+            while (i < items.Count && used + gap + items[i].Basis <= width) used += gap + items[i++].Basis;
+            double spare = Math.Max(0, width - used);
+            double grow = 0;
+            for (int k = start; k < i; k++) grow += items[k].Grow;
+            var line = new List<(int, double)>();
+            for (int k = start; k < i; k++)
+            {
+                double w = items[k].Basis + (grow > 0 ? spare * items[k].Grow / grow : 0);
+                line.Add((k, Math.Min(w, width)));
+            }
+            lines.Add(line);
+        }
+        return lines;
+    }
+
+    private List<(double, double)> Items()
+    {
+        var list = new List<(double, double)>();
+        foreach (UIElement child in InternalChildren)
+            list.Add(child.Visibility == Visibility.Collapsed ? (0, 0) : (GetBasis(child), GetGrow(child)));
+        return list;
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        double width = double.IsInfinity(availableSize.Width) ? Items().Sum(x => x.Item1) : availableSize.Width;
+        double height = 0;
+        var lines = Lines(Items(), width, Gap);
+        foreach (var line in lines)
+        {
+            double row = 0;
+            foreach (var (index, w) in line)
+            {
+                var child = InternalChildren[index];
+                child.Measure(new Size(w, double.PositiveInfinity));
+                row = Math.Max(row, child.DesiredSize.Height);
+            }
+            height += row;
+        }
+        height += Gap * Math.Max(0, lines.Count - 1);
+        return new Size(width, height);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        double y = 0;
+        foreach (var line in Lines(Items(), finalSize.Width, Gap))
+        {
+            double row = 0;
+            foreach (var (index, _) in line) row = Math.Max(row, InternalChildren[index].DesiredSize.Height);
+            double x = 0;
+            foreach (var (index, w) in line)
+            {
+                InternalChildren[index].Arrange(new Rect(x, y, w, row));
+                x += w + Gap;
+            }
+            y += row + Gap;
+        }
+        return finalSize;
+    }
+}

@@ -695,6 +695,10 @@ def perf_scenarios():
         # The rooms list scrolled up and down (design 104a's rows, with their shadows).
         "roomsscroll": {"runs": 3, "seconds": 20, "args": ["--demo-rooms=86a"], "drive": "scroll"},
         "resize": {"runs": 1, "seconds": 20, "args": [], "drive": "resize"},
+        # Design 110's pill breathing at rest, and design 106's tournament pulses (a running
+        # bracket): the two loops of light the 14-November package added.
+        "pill": {"runs": 1, "seconds": 60, "args": ["--preview-dialog=updatepill:available"]},
+        "tournaments": {"runs": 1, "seconds": 60, "args": ["--demo-tournaments=big32"]},
         "mods": {"runs": 1, "seconds": 30, "args": [], "drive": "mods"},
         # Long runs, for what only time shows: memory that grows a little on every tab switch,
         # and a launcher left in the tray that slowly starts costing CPU. The probe's per-second

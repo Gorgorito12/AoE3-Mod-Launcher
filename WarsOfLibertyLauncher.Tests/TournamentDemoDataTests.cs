@@ -149,9 +149,10 @@ public class TournamentDemoDataTests
     public void NoScenarioCarriesAModIdSoNothingCanTryToOpenARoom()
     {
         // A second lock after the demo guard itself: OpenTournamentMatchAsync early-returns
-        // without a mod id, so even a missed guard cannot reach the network. The big draw is the
-        // one exception: it is the sample that shows a mod's image behind the page.
-        Assert.All(TournamentDemoData.All().Where(t => t.Id != TournamentDemoData.Big32Id),
+        // without a mod id, so even a missed guard cannot reach the network. Two exceptions: the
+        // big draw shows a mod's image behind the page, and the finished one is design 106's case
+        // (a champion in a red mod) - finished, it has no match left to open a room for.
+        Assert.All(TournamentDemoData.All().Where(t => t.Id != TournamentDemoData.Big32Id && t.Id != TournamentDemoData.FinishedId),
             t => Assert.True(string.IsNullOrEmpty(t.ModId)));
     }
 

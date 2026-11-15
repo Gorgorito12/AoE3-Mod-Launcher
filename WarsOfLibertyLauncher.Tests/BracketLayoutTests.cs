@@ -280,23 +280,24 @@ public class BracketLayoutTests
 
     /// <summary>
     /// THE ONE THAT MATTERS. Nobody played a walkover or a disqualification, so neither side
-    /// gets a figure: the winner keeps its tag and the loser's edge stays empty.
+    /// gets a FIGURE: the winner gets a drawn tick ("won without playing") and the loser the tag
+    /// of what happened to it, on its own row.
     ///
     /// <para>"1 - 0" there would describe a game that never happened, on a launcher whose wire
-    /// carries no score at all. This is the half of the reference that was deliberately NOT
-    /// adopted, and it is the only place that says so in code rather than in a comment.</para>
+    /// carries no score at all. And DQ belongs to the disqualified entrant: it used to sit on the
+    /// WINNER's row, which read as if the winner had been disqualified (design 106).</para>
     /// </summary>
     [Fact]
     public void THE_ONE_THAT_MATTERS_NobodyPlayedSoNobodyGetsAFigure()
     {
         Assert.Equal(SideMarker.WalkoverTag,
             BracketLayout.MarkerFor(bye: false, decided: true, won: true, outcome: "walkover"));
-        Assert.Equal(SideMarker.None,
+        Assert.Equal(SideMarker.AbsentTag,
             BracketLayout.LoserMarkerFor(decided: true, known: true, outcome: "walkover"));
 
-        Assert.Equal(SideMarker.DqTag,
+        Assert.Equal(SideMarker.WalkoverTag,
             BracketLayout.MarkerFor(bye: false, decided: true, won: true, outcome: "dq"));
-        Assert.Equal(SideMarker.None,
+        Assert.Equal(SideMarker.DqTag,
             BracketLayout.LoserMarkerFor(decided: true, known: true, outcome: "dq"));
     }
 

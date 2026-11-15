@@ -279,7 +279,8 @@ public partial class MultiplayerTab
         // Nobody ranked yet: the notice takes the ranked rows' place, the placement group follows.
         if (ranked.Count == 0)
             RankingBody.Children.Add(BuildRankingEmptyBox(nobodyAtAll: false, team));
-        if (hasRows) RankingHeaderHost.Children.Add(BuildRankingHeader(specs));
+        // The headings name the ranked rows' columns: none until somebody is ranked (design 107).
+        if (ranked.Count > 0) RankingHeaderHost.Children.Add(BuildRankingHeader(specs));
 
         var topRating = ranked.Count > 0 ? ranked.Max(r => r.Rating) : 0;
         var meId = RankingViewerId;
@@ -310,12 +311,22 @@ public partial class MultiplayerTab
             // The viewer's own placing number, for his own row: a current server sends none on these
             // rows to anybody, him included (src/elo/placementPrivacy.ts on the server).
             var ownRating = OwnLadder(team)?.Rating;
+            // A grid of blue tiles, 250 px at least, instead of a full row each (design 107):
+            // blue is "in progress", as in Rooms and Tournaments.
+            var tiles = new AutoFillPanel
+            {
+                MinColumn = 250,
+                Gap = 6,
+                Margin = new Thickness(RankingTableLayout.BodyInset, 2, RankingTableLayout.BodyInset, 6),
+                Tag = PlacementTilesTag,
+            };
             foreach (var p in placing)
             {
                 var isMe = IsViewer(p.UserId, meId);
-                RankingBody.Children.Add(BuildPlacementRow(p, isMe, specs, isMe ? ownResults : null,
+                tiles.Children.Add(BuildPlacementRow(p, isMe, specs, isMe ? ownResults : null,
                     isMe ? ownRating : null));
             }
+            RankingBody.Children.Add(tiles);
         }
 
         // The flags beside the match list's names come from the mod's own files.
@@ -337,6 +348,8 @@ public partial class MultiplayerTab
     internal static FrameworkElement BuildRankingGroupHead(RankAge age, string title, string range, string? tip)
     {
         var (main, light) = RankAgeColors.Of(age);
+        // The placement group is blue, "in progress" (design 107); its shield stays Discovery's.
+        if (age == RankAge.Discovery) (main, light) = ("#55ACEE", "#A9D6F7");
         var grid = new Grid
         {
             Height = 32,
@@ -386,7 +399,7 @@ public partial class MultiplayerTab
             Height = 1,
             Margin = new Thickness(9, 0, 0, 11),
             VerticalAlignment = VerticalAlignment.Bottom,
-            Fill = Across((Rgba(main, .55), 0), (Rgba(main, 0), 1)),
+            Fill = Across((Rgba(main, age == RankAge.Discovery ? .6 : .55), 0), (Rgba(main, 0), 1)),
         }, 3));
         return grid;
     }
@@ -554,7 +567,7 @@ public partial class MultiplayerTab
             {
                 Child = notice,
                 Tag = "RankingEmptyPlacement",
-                Margin = new Thickness(0, 2, 0, 6),
+                Margin = new Thickness(0, 8, 0, 6),
                 Padding = new Thickness(14, 12, 14, 12),
                 CornerRadius = new CornerRadius(10),
                 Background = Solid("#1455ACEE"),
@@ -612,22 +625,32 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// The column headings, from the same specs every row reads: a 38-px row, 11-px bold labels,
-    /// in line with the rows' own content (design 93).
+    /// The column headings, from the same specs every row reads, on a BAR like the Rooms page's
+    /// (design 107): 30 high, 8 in from the card, a 1-px rim and 12 of padding - which is exactly
+    /// <see cref="RankingTableLayout.SidePadding"/>, so the labels stay in line with the rows.
     /// </summary>
     private UIElement BuildRankingHeader(IReadOnlyList<RankingColumnSpec> specs)
     {
         var grid = BuildRankingGrid(specs, _rankingFluid.Gap);
-        grid.Margin = new Thickness(RankingTableLayout.SidePadding, 4, RankingTableLayout.SidePadding, 0);
-        grid.Height = RankingTableLayout.HeaderHeight - 4;
+        var bar = new Border
+        {
+            Height = 30,
+            Margin = new Thickness(RankingTableLayout.BodyInset, 8, RankingTableLayout.BodyInset, 4),
+            Padding = new Thickness(RankingTableLayout.RowPadding, 0, RankingTableLayout.RowPadding, 0),
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            Background = Solid("#0FFFFFFF"),
+            BorderBrush = Solid("#17FFFFFF"),
+            Child = grid,
+        };
         for (var i = 0; i < specs.Count; i++)
         {
             var spec = specs[i];
             var t = new TextBlock
             {
                 Text = Strings.Get(RankingTableLayout.HeaderKey(spec.Column)),
-                Foreground = Solid("#61779A"),
-                FontSize = (double)Application.Current.FindResource("MpMicroSize"),
+                Foreground = Solid("#A8BCD2"),
+                FontSize = (double)Application.Current.FindResource("MpRankSmallSize"),
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = spec.RightAligned ? HorizontalAlignment.Right : HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -637,7 +660,7 @@ public partial class MultiplayerTab
             Grid.SetColumn(t, GridColumnOf(i));
             grid.Children.Add(t);
         }
-        return grid;
+        return bar;
     }
 
     /// <summary>
@@ -812,10 +835,12 @@ public partial class MultiplayerTab
         var figure = RankingFigure(PlacementView.RatingText(peak),
             isMe ? "MpRankRecordOwn" : inactive ? "MpRankMutedText" : "MpTextSecondary",
             FontWeights.Normal, right: false);
-        if (!isMe && !inactive) figure.Foreground = Solid("#C3D2E5");
+        bool atBest = !inactive && RankingGroups.AtPeak(row.Rating, peak);
+        if (atBest) figure.Foreground = Solid("#F3D995");
+        else if (!isMe && !inactive) figure.Foreground = Solid("#C3D2E5");
         figure.Tag = RankingPeakTag;
         var date = ShortDate.Parse(row.RatingPeakAt) is { } when ? ShortDate.Format(when) : null;
-        if (date != null) figure.ToolTip = TooltipHelper.Wrap(Strings.Format("MpRankPeakTip", date));
+        if (date != null) figure.ToolTip = TooltipHelper.Wrap(Strings.Format(atBest ? "RkPeakAtBestTip" : "MpRankPeakTip", date));
         return figure;
     }
 
@@ -853,40 +878,75 @@ public partial class MultiplayerTab
     /// sent one). The viewer's own number comes from the row or, when the server sent none, from
     /// <paramref name="ownRating"/> — his own standing.</para>
     /// </summary>
+    /// <summary>What marks the panel of placement tiles in <c>RankingBody</c>.</summary>
+    internal const string PlacementTilesTag = "PlacementTiles";
+
+    /// <summary>
+    /// One player being placed, as a blue TILE (design 107): the avatar over two lines, the name,
+    /// "YOU" and the streak, the progress on the right, and a square per match the placement asks
+    /// for under them. Somebody else's squares say played or to play; the viewer's say how each went.
+    /// The figure is the viewer's own and nobody else's - a current server sends no number on these
+    /// rows to anybody, him included (src/elo/placementPrivacy.ts on the server).
+    /// </summary>
     internal UIElement BuildPlacementRow(
         PlacementRow row, bool isMe, IReadOnlyList<RankingColumnSpec> specs,
         IReadOnlyList<PlacementResultEntry>? ownResults, double? ownRating = null)
     {
-        var narrow = RankingTableLayout.IsNarrowSet(specs);
-        var fluid = _rankingFluid;
-        var grid = BuildRankingGrid(specs, fluid.Gap);
-        grid.MinHeight = (narrow ? RankingTableLayout.NarrowPlacementRowHeight : fluid.PlacementRowHeight) - 2;
-
         var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
-        // Design 93: a player being placed wears the Discovery badge, like everywhere else he is
-        // seen. It carries no numeral and never a light.
-        var team = _rankingShowsTeam;
-        var shown = new ShownBadge(team ? BadgeKind.Team : BadgeKind.Solo, RankAge.Discovery, 0, null, 0);
-        var badge = RankBadge.BuildFor(shown, RankingBadgeSize, row.UserId,
-            RankBadgeTips.Text(shown, CommunityStatsView.RequiredDecided(_communityStats)),
-            onClick: () => ShowRankGuide(initial: shown.Kind), animated: false);
-        var who = BuildRankingWho(
-            badge, BuildRankingAvatar(name, row.AvatarUrl, RankingTableLayout.AvatarSize(fluid.RowHeight)), name,
-            nameHex: isMe ? "#FFFFFF" : "#A8BCD2",
-            nameSize: fluid.NameSize, nameWeight: FontWeights.Medium, avatarOpacity: 0.8,
-            isMe, row.Streak, placementRow: true, inactive: false);
-        grid.Children.Add(WithColumn(who, CellOf(specs, RankingColumn.Player)));
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var elo = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        // The figure is the viewer's own and nobody else's (see the summary).
+        var avatar = BuildRankingAvatar(name ?? "", row.AvatarUrl, 30);
+        avatar.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetRowSpan(avatar, 2);
+        grid.Children.Add(avatar);
+
+        // Line 1: the name (the only thing that trims), "YOU", the streak.
+        var line = new Grid { Margin = new Thickness(0, 0, 10, 0) };
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var nameText = new TextBlock
+        {
+            Text = name,
+            FontSize = (double)Application.Current.FindResource("MpHistoryTitleSize"),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Solid(isMe ? "#FFFFFF" : "#DCE7F5"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        line.Children.Add(nameText);
+        if (isMe)
+            line.Children.Add(WithColumn(new TextBlock
+            {
+                Text = Strings.Get("TpYouTag"),
+                Margin = new Thickness(6, 0, 0, 0),
+                FontSize = (double)Application.Current.FindResource("MpPillSize"),
+                FontWeight = FontWeights.Bold,
+                Foreground = Solid("#9FD0F5"),
+                VerticalAlignment = VerticalAlignment.Center,
+            }, 1));
+        if (StreakView.ShowsPill(row.Streak))
+        {
+            var pill = BuildStreakPill(row.Streak, table: true);
+            pill.Margin = new Thickness(8, 0, 0, 0);
+            line.Children.Add(WithColumn(pill, 2));
+        }
+        Grid.SetColumn(line, 2);
+        grid.Children.Add(line);
+
+        // On the right: the viewer's provisional ELO and "?", then "8/10".
         var shownRating = isMe ? row.Rating ?? ownRating : null;
-        var figure = new TextBlock
+        var progress = new TextBlock
         {
             FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            FontSize = narrow ? (double)Application.Current.FindResource("MpRankNameSize") : fluid.EloSize,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = Solid("#F0F5FB"),
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            FontSize = (double)Application.Current.FindResource("MpRankNameSize"),
+            VerticalAlignment = VerticalAlignment.Center,
             ToolTip = TooltipHelper.Wrap(shownRating.HasValue
                 ? Strings.Get("MpEloProvisionalTip")
                 : HiddenPlacementTip(row.PlacementPlayed, row.PlacementRequired)),
@@ -894,53 +954,103 @@ public partial class MultiplayerTab
         };
         if (shownRating is double own)
         {
-            figure.Inlines.Add(new System.Windows.Documents.Run(PlacementView.RatingText(own)));
-            figure.Inlines.Add(new System.Windows.Documents.Run("?")
+            progress.Inlines.Add(new System.Windows.Documents.Run(PlacementView.RatingText(own))
             {
-                Foreground = (Brush)Application.Current.FindResource("MpCaution"),
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Solid("#F0F5FB"),
             });
+            progress.Inlines.Add(new System.Windows.Documents.Run("?") { Foreground = Solid("#F5BD76"), FontWeight = FontWeights.SemiBold });
+            progress.Inlines.Add(new System.Windows.Documents.Run(" "));
         }
-        // "1571? Placement 6/10" on one line (design 59), or 55b's "1534? 2/5" - or, on anybody
-        // else's row, only the progress. The en space is the handoff's 6-px gap: a Run takes no
-        // margin, and with no figure in front of it there is nothing to keep a gap from.
-        figure.Inlines.Add(new System.Windows.Documents.Run((shownRating.HasValue ? "\u2002" : "") + (narrow
-            ? Strings.Format("MpPlacementProgressShort", row.PlacementPlayed, row.PlacementRequired)
-            : Strings.Format("MpPlacementProgress", row.PlacementPlayed, row.PlacementRequired)))
+        progress.Inlines.Add(new System.Windows.Documents.Run(
+            Strings.Format("MpPlacementProgressShort", row.PlacementPlayed, row.PlacementRequired))
         {
-            FontFamily = (FontFamily)Application.Current.FindResource("BodyFont"),
-            FontSize = (double)Application.Current.FindResource(narrow ? "MpRankSmallSize" : "MpLabelSize"),
-            FontWeight = FontWeights.Normal,
-            Foreground = Solid("#A8BCD2"),
+            FontWeight = FontWeights.Bold,
+            Foreground = Solid("#A9D6F7"),
         });
-        elo.Children.Add(figure);
+        Grid.SetColumn(progress, 3);
+        grid.Children.Add(progress);
 
-        var segments = BuildPlacementSegments(
-            PlacementView.Segments(row.PlacementPlayed, row.PlacementRequired, isMe ? ownResults : null),
-            height: RankingTableLayout.SegmentHeight, gap: RankingTableLayout.SegmentGap, profile: false);
-        // The ELO column grows with the window; the segments stop at 300 px with the bar.
-        var segmentHost = CappedLeft(segments);
-        segmentHost.Margin = new Thickness(0, RankingTableLayout.BarGap + 1, 0, 0);
-        elo.Children.Add(segmentHost);
-        grid.Children.Add(WithColumn(elo, CellOf(specs, RankingColumn.Rating)));
+        // Line 2: a square per match the placement asks for.
+        var squares = BuildPlacementTileSegments(
+            PlacementView.Segments(row.PlacementPlayed, row.PlacementRequired, isMe ? ownResults : null));
+        squares.Margin = new Thickness(0, 7, 0, 0);
+        Grid.SetRow(squares, 1);
+        Grid.SetColumn(squares, 2);
+        Grid.SetColumnSpan(squares, 2);
+        grid.Children.Add(squares);
 
-        // No peak before placement is over (the server's rule): a dash that says when it comes.
-        // The viewer's own results are already in the segments above.
-        var peakCol = CellOf(specs, RankingColumn.Peak);
-        if (peakCol >= 0)
+        // The hover wash and the 1-px top light are layers, so the content Grid stays the child.
+        var layers = new Grid();
+        var wash = new Border { CornerRadius = new CornerRadius(9), Background = Solid("#FFFFFF"), Opacity = 0, IsHitTestVisible = false };
+        layers.Children.Add(new Border { CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Solid("#0DFFFFFF"), IsHitTestVisible = false });
+        layers.Children.Add(grid);
+        layers.Children.Add(wash);
+
+        var tile = new Border
         {
-            var dash = RankingFigure(Strings.Get("MpDash"), "MpTextDim", FontWeights.Normal, right: false);
-            dash.Tag = RankingPeakTag;
-            dash.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRankPeakPlacementTip"));
-            grid.Children.Add(WithColumn(dash, peakCol));
-        }
-
-        var plate = RankingPlate(grid, row, isMe, Solid("#05FFFFFF"));
+            Tag = row,
+            Padding = new Thickness(12, 9, 12, 10),
+            CornerRadius = new CornerRadius(10),
+            BorderThickness = new Thickness(isMe ? 1.5 : 1),
+            BorderBrush = Solid(isMe ? "#BF55ACEE" : "#3855ACEE"),
+            Background = isMe ? BlueTileFill(.28, .10) : BlueTileFill(.14, .04),
+            Child = layers,
+            ToolTip = TooltipHelper.Wrap(isMe
+                ? Strings.Format("RkPlacingTileOwnTip", row.PlacementPlayed, row.PlacementRequired)
+                : Strings.Format("RkPlacingTileTip", name, row.PlacementPlayed, row.PlacementRequired)),
+        };
+        // A little lighter under the pointer (design 107: 12 %).
+        tile.MouseEnter += (_, _) => wash.Opacity = .05;
+        tile.MouseLeave += (_, _) => wash.Opacity = 0;
         if (isMe)
         {
-            plate.Cursor = System.Windows.Input.Cursors.Hand;
-            plate.MouseLeftButtonUp += (_, _) => OpenOwnProfileFromRanking();
+            tile.Cursor = System.Windows.Input.Cursors.Hand;
+            tile.MouseLeftButtonUp += (_, _) => OpenOwnProfileFromRanking();
         }
-        return plate;
+        return tile;
+    }
+
+    /// <summary>A left-to-right blue: the placement tiles' fill.</summary>
+    private static Brush BlueTileFill(double from, double to)
+    {
+        var fill = new LinearGradientBrush { StartPoint = new Point(0, .5), EndPoint = new Point(1, .5) };
+        fill.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(from * 255), 0x55, 0xAC, 0xEE), 0));
+        fill.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(to * 255), 0x55, 0xAC, 0xEE), 1));
+        fill.Freeze();
+        return fill;
+    }
+
+    /// <summary>
+    /// The tile's squares (design 107): 4 high, radius 2, 3 apart. Played is blue and to play a
+    /// faint blue; the viewer's own say win (green) or loss (red). Each says what it is on hover.
+    /// </summary>
+    internal static FrameworkElement BuildPlacementTileSegments(IReadOnlyList<PlacementView.Segment> segments)
+    {
+        var grid = new Grid { Height = 4, Tag = "PlacementSegments" };
+        for (var i = 0; i < segments.Count; i++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var (fill, tip) = segments[i] switch
+            {
+                PlacementView.Segment.Win => ("#4FD68A", Strings.Format("RkSegWin", i + 1)),
+                PlacementView.Segment.Loss => ("#C84A4A", Strings.Format("RkSegLoss", i + 1)),
+                PlacementView.Segment.Played => ("#55ACEE", Strings.Get("RkSegPlayed")),
+                _ => ("#2982AFFF", Strings.Get("RkSegToPlay")),
+            };
+            var seg = new Border
+            {
+                Margin = new Thickness(i == 0 ? 0 : 3, 0, 0, 0),
+                CornerRadius = new CornerRadius(2),
+                Background = Solid(fill),
+                Tag = segments[i],
+                ToolTip = TooltipHelper.Wrap(tip),
+            };
+            Grid.SetColumn(seg, i);
+            grid.Children.Add(seg);
+        }
+        return grid;
     }
 
     /// <summary>

@@ -65,6 +65,8 @@ internal static class RoomListDemoData
     internal static int? HostPingMs(string lobbyId) => lobbyId switch
     {
         "DEMO86K1" => 38,
+        // A room behind a password shows its ping too, as the server publishes it (2026-11-14).
+        "DEMO86P3" => 74,
         "DEMO86N2" => 162,
         "DEMO86R1" => 51,
         OtherVersionId => -1,

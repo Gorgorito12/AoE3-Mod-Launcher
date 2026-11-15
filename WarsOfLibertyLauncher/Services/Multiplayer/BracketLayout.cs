@@ -115,23 +115,25 @@ internal static class BracketLayout
         if (bye) return SideMarker.ByeTag;
         if (!decided || !won) return SideMarker.None;
 
-        return outcome switch
-        {
-            "walkover" => SideMarker.WalkoverTag,
-            "dq" => SideMarker.DqTag,
-            _ => SideMarker.One,
-        };
+        // Won without playing, whether the rival did not come or was disqualified: a drawn tick.
+        // What happened to the RIVAL is said on the rival's own row (design 106).
+        return outcome is "walkover" or "dq" ? SideMarker.WalkoverTag : SideMarker.One;
     }
 
     /// <summary>
-    /// The losing side of the same match. Separate from <see cref="MarkerFor"/> because only a
-    /// PLAYED match gives the loser anything at all: a walkover leaves it blank, which is what
-    /// stops the card from claiming a game that never happened.
+    /// The losing side of the same match. A PLAYED match gives it a 0; a match nobody played gives
+    /// it no figure, only what happened to it: ABSENT for who did not come, DQ for who was
+    /// disqualified. Each tag sits on the row of the entrant it is about (design 106 - DQ used to
+    /// sit on the WINNER's row, which read as if the winner had been disqualified).
     /// </summary>
     internal static SideMarker LoserMarkerFor(bool decided, bool known, string? outcome)
-        => decided && known && outcome is not ("walkover" or "dq")
-            ? SideMarker.Zero
-            : SideMarker.None;
+        => !decided || !known ? SideMarker.None
+            : outcome switch
+            {
+                "walkover" => SideMarker.AbsentTag,
+                "dq" => SideMarker.DqTag,
+                _ => SideMarker.Zero,
+            };
 }
 
 /// <summary>What the card for one bracket match offers the person looking at it.</summary>
@@ -194,11 +196,14 @@ internal enum SideMarker
     /// <summary>Nobody was there to play. Sits on the single side a bye card draws.</summary>
     ByeTag,
 
-    /// <summary>The other side never turned up.</summary>
+    /// <summary>Won without playing: the other side did not come or was disqualified.</summary>
     WalkoverTag,
 
-    /// <summary>The other side was disqualified.</summary>
+    /// <summary>This side was disqualified (on its own row).</summary>
     DqTag,
+
+    /// <summary>This side did not turn up (on its own row).</summary>
+    AbsentTag,
 }
 
 /// <summary>

@@ -7,8 +7,9 @@ internal enum HostPingKind
     None,
     /// <summary>I have no Radmin address, so nothing can be measured from here.</summary>
     NoMyRadmin,
-    /// <summary>A room whose host's address the server does not publish: behind a password, or a
-    /// tournament match. Said as such, never as "not on Radmin", which would be a guess.</summary>
+    /// <summary>A room whose host's address the server does not publish: a tournament match, or a
+    /// room behind a password on a server older than 2026-11-14. Said as such, never as "not on
+    /// Radmin", which would be a guess.</summary>
     NotPublished,
     /// <summary>The host has not reported a Radmin address yet.</summary>
     HostNotOnRadmin,
@@ -23,8 +24,11 @@ internal enum HostPingKind
 /// <summary>The facts one row's ping cell is decided from.</summary>
 /// <param name="LastMs">The last answered round trip, or null when the last probe got no answer.</param>
 /// <param name="Fails">Probes in a row that got no answer.</param>
-/// <param name="Published">The server publishes this room's host (public, not a tournament match).</param>
-internal readonly record struct HostPingFacts(bool Mine, bool IHaveRadmin, bool Published, bool HostHasIp, int? LastMs, int Fails);
+/// <param name="Published">The server publishes this room's host (<see cref="HostPing.IsPublished"/>).</param>
+/// <param name="PrivateRoomsPublished">The server publishes password rooms too, so a room that is not
+/// published can only be a tournament match (it decides the tooltip's words).</param>
+internal readonly record struct HostPingFacts(bool Mine, bool IHaveRadmin, bool Published, bool HostHasIp, int? LastMs, int Fails,
+    bool PrivateRoomsPublished = false);
 
 /// <summary>
 /// The rooms list's per-host ping, decided in one place (design 86). The figure is the ICMP round
@@ -36,6 +40,14 @@ internal static class HostPing
     /// <summary>Probes in a row without an answer before a row says "no answer". One dropped packet
     /// must not read as a firewall.</summary>
     internal const int FailsBeforeNoAnswer = 2;
+
+    /// <summary>
+    /// Whether the server hands out this room's host address: never a tournament match, and a room
+    /// behind a password only when the server said it includes them. Against an older server a
+    /// password room keeps saying "not published", never "the host is not on Radmin".
+    /// </summary>
+    internal static bool IsPublished(bool isPrivate, string? tournamentMatchId, bool privateRoomsPublished)
+        => string.IsNullOrEmpty(tournamentMatchId) && (!isPrivate || privateRoomsPublished);
 
     internal static HostPingKind Classify(HostPingFacts f)
     {
@@ -57,10 +69,10 @@ internal static class HostPing
     };
 
     /// <summary>The string key of the tooltip that says what the cell means; null for none.</summary>
-    internal static string? TipKey(HostPingKind kind) => kind switch
+    internal static string? TipKey(HostPingKind kind, bool privateRoomsPublished = false) => kind switch
     {
         HostPingKind.NoMyRadmin => "RmPingTipNoRadmin",
-        HostPingKind.NotPublished => "RmPingTipNotPublished",
+        HostPingKind.NotPublished => privateRoomsPublished ? "RmPingTipTournament" : "RmPingTipNotPublished",
         HostPingKind.HostNotOnRadmin => "RmPingTipHostNoRadmin",
         HostPingKind.NoAnswer => "RmPingTipNoAnswer",
         HostPingKind.Answered => "RmPingTipAnswered",

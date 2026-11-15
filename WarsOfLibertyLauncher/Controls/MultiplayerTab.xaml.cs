@@ -2140,6 +2140,7 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyMaxPlayers = 0;
                 _currentLobbyIsPrivate = null;
                 _currentLobbyIsCompetitive = false;
+                _currentLobbyGameRules = Services.Multiplayer.LanAutoStartArgs.Standard;
                 _currentLobbySpectatorSlots = 0;
                 _currentLobbyTournamentMatchId = null;
                 _currentLobbyMatchmaking = false;
@@ -5022,6 +5023,9 @@ public partial class MultiplayerTab : UserControl
     /// the room may be gone.</para>
     /// </summary>
     private bool _currentLobbyIsCompetitive;
+    /// <summary>The Game Rules entry chosen when THIS launcher created the room; Standard for a room
+    /// joined or inherited, whose creator's choice this launcher never saw.</summary>
+    private int _currentLobbyGameRules;
 
     /// <summary>
     /// How many of the current room's seats are for watching rather than playing.
@@ -7413,7 +7417,7 @@ public partial class MultiplayerTab : UserControl
 
     private object CurrentStatsPaintKey() => (
         (_statsCommunity, _civStats, _matchups, _deckStats, DeckCardNames.Peek(StatsModId()), StatsModId(), StatsMode()),
-        (Strings.Language, _statsLayout, _statsCivsExpanded, _statsMapsExpanded, _deckCivSelected, _deckCivsExpanded,
+        (Strings.Language, _statsLayout, _statsShape, _statsCivsExpanded, _statsMapsExpanded, _deckCivSelected, _deckCivsExpanded,
             string.Join(",", _deckTailsOpen.OrderBy(t => t, StringComparer.Ordinal))),
         (_statsLoadFailed, _demoStats, _demoStatsLoading, _demoStatsEmpty, _demoStatsBig,
             _config?.UseModColor, TextScale.CurrentFactor),
@@ -8031,7 +8035,7 @@ public partial class MultiplayerTab : UserControl
             // age; a match with no recording leaves that space empty.
             RankingHistoryList.Children.Add(BuildRankingMatchRow(
                 m, MatchVocabulary(m), look: MatchRowLook.Ranking(_rankingFluid.MatchLineSize),
-                replayCell: BuildReplayCell));
+                replayCell: BuildReplayCell, stated: true));
         }
 
         _rankingHistoryHasRows = matches.Count > 0;
@@ -8287,16 +8291,19 @@ public partial class MultiplayerTab : UserControl
         MatchRowLook? look = null,
         Func<Models.Multiplayer.CommunityMatch, FrameworkElement?>? replayCell = null,
         string? ageText = null,
-        bool tile = false)
+        bool tile = false,
+        bool stated = false)
     {
         var size = look ?? MatchRowLook.Rooms(Services.Multiplayer.RoomsActivityLayout.Fluid(0));
-        var style = MatchLineStyle.Ranking;
         var players = MatchParticipantsView.Build(m.Participants, null);
         var winners = players.Where(p => p.Verdict == MatchVerdict.Win).ToList();
         var losers = players.Where(p => p.Verdict == MatchVerdict.Loss).ToList();
         // Decided means every player has a result, and both sides are there. A 0.5 anywhere is
         // "could not be read", never a draw, and names nobody.
         var decided = winners.Count > 0 && losers.Count > 0 && winners.Count + losers.Count == players.Count;
+        // Design 107 (`stated`, Ranking's «Latest matches» only): the row says what happened in
+        // colour - "beat" in green, the loser dimmed, a competitive match that did not count amber.
+        var style = !stated ? MatchLineStyle.Ranking : decided ? MatchLineStyle.StatedDecided : MatchLineStyle.StatedOpen;
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -8305,7 +8312,7 @@ public partial class MultiplayerTab : UserControl
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        grid.Children.Add(WithColumn(new System.Windows.Shapes.Ellipse
+        grid.Children.Add(WithColumn(stated ? StatedMatchDot(decided, m.Competitive == true) : new System.Windows.Shapes.Ellipse
         {
             Width = 6,
             Height = 6,
@@ -8354,6 +8361,11 @@ public partial class MultiplayerTab : UserControl
         who.Loaded += (_, _) => InlineFlagFit.Apply(who);
         Grid.SetColumn(who, 1);
         grid.Children.Add(who);
+        // Design 107: flags only when the match carries a civilization - then line 2 starts at the
+        // edge, without the empty flag's room.
+        if (stated && who.Inlines.FirstInline is System.Windows.Documents.InlineUIContainer { Child: Border { Tag: EmptyFlagSlotTag } } empty
+            && !who.Inlines.OfType<System.Windows.Documents.InlineUIContainer>().Any(c => c != empty))
+            who.Inlines.Remove(empty);
 
         // Line 2 starts under the first NAME when line 1 opens with a flag (58b).
         var indent = who.Inlines.FirstInline is System.Windows.Documents.InlineUIContainer
@@ -8458,14 +8470,19 @@ public partial class MultiplayerTab : UserControl
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 LineHeight = Math.Round(size.SubSize * 1.3, 1),
             };
-            if (label != null)
+            if (stated)
+                FillStatedSecondLine(sub, label, m, isTournament, decided, tournamentName, roundText, map, duration);
+            else
             {
-                sub.Inlines.Add(MatchModeLabelRun(label, m.Competitive, isTournament));
+                if (label != null)
+                {
+                    sub.Inlines.Add(MatchModeLabelRun(label, m.Competitive, isTournament));
+                    if (!string.IsNullOrWhiteSpace(under))
+                        sub.Inlines.Add(new System.Windows.Documents.Run(" · "));
+                }
                 if (!string.IsNullOrWhiteSpace(under))
-                    sub.Inlines.Add(new System.Windows.Documents.Run(" · "));
+                    sub.Inlines.Add(new System.Windows.Documents.Run(under));
             }
-            if (!string.IsNullOrWhiteSpace(under))
-                sub.Inlines.Add(new System.Windows.Documents.Run(under));
             Grid.SetRow(sub, 1);
             Grid.SetColumn(sub, 1);
             // Under the age when there is no recording column; inside the content column when
@@ -8546,14 +8563,118 @@ public partial class MultiplayerTab : UserControl
     /// The colours of a match row's line 1 (design 59): the joining words ("beat", "vs"), the
     /// winners and everybody else. The joining words are the line's own size.
     /// </summary>
-    private readonly record struct MatchLineStyle(string Joining, string Winner, string Other)
+    private readonly record struct MatchLineStyle(string Joining, string Winner, string Other, bool JoiningBold = false)
     {
         public static readonly MatchLineStyle Ranking = new("MpTextMuted", "MpTextHeading", "UiTextStrong");
+
+        /// <summary>Design 107, a decided match: "beat" in green 600, the loser dimmed.</summary>
+        public static readonly MatchLineStyle StatedDecided = new("RmTextGreen", "MpTextHeading", "UiMutedText", JoiningBold: true);
+
+        /// <summary>Design 107, a match nobody won: "vs" in grey, both names alike.</summary>
+        public static readonly MatchLineStyle StatedOpen = new("MpTextFaint", "UiTextStrong", "UiTextStrong");
     }
 
     /// <summary>A muted run: the joining words between names.</summary>
     private static System.Windows.Documents.Run Muted(string text, MatchLineStyle style)
-        => new(text) { Foreground = (Brush)Application.Current.FindResource(style.Joining) };
+        => new(text)
+        {
+            Foreground = (Brush)Application.Current.FindResource(style.Joining),
+            FontWeight = style.JoiningBold ? FontWeights.SemiBold : FontWeights.Normal,
+        };
+
+    /// <summary>
+    /// The «Latest matches» dot (design 107): green with a halo for a decided match, amber with a
+    /// halo for a competitive one that did not count, plain grey for a casual one with no result.
+    /// </summary>
+    private static FrameworkElement StatedMatchDot(bool decided, bool competitive)
+    {
+        var (dot, halo) = decided ? ("#4FD68A", "#2E4FD68A")
+            : competitive ? ("#F4900C", "#2EF4900C")
+            : ("#5D6F8A", (string?)null);
+        var host = new Grid { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 7, 9, 0), Tag = "MatchDot" };
+        if (halo != null)
+            host.Children.Add(new System.Windows.Shapes.Ellipse { Width = 12, Height = 12, Margin = new Thickness(-3), Fill = BrushOf(halo) });
+        host.Children.Add(new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, Fill = BrushOf(dot) });
+        return host;
+    }
+
+    private static SolidColorBrush BrushOf(string hex)
+    {
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>
+    /// Line 2 of a «Latest matches» row (design 107): the mode as a PILL (gold when it counted,
+    /// grey when casual), the mod's icon with its name on hover, then "no result" (amber when a
+    /// competitive match did not count), the map and the length.
+    /// </summary>
+    private static void FillStatedSecondLine(TextBlock sub, string? label, Models.Multiplayer.CommunityMatch m,
+        bool isTournament, bool decided, string? tournamentName, string? roundText, string? map, string? duration)
+    {
+        sub.Foreground = (Brush)Application.Current.FindResource("MpTextFaint");
+        bool gold = m.Competitive == true || isTournament;
+        if (label != null)
+        {
+            var text = new TextBlock
+            {
+                Text = label,
+                FontSize = (double)Application.Current.FindResource("StatsTagSize"),
+                FontWeight = FontWeights.Bold,
+                Foreground = BrushOf(gold ? "#E6C06A" : "#A8BCD2"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var pill = new Border
+            {
+                Height = 15,
+                Padding = new Thickness(6, 0, 6, 0),
+                CornerRadius = new CornerRadius(8),
+                BorderThickness = new Thickness(1),
+                Background = BrushOf(gold ? "#24E6C06A" : "#0FFFFFFF"),
+                BorderBrush = BrushOf(gold ? "#73E6C06A" : "#1FFFFFFF"),
+                Child = text,
+                Tag = "MatchModePill",
+            };
+            sub.Inlines.Add(new System.Windows.Documents.InlineUIContainer(pill) { BaselineAlignment = BaselineAlignment.Center });
+        }
+        var mod = string.IsNullOrEmpty(m.ModId) ? null : ModRegistry.Find(m.ModId);
+        var icon = mod == null ? null : MainWindow.TryLoadTileImage(mod.ResolveIconSource(), MainWindow.IconDecodeWidth);
+        // The tile cache is the process's: a brush still downloading is not frozen yet and belongs
+        // to the thread that asked first.
+        if (icon != null && !icon.CheckAccess()) icon = null;
+        if (icon != null)
+        {
+            var tile = new Border
+            {
+                Width = 14,
+                Height = 14,
+                CornerRadius = new CornerRadius(3),
+                Margin = new Thickness(label != null ? 6 : 0, 0, 0, 0),
+                Background = icon,
+                BorderBrush = BrushOf("#29FFFFFF"),
+                BorderThickness = new Thickness(1),
+                ToolTip = TooltipHelper.Wrap(ModRegistry.KnownDisplayName(m.ModId) ?? ""),
+            };
+            sub.Inlines.Add(new System.Windows.Documents.InlineUIContainer(tile) { BaselineAlignment = BaselineAlignment.Center });
+        }
+        bool first = label == null && icon == null;
+        void Part(string? text, Brush? ink = null)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            sub.Inlines.Add(new System.Windows.Documents.Run((first ? "" : sub.Inlines.Count > 0 && sub.Inlines.LastInline is System.Windows.Documents.InlineUIContainer ? "  " : " · ") + text)
+            {
+                Foreground = ink ?? sub.Foreground,
+            });
+            first = false;
+        }
+        Part(tournamentName);
+        Part(roundText);
+        if (!decided)
+            Part(Strings.Get("MpRankHistoryUndecided"), m.Competitive == true ? BrushOf("#F5BD76") : null);
+        Part(map);
+        Part(duration);
+    }
 
     /// <summary>
     /// Walk a "{0} beat {1}" template and append it to <paramref name="target"/> as inlines,
@@ -8758,7 +8879,8 @@ public partial class MultiplayerTab : UserControl
             {
                 Width = spec.FixedWidth.HasValue
                     ? new GridLength(spec.FixedWidth.Value + trailing)
-                    : new GridLength(1, GridUnitType.Star),
+                    : new GridLength(spec.Star, GridUnitType.Star),
+                MinWidth = spec.FixedWidth.HasValue ? 0 : spec.MinWidth + trailing,
             };
             grid.ColumnDefinitions.Add(column);
         }
@@ -9835,7 +9957,8 @@ public partial class MultiplayerTab : UserControl
             await EnterCreatedRoomAsync(
                 dlg.CreatedLobby!, dlg.CreatedLobbyProfile?.Id ?? "", dlg.CreatedLobbyTitle,
                 dlg.CreatedLobbyMaxPlayers, dlg.CreatedLobbyIsPrivate, dlg.CreatedLobbyIsCompetitive,
-                dlg.CreatedLobbySpectatorSlots, dlg.CreatedLobbyCompetitiveDowngraded);
+                dlg.CreatedLobbySpectatorSlots, dlg.CreatedLobbyCompetitiveDowngraded,
+                gameRules: dlg.CreatedLobbyGameRules);
         }
         catch (Exception ex)
         {
@@ -9859,10 +9982,12 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private async Task EnterCreatedRoomAsync(
         CreateLobbyResponse created, string modId, string? title, int maxPlayers, bool isPrivate,
-        bool isCompetitive, int spectatorSlots, bool competitiveDowngraded)
+        bool isCompetitive, int spectatorSlots, bool competitiveDowngraded,
+        int gameRules = Services.Multiplayer.LanAutoStartArgs.Standard)
     {
         if (_session == null) return;
-        DiagnosticLog.Write($"CreateRoom: lobby id {created.Id} created (mod={modId}), entering room");
+        DiagnosticLog.Write($"CreateRoom: lobby id {created.Id} created (mod={modId}, rules={gameRules}), entering room");
+        _currentLobbyGameRules = gameRules;
         // Stamp the current room's mod id so LaunchActiveModGame
         // picks the right profile, even if the user later
         // switches the Play tab to a different mod while still
@@ -13386,6 +13511,7 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyMaxPlayers = lobby.MaxPlayers;
                 _currentLobbyIsPrivate = lobby.IsPrivate;
                 _currentLobbyIsCompetitive = lobby.Competitive;
+                _currentLobbyGameRules = Services.Multiplayer.LanAutoStartArgs.Standard;
                 _currentLobbySpectatorSlots = lobby.SpectatorSlots;
                 _currentLobbyTournamentMatchId = lobby.TournamentMatchId;
                 _currentLobbyMatchmaking = lobby.Matchmaking;
@@ -14057,6 +14183,13 @@ public partial class MultiplayerTab : UserControl
             var extraArgs = BuildMultiplayerLaunchArgs();
             DiagnosticLog.Write($"MultiplayerTab.LaunchActiveModGame: extraArgs='{extraArgs}'");
 
+            // A competitive room needs the recording, and the lobby's Record Game box is the
+            // HOST's game setting: the game opens the hosted lobby with the value the profile's
+            // MultiplayerGameSettings last saved, so setting it there ticks the box for the match.
+            // Every mod, no DLL. A casual room is left as the player last chose.
+            if (_isHostInCurrentRoom && _currentLobbyIsCompetitive && _config != null)
+                Services.GameSettingsStore.EnsureLobbyRecordGame(profile, _config);
+
             // With n2n in place, this method used to bring up a Detours-
             // based hook DLL inside age3y.exe and a named-pipe bridge
             // that forwarded each WinSock send/recv across PeerMesh.
@@ -14155,9 +14288,12 @@ public partial class MultiplayerTab : UserControl
     ///
     /// AoE3 has NO command-line flag to auto-host or auto-join a LAN
     /// game (we searched for hostmpgame / joinIPaddr / joinmpgame /
-    /// jumpTo etc. — none exist), so the player still has to click
-    /// "Multiplayer → LAN" once after the game opens. The launcher
-    /// cuts every other startup delay it can.
+    /// jumpTo etc. — none exist). The launcher therefore also passes
+    /// <c>+uhcLanHost</c> / <c>uhcLanJoin="&lt;host ip&gt;"</c>
+    /// (<see cref="Services.Multiplayer.LanAutoStartArgs"/>), which the
+    /// things-new <c>UHC.dll</c> reads when a mod enables its
+    /// <c>lanAutoStart</c> key; with any other DLL the game ignores them
+    /// and the player clicks "Multiplayer → LAN" as before.
     ///
     /// The REASON no such flag exists — don't go looking for more
     /// names: the engine keeps config variables and commands in two
@@ -14229,6 +14365,20 @@ public partial class MultiplayerTab : UserControl
         {
             DiagnosticLog.Write($"MultiplayerTab.BuildMultiplayerLaunchArgs: OverrideAddress OMITTED — no 26.x Radmin adapter Up [{radminState}]");
         }
+
+        // Straight into the LAN game, for a mod whose UHC.dll has lanAutoStart on. The host's
+        // address is the one his launcher reported to the room (member_net), never this
+        // player's own: that is the address the joiner's Direct IP has to reach.
+        string? hostIp = null;
+        if (!_isHostInCurrentRoom
+            && !string.IsNullOrEmpty(_roomHostUserId)
+            && _roomMembers.TryGetValue(_roomHostUserId, out var hostEntry))
+            hostIp = hostEntry.RadminIp;
+        var lanArg = Services.Multiplayer.LanAutoStartArgs.For(_isHostInCurrentRoom, hostIp, _currentLobbyGameRules);
+        sb.Append(lanArg);
+        DiagnosticLog.Write(lanArg.Length > 0
+            ? $"MultiplayerTab.BuildMultiplayerLaunchArgs: LAN auto-start '{lanArg.Trim()}'"
+            : $"MultiplayerTab.BuildMultiplayerLaunchArgs: no LAN auto-start - the host's Radmin address is unknown (host='{_roomHostUserId}', reported='{hostIp}')");
 
         return sb.ToString();
     }
@@ -16507,6 +16657,7 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyMaxPlayers = 0;
                 _currentLobbySpectatorSlots = 0;
                 _currentLobbyIsCompetitive = false;
+                _currentLobbyGameRules = Services.Multiplayer.LanAutoStartArgs.Standard;
             }
             return;
         }

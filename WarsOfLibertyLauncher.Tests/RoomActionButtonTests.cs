@@ -202,6 +202,29 @@ public class RoomActionButtonTests
         Assert.Null(error);
     }
 
+    /// <summary>A password room's chip is purple (2026-11-14), the colour a password room wears in
+    /// the create dialog and the room: it had gone grey with the other quiet chips.</summary>
+    [Fact]
+    public void ThePasswordChipIsPurple()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithModInstalled();
+            var room = Room("PASS0001", max: 4, current: 2);
+            room.IsPrivate = true;
+            var card = Card(tab, room);
+            var label = Descendants(card).OfType<TextBlock>()
+                .Single(t => t.Text == Localization.Strings.Get("RmChipPassword"));
+            var chip = (Border)((StackPanel)label.Parent).Parent;
+            Assert.Same(Res("MpPrivateText"), label.Foreground);
+            Assert.Same(Res("MpPrivateBg"), chip.Background);
+            Assert.Same(Res("MpPrivateRim"), chip.BorderBrush);
+            var dot = ((StackPanel)label.Parent).Children.OfType<System.Windows.Shapes.Ellipse>().Single();
+            Assert.Same(Res("MpPrivate"), dot.Fill);
+        });
+        Assert.Null(error);
+    }
+
     /// <summary>Four signal bars (104a): up to 60 ms all four, under 100 three, up to 150 two,
     /// slower one, and none for a ping that was not measured.</summary>
     [Theory]

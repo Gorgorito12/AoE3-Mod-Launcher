@@ -124,6 +124,13 @@ public partial class CreateLobbyDialog : Window
     /// derived from what the SERVER made (see <see cref="RoomFormats"/>).</summary>
     public RoomFormat CreatedLobbyFormat { get; private set; }
 
+    /// <summary>The Game Rules entry the host's game picks on its LAN screen (0 Standard, 1 Classic,
+    /// 7 King of the Hill). Only a mod whose UHC.dll has lanAutoStart applies it; see
+    /// <see cref="LanAutoStartArgs"/>.</summary>
+    public int CreatedLobbyGameRules { get; private set; }
+
+    private int _gameRules;
+
     /// <summary>
     /// Set when the server refused the room because this build is too old for multiplayer.
     /// The dialog closes on that answer; the tab shows the notice and offers the update.
@@ -175,7 +182,7 @@ public partial class CreateLobbyDialog : Window
         Refresh();
         RoomTitleBox.Focus();
 
-        FrameworkElement[] cards = { KindCard, ModCard, PasswordCard, SeatsCard, NetCard };
+        FrameworkElement[] cards = { KindCard, ModCard, PasswordCard, SeatsCard, GameCard, NetCard };
         void Frost() => ModDialogChrome.FrostCards(Root, cards);
         foreach (var card in cards) card.SizeChanged += (_, _) => Frost();
         Scroller.ScrollChanged += (_, _) => Frost();
@@ -191,6 +198,7 @@ public partial class CreateLobbyDialog : Window
         KindLabel.Text = Strings.Get("MpCreateDialogKind");
         ModLabel.Text = Strings.Get("MpCreateDialogModLabel");
         CopyLabel.Text = Strings.Get("MpCreateDialogCopyLabel");
+        GameRulesLabel.Text = Strings.Get("MpCreateDialogRules");
         TitleLabel.Text = Strings.Get("MpCreateDialogTitleLabel");
         TitlePlaceholder.Text = Strings.Get("MpCreateDialogNamePlaceholder");
         MaxPlayersLabel.Text = Strings.Get("MpCreateDialogMaxPlayers");
@@ -235,6 +243,17 @@ public partial class CreateLobbyDialog : Window
         // disabled rather than hidden: the row then says what the ceiling is.
         foreach (var button in KindRow.Buttons.Skip(1).Zip(Kinds.Skip(1)))
             button.First.IsEnabled = RoomFormats.PlayersFor(button.Second) <= _lobbyMaxPlayers;
+        // What each type means, for a player who has never seen the words "casual" or "2v2" here.
+        foreach (var (button, kind) in KindRow.Buttons.Zip(Kinds))
+        {
+            button.ToolTip = TooltipHelper.Wrap(kind switch
+            {
+                RoomFormat.Casual => Strings.Get("MpCreateDialogKindTipCasual"),
+                RoomFormat.OneVOne => Strings.Get("MpCreateDialogKindTip1v1"),
+                _ => Strings.Format("MpCreateDialogKindTipTeams", RoomFormats.PlayersFor(kind) / 2),
+            });
+            ToolTipService.SetShowOnDisabled(button, true);
+        }
         KindRow.Picked += key => SelectKind((RoomFormat)key);
 
         MaxPlayersRow.SetOptions(Enumerable.Range(MinRoomPlayers, MaxRoomPlayers - MinRoomPlayers + 1)
@@ -245,6 +264,35 @@ public partial class CreateLobbyDialog : Window
         MaxPlayersRow.Picked += key => SelectSeats((int)key);
 
         ObserversRow.Picked += key => SelectSpectatorSlots((int)key);
+
+        foreach (var rules in LanAutoStartArgs.OfferedRules)
+            GameRulesCombo.Items.Add(new ComboBoxItem
+            {
+                Content = Strings.Get(LanAutoStartArgs.RulesLabelKey(rules)),
+                Tag = rules,
+                ToolTip = TooltipHelper.Wrap(RulesDescription(rules)),
+            });
+        var lastRules = _config?.LastRoomGameRules ?? LanAutoStartArgs.Standard;
+        SelectGameRules(LanAutoStartArgs.IsOfferedRules(lastRules) ? lastRules : LanAutoStartArgs.Standard);
+    }
+
+    internal void SelectGameRules(int rules)
+    {
+        _gameRules = rules;
+        var item = GameRulesCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (int)i.Tag == rules);
+        if (item != null && !ReferenceEquals(GameRulesCombo.SelectedItem, item)) GameRulesCombo.SelectedItem = item;
+        GameRulesDescription.Text = RulesDescription(rules);
+        GameHint.Text = Strings.Get("MpCreateDialogRulesHint")
+            + (LanAutoStartArgs.IsTreaty(rules) ? " " + Strings.Get("MpCreateDialogRulesTreatyHint") : "");
+    }
+
+    private static string RulesDescription(int rules) =>
+        Strings.Format(LanAutoStartArgs.RulesDescriptionKey(rules), LanAutoStartArgs.TreatyMinutes(rules));
+
+    private void GameRulesCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (GameRulesCombo.SelectedItem is ComboBoxItem { Tag: int rules } && rules != _gameRules)
+            SelectGameRules(rules);
     }
 
     /// <summary>Pick the room type: <see cref="RoomFormat.Casual"/> or a competitive format.</summary>
@@ -739,9 +787,11 @@ public partial class CreateLobbyDialog : Window
             CreatedLobbySpectatorSlots = CreatedLobby?.SpectatorSlots ?? 0;
             CreatedLobbyCompetitiveDowngraded = Competitive && !CreatedLobbyIsCompetitive;
             CreatedLobbyFormat = RoomFormats.Resolve(CreatedLobbyIsCompetitive, maxPlayers, CreatedLobbySpectatorSlots);
+            CreatedLobbyGameRules = _gameRules;
             if (_config != null)
             {
                 _config.LastRoomKind = RoomFormats.KindToken(_kind);
+                _config.LastRoomGameRules = _gameRules;
                 _config.Save();
             }
             DialogResult = true;

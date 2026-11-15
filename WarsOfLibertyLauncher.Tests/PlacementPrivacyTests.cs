@@ -219,7 +219,8 @@ public class PlacementPrivacyTests
                 PlacementPlayed = 3, PlacementRequired = 10,
             }, isMe: false, Services.Multiplayer.RankingTableLayout.WithoutPeak, ownResults: null);
             AssertNoNumberAndAPlacementLabel(row, "1380");
-            Assert.Contains(Texts(row), t => t.Contains(Strings.Format("MpPlacementProgress", 3, 10)));
+            // Design 107: the tile says "3/10"; the long form is in its tooltip.
+            Assert.Contains(Texts(row), t => t.Contains(Strings.Format("MpPlacementProgressShort", 3, 10)));
 
             // #10 the history's player rows.
             var history = MatchParticipantsView.Build(new List<MatchHistoryParticipant>

@@ -261,6 +261,7 @@ public partial class MultiplayerTab
         {
             bool on = _tournamentFilter == key;
             var line = new StackPanel { Orientation = Orientation.Horizontal };
+            if (key != "all") line.Children.Add(Dot(7, StatusDot(key), 7));
             line.Children.Add(Say(Strings.Get(caption), "SetControlSize", on ? "#FFFFFF" : "#A8BCD2", on ? FontWeights.SemiBold : FontWeights.Medium));
             line.Children.Add(Say((key == "all" ? all.Count : all.Count(t => t.Status == key)).ToString(), "SetCaptionSize",
                 on ? "#C3D2E5" : "#8C9CB1", FontWeights.SemiBold, new Thickness(6, 0, 0, 0), mono: true));
@@ -463,21 +464,40 @@ public partial class MultiplayerTab
         return (mod == null ? null : (Brush?)ResolveRoomModIcon(mod)) ?? Ink("#1A2C48");
     }
 
-    private static Brush StatusDot(string? status) => Ink(status switch
-    {
-        "registration" or "ready" => "#55ACEE",
-        "running" => "#4FD68A",
-        "cancelled" => "#C84A4A",
-        _ => "#8C9CB1",
-    });
+    /// <summary>A tournament's state colour, the same in the chip, the list's dot, the filters and
+    /// the steps (design 106): registration green, being played blue, finished gold. Never the
+    /// mod's colour.</summary>
+    private static Brush StatusDot(string? status) => Solid(StateColors.Mark(StateColors.ForTournament(status)));
 
-    private static string StatusInk(string? status) => status switch
+    private static string StatusInk(string? status) => ToHex(StateColors.Text(StateColors.ForTournament(status)));
+
+    /// <summary><paramref name="top"/> at <paramref name="topAlpha"/> laid over the page's navy at
+    /// <paramref name="underAlpha"/>: the design's two stacked fills as one brush.</summary>
+    private static SolidColorBrush Over(Color top, double topAlpha, double underAlpha)
     {
-        "registration" or "ready" => "#9FD2F6",
-        "running" => "#8FE0B0",
-        "cancelled" => "#F0A6A6",
-        _ => "#C3D2E5",
-    };
+        var under = Color.FromRgb(0x0A, 0x13, 0x21);
+        double a = topAlpha + underAlpha * (1 - topAlpha);
+        byte Ch(byte t, byte u) => (byte)Math.Round((t * topAlpha + u * underAlpha * (1 - topAlpha)) / a);
+        return Frozen((byte)Math.Round(a * 255), Ch(top.R, under.R), Ch(top.G, under.G), Ch(top.B, under.B));
+    }
+
+    /// <summary>A tick drawn in a 20-px box (<c>M4.5 10.5l3.8 3.8 7.2-8.3</c>), never the character.</summary>
+    internal static FrameworkElement DrawnTick(double size, Brush ink, double thickness = 2.4)
+    {
+        var path = new Path
+        {
+            Data = Geometry.Parse("M4.5 10.5l3.8 3.8 7.2-8.3"),
+            Stroke = ink,
+            StrokeThickness = thickness,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+        };
+        // A Grid, not a Canvas: the bracket is the page's one Canvas, and tests find it by that.
+        var box = new Grid { Width = 20, Height = 20 };
+        box.Children.Add(path);
+        return new Viewbox { Width = size, Height = size, Child = box, IsHitTestVisible = false };
+    }
 
     private void TournamentsFold_Click(object sender, RoutedEventArgs e)
     {
@@ -609,9 +629,12 @@ public partial class MultiplayerTab
             chips.Children.Add(chip);
         }
         var state = new StackPanel { Orientation = Orientation.Horizontal };
-        state.Children.Add(Dot(7, StatusDot(t.Status)));
+        var stateDot = Dot(7, StatusDot(t.Status));
+        if (StateColors.Pulses(t.Status)) AttachChipPulse(stateDot);
+        state.Children.Add(stateDot);
         state.Children.Add(Say(StatusLabel(t.Status, false), "SetControlSize", StatusInk(t.Status), FontWeights.SemiBold));
-        var stateChip = Pill(state, 26, 11, 11, chipFill, chipRim, 13);
+        var stateTone = StateColors.Mark(StateColors.ForTournament(t.Status));
+        var stateChip = Pill(state, 26, 11, 11, Over(stateTone, .2, .72), Tint(stateTone, .55), 13);
         stateChip.Margin = new Thickness(0, 0, 8, 6);
         chips.Children.Add(stateChip);
         if (t.IsPrivate)
@@ -647,21 +670,7 @@ public partial class MultiplayerTab
         meta.TextWrapping = TextWrapping.Wrap;
         left.Children.Add(meta);
 
-        var stepsRow = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
-        foreach (var step in TournamentPage.Steps(t.Status))
-        {
-            var (glyph, ink) = step.State switch
-            {
-                TournamentStepState.Done => ("✓", "#C3D2E5"),
-                TournamentStepState.Now => ("●", ToHex(ModAccent.TextOn(_pageAccent))),
-                _ => ("○", "#8C9CB1"),
-            };
-            var pill = Pill(Say(glyph + " " + step.Text, "SetCaptionSize", ink, FontWeights.SemiBold), 24, 10, 10,
-                Frozen(step.State == TournamentStepState.Now ? (byte)0xB3 : (byte)0x73, 0x0A, 0x13, 0x21),
-                step.State == TournamentStepState.Now ? Tint(_pageAccent, .7) : Frozen(0x1A, 0xFF, 0xFF, 0xFF), 12);
-            pill.Margin = new Thickness(0, 0, 6, 0);
-            stepsRow.Children.Add(pill);
-        }
+        var stepsRow = BuildTournamentSteps(t.Status);
         _tournamentStepsRow = stepsRow;
         left.Children.Add(stepsRow);
 
@@ -704,6 +713,72 @@ public partial class MultiplayerTab
         return grid;
     }
 
+    /// <summary>
+    /// The five steps as ONE capsule (design 106): a circle and a word per step, joined by a line
+    /// that is green up to the current step. Done is a green circle with a drawn tick, the current
+    /// one a ring and a dot in the state's colour (beating while the tournament is played), what
+    /// is still to come an empty ring; "Finished", once it is, is gold.
+    /// </summary>
+    internal static Border BuildTournamentSteps(string? status)
+    {
+        var steps = TournamentPage.Steps(status);
+        var tone = StateColors.ForTournament(status);
+        var line = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        for (int i = 0; i < steps.Count; i++)
+        {
+            var step = steps[i];
+            if (i > 0)
+            {
+                bool lit = step.State != TournamentStepState.Next;
+                line.Children.Add(new Border
+                {
+                    Width = 14, Height = 2, CornerRadius = new CornerRadius(1), Margin = new Thickness(6, 0, 6, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Background = lit ? Tint(StateColors.Green, .7) : Frozen(0x29, 0xFF, 0xFF, 0xFF),
+                });
+            }
+            bool finishedStep = step.State == TournamentStepState.Done && status == "finished" && i == steps.Count - 1;
+            var circle = new Grid { Width = 16, Height = 16, VerticalAlignment = VerticalAlignment.Center };
+            string ink;
+            switch (step.State)
+            {
+                case TournamentStepState.Done:
+                    circle.Children.Add(new Ellipse { Fill = Solid(finishedStep ? StateColors.Gold : StateColors.Green) });
+                    circle.Children.Add(DrawnTick(14, Ink("#0F1C2E")));
+                    ink = finishedStep ? ToHex(StateColors.GoldText) : "#DCE7F5";
+                    break;
+                case TournamentStepState.Now:
+                    circle.Children.Add(new Ellipse { Fill = Frozen(0xBF, 0x0A, 0x13, 0x21), Stroke = Solid(StateColors.Mark(tone)), StrokeThickness = 1.5 });
+                    var dot = new Ellipse { Width = 6, Height = 6, Fill = Solid(StateColors.Mark(tone)) };
+                    if (StateColors.Pulses(status)) AttachChipPulse(dot);
+                    circle.Children.Add(dot);
+                    ink = ToHex(StateColors.Text(tone));
+                    break;
+                default:
+                    circle.Children.Add(new Ellipse { Stroke = Frozen(0x3D, 0xFF, 0xFF, 0xFF), StrokeThickness = 1.5 });
+                    ink = "#8C9CB1";
+                    break;
+            }
+            var pair = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            pair.Children.Add(circle);
+            pair.Children.Add(Say(step.Text, "SetDescSize", ink, FontWeights.SemiBold, new Thickness(6, 0, 0, 0)));
+            line.Children.Add(pair);
+        }
+        return new Border
+        {
+            MinHeight = 30,
+            CornerRadius = new CornerRadius(15),
+            Padding = new Thickness(8, 6, 13, 6),
+            Margin = new Thickness(0, 12, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Background = Frozen(0x9E, 0x0A, 0x13, 0x21),
+            BorderBrush = Frozen(0x1A, 0xFF, 0xFF, 0xFF),
+            BorderThickness = new Thickness(1),
+            Child = line,
+            Visibility = steps.Count == 0 ? Visibility.Collapsed : Visibility.Visible,
+        };
+    }
+
     private FrameworkElement? BuildCallCard(TournamentDetail t, string? me)
     {
         var call = TournamentPage.Call(t, me);
@@ -716,7 +791,8 @@ public partial class MultiplayerTab
         {
             if (string.IsNullOrEmpty(call.Kicker) && string.IsNullOrEmpty(call.Title)) return null;
             if (!string.IsNullOrEmpty(call.Kicker))
-                words.Children.Add(Say(call.Kicker, "SetCaptionSize", call.Primary == TournamentPrimary.CloseRegistration ? "#9FD2F6" : ToHex(ModAccent.TextOn(_pageAccent)), FontWeights.Bold));
+                words.Children.Add(Say(call.Kicker, "SetCaptionSize",
+                    t.Status == "registration" ? ToHex(StateColors.GreenText) : ToHex(ModAccent.TextOn(_pageAccent)), FontWeights.Bold));
             if (call.Match != null) words.Children.Add(BuildVersus(t, me, call.Match));
             else if (!string.IsNullOrEmpty(call.Title))
             {
@@ -827,7 +903,7 @@ public partial class MultiplayerTab
             CornerRadius = new CornerRadius(14),
             VerticalAlignment = VerticalAlignment.Bottom,
             BorderThickness = new Thickness(call.Champion ? 1.5 : 1),
-            BorderBrush = call.Champion ? Tint(ModAccent.TextOn(_pageAccent), .85) : Frozen(0x1F, 0xFF, 0xFF, 0xFF),
+            BorderBrush = call.Champion ? Tint(StateColors.Gold, .85) : Frozen(0x1F, 0xFF, 0xFF, 0xFF),
             Child = grid,
         };
         if (!call.Champion)
@@ -835,36 +911,38 @@ public partial class MultiplayerTab
             card.SetResourceReference(Border.BackgroundProperty, "GlassPanel");
             return card;
         }
-        card.Background = ChampionFill(.64, 1.2);
-        return WithGlow(card, 14, 36, .4);
+        card.Background = ChampionFill(new Point(0, 0), .4, 1.2);
+        return WithGlow(card, 14, 36, .3);
     }
 
-    /// <summary>The design's <c>radial-gradient(...), mix(...)</c>, in one brush.</summary>
-    private Brush ChampionFill(double navy, double reach)
+    /// <summary>The champion's fill (design 106): gold mixed at 78 % with the navy (#3E403B), lit by
+    /// gold at <paramref name="light"/> from <paramref name="from"/> and gone by 65 %. Gold, never the
+    /// mod's colour: a red mod's champion read as an error.</summary>
+    private static Brush ChampionFill(Point from, double light, double reach)
     {
-        var below = ModAccent.Mix(_pageAccent, ModAccent.Navy, navy);
-        var fill = new RadialGradientBrush { Center = new Point(0, 0), GradientOrigin = new Point(0, 0), RadiusX = reach, RadiusY = reach };
-        fill.GradientStops.Add(new GradientStop(ModAccent.Mix(below, _pageAccent, .45), 0));
+        var below = ModAccent.Mix(StateColors.Gold, ModAccent.Navy, .78);
+        var fill = new RadialGradientBrush { Center = from, GradientOrigin = from, RadiusX = reach, RadiusY = reach };
+        fill.GradientStops.Add(new GradientStop(ModAccent.Mix(below, StateColors.Gold, light), 0));
         fill.GradientStops.Add(new GradientStop(below, .65));
         fill.Freeze();
         return fill;
     }
 
-    /// <summary>A glow as a sibling under the card: an Effect on the card would take ClearType from
-    /// every word on it.</summary>
-    private FrameworkElement WithGlow(FrameworkElement card, double radius, double blur, double strength)
+    /// <summary>A gold glow as a sibling under the card: an Effect on the card would take ClearType
+    /// from every word on it. Only the champion wears it.</summary>
+    private static FrameworkElement WithGlow(FrameworkElement card, double radius, double blur, double strength)
     {
         // A slow machine, or a player who asked for fewer effects, gets the card alone.
         if (RankBadge.ReducedEffects) return card;
         var host = new Grid { VerticalAlignment = card.VerticalAlignment };
         host.Children.Add(new Border
         {
-            Background = Solid(_pageAccent),
+            Background = Solid(StateColors.Gold),
             CornerRadius = new CornerRadius(radius),
             Margin = new Thickness(2),
             IsHitTestVisible = false,
             CacheMode = new BitmapCache(),
-            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = _pageAccent, BlurRadius = blur, ShadowDepth = 0, Opacity = strength },
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = StateColors.Gold, BlurRadius = blur, ShadowDepth = 0, Opacity = strength },
         });
         host.Children.Add(card);
         return host;
@@ -1024,7 +1102,7 @@ public partial class MultiplayerTab
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.Children.Add(BuildShield(Initial(name), 44, 52, 19));
         var words = new StackPanel { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        words.Children.Add(Say(Strings.Get("TpChampion"), "SetCaptionSize", ToHex(ModAccent.TextOn(_pageAccent)), FontWeights.Bold));
+        words.Children.Add(Say(Strings.Get("TpChampion"), "SetCaptionSize", ToHex(StateColors.GoldText), FontWeights.Bold));
         var title = Say(name, "FontSizeHeading", "#FFFFFF", FontWeights.Bold, new Thickness(0, 5, 0, 0));
         title.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
         title.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -1069,11 +1147,11 @@ public partial class MultiplayerTab
     /// <summary>The champion's shield: <c>clip-path: polygon(...)</c> in the design.</summary>
     private FrameworkElement BuildShield(string initial, double width, double height, double fontSize)
     {
-        var fill = new LinearGradientBrush { StartPoint = new Point(.15, 0), EndPoint = new Point(.85, 1) };
-        var text = ModAccent.TextOn(_pageAccent);
-        fill.GradientStops.Add(new GradientStop(ModAccent.Mix(text, Colors.White, .3), 0));
-        fill.GradientStops.Add(new GradientStop(_pageAccent, .6));
-        fill.GradientStops.Add(new GradientStop(ModAccent.Mix(_pageAccent, Colors.Black, .55), 1));
+        // Gold at 160 degrees (design 106): #FFF3CF -> #E6C06A at 52 % -> #8A6418.
+        var fill = new LinearGradientBrush { StartPoint = new Point(.33, 0), EndPoint = new Point(.67, 1) };
+        fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0xF3, 0xCF), 0));
+        fill.GradientStops.Add(new GradientStop(StateColors.Gold, .52));
+        fill.GradientStops.Add(new GradientStop(Color.FromRgb(0x8A, 0x64, 0x18), 1));
         fill.Freeze();
         var shape = new Path
         {
@@ -1088,7 +1166,7 @@ public partial class MultiplayerTab
             Text = initial,
             FontSize = fontSize,
             FontWeight = FontWeights.Bold,
-            Foreground = Brushes.White,
+            Foreground = Ink("#3B2A06"),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 0, 7),
@@ -1173,7 +1251,12 @@ public partial class MultiplayerTab
         {
             bool now = round == current && t.Status == "running";
             var words = new StackPanel { Orientation = Orientation.Horizontal };
-            if (now) words.Children.Add(Dot(6, Solid(ModAccent.TextOn(_pageAccent)), 6));
+            if (now)
+            {
+                var beat = Dot(6, Solid(StateColors.Blue), 6);
+                AttachChipPulse(beat);
+                words.Children.Add(beat);
+            }
             words.Children.Add(Say(TournamentPage.RoundName(t, round), "SetDescSize", now ? "#FFFFFF" : "#C3D2E5", FontWeights.SemiBold));
             var anchor = new Button
             {
@@ -1182,7 +1265,7 @@ public partial class MultiplayerTab
                 Padding = new Thickness(11, 0, 11, 0),
                 Margin = new Thickness(0, 0, 6, 0),
                 Background = Frozen(0x8C, 0x0A, 0x13, 0x21),
-                BorderBrush = now ? Tint(_pageAccent, .7) : Frozen(0x1F, 0xFF, 0xFF, 0xFF),
+                BorderBrush = now ? Tint(StateColors.Blue, .7) : Frozen(0x1F, 0xFF, 0xFF, 0xFF),
                 Tag = 15d,
             };
             anchor.SetResourceReference(StyleProperty, "TournamentChip");
@@ -1379,12 +1462,21 @@ public partial class MultiplayerTab
         var mine = (t.Matches ?? new()).FirstOrDefault(m => MatchCards.For(m, me, t.Entrants)
             is MatchCardState.Playable or MatchCardState.JoinRoom or MatchCardState.ReturnToRoom);
         var path = mine != null ? TournamentPage.PathFrom(t, mine) : TournamentPage.ChampionPath(t);
-        var bright = Tint(ModAccent.TextOn(_pageAccent), .85);
+        // Your way through the bracket is yours (the mod's colour); the champion's is gold.
+        var bright = mine != null ? Tint(ModAccent.TextOn(_pageAccent), .85) : Tint(StateColors.Gold, .9);
         foreach (var l in path) canvas.Children.Add(Bar(l, bright));
 
         _bracketCards.Clear();
         foreach (var box in sheet.Cards)
         {
+            if (!RankBadge.ReducedEffects)
+            {
+                var cardState = MatchCards.For(box.Match, me, t.Entrants);
+                if (cardState is MatchCardState.Playable or MatchCardState.JoinRoom or MatchCardState.ReturnToRoom)
+                    canvas.Children.Add(CardHalo(box, _pageAccent));
+                else if (cardState is MatchCardState.InProgress or MatchCardState.SuperviseRoom)
+                    canvas.Children.Add(CardHalo(box, StateColors.Blue));
+            }
             var card = BuildBracketCard(t, box, me);
             Canvas.SetLeft(card, box.X);
             Canvas.SetTop(card, box.Y);
@@ -1398,14 +1490,26 @@ public partial class MultiplayerTab
         {
             var final = sheet.Cards.OrderByDescending(b => b.Match.Round).First();
             double right = final.X + final.Width, cy = final.Y + final.Height / 2;
-            canvas.Children.Add(Bar(new BracketLine(right, cy - .5, sheet.Gutter, 2), bright));
+            canvas.Children.Add(Bar(new BracketLine(right, cy - .5, sheet.Gutter, 2), Tint(StateColors.Gold, .9)));
             var trophy = BuildChampionCard(t, final.Match);
+            trophy.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double tall = trophy.DesiredSize.Height;
+            // Centred on the final; when that would cut it against the round titles (a 4-player
+            // draw), the whole sheet moves down instead (design 106).
+            double top = cy - tall / 2, lift = Math.Max(0, -top);
+            ShiftSheet(canvas, lift);
             Canvas.SetLeft(trophy, right + sheet.Gutter);
-            Canvas.SetTop(trophy, Math.Max(0, cy - 82));
+            Canvas.SetTop(trophy, top + lift);
             canvas.Children.Add(trophy);
             width += sheet.Gutter + 200;
             canvas.Width = width;
-            canvas.Height = Math.Max(sheet.Height, Math.Max(0, cy - 82) + 170);
+            canvas.Height = Math.Max(sheet.Height + lift, top + lift + tall);
+        }
+        // A sheet shorter than 200 sits in the middle of 200, not against the titles.
+        if (canvas.Height < SmallSheetHeight)
+        {
+            ShiftSheet(canvas, (SmallSheetHeight - canvas.Height) / 2);
+            canvas.Height = SmallSheetHeight;
         }
 
         _bracketScale = new ScaleTransform(_bracketZoom / 100, _bracketZoom / 100);
@@ -1457,10 +1561,23 @@ public partial class MultiplayerTab
         host.RowDefinitions.Add(new RowDefinition());
         host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         host.Children.Add(body);
-        var legend = BuildBracketLegend();
+        var legend = BuildBracketLegend(t);
         Grid.SetRow(legend, 1);
         host.Children.Add(legend);
         return host;
+    }
+
+    internal const double SmallSheetHeight = 200;
+
+    /// <summary>Moves everything on the sheet down by <paramref name="by"/>.</summary>
+    private static void ShiftSheet(Canvas canvas, double by)
+    {
+        if (by <= 0) return;
+        foreach (UIElement child in canvas.Children)
+        {
+            var at = Canvas.GetTop(child);
+            Canvas.SetTop(child, (double.IsNaN(at) ? 0 : at) + by);
+        }
     }
 
     private static Border Bar(BracketLine l, Brush fill)
@@ -1487,8 +1604,16 @@ public partial class MultiplayerTab
             var cell = new Grid { ClipToBounds = true, Width = ((i == 0 ? sheet.Pad : 0) + sheet.ColumnWidth + sheet.Gutter) * z };
             cell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             cell.ColumnDefinitions.Add(new ColumnDefinition());
-            var name = Say(TournamentPage.RoundName(t, round.Key).ToUpperInvariant(), "SetCaptionSize", now ? ToHex(ModAccent.TextOn(_pageAccent)) : "#C3D2E5", FontWeights.Bold, new Thickness((i == 0 ? sheet.Pad : 0) * z, 0, 7, 0));
-            cell.Children.Add(name);
+            var title = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness((i == 0 ? sheet.Pad : 0) * z, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
+            if (now)
+            {
+                // The round being played: blue, with a beating dot (design 106), never the mod's colour.
+                var beat = Dot(6, Solid(StateColors.Blue), 6);
+                AttachChipPulse(beat);
+                title.Children.Add(beat);
+            }
+            title.Children.Add(Say(TournamentPage.RoundName(t, round.Key).ToUpperInvariant(), "SetCaptionSize", now ? ToHex(StateColors.BlueText) : "#C3D2E5", FontWeights.Bold));
+            cell.Children.Add(title);
             var tally = Say(z < .7 ? count.ToString() : Strings.Format(count == 1 ? "TpMatchesOne" : "TpMatchesMany", count), "SetCaptionSize", "#8C9CB1",
                 margin: new Thickness(0, 0, 10, 0), mono: true);
             tally.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -1497,7 +1622,7 @@ public partial class MultiplayerTab
             row.Children.Add(cell);
         }
         if (!string.IsNullOrEmpty(t.WinnerEntrantId))
-            row.Children.Add(Say(Strings.Get("TpChampion"), "SetCaptionSize", ToHex(ModAccent.TextOn(_pageAccent)), FontWeights.Bold));
+            row.Children.Add(Say(Strings.Get("TpChampion"), "SetCaptionSize", ToHex(StateColors.GoldText), FontWeights.Bold));
         return row;
     }
 
@@ -1509,7 +1634,7 @@ public partial class MultiplayerTab
         var shield = BuildShield(Initial(name), 46, 54, 20);
         shield.HorizontalAlignment = HorizontalAlignment.Center;
         stack.Children.Add(shield);
-        var label = Say(Strings.Get("TpChampion"), "SetCaptionSize", ToHex(ModAccent.TextOn(_pageAccent)), FontWeights.Bold, new Thickness(0, 8, 0, 0));
+        var label = Say(Strings.Get("TpChampion"), "SetCaptionSize", ToHex(StateColors.GoldText), FontWeights.Bold, new Thickness(0, 8, 0, 0));
         label.HorizontalAlignment = HorizontalAlignment.Center;
         stack.Children.Add(label);
         var title = Say(name, "FontSizeTitle", "#FFFFFF", FontWeights.Bold, new Thickness(0, 8, 0, 0));
@@ -1527,11 +1652,11 @@ public partial class MultiplayerTab
             Width = 200,
             Padding = new Thickness(16, 18, 16, 16),
             CornerRadius = new CornerRadius(14),
-            Background = ChampionFill(.62, 1),
-            BorderBrush = Tint(ModAccent.TextOn(_pageAccent), .85),
+            Background = ChampionFill(new Point(.5, 0), .42, 1),
+            BorderBrush = Tint(StateColors.Gold, .85),
             BorderThickness = new Thickness(1.5),
             Child = stack,
-        }, 14, 38, .45);
+        }, 14, 38, .34);
     }
 
     private Border BuildBracketCard(TournamentDetail t, MatchBox box, string? me)
@@ -1559,20 +1684,23 @@ public partial class MultiplayerTab
         }
         var body = new Grid();
         body.Children.Add(rows);
+        // A 1-px light along the top edge (design 106).
+        body.Children.Add(new Border { BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Frozen(0x0D, 0xFF, 0xFF, 0xFF), CornerRadius = new CornerRadius(8), IsHitTestVisible = false });
         if (MatchCards.For(m, me, t.Entrants) is MatchCardState.InProgress or MatchCardState.SuperviseRoom)
         {
-            body.Children.Add(new Ellipse
+            // Being played: blue, and it beats (it used to be a still green dot).
+            var live = new Ellipse
             {
                 Width = 7,
                 Height = 7,
-                Fill = Ink("#4FD68A"),
-                Stroke = Frozen(0x38, 0x4F, 0xD6, 0x8A),
-                StrokeThickness = 0,
+                Fill = Solid(StateColors.Blue),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 7, 7, 0),
                 ToolTip = TooltipHelper.Wrap(Strings.Get("TpStateLive")),
-            });
+            };
+            AttachChipPulse(live);
+            body.Children.Add(live);
         }
 
         var card = new Border
@@ -1589,6 +1717,38 @@ public partial class MultiplayerTab
         return card;
     }
 
+    /// <summary>A match being played: a blue tint from the left over the card's navy (20 % to 4 % at 72 %).</summary>
+    private static readonly Brush LiveCardFill = MakeLiveCardFill();
+
+    private static Brush MakeLiveCardFill()
+    {
+        var navy = Color.FromRgb(0x12, 0x21, 0x3A);
+        var fill = new LinearGradientBrush { StartPoint = new Point(0, .5), EndPoint = new Point(1, .5) };
+        fill.GradientStops.Add(new GradientStop(ModAccent.Mix(navy, StateColors.Blue, .2), 0));
+        fill.GradientStops.Add(new GradientStop(ModAccent.Mix(navy, StateColors.Blue, .04), .72));
+        fill.Freeze();
+        return fill;
+    }
+
+    /// <summary>The halo under a card being played (blue) or your own (the mod's colour): a blurred
+    /// sibling placed behind it on the sheet, never an Effect on the card and its text.</summary>
+    private static Border CardHalo(MatchBox box, Color color)
+    {
+        var halo = new Border
+        {
+            Width = Math.Max(0, box.Width - 4),
+            Height = Math.Max(0, box.Height - 4),
+            CornerRadius = new CornerRadius(9),
+            Background = Solid(color),
+            IsHitTestVisible = false,
+            CacheMode = new BitmapCache(),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = color, BlurRadius = 18, ShadowDepth = 0, Opacity = .5 },
+        };
+        Canvas.SetLeft(halo, box.X + 2);
+        Canvas.SetTop(halo, box.Y + 2);
+        return halo;
+    }
+
     private void PaintCardRim(TournamentDetail t, TournamentMatch m, Border card, bool hit)
     {
         var me = TournamentViewerId(t);
@@ -1597,13 +1757,18 @@ public partial class MultiplayerTab
         bool picked = string.Equals(m.Id, _selectedMatchId, StringComparison.Ordinal);
         bool live = state is MatchCardState.InProgress or MatchCardState.SuperviseRoom;
         var text = ModAccent.TextOn(_pageAccent);
+        bool champion = OnChampionsPath(t, m);
         card.Background = mine ? Solid(ModAccent.SelectionFill(_pageAccent))
+            : live ? LiveCardFill
             : m.Status == "bye" ? Frozen(0x8C, 0x12, 0x21, 0x3A) : Ink("#12213A");
-        card.BorderThickness = new Thickness(picked || hit ? 2 : 1);
-        card.BorderBrush = picked ? Solid(text)
+        card.BorderThickness = new Thickness(picked || hit ? 2 : live ? 1.5 : 1);
+        // Picked in a finished tournament: a gold ring. Your match keeps the mod's colour; being
+        // played is blue; the champion's way through is gold (design 106).
+        card.BorderBrush = picked ? (t.Status == "finished" ? Solid(StateColors.Gold) : Solid(text))
             : hit ? Brushes.White
             : mine ? Tint(_pageAccent, .65)
-            : live ? Frozen(0x99, 0x4F, 0xD6, 0x8A)
+            : live ? Tint(StateColors.Blue, .8)
+            : champion ? Tint(StateColors.Gold, .55)
             : Frozen(0x1A, 0xFF, 0xFF, 0xFF);
     }
 
@@ -1691,38 +1856,108 @@ public partial class MultiplayerTab
         var marker = won || !decided || !known
             ? BracketLayout.MarkerFor(bye, decided, won, m.Outcome)
             : BracketLayout.LoserMarkerFor(decided, known, m.Outcome);
+        bool final = IsFinishedFinal(t, m);
         FrameworkElement? mark = marker switch
         {
-            SideMarker.One => Say("1", "SetControlSize", "#8FE0B0", FontWeights.SemiBold, new Thickness(8, 0, 0, 0), mono: true),
-            SideMarker.Zero => Say("0", "SetControlSize", "#61779A", FontWeights.SemiBold, new Thickness(8, 0, 0, 0), mono: true),
-            SideMarker.ByeTag => BracketTag(Strings.Get("TpTagBye"), "#C3D2E5"),
-            SideMarker.WalkoverTag => Say("✓", "SetControlSize", "#8FE0B0", FontWeights.SemiBold, new Thickness(8, 0, 0, 0)),
-            SideMarker.DqTag => BracketTag("DQ", "#F0A6A6"),
+            SideMarker.One => ResultSquare(final ? ResultKind.WonTheFinal : ResultKind.Won, 18),
+            SideMarker.Zero => ResultSquare(ResultKind.Lost, 18),
+            SideMarker.WalkoverTag => ResultSquare(ResultKind.WonWithoutPlaying, 18),
+            SideMarker.ByeTag or SideMarker.DqTag or SideMarker.AbsentTag => TagFor(marker),
             _ => null,
         };
-        // A walkover names who did not come: the loser's side carries it, with no figure.
-        if (lost && m.Outcome == "walkover") mark = BracketTag(Strings.Get("TpTagAbsent"), "#F5BD76");
         if (mark != null)
         {
             Grid.SetColumn(mark, 3);
             grid.Children.Add(mark);
         }
-        return grid;
+        // The winner's row: a green tint from the left (gold in the final of a finished tournament).
+        return new Border
+        {
+            Background = won ? final ? RowTint(StateColors.Gold, .24, 0, .8) : RowTint(StateColors.Green, .16, 0, .8) : null,
+            Child = grid,
+        };
     }
 
-    private static Border BracketTag(string text, string ink) => new()
-    {
-        Height = 18,
-        Margin = new Thickness(8, 0, 0, 0),
-        Padding = new Thickness(7, 0, 7, 0),
-        CornerRadius = new CornerRadius(9),
-        Background = Frozen(0x14, 0xFF, 0xFF, 0xFF),
-        BorderBrush = Frozen(0x24, 0xFF, 0xFF, 0xFF),
-        BorderThickness = new Thickness(1),
-        Child = Say(text, "SetTinySize", ink, FontWeights.Bold),
-    };
+    /// <summary>What a result square says (design 106).</summary>
+    private enum ResultKind { Won, Lost, WonWithoutPlaying, WonTheFinal }
 
-    private FrameworkElement BuildBracketLegend()
+    /// <summary>
+    /// A result in a square instead of a loose figure (design 106): green for the winner, a quiet
+    /// 0 for the loser, a drawn tick for a win nobody played, gold for the final of a finished
+    /// tournament. 18 in the bracket, 22 in the match panel.
+    /// </summary>
+    private static Border ResultSquare(ResultKind kind, double size)
+    {
+        bool gold = kind == ResultKind.WonTheFinal;
+        bool won = kind != ResultKind.Lost;
+        var square = new Border
+        {
+            Width = size,
+            Height = size,
+            CornerRadius = new CornerRadius(size > 20 ? 6 : 5),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = gold ? Tint(StateColors.Gold, .24) : won ? Solid(StateColors.WonFill) : Frozen(0x0D, 0xFF, 0xFF, 0xFF),
+            BorderBrush = gold ? Tint(StateColors.Gold, .75) : won ? Tint(StateColors.Green, .55) : Frozen(0x1A, 0xFF, 0xFF, 0xFF),
+        };
+        if (kind == ResultKind.WonWithoutPlaying)
+        {
+            square.Child = DrawnTick(size * .72, Brushes.White);
+            square.ToolTip = TooltipHelper.Wrap(Strings.Get("TpWonWithoutPlaying"));
+            return square;
+        }
+        var figure = Say(kind == ResultKind.Lost ? "0" : "1", size > 20 ? "SetRowDescSize" : "SetDescSize",
+            gold ? ToHex(StateColors.GoldText) : won ? "#FFFFFF" : "#8C9CB1", FontWeights.Bold, mono: true);
+        figure.HorizontalAlignment = HorizontalAlignment.Center;
+        square.Child = figure;
+        return square;
+    }
+
+    /// <summary>ABSENT, DQ and BYE, each in its own colour (design 106), on the row it is about.</summary>
+    private static Border TagFor(SideMarker marker)
+    {
+        var (text, fill, rim, ink) = marker switch
+        {
+            SideMarker.AbsentTag => (Strings.Get("TpTagAbsent"), Tint(StateColors.Amber, .14), Tint(StateColors.Amber, .5), ToHex(StateColors.AmberText)),
+            SideMarker.DqTag => (Strings.Get("TpTagDq"), Tint(StateColors.Red, .18), Tint(StateColors.Red, .55), ToHex(StateColors.RedText)),
+            _ => (Strings.Get("TpTagBye"), Frozen(0x14, 0xFF, 0xFF, 0xFF), Frozen(0x24, 0xFF, 0xFF, 0xFF), "#C3D2E5"),
+        };
+        return new Border
+        {
+            Height = 18,
+            Margin = new Thickness(8, 0, 0, 0),
+            Padding = new Thickness(7, 0, 7, 0),
+            CornerRadius = new CornerRadius(9),
+            Background = fill,
+            BorderBrush = rim,
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = Say(text, "SetTinySize", ink, FontWeights.Bold),
+        };
+    }
+
+    /// <summary>The final of a tournament that is over: what it shows goes gold.</summary>
+    private static bool IsFinishedFinal(TournamentDetail t, TournamentMatch m)
+        => t.Status == "finished" && t.Matches is { Count: > 0 } all && m.Round == all.Max(x => x.Round);
+
+    /// <summary>A card the champion went through, in a finished tournament.</summary>
+    private static bool OnChampionsPath(TournamentDetail t, TournamentMatch m)
+        => t.Status == "finished" && !string.IsNullOrEmpty(t.WinnerEntrantId)
+           && (m.Entrant1Id == t.WinnerEntrantId || m.Entrant2Id == t.WinnerEntrantId);
+
+    /// <summary>A left-to-right tint that fades out: the winner's row.</summary>
+    private static Brush RowTint(Color c, double from, double to, double at)
+    {
+        var fill = new LinearGradientBrush { StartPoint = new Point(0, .5), EndPoint = new Point(1, .5) };
+        fill.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(from * 255), c.R, c.G, c.B), 0));
+        fill.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(to * 255), c.R, c.G, c.B), at));
+        fill.Freeze();
+        return fill;
+    }
+
+    /// <summary>The legend draws the same pieces as the bracket (design 106), not grey text.</summary>
+    private FrameworkElement BuildBracketLegend(TournamentDetail t)
     {
         var line = new WrapPanel();
         FrameworkElement Item(params UIElement[] parts)
@@ -1741,10 +1976,24 @@ public partial class MultiplayerTab
             BorderBrush = Tint(_pageAccent, .65),
             BorderThickness = new Thickness(1),
         }, Say(Strings.Get("TpLegendMine"), "SetDescSize", "#A8BCD2")));
-        line.Children.Add(Item(Dot(7, Ink("#4FD68A"), 6), Say(Strings.Get("TpLegendLive"), "SetDescSize", "#A8BCD2")));
-        line.Children.Add(Item(Say("1", "SetCaptionSize", "#8FE0B0", FontWeights.SemiBold, mono: true), Say("/", "SetDescSize", "#A8BCD2", margin: new Thickness(5, 0, 5, 0)),
-            Say("0", "SetCaptionSize", "#61779A", FontWeights.SemiBold, mono: true), Say(Strings.Get("TpLegendResult"), "SetDescSize", "#A8BCD2", margin: new Thickness(6, 0, 0, 0))));
-        line.Children.Add(Say(Strings.Get("TpLegendTags"), "SetDescSize", "#A8BCD2"));
+        var live = Dot(7, Solid(StateColors.Blue), 6);
+        AttachChipPulse(live);
+        line.Children.Add(Item(live, Say(Strings.Get("TpLegendLive"), "SetDescSize", "#A8BCD2")));
+        var one = ResultSquare(ResultKind.Won, 18);
+        one.Margin = new Thickness(0);
+        var zero = ResultSquare(ResultKind.Lost, 18);
+        zero.Margin = new Thickness(0);
+        line.Children.Add(Item(one, Say("/", "SetDescSize", "#A8BCD2", margin: new Thickness(5, 0, 5, 0)), zero,
+            Say(Strings.Get("TpLegendResult"), "SetDescSize", "#A8BCD2", margin: new Thickness(6, 0, 0, 0))));
+        if (t.Status == "finished" && !string.IsNullOrEmpty(t.WinnerEntrantId))
+            line.Children.Add(Item(new Border { Width = 14, Height = 2, CornerRadius = new CornerRadius(1), Margin = new Thickness(0, 0, 6, 0), Background = Tint(StateColors.Gold, .9), VerticalAlignment = VerticalAlignment.Center },
+                Say(Strings.Get("TpLegendChampionPath"), "SetDescSize", "#A8BCD2")));
+        foreach (var (tag, key) in new[] { (SideMarker.AbsentTag, "TpLegendAbsent"), (SideMarker.DqTag, "TpLegendDq"), (SideMarker.ByeTag, "TpLegendBye") })
+        {
+            var pill = TagFor(tag);
+            pill.Margin = new Thickness(0, 0, 6, 0);
+            line.Children.Add(Item(pill, Say(Strings.Get(key), "SetDescSize", "#A8BCD2")));
+        }
         return new Border { Padding = new Thickness(16, 9, 16, 9), BorderBrush = Frozen(0x12, 0xFF, 0xFF, 0xFF), BorderThickness = new Thickness(0, 1, 0, 0), Child = line };
     }
 
@@ -1812,20 +2061,23 @@ public partial class MultiplayerTab
         var winner = TournamentPage.NameOf(t, m.WinnerEntrantId);
         var loser = m.WinnerEntrantId == m.Entrant1Id ? TournamentPage.NameOf(t, m.Entrant2Id) : TournamentPage.NameOf(t, m.Entrant1Id);
         var accent = ToHex(ModAccent.TextOn(_pageAccent));
+        var doneDot = ToHex(IsFinishedFinal(t, m) ? StateColors.Gold : StateColors.Green);
         var (text, ink, dot) = state switch
         {
             MatchCardState.Bye => (Strings.Format("TpStateBye", TournamentPage.NameOf(t, m.Entrant1Id ?? m.Entrant2Id)), "#C3D2E5", "#8C9CB1"),
-            MatchCardState.InProgress or MatchCardState.SuperviseRoom => (Strings.Get("TpStateLive"), "#8FE0B0", "#4FD68A"),
+            MatchCardState.InProgress or MatchCardState.SuperviseRoom => (Strings.Get("TpStateLive"), ToHex(StateColors.BlueText), ToHex(StateColors.Blue)),
             MatchCardState.Playable or MatchCardState.ReturnToRoom => (Strings.Get("TpStateMine"), accent, accent),
             MatchCardState.JoinRoom => (Strings.Get("TpStateJoin"), accent, accent),
-            MatchCardState.Done when m.Outcome == "walkover" => (Strings.Format("TpStateWalkover", winner, loser), "#DCE7F5", "#8FE0B0"),
-            MatchCardState.Done when m.Outcome == "dq" => (Strings.Format("TpStateDq", winner, loser), "#DCE7F5", "#8FE0B0"),
-            MatchCardState.Done => (Strings.Format("TpStateWon", winner), "#DCE7F5", "#8FE0B0"),
+            MatchCardState.Done when m.Outcome == "walkover" => (Strings.Format("TpStateWalkover", winner, loser), "#DCE7F5", doneDot),
+            MatchCardState.Done when m.Outcome == "dq" => (Strings.Format("TpStateDq", winner, loser), "#DCE7F5", doneDot),
+            MatchCardState.Done => (Strings.Format("TpStateWon", winner), "#DCE7F5", doneDot),
             _ when string.IsNullOrEmpty(m.Entrant1Id) || string.IsNullOrEmpty(m.Entrant2Id) => (Strings.Get("TpStateWaiting"), "#C3D2E5", "#8C9CB1"),
             _ => (Strings.Get("TpStateToPlay"), "#C3D2E5", "#8C9CB1"),
         };
         var stateLine = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
-        stateLine.Children.Add(Dot(7, Ink(dot), 8));
+        var stateDot = Dot(7, Ink(dot), 8);
+        if (state is MatchCardState.InProgress or MatchCardState.SuperviseRoom) AttachChipPulse(stateDot);
+        stateLine.Children.Add(stateDot);
         var stateText = Say(text, "SetRowDescSize", ink, FontWeights.SemiBold);
         stateText.TextWrapping = TextWrapping.Wrap;
         stateText.MaxWidth = 250;
@@ -1924,20 +2176,22 @@ public partial class MultiplayerTab
         grid.Children.Add(disc);
         grid.Children.Add(words);
 
-        string res = "", resInk = "#61779A";
-        if (m.Status == "bye") { res = Strings.Get("TpTagBye"); resInk = "#C3D2E5"; }
-        else if (decided && known)
+        // The same squares and tags as the bracket, at 22 (design 106).
+        bool final = IsFinishedFinal(t, m);
+        var marker = m.Status == "bye" ? SideMarker.ByeTag
+            : !decided || !known ? SideMarker.None
+            : won ? BracketLayout.MarkerFor(false, true, true, m.Outcome)
+            : BracketLayout.LoserMarkerFor(true, true, m.Outcome);
+        FrameworkElement? mark = marker switch
         {
-            (res, resInk) = m.Outcome switch
-            {
-                "walkover" => won ? ("✓", "#8FE0B0") : (Strings.Get("TpTagAbsent"), "#F5BD76"),
-                "dq" => won ? ("DQ", "#F0A6A6") : ("", "#61779A"),
-                _ => won ? ("1", "#8FE0B0") : ("0", "#61779A"),
-            };
-        }
-        if (res.Length > 0)
+            SideMarker.One => ResultSquare(final ? ResultKind.WonTheFinal : ResultKind.Won, 22),
+            SideMarker.Zero => ResultSquare(ResultKind.Lost, 22),
+            SideMarker.WalkoverTag => ResultSquare(ResultKind.WonWithoutPlaying, 22),
+            SideMarker.ByeTag or SideMarker.DqTag or SideMarker.AbsentTag => TagFor(marker),
+            _ => null,
+        };
+        if (mark != null)
         {
-            var mark = Say(res, "SetControlSize", resInk, FontWeights.Bold, new Thickness(8, 0, 0, 0), mono: true);
             Grid.SetColumn(mark, 2);
             grid.Children.Add(mark);
         }
@@ -1948,8 +2202,10 @@ public partial class MultiplayerTab
             Padding = new Thickness(12, 10, 12, 10),
             CornerRadius = new CornerRadius(9),
             BorderThickness = new Thickness(1),
-            Background = isMe ? Solid(ModAccent.SelectionFill(_pageAccent)) : won ? Frozen(0x14, 0x4F, 0xD6, 0x8A) : !known ? Frozen(0x59, 0x0A, 0x13, 0x21) : Frozen(0x73, 0x0A, 0x13, 0x21),
-            BorderBrush = isMe ? Tint(_pageAccent, .65) : won ? Frozen(0x59, 0x4F, 0xD6, 0x8A) : Frozen(0x14, 0xFF, 0xFF, 0xFF),
+            Background = isMe ? Solid(ModAccent.SelectionFill(_pageAccent))
+                : won ? final ? RowTint(StateColors.Gold, .22, .06, 1) : RowTint(StateColors.Green, .18, .05, 1)
+                : !known ? Frozen(0x59, 0x0A, 0x13, 0x21) : Frozen(0x73, 0x0A, 0x13, 0x21),
+            BorderBrush = isMe ? Tint(_pageAccent, .65) : won ? (final ? Tint(StateColors.Gold, .6) : Tint(StateColors.Green, .5)) : Frozen(0x14, 0xFF, 0xFF, 0xFF),
             Child = grid,
         };
     }
@@ -2191,9 +2447,10 @@ public partial class MultiplayerTab
         }
 
         var fate = TournamentPage.FateOf(t, e);
+        bool isChampion = !string.IsNullOrEmpty(t.WinnerEntrantId) && t.WinnerEntrantId == e.Id;
         var (text, ink, dot) = fate != null
-            ? (fate.Text, fate.Tone switch { "ok" => "#8FE0B0", "caution" => "#F5BD76", "danger" => "#F0A6A6", "plain" => "#DCE7F5", _ => "#A8BCD2" },
-               fate.Tone switch { "ok" => "#4FD68A", "caution" => "#F4900C", "danger" => "#C84A4A", "plain" => "#C3D2E5", _ => "#61779A" })
+            ? (fate.Text, fate.Tone switch { "champion" => "#F3D995", "ok" => "#8FE0B0", "caution" => "#F5BD76", "danger" => "#F0A6A6", "plain" => "#DCE7F5", _ => "#A8BCD2" },
+               fate.Tone switch { "champion" => "#E6C06A", "ok" => "#4FD68A", "caution" => "#F4900C", "danger" => "#C84A4A", "plain" => "#C3D2E5", _ => "#61779A" })
             : needsTeam ? (Strings.Get("MpTournamentNeedsTeam"), "#F5BD76", "#F4900C")
             : noSeed ? (Strings.Get("MpTournamentNoSeed"), "#F5BD76", "#F4900C")
             : pending && TournamentPermissions.CanDecideEntrant(t, me, e) ? (Strings.Get("MpTournamentAskedToEnter"), "#F5BD76", "#F4900C")
@@ -2242,10 +2499,22 @@ public partial class MultiplayerTab
             Padding = new Thickness(10, 8, 10, 8),
             CornerRadius = new CornerRadius(9),
             BorderThickness = new Thickness(1),
-            Background = isMine ? Solid(ModAccent.SelectionFill(_pageAccent)) : pending ? Frozen(0x14, 0xF4, 0x90, 0x0C) : isOut ? Frozen(0x47, 0x0A, 0x13, 0x21) : Frozen(0x73, 0x0A, 0x13, 0x21),
-            BorderBrush = isMine ? Tint(_pageAccent, .65) : pending ? Frozen(0x59, 0xF4, 0x90, 0x0C) : Frozen(0x14, 0xFF, 0xFF, 0xFF),
+            // The champion's tile is gold even when it is yours: nothing of the champion takes the mod's colour.
+            Background = isChampion ? GoldTint(.2, .05) : isMine ? Solid(ModAccent.SelectionFill(_pageAccent)) : pending ? Frozen(0x14, 0xF4, 0x90, 0x0C) : isOut ? Frozen(0x47, 0x0A, 0x13, 0x21) : Frozen(0x73, 0x0A, 0x13, 0x21),
+            BorderBrush = isChampion ? Tint(StateColors.Gold, .55) : isMine ? Tint(_pageAccent, .65) : pending ? Frozen(0x59, 0xF4, 0x90, 0x0C) : Frozen(0x14, 0xFF, 0xFF, 0xFF),
             Child = grid,
         };
+    }
+
+    /// <summary>A left-to-right gold tint over the page's glass: the champion's row (design 106).</summary>
+    private static Brush GoldTint(double from, double to, double reach = 1)
+    {
+        var fill = new LinearGradientBrush { StartPoint = new Point(0, .5), EndPoint = new Point(1, .5) };
+        var g = StateColors.Gold;
+        fill.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(from * 255), g.R, g.G, g.B), 0));
+        fill.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(to * 255), g.R, g.G, g.B), reach));
+        fill.Freeze();
+        return fill;
     }
 
     private FrameworkElement? BuildEntrantActions(TournamentDetail t, TournamentEntrant e, string? me, bool needsTeam)

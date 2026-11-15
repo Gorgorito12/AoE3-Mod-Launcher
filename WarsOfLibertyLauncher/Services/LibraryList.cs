@@ -180,6 +180,17 @@ public readonly record struct LibraryMetrics(
     }
 
     /// <summary><c>open</c> and <c>closed</c> are the player's; anything else follows the width.</summary>
+    /// <summary>
+    /// Whether the list has to be drawn again before the page can be trusted (2026-11-14). The
+    /// column's width and the list inside it were decided in two places: a refresh that ran while
+    /// the Library was hidden read a width of 0 and drew the list FOLDED, and coming back the
+    /// column opened wide around it (a wide empty panel with the icons alone, until a resize).
+    /// A hidden page (width 0) never draws; the list is redrawn when nothing has been drawn yet or
+    /// when what was drawn is not what the width now asks for.
+    /// </summary>
+    public static bool RailNeedsDrawing(double width, bool? drawnOpen, bool open)
+        => width > 0 && drawnOpen != open;
+
     public static bool RailOpen(string? mode, double width) => mode switch
     {
         "open" => true,

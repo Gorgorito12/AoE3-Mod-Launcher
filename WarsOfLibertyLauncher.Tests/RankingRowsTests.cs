@@ -53,7 +53,8 @@ public class RankingRowsTests
             Layout();
             Assert.True(tab.RankingRowsScroll.ScrollableHeight > 0, "the list should be scrolling");
 
-            var heading = (Grid)tab.RankingHeaderHost.Children[0];
+            // The headings sit on a bar (design 107); its Grid is the one that lines up.
+            var heading = (Grid)((Border)tab.RankingHeaderHost.Children[0]).Child;
             var rows = tab.RankingBody.Children.OfType<Border>().Where(b => b.Tag is LeaderboardRow).ToList();
             Assert.NotEmpty(rows);
             foreach (var plate in rows)
@@ -177,18 +178,13 @@ public class RankingRowsTests
                 {
                     UserId = "u2", DisplayName = "Beto", Rating = 1500, PlacementPlayed = 6, PlacementRequired = 10,
                 }, isMe: false, specs, ownResults: null);
+                // Design 107: a player being placed is a TILE in its own grid, not a row of the
+                // table: "6/10" and a square per match, and no peak at all (there is none yet).
                 var plain = Walk(placing).OfType<TextBlock>().Select(WarsOfLibertyLauncher.RevealText.PlainTextOf);
-                Assert.Contains(plain, t => t.Contains(Strings.Format("MpPlacementProgress", 6, 10)));
+                Assert.Contains(plain, t => t.Contains(Strings.Format("MpPlacementProgressShort", 6, 10)));
                 Assert.DoesNotContain(Walk(placing).OfType<TextBlock>(), t => Equals(t.Tag, MultiplayerTab.RankingPeakTag));
-
-                // With the column, a placement row's peak is a dash that says when it comes.
-                placing = (DependencyObject)tab.BuildPlacementRow(new PlacementRow
-                {
-                    UserId = "u2", DisplayName = "Beto", Rating = 1500, PlacementPlayed = 6, PlacementRequired = 10,
-                }, isMe: false, RankingTableLayout.All, ownResults: null);
-                var dash = Walk(placing).OfType<TextBlock>().Single(t => Equals(t.Tag, MultiplayerTab.RankingPeakTag));
-                Assert.Equal(Strings.Get("MpDash"), dash.Text);
-                Assert.Equal(Strings.Get("MpRankPeakPlacementTip"), Assert.IsAssignableFrom<TextBlock>(dash.ToolTip).Text);
+                var squares = Walk(placing).OfType<Grid>().Single(g => Equals(g.Tag, "PlacementSegments"));
+                Assert.Equal(10, squares.Children.Count);
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -203,7 +199,10 @@ public class RankingRowsTests
         {
             var tab = new MultiplayerTab();
             tab.ShowDemoElo("ranking");
+            // The placement tiles sit in their own grid (design 107).
             var rows = tab.RankingBody.Children.OfType<Border>()
+                .Concat(tab.RankingBody.Children.OfType<Panel>().Where(p => Equals(p.Tag, MultiplayerTab.PlacementTilesTag))
+                    .SelectMany(p => p.Children.OfType<Border>()))
                 .Where(b => b.Tag is LeaderboardRow or PlacementRow).ToList();
             Assert.Contains(rows, b => b.Tag is LeaderboardRow);
             Assert.Contains(rows, b => b.Tag is PlacementRow);

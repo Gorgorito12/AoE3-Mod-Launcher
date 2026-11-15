@@ -38,6 +38,18 @@ public static class RankingGroups
     /// <summary>How many players stand on the podium.</summary>
     public const int PodiumPlaces = 3;
 
+    /// <summary>Whether a player stands at his best: his ELO reached his peak (design 107 draws the
+    /// peak in gold then).</summary>
+    public static bool AtPeak(double rating, double? peak) => peak is double p && rating >= p;
+
+    /// <summary>The colour of a podium place: gold, silver, bronze (design 107).</summary>
+    public static System.Windows.Media.Color PodiumMetal(int place) => place switch
+    {
+        1 => System.Windows.Media.Color.FromRgb(0xE6, 0xC0, 0x6A),
+        2 => System.Windows.Media.Color.FromRgb(0xCF, 0xD9, 0xE6),
+        _ => System.Windows.Media.Color.FromRgb(0xD5, 0x90, 0x56),
+    };
+
     /// <summary>The players of the podium, in the server's order (first place first).</summary>
     public static IReadOnlyList<LeaderboardRow> Podium(IReadOnlyList<LeaderboardRow> ranked)
         => ranked.Take(PodiumPlaces).ToList();

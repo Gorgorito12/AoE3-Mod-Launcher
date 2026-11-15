@@ -30,10 +30,11 @@ public class RankingBadgesLayoutTests
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = RenderedRanking();
-            var header = (Grid)tab.RankingHeaderHost.Children[0];
+            var header = (Grid)((Border)tab.RankingHeaderHost.Children[0]).Child;
             var rows = RowGrids(tab.RankingBody).ToList();
-            // Twelve ranked less the three on the podium, and the three being placed.
-            Assert.True(rows.Count >= 12);
+            // Twelve ranked less the three on the podium: the players being placed are tiles in a
+            // grid of their own since design 107, under no column.
+            Assert.True(rows.Count >= 9);
 
             var headerX = header.TranslatePoint(new Point(0, 0), tab.RankingHeaderHost).X;
             var specs = RankingTableLayout.All;
@@ -66,15 +67,22 @@ public class RankingBadgesLayoutTests
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = RenderedRanking();
-            var tags = tab.RankingBody.Children.OfType<Border>().Select(b => b.Tag).ToList();
-            var lastRanked = tags.FindLastIndex(t => t is Models.Multiplayer.LeaderboardRow);
-            var firstPlacing = tags.FindIndex(t => t is Models.Multiplayer.PlacementRow);
-            Assert.True(lastRanked >= 0 && firstPlacing > lastRanked);
+            var children = tab.RankingBody.Children.OfType<FrameworkElement>().ToList();
+            var lastRanked = children.FindLastIndex(c => c.Tag is Models.Multiplayer.LeaderboardRow);
+            var tiles = children.FindIndex(c => Equals(c.Tag, MultiplayerTab.PlacementTilesTag));
+            Assert.True(lastRanked >= 0 && tiles > lastRanked);
             Assert.Equal(
                 StatsDemoData.Community().Leaderboard.Skip(RankingGroups.PodiumPlaces).Select(r => r.Rank),
-                tags.OfType<Models.Multiplayer.LeaderboardRow>().Select(r => r.Rank));
-            foreach (var b in tab.RankingBody.Children.OfType<Border>().Where(b => b.Tag is Models.Multiplayer.PlacementRow))
-                Assert.Equal(RankAge.Discovery, BadgeOf((Grid)b.Child)!.Tag);
+                children.Select(c => c.Tag).OfType<Models.Multiplayer.LeaderboardRow>().Select(r => r.Rank));
+            // Design 107: blue tiles, each a player being placed - the heading above them carries
+            // the Discovery shield, the tile itself no place and no badge.
+            var grid = (Panel)children[tiles];
+            Assert.NotEmpty(grid.Children);
+            foreach (var tile in grid.Children.OfType<Border>())
+            {
+                Assert.IsType<Models.Multiplayer.PlacementRow>(tile.Tag);
+                Assert.Null(BadgeOf((Grid)((Grid)tile.Child).Children[1]));
+            }
         });
         Assert.Null(error);
     }
@@ -264,8 +272,7 @@ public class RankingBadgesLayoutTests
     private static IEnumerable<Grid> RowGrids(Panel root)
     {
         foreach (UIElement child in root.Children)
-            if (child is Border { Child: Grid g } b
-                && b.Tag is Models.Multiplayer.LeaderboardRow or Models.Multiplayer.PlacementRow)
+            if (child is Border { Child: Grid g } b && b.Tag is Models.Multiplayer.LeaderboardRow)
                 yield return g;
     }
 
