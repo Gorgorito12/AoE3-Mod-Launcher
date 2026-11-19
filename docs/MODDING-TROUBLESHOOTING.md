@@ -264,7 +264,16 @@ only the fallback when GitHub cannot be reached. If you don't use it, update
 **Background.** Napoleonic Era and Struggle of Indonesia were listed at `1.0.0`;
 their authors later renamed their tags to the mods' real version numbers (`2.1.7b`
 and `1.2`), and every new install of both mods failed until the catalog caught
-up.
+up. King's Return sat on a tag that no longer existed the same way.
+
+**Now caught for you (2026-11-18).** The catalog runs
+`.github/scripts/check_releases.py` every day: it asks GitHub what the launcher
+will ask and applies the launcher's own rules (a missing tag, a release with no
+payload, a broken split set, no baseline for `deltaPatches`, a `userDataPayload`
+on no release). Each mod with a problem gets ONE issue titled
+`Release check: <id>`, updated when the findings change and closed when the mod is
+clean. A pull request that bumps a tag to one that does not exist now fails its
+check instead of merging. If GitHub does not answer, nothing is opened or closed.
 
 ---
 

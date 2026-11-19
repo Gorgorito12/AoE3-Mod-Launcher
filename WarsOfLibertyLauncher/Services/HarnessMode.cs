@@ -88,6 +88,29 @@ public static class HarnessMode
     internal static string? DocumentsRootFor(bool active, string? value)
         => active && !string.IsNullOrWhiteSpace(value) ? value : null;
 
+    /// <summary>The lobby server a test run talks to instead of the real one.</summary>
+    public const string LobbyUrlVariable = "AOE3ML_LOBBY_URL";
+
+    /// <summary>
+    /// Null outside the harness, so no environment can point a player's launcher at another
+    /// server. Read, never stored: the config keeps its own address, and the migration that
+    /// rewrites a local address back to production (and signs the player out) never sees it.
+    /// </summary>
+    public static string? LobbyUrl => LobbyUrlFor(Active, Environment.GetEnvironmentVariable(LobbyUrlVariable));
+
+    /// <summary>
+    /// Only plain http to this machine, with no user name in it: the rig runs its own server on
+    /// loopback, and anything else would be a way to send a test account's token somewhere.
+    /// </summary>
+    internal static string? LobbyUrlFor(bool active, string? value)
+    {
+        if (!active || string.IsNullOrWhiteSpace(value)) return null;
+        if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)) return null;
+        if (uri.Scheme != Uri.UriSchemeHttp || !uri.IsLoopback) return null;
+        if (!string.IsNullOrEmpty(uri.UserInfo)) return null;
+        return uri.GetLeftPart(UriPartial.Authority);
+    }
+
     internal static bool Decide(string? flag, string? dataDirOverride, string defaultDataDir, bool developerBuild)
     {
         if (flag != "1" || !developerBuild) return false;

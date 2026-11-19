@@ -136,6 +136,17 @@ public partial class MultiplayerTab
                   : observers > 1 ? Strings.Format("RoomModeObservers", observers) : "");
         w.RoomModeDot.Fill = Solid(_currentLobbyIsCompetitive ? "#E6C06A" : "#8C9CB1");
 
+        // The rules every member's game will be in, said before anybody presses Ready.
+        var showRules = result == null && LanAutoStartArgs.ShowsRulesChip(_currentLobbyRulesStated);
+        w.RoomRulesChip.Visibility = showRules ? Visibility.Visible : Visibility.Collapsed;
+        if (showRules)
+        {
+            var rulesName = Strings.Get(LanAutoStartArgs.RulesLabelKey(_currentLobbyGameRules));
+            w.RoomRulesText.Text = Strings.Format("RoomRulesChip", rulesName);
+            w.RoomRulesChip.ToolTip = TooltipHelper.Wrap(Strings.Format("RoomRulesTip",
+                CreateLobbyDialog.RulesDescription(_currentLobbyGameRules)));
+        }
+
         var version = string.IsNullOrEmpty(_currentLobbyModId)
             ? "" : Cfg().GetState(_currentLobbyModId!).LastKnownVersion ?? "";
         w.RoomVersionName.Text = modName;
@@ -407,8 +418,8 @@ public partial class MultiplayerTab
         if (line.Inlines.Count > 0) stack.Children.Add(line);
 
         FrameworkElement avatar = inRoom ? BuildAvatarDisc(player.Name, member!.AvatarUrl, 32) : BuildEmptySeatDisc();
-        var state = inRoom
-            ? BracketState(member!, isMe, bracket, side, out var dim)
+        FrameworkElement state = inRoom
+            ? WithPeerPing(BracketState(member!, isMe, bracket, side, out var dim), member!, isMe)
             : RosterState(Strings.Get("RtStAbsent"), "#8C9CB1", "#61779A", ring: true);
         var row = RosterRow(avatar, null, stack, state);
         if (inRoom && BracketDim(member!, isMe)) row.Opacity = .6;
@@ -651,6 +662,7 @@ public partial class MultiplayerTab
 
         w.RoomResultPanel.Visibility = hasResult ? Visibility.Visible : Visibility.Collapsed;
         w.RoomSoloPanel.Visibility = alone ? Visibility.Visible : Visibility.Collapsed;
+        RefreshRoomLanCard();
 
         var observers = _roomMembers.Values.Any(m => string.Equals(m.Role, "spectator", StringComparison.Ordinal));
         w.RoomRecordPanel.Visibility = !competitive && !live && !hasResult && !observers
@@ -769,7 +781,15 @@ public partial class MultiplayerTab
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    private static string UnratedSentence(MatchOutcomeView model) => model.UnratedReason ?? "";
+    /// <summary>
+    /// The server's reason as a sentence, through the same mapping the end-of-match card and the
+    /// history use. It printed the raw code (<c>new_account_short</c>) in the room's facts and its
+    /// footer, found by the two-account rig on the first match it played.
+    /// </summary>
+    internal static string UnratedSentence(MatchOutcomeView model)
+        => string.IsNullOrEmpty(model.UnratedReason) && model.LocalFailure == LocalReadFailure.None
+            ? ""
+            : Strings.Get(MatchOutcomeView.UnratedNoteKey(model.UnratedReason, model.LocalFailure));
 
     private FrameworkElement BuildResultRivalRow(MatchOutcomeView model)
     {
@@ -859,10 +879,8 @@ public partial class MultiplayerTab
             : null;
         var hostEntry = players.FirstOrDefault(m => string.Equals(m.UserId, _roomHostUserId, StringComparison.Ordinal));
 
-        // The host of a casual room starts it, so nobody waits for them. In a competitive room the
-        // match starts itself, and the host's Ready is one of the ones it needs.
-        var counted = players.Where(m => _currentLobbyIsCompetitive
-                                         || !string.Equals(m.UserId, _roomHostUserId, StringComparison.Ordinal));
+        // The host marks ready like everybody else, in every room: the automatic start needs him too.
+        var counted = players;
         var facts = new RoomFacts
         {
             Stage = CurrentRoomStage(),
@@ -975,6 +993,14 @@ public partial class MultiplayerTab
         w.RematchButton.Visibility = Show(view.Primary == RoomPrimary.Rematch || inTournamentResult);
         w.RematchButton.Content = Strings.Get(inTournamentResult ? "RtViewBracket" : "RoomBtnRematch");
 
+        var force = view.Link == RoomLink.ForceStart;
+        w.RoomForceStartLink.Visibility = Show(force);
+        if (force)
+        {
+            w.RoomForceStartLink.Content = Strings.Get("RoomForceStart") + "  ▸";
+            w.RoomForceStartLink.ToolTip = TooltipHelper.Wrap(Strings.Get("RoomForceStartTip"));
+        }
+
         var second = view.Secondary is RoomSecondary.Assistant or RoomSecondary.FindAnother;
         w.RoomSecondaryButton.Visibility = Show(second);
         if (second)
@@ -983,6 +1009,35 @@ public partial class MultiplayerTab
             w.RoomSecondaryButton.Content = Strings.Get(find ? "QmFindAnother" : "RoomBtnAssistant");
             w.RoomSecondaryButton.ToolTip = TooltipHelper.Wrap(Strings.Get(find ? "RoomTipFindAnother" : "RoomBtnAssistantTip"));
         }
+    }
+
+    /// <summary>
+    /// "Start without waiting": the host of a casual room starts the countdown before everyone has
+    /// said ready. Asked first, naming who has not, because that player may not be at his PC. The
+    /// countdown that follows is the ordinary one, which anybody can still cancel.
+    /// </summary>
+    private async Task ForceStartAsync()
+    {
+        if (_lobbyWindow == null || _roomFooter?.Link != RoomLink.ForceStart) return;
+        var me = RoomViewerId;
+        var waiting = RoomPlayers()
+            .Where(m => !m.Ready && !string.Equals(m.UserId, me, StringComparison.Ordinal))
+            .Select(MemberName).ToList();
+        if (waiting.Count > 0)
+        {
+            var go = await MpAlertOverlay.ConfirmAsync(
+                _lobbyWindow.LobbyRootGrid,
+                Strings.Get("RoomForceStartTitle"),
+                Strings.Format(waiting.Count == 1 ? "RoomForceStartBody" : "RoomForceStartBodyPl", NameList.Join(waiting)),
+                Strings.Get("RoomForceStartYes"),
+                Strings.Get("MpCountdownCancel"),
+                danger: false);
+            if (!go) return;
+        }
+        if (_demoRoomSample != null) { AppendChatSystem(Strings.Get("RoomForceStart")); return; }
+        if (_matchPhase != MatchPhase.Lobby || !_isHostInCurrentRoom) return;
+        DiagnosticLog.Write($"MultiplayerTab: host starts without waiting for {waiting.Count} player(s).");
+        await BeginHostStart();
     }
 
     /// <summary>The footer's second button.</summary>

@@ -117,15 +117,26 @@ All commands run from `WarsOfLibertyLauncher/`.
   a stale `WarsOfLibertyLauncher.exe` (the `<AssemblyName>` rename made it
   `Aoe3ModLauncher.exe`), so its success output never printed — that drift is
   the reason it was collapsed into a wrapper.
+  **Every `.ps1` stays ASCII-only (or carries a BOM).** Windows PowerShell 5.1 reads a
+  BOM-less script in the ANSI code page, where a UTF-8 em dash (E2 80 94) ends in 0x94 =
+  U+201D, a closing curly quote PowerShell accepts as a quote — so one dash inside a
+  double-quoted `Write-Host` made `build-release.ps1` fail to parse under 5.1 while it parsed
+  cleanly under PowerShell 7, where it was always tried. Write `-`, `->`, `...`. Pinned by
+  `PowerShellScriptsTests`, which checks bytes rather than parsing (no BOM survives here: the
+  repo has no `.gitattributes`/`.editorconfig` to keep one).
 - **CI release builds run in GitHub Actions, NOT locally — this is a SignPath
   requirement.** `.github/workflows/release.yml` builds the same self-contained
   single-file `Aoe3ModLauncher.exe` on a `windows-latest` runner (runs the unit
   tests first), but UNSIGNED: it passes `-p:SignOutput=false` so the `.csproj`'s
   local `CN=Gorgorito` Authenticode targets are skipped. SignPath Foundation (free
   OSS code signing) only signs binaries built in CI on GitHub-hosted runners and
-  origin-verified — a locally built/signed `.exe` is not accepted — so the release
-  artifact must come from here, not `build-release.ps1` (which stays the LOCAL,
-  self-signed path for ad-hoc builds). Triggers: a `v*` tag push or manual
+  origin-verified — a locally built/signed `.exe` is not accepted — so ONCE SignPath is
+  approved the release artifact must come from here. **Until then the CI artifact is for the
+  SignPath review ONLY and must never be attached to a release:** every installed launcher
+  verifies that an update is signed by its own publisher (`CN=Gorgorito`), so an unsigned
+  asset is downloaded, refused, burns the tag in the startup gate and keeps multiplayer closed
+  behind an update nobody can install. Today's release asset is the local, self-signed
+  `build-release.ps1` build; switching signers needs one bridging release that accepts both. Triggers: a `v*` tag push or manual
   `workflow_dispatch` (with an optional version input; a tagged build derives the
   SemVer from the tag, same contract as `build-release.ps1 -Version`). The
   downstream `sign` job is auto-skipped (`if: vars.SIGNPATH_ORGANIZATION_ID != ''`)
@@ -137,6 +148,25 @@ All commands run from `WarsOfLibertyLauncher/`.
   home page with the verbatim SignPath attribution) ✅ — the remaining gaps are
   operational, not code: enable MFA on GitHub/SignPath for all team members (the
   policy doc already asserts it), and confirm the lobby backend repo is public OSS.
+
+### Testbed (the real launcher, on the CORSAIR)
+
+`tools/testbed/` runs the real launcher beside the player's own: `build`, `launch`, `shot`, `record`,
+`uia` (presses real controls with UI Automation, no cursor), `perf`, `compare`, `safety`. Writes that
+matter run for real in its own folders: `AOE3ML_DOCUMENTS` (backups, restores, imports) and
+`AOE3ML_SANDBOX` (Repair on `repair_fixture.py`'s real mod, `HarnessMode.BlockOutsideSandbox`), both
+ignored outside the harness. **In the harness `EnsureGameNotRunning` answers yes without looking,**
+because that check goes by name and the game on this machine may be another project's: never press
+"close it". `SelfUpdateIntegrationTests` runs the real download, verification and swap on a disposable
+copy with `AOE3ML_SELFUPDATE_TEST=1`; it is skipped otherwise, and it stops short of the restart. Its
+`README.md` has the commands and the definition of done; read it before verifying UI. Test launches
+open on the CORSAIR XENEON, found by NAME, because Windows' `DISPLAYn` does not match Display
+Settings. **`Services/HarnessMode.cs` is what makes this safe and all three of its conditions are
+required** (`AOE3ML_HARNESS=1`, a developer build, a data folder that is not the player's): a
+published launcher ignores the variable. In that mode every process goes through
+`HarnessMode.Start` and becomes a `HARNESS BLOCKED` log line, which is how a button is proved
+without anything opening. **A new `Process.Start` must use that funnel**;
+`HarnessModeTests.THE_ONE_THAT_MATTERS_EveryProcessGoesThroughTheFunnel` fails otherwise.
 
 ### Tests & verification
 
@@ -192,7 +222,95 @@ leaving the room mid-match has to warn about). Two more cover the network edge o
 pipeline, which had none at all: `DownloadRetryTests` (which download failures are retried —
 the REJECTION cases are the point: a user's Cancel and a permission error must not be) and
 `UpdateInfoServiceTests` (`ParseXml` + `IsUsable` — the well-formed-but-empty manifest is
-the case that matters).
+the case that matters). Four guard the competitive-recording upload (`ReplayUploadTests.cs`):
+`ReplayUploadGateTests` (casual room, opted out, no file, a recording never checked against the
+match, no match id — the refusals are the point), `ReplayStorageUrlTests` (a relative upload URL — the old backend's — is refused),
+`ReplayFileNameTests` (a server-suggested name is still not a path) and `ReplayStoragePutTests`
+(`THE_ONE_THAT_MATTERS_…`: the PUT carries NO Authorization header and exactly the signed
+length); `ReplayUploadQueueTests.cs` pins the retry queue — which answers are retried and which
+forgotten (`THE_ONE_THAT_MATTERS_AServerWithNoStorageIsAskedAgain`), the back-off, the week and the
+30-entry cap, one request per back-off step while the server has no storage, the copy that is sent
+after AoE3 renumbered the original, and sharing switched off forgetting everything; plus
+`DialogXamlTests.TheHistoryCardOffersADownloadOnlyWhenThereIsARecording` and
+`TheRecordingSwitchReadsAndWritesThePolicy`, and `has_replay` in `HistoryWireContractTests`.
+Downloading from Ranking (design handoff 63) adds `ReplayBrowseTests` (available / expired /
+none — an older server offers nothing — the " (2)" names, the 1/2/3 columns, the month groups,
+when the next page is asked for, and `AppendingAPageGroupsExactlyAsTheWholeList`),
+`ReplayDownloadIndexTests` (a deleted file no longer counts as downloaded),
+`ReplayWireContractTests`, and `RankingMatchesTests` (`THE_ONE_THAT_MATTERS_TheMatchesButtonSwapsThePage`,
+`THE_ONE_THAT_MATTERS_ScrollingToTheEndLoadsTheRestWithoutAButton` — the list loads as it scrolls,
+appends instead of redrawing, stops on a failed page until Retry, and goes back to the top on a
+filter change —
+only recorded matches carry a button, the expired group, the empty search, the Rooms row left
+alone, and a row with the button still 50 px); design 64b adds
+`THE_ONE_THAT_MATTERS_EachMatchInTheMatchesViewIsATile` (the card's fill, rim and radius, no group
+panel, 8 / 6 px apart — measured from where the cards land), `TheLatestMatchesPanelKeepsItsHairlineRows`
+(the tile is opt-in) and `TheButtonEndsFourPixelsAboveTheRowsBottom` (the 38 px / −4 column, both
+kinds of row). The period / kind / sort / "with a winner" controls add `MatchBrowseQueryTests`
+(`THE_ONE_THAT_MATTERS_ADefaultQueryIsTheRequestThisViewAlwaysMade`, and a match whose room is
+unknown is in neither kind), the recency headings in `ReplayBrowseTests` (TODAY / YESTERDAY / THIS
+WEEK, oldest first puts the year that is gone first) and, in `RankingMatchesTests`,
+`THE_ONE_THAT_MATTERS_TheNewControlsShowOnlyWhenTheServerAppliesThem`,
+`EachFilterNarrowsTheListAndOldestFirstOpensOnTheOldest` and
+`ANarrowedEmptyListSaysSoAndClearingKeepsTheOrder`.
+
+Three more pin the team rank badge (design handoff 51): `RankBadgeChoiceTests` (which badge
+shows where — the room overrules the player, a casual room defers, Highest compares AGE and a tie
+goes to 1v1), `RankBadgeContextTests` (the same rule on the real rooms row and roster, where a call
+site handing it the wrong room is the failure a player would see) and `BadgeModeCardTests` (no
+selector for a server that cannot store the choice, and no clickable Teams without a team place).
+
+Two pin what the launcher costs when nobody is looking: `RankBadgeClockTests` (stopping a badge
+STOPS its animation clocks instead of detaching them — the leak that kept two players' launchers
+at ~40 % CPU in the tray; it fails if `Controller.Stop()` is removed, which was checked) and
+`LayoutStormDetectorTests` (the storm rule, once a minute, that badges animating on screen are
+not a storm, that few-but-expensive frames are, and that a storm whose seconds mostly had no
+layout pass and a flood of size changes is called `NON-CONVERGING` — even when one second did
+complete — while a redraw-only one is not). See the
+animation-clock gotcha below.
+Three pin the v1.0.15 Rooms-page storm, a layout that never completed (see the `SizeChanged`
+gotcha): `InlineFlagFitTests.THE_ONE_THAT_MATTERS_HidingAFlagNeverInvalidatesTheLine` (hiding a
+flag leaves its line's measure valid — Hidden, never Collapsed),
+`RoomsActivityLayoutTests.ARowThatDoesNotFitIsLaidOutAtThePanelsWidth` (no 0×0 slot) and
+`CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth` (twelve flagged
+team matches in a one-row panel, under the launcher's text settings, settle at every sixth width
+from 180 to 516 px; on the old code 25 of 341 widths never did, and either fix alone passes it —
+both checked). Five pin the self-update ETag pair (see the self-update bullet (4)):
+`LauncherUpdateServiceTests.THE_ONE_THAT_MATTERS_TwoCopiesSharingAConfigEachGetTheTruth` and its
+`ShouldSendCachedETag` theory, `BuildLatestReleaseRequest_CarriesIfNoneMatchOnlyForAReleaseThisBinaryIsNotOlderThan`
+(the request CheckAsync really sends), `StartupUpdateStateTests.TheGateReadsTheReleaseETagWithItsTagAndNeverTheLegacyOne`
+and `LauncherConfigMigrationTests.THE_ONE_THAT_MATTERS_TheLegacyETagIsBlankedAndThePairIsLeftAlone`.
+Three more pin what it costs on a slow PC with somebody looking: `RankBadgeMotionTests` (a badge
+in a list — players panel, rooms, roster — is built STILL, only the top three places of a ladder
+wear a light, reduced effects stop everything and build nothing lit, and the blur is cached while
+the crisp numeral is not; the list test fails when a list badge is built lit, which was checked),
+`EffectsGovernorTests` (three slow seconds turn the lights off; a resize of many cheap frames and
+a hidden window do not) and `StartupWorkTests` (one AoE3 probe for callers in the same moment, and
+nothing invisible built while starting). `ScreenAndAvatarTests` pins the `TAB` log line (written
+only on a change) and that a Discord avatar is decoded ONCE, at the size it is shown.
+Six pin the folder a mod installs into (see the "A mod's NAME is not a folder name" gotcha):
+`SafeFolderNameTests` (the drop rule — AoE1's colon goes, and every name already shipped comes back
+unchanged), `InstallFolderRulesTests` (the refusals: both paths the maintainer typed, drive roots,
+relative paths, trailing dots, a UNC path with a separator too many), `InstallFolderSuggestionTests`
+(an install under the RAW name is still trusted; nothing relative is ever suggested),
+`LegacyShortcutsTests` (real NTFS streams; a base file with content and a neighbouring file
+survive; a locked stream stays recorded), `ShortcutNamesTests` (AoE1's shortcuts are files, not
+streams; a name that already works keeps its exact bytes; the record merge) and
+`InstallFolderTextTests`.
+Six came with the 2026-10-28 investigation of sessions ending on their own and competitive
+matches that never scored (see `.Codex/rules/multiplayer.md`): `SessionTokenInfoTests` (the log
+names a token by fingerprint and NEVER carries it or its `sub`/`du`; expired vs PC-clock-behind vs
+signing-key-changed), `SessionRefreshPolicyTests` and `SessionRefreshTests` (a real local socket: a
+server without `/auth/refresh` changes nothing and is not asked on every tick; a failed or cancelled
+re-sign-in keeps a valid session), `MatchReportRetryTests` (the REFUSALS are the point — nothing the
+server may have stored is retried — plus the budget against the 30-s result hold),
+`GameProcessCloserTests` (a refused kill leaves no "stopped by launcher" stamp) and `ExitRoutingTests`
+(source checks: a user's Exit closes the window instead of calling `Application.Shutdown`).
+The same day's small-UI session added `ToastRoutingTests` + `ToastFunnelTests` ("Do not disturb":
+news is silenced everywhere, answers and calls are not, and nothing but the two routers puts a
+pop-up on screen), `ModDisplayNameTests` (a mod id the catalogue does not know is never shown raw),
+and, for "Uninstall from this PC", `SelfUninstallTests` and `PrivateKeySweepTests` — where, again,
+the refusals are the point.
 
 **`DialogXamlTests` is the guard for every window the smoke test never opens.** The
 smoke-launch below opens `MainWindow` and nothing else, so the XAML of
@@ -214,6 +332,21 @@ automated cover for a resource reached by XAML alone and by no code-built card. 
 live inside `MainWindow`, so the smoke-launch would catch it too — but **the smoke test
 cannot run while a launcher is already open**: the single-instance guard makes the second
 process exit successfully having parsed nothing, which looks exactly like a pass.
+
+**Every STA test thread goes through `StaTestThread.Run`, which closes the thread's windows and
+shuts its dispatcher down before the thread ends — never write a bare `new Thread(...)` STA helper
+again.** Without it roughly one full run in three ABORTED: a shown window's HWND outlived the thread
+that created it, Windows destroyed it during thread teardown, and WPF's subclassed window procedure
+ran after the managed thread was gone (`NullReferenceException at Thread.get_CurrentThread()` in
+`HwndSubclass.SubclassWndProc`). **The run still printed "passed", with forty or fifty fewer tests
+than it has** — the same "the total is the symptom" trap the install-dialog note describes. It
+always died inside `TrayStartParkingTests`, the one class that `.Show()`s real windows. The cost is
+time, measured: the suite went from ~6 s to ~21 s, because tearing a dispatcher down is not free —
+worth it for a run whose result can be believed. `DialogXamlTests.RunOnStaThread`,
+`WorkshopAndAddonsLayoutTests.RunOnStaThread` and `RevealTextTests.RunSta` all delegate to it.
+The same investigation fixed the two `TrayStartParkingTests` that failed in a full run and passed
+alone: Windows puts a shown window on whole DEVICE pixels, so 474.4 DIP at 140 % came back as
+474.286 once an earlier test had made the process per-monitor aware. They compare within one DIP.
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
@@ -331,7 +464,10 @@ Perfil; `design_handoff_ajustes_y_taller/` (4a-4d, 5a-5d, 6a) is Launcher settin
 settings and the Workshop; `design_handoff_dialogos/` (12a-12c, 13a-13e) is the Radmin
 assistant, Create-room, New-tournament and the Discord sign-in. `design_generar_parche/` (18a-18b) is the delta-patch generator and
 `design_publicar_e_instalar/` (20a-20c, 19a-19b) is the publish wizard and the
-install-folder dialog. Read the `.html` prototype in
+install-folder dialog, and `design_archivos_antivirus/` (49a-49d, 48a-48c) is the LOCAL FILES
+tab, the uninstall window and the antivirus exclusion dialog (where it was not followed, and
+why, is in the index). (The count above predates the later folders; the index lists them all.)
+Read the `.html` prototype in
 any of them, not only its README — the prose omits values the markup carries. Where the second one was deliberately NOT followed
 (the PROVISIONAL tag in the ladder, the filter pills that filter nothing, the Revancha button),
 the reasons are in `.Codex/rules/multiplayer.md` rather than here.
@@ -369,6 +505,290 @@ the version somebody looked at. So the tournament dialog came UP to the room dia
 rather than the reverse.
 
 ## Important gotchas
+
+- **The Library and the Workshop are ONE tab now (design 68a, `docs/design_base_launcher`), and this
+  SUPERSEDES several bullets below that still describe the old screens.** `TopTabMods` is hidden and
+  `SwitchTopTab(TopTab.Mods)` lands on the Library, so the Workshop rules below ("the Workshop never
+  installs", the 86-px row, "See in Library") describe a control nobody reaches: installing starts
+  from the same button as playing, and a catalog mod is selected in the list like any other.
+  `MainWindow.Library.cs` draws it; the install, update, repair and check code did not move.
+  `Controls/ModRail` is the list, `Services/LibraryList` the pure rules (groups, filters,
+  `LibraryMetrics` for the prototype's `clamp()`s, `HeroCover`, `LibraryStatus`), `Services/ModTheme`
+  paints the selected mod's colour into `Application.Resources` (the `Mod*` brushes; menus and
+  panels of the launcher itself never read them) and `Services/GlassTheme` the transparency level.
+  Things worth knowing, each of which cost a round:
+  (1) **The cover runs behind the title bar and the tabs**, so it lives in `LibraryBackdrop`, a child
+  of the window's root grid, and `DashboardBgFill` is no longer inside `PlayView`. The hero is CSS
+  `center 25%/cover` through a computed `Viewbox` (`HeroCover`): the old `Stretch.Fill`, and the
+  paragraph below explaining why, are gone. The hero brushes are therefore NOT frozen.
+  **What a picture costs is a decode, and it is outside the managed heap.** An image left behind
+  stays in memory until a collection a launcher at rest may not run for hours, so the cover is read
+  ONCE: `HeroBrushFor` keeps the last `HeroCacheSize` (4) covers with their blurred copies, so going
+  back to a recent mod decodes nothing (`ForgetHeroBrush` when a revalidation replaces a file; a
+  remote cover leaves the list if its download fails), and `ModAssetCacheService.PrimeHeroPaths`
+  finds the file on disk before the first paint. Without those two every launch downloaded the picture it already had and
+  decoded it three times, 24 MB of the 230 at idle. `TryLoadTileImage` takes the width it is drawn
+  at (`IconDecodeWidth`, `StripDecodeWidth`), because that cache lives as long as the process and a
+  catalog icon is often 1024 px. `BitmapScalingMode` on the cover is NOT the lever: Linear measured
+  the same as HighQuality.
+  (2) **The glass is one image blurred once** (`BuildBlurredCover`, 320 px wide) in
+  `LibraryBlurLayer`, clipped to the panels by `UpdateLibraryBlurClip`; never a live `BlurEffect`
+  behind them. The panels are SIBLINGS of the backdrop, so the clip needs `TransformToVisual`:
+  `TransformToAncestor` throws, and the `catch` beside it would hide that as "no blur".
+  (3) **The hero stopped being a transform:** `UiScale.Attach(HeroContentGrid, …)` is gone, the cover
+  reflows, and `HeroContentGrid` is a plain StackPanel that keeps the name. Everything `Dashboard*` the
+  code writes to kept its name, including elements that are now collapsed (`DashboardChangeModButton`,
+  the speed/ETA labels), because the operation code still assigns them.
+  (4) **The primary button and the status line:** `_statusMessage` used to live in the idle progress
+  strip, which no longer exists. A message a player should read goes to `LibraryStatusLine`; the
+  ones the chip above the title already says are filtered by `LibraryStatus.IsRoutine`
+  (`RoutineStatusTemplates`). A new routine status must be added there or it appears under the
+  buttons. `LibraryCaption` replaces the legacy text; Stop coercion in `SetPrimaryAction` still runs first.
+  **Switching mods is measured (`MODSWITCH  a -> b  N ms`, click to frame; `MODSWITCH-PHASES` only
+  when a switch took 200 ms or more).** What a first visit waited for was the mod's network check
+  (0.3-3.4 s), so `PrefetchInstalledChecksAsync` checks every installed mod once in the background
+  after the window is shown, into the same `_checkResultCache` a second visit reads; every
+  invalidation goes through `ForgetCheckResult`, whose counter makes a prefetch that overlapped an
+  install or update throw its answer away. Measured: 6-12 ms a switch afterwards, 40 ms when the
+  cover is not in the cache yet.
+  (5) **A refresh is coalesced and keyed** (`ScheduleLibraryRefresh`, `_libraryRailKey`,
+  `_libraryCoverKey`): a mod switch asks for several, and rebuilding the list each time was a
+  three-second LAYOUT STORM. `ModRail.UpdateOperation` is what a progress tick calls; it never rebuilds.
+  **The selected mod is NOT in the rail key**: a switch calls `ModRail.Select`, which moves the highlight
+  on the rows already built; the filter pills are keyed too (`_libraryFiltersKey`) and `ModTheme.Apply`
+  returns at once for the colour already applied. Together they took a repeated switch from 53-81 ms
+  to 30-51 ms, click to settled frame (`MODSWITCH … settled`).
+  **The rail's Updates badge comes from the LAST check before this session's has answered**
+  (`UpdateVerdict.HasUpdateFromLastKnown`, the no-cache branch of `BuildModRowState`): every mod
+  used to read "up to date" until the network replied, though both tags were on disk. GitHubReleases
+  only, a cached latest only from the SAME repository, and a follow-latest mod with nothing learned
+  says nothing — its approved tag is an offline seed, and reading it as "the latest" called a player
+  on a newer release (Improvement Mod 24.07 against approved 19.07) out of date; the sweep found it.
+  The real check replaces it. Pinned by `UpdateVerdictTests`. **`IsProfileInstalledLocally`
+  remembers its answer for 60 s** per mod and path (`_installedMemo`): a rail repaint asked the disk
+  for every mod each time. `ForgetCheckResult` forgets the entry, so installs, updates and
+  uninstalls are seen at once.
+  **Folded, the list still says which mods are the catalog** (`ModRail.BuildFolded`): a rule parts
+  every two groups, its tooltip names the group below on a 12-px hover area (a tooltip on the 1-px
+  line could never be reached), and catalog icons sit at `CatalogTileOpacity` (.55) except on the
+  selected tile and under the pointer. The fold arrows are DRAWN (`ModRail.Chevrons`, a fixed 8x7
+  path), not the characters `«` `»`: as text they were reported sitting high in the button until the
+  window settled. Pinned in `LibraryViewTests`.
+  (6) **Chrome.xaml gives every ScrollViewer `Padding="0,0,8,0"`**, and it silently crops anything laid
+  out to a known width: the folded tiles lost 13 px until the padding was given back.
+  (7) **Header:** title bar 40 and nav 56 in BOTH layouts; the old compact heights (34 / 42) and the
+  `NavTabButtonCompact` swap below are history. The main bar carries the mod's tint (`ModTitleBar`)
+  **in the Library only**: `SwitchTopTab` points it back at `GlassTitleBar` on every other tab, where
+  the tint used to stay behind; secondary windows keep one uniform colour (BASE.md). The tab
+  underline follows the same rule (the button's `BorderBrush`, set in `SwitchTopTab`), and the quick
+  match's button is the launcher's blue (2026-11-14): outside the Library nothing follows the mod open
+  there (`OutsideLibraryColourTests`). **No line between the title bar and the tabs**
+  (`TitleBar.ShowBottomLine="False"`; every other window keeps its bar's line), and the
+  launcher-update pill is in the title bar beside the bell (title-bar column 4, hit-testable in the
+  caption region), where the maintainer wants it rather than where 77k drew it.
+  (8) **`--preview-library=updating|installing|stopped`** paints the download states with nothing
+  downloading, in the harness only. `tools/testbed/sweep_library.py` presses every control of the
+  screen on the real launcher.
+  (9) **The pictures under the buttons are `ModProfile.ResolveGallerySources`**: the screenshots, else
+  the cover and the banner (as 68a draws them), never a single picture; the viewer animates a GIF.
+  The hero column is a star column capped at 1000, so the progress card reaches its 660.
+  (10) **The four type sizes `LibraryMetrics` computes follow the text-size setting**
+  (`TextScale.CurrentFactor`); the geometry does not, as with every font token.
+  **MainWindow's XAML is parsed by no unit test**, so a broken value there passes the whole suite and
+  dies on launch (a `Margin="11%"` did exactly that): launch it with the testbed before calling a
+  change to that file done.
+
+- **Screens 73, 74, 77, 78 and 79 of `docs/design_base_launcher` SUPERSEDE these claims further
+  down.** `PublishModDialog` is no longer fixed at 760: it has the settings chassis, a list of steps
+  on the left, and `Controls/FieldRowPanel` rows. `InstallFolderDialog` now BLOCKS Install when the
+  space estimate is short instead of warning, and shows paths through `Controls/PathLinePanel` and
+  `PathDisplay.SplitWhole` (`SplitForDisplay` is gone). `LauncherUpdateDialog` warns about space
+  inside itself rather than through `DiskSpacePrompt`, and its "ready" state lives in
+  `LauncherUpdateService.MarkStaged`, one session only because `CleanupOldVersion` sweeps the staged
+  file. The Radmin assistant has THREE steps and installs Radmin itself. `--preview-dialog=` also
+  takes `launcherupdate:*`, `installfolder:*`, `radmin:*`, `publish:<step>`, `updatepill:*`, `bar:*`.
+
+- **Screen 87 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the room window**
+  (the left-column Start doubling as Cancel, `InGameOverlay` in the left column, the sub-header strip
+  with its stats, `RoomInfoCard`, the "chat always reachable" layout still holds). The chassis is
+  `ModDialogChrome.AttachRoom`, the buttons are `RoomFooterState`, the rest of the rules are in
+  `.Codex/rules/multiplayer.md`. `--demo-room=87a..87l` and `87live` open each state, and
+  `testbed.py check` with `--title` now resizes that window instead of the launcher behind it.
+  **Screen 85 is that same window in tournament mode** (`LobbyWindow.TournamentMode`, set when the
+  room has a `TournamentRoomContext`): `--demo-room=85a..85i`. Sample rooms disconnect their
+  buttons, so pressing one there proves nothing.
+
+- **Screen 88 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the create-room
+  dialog** (`CompetitiveCheck`, the format row that is always visible, the 596 width, the eight
+  seats it opened on, the summary line). The type is one row (`_kind`, Casual or a format, kept in
+  `LauncherConfig.LastRoomKind`), a suggestion REPLACES the name, and the footer names what stops
+  the room before the click. `Controls/SegmentRow` is the segmented row of the creation dialogs.
+  `ModDialogChrome.AttachPicked` is the chassis of a window whose mod is picked inside it: it can
+  run again, and `FrostCards` shows a once-blurred copy of the image under the cards.
+  `TitleBar.PlainTitle` is the Segoe title of the room window; **screen 81, the new-tournament window,
+  keeps the serif** and passes `topGlow: true` to `AttachPicked` (its image, fade and glow are not 88's).
+  A layer of that chassis may never carry a `Height` it does not need: it spans the window, so in a
+  `SizeToContent` dialog it is a floor (the glow's 580 px made 81a 85 px too tall). `SegmentRow.Raised`
+  and `Controls/ModSearchPopup` are 81's. **Design 108 (docs/design_14nov) re-lays 81 out:** 780 wide,
+  the tournament on the left and the registration on the right at one height, teams and the summary
+  strip under them, and the choices with a sentence as `Controls/OptionRows` (circle, title, meaning
+  inside the row). **A choice never changes weight or size when picked** — fill, rim and a blurred
+  glow sibling (`ChoiceGlow.Brush`) say it — and a raised segment has `MinHeight`, never `Height`:
+  bold "First come, first served" ran past its box in English. Pinned by `NewTournamentLayoutTests`.
+  `--preview-dialog=newtournament:a|b|c|soi|pick`, and
+  `--preview-dialog=enroll:a..l` for 82, the enrol window (`EnrollDialog` + the pure
+  `Services/Multiplayer/EnrollView`), and `--preview-dialog=teams:a..m` for 83, My teams
+  (`MyTeamsWindow` + the pure `Services/Multiplayer/MyTeamsView`). `teams:l` is the toast: the
+  desktop card lands on the primary monitor, not the test one. The room NAME stays
+  the English network value of `RoomTitleProposal`, against the prototype's Spanish samples.
+
+- **Screen 80 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the Tournaments
+  subtab** (the action bar, the entrant table with its `⋯` column, the tournament header). The page is
+  `MultiplayerTab.TournamentsPage.cs` over the pure `Services/Multiplayer/TournamentPage`, with the
+  mod's cover behind it (`MainWindow.TournamentBackdrop.cs`); the rules are in
+  `.Codex/rules/multiplayer.md` (TOURNAMENTS). `--demo-tournaments=big32` is the 32-place draw.
+  `Controls/FlexLine` is a wrapping row whose `Spring` child takes what is left of its line (CSS
+  flex-wrap), and `AutoFillPanel` is `repeat(auto-fill, minmax())`.
+
+- **Screen 86 of `docs/design_base_launcher_2` SUPERSEDES what this file says about the Rooms page**
+  (the rooms table with its sort arrows and capacity bars, the rank badge in the host cell, design 66's
+  green/blue/amber action buttons, the refresh icon, the "Find a 1v1 match" button in the list header,
+  the 58/54-px rows). One row per room (`Controls/MultiplayerTab.RoomRows.cs`): icon, name over chips,
+  host over "1630 ELO" or "En posicionamiento 3/10", players, the ping to the host over Radmin (only
+  with a server that publishes hosts' addresses), and ONE action decided by the pure
+  `Services/Multiplayer/RoomActionRule`, which also groups the list under PUEDES ENTRAR / EN PARTIDA /
+  NO DISPONIBLES AHORA. The quick match is a one-line bar above the list with a mod picker and a
+  Rated / Casual / Either segment (`MultiplayerTab.QuickCard.cs` over
+  `Services/Multiplayer/QuickCardView`; 2026-11-10, over 86's card), and the host cell wears his photo
+  and rank badge again (also 2026-11-10). The rules are in `.Codex/rules/multiplayer.md` (ROOMS PAGE).
+  `--demo-rooms=86a..86e` (and a Settings → Developer row) paints it with sample rooms; buttons there
+  say what they would do instead of doing it. **The rows' LOOK is design 104a since 2026-11-11**
+  (`docs/design_salas_filas`): raised cards tinted with their group's colour, the headings as a bar,
+  seat dots and four signal bars; see the 104a bullet in `.Codex/rules/multiplayer.md`.
+
+- **Screen 93 of `docs/design_base_launcher_2` SUPERSEDES what this file and `multiplayer.md` say about
+  the Clasificación page** (the pinned copy of the viewer's row, the plain hairline rows, the page title
+  and its "How ranks work" button, the uppercase cards of Highlights). The first three stand on a
+  podium (`Controls/MultiplayerTab.RankingPodium.cs`), the table starts at the fourth under a heading
+  per age, players being placed are its last group, and "Your position" sits over "Latest matches" in
+  the side column; the pure rules are `Services/Multiplayer/RankingView.cs` (`RankingGroups`,
+  `YourStandingView`, `RankingPodiumFluid`, `RankAgeColors`). `--demo-elo=93a..93f` opens each block.
+  Going back to the subtab draws nothing unless something moved (`RenderRankingIfChanged`), and a
+  looping light that is not a badge asks `RankBadge.MayRunOn` and listens to
+  `RankBadge.RunConditionsChanged`. The rules are in `.Codex/rules/multiplayer.md` (RANKING PAGE).
+
+- **Menus have real glass now: `Controls/PopupGlass`.** Over the cover a menu is painted with the
+  piece of the blurred cover under it, then the SAME layers a panel has between the cover and itself
+  (`LibraryOverlays()`: the side shade, the two gradients, the mod's wash, each sampled at the menu's
+  place), then the panel's tint (`Spec.Panel`) and `PopupGlass.Denser` on top — the panel's glass,
+  only more opaque. With the cover and its own tint alone it read lighter and warmer than the list it
+  opened over (reported); `PopupGlassTests.THE_ONE_THAT_MATTERS_AMenuIsThePanelsGlassOnlyDenser`
+  renders both over a warm picture at all three levels. This supersedes the "denser than the design"
+  note below while a cover is on screen; with none, `Spec.Floating` stays.
+
+- **ONE transparency logic for the whole launcher (2026-11-11) — `GlassTheme.Apply(level,
+  reducedEffects)`.** Seven brushes followed the level and ~15 more surfaces of the same kind had an
+  alpha of their own, so changing the level moved the list and left the tab bar, the search box and
+  the chips beside it as they were. Every translucent surface that is not a panel/tile/menu/footer/
+  title bar is now in `GlassTheme.Followers` (key, base navy, its alpha at Media, inset or not): at
+  Media each keeps exactly the value the XAML declares (pinned), Solid lifts it to the panel's .86
+  (an INSET — a dark well inside a card — keeps its own, or a search box turns black), Maximum lowers
+  it as the panel is lowered. **"Effects: reduced" makes every glass opaque** (`GlassTheme.Settle`:
+  the colour it would show over the page's navy, solid), as BASE.md asks; `GlassTheme.IsReduced` is
+  the one rule for "reduced", read by the Library and by App before the first window. The tooltip,
+  the toned toast and the alert card wear the floating glass (`GlassMenu` / `LibraryMenuBg`) — the
+  tooltip was a warm grey of its own. **`GlassConsistencyTests` fails on any translucent navy fill
+  written by hand in XAML** (veils behind an overlay are listed by name): that is how a surface stops
+  following, and nothing on screen says so until somebody changes the level. Adding a translucent
+  surface means adding its key to `Followers`.
+  **Outside the Library the window has a page behind its three rows** (`NeutralBackdrop` in
+  `MainWindow.xaml`: `MpAppBg` and design 86's two glows, `MpPageGlowTop`/`MpPageGlowBottom`, which
+  Solid and reduced effects leave out). The window's own background is the near-black `BgBase`, and
+  with the Library's cover collapsed the bars showed it through, so they read as solid. `TabRootGrid`
+  is transparent and the sub-bar keeps `RmSubBarBg` with or without a tournament cover
+  (`SetCoverBehind` used to switch it to solid `MpPanel`); the Multiplayer page panels (quick match,
+  rooms, activity, chat, the Matches filter bar, the profile cards) wear `GlassPanel`, as design 86's
+  `gBg` does.
+
+- **A mod with no `accentColor` gets a colour of its own — `Services/ModAccentResolver`.** It used to
+  be one fixed `#3a8cd9` for all of them. Declared stays declared (`ModProfile.AccentDeclared`, never
+  replaced). Otherwise the colour of its icon, once the rail has decoded it (`LearnAccentFromArt`, no
+  extra download): `Candidates` gives up to three peaks of the image's hues weighted by saturation, and
+  `Pick` takes the first no other mod already wears — AoE3 icons are mostly GOLD, so the first peak is
+  gold for nearly every mod; measured on the catalog's icons, the second one is often the mod's own
+  (Age of Dynasties' teal, Hundred Days' olive, King's Return's red). It is kept in
+  `AppPaths.DataDir\accent-cache.json` keyed by the image's address, so the next session opens in it.
+  Until then, and for an icon with no colour, `AssignFallbackAccents` gives each such mod a hue by the
+  golden angle in id order, skipping hues a declared colour holds. The *Publish my mod* wizard has
+  "From an image…" beside the colour field, so the colour can reach the catalog declared. Pinned by
+  `ModAccentResolverTests`, where the black-and-white and declared cases are the point. Today every
+  catalog mod declares its colour, so none of this shows until one does not. `ChromePopups.Track` also gives a shadowed popup room for its shadow: Placement already
+  leaves a child's Margin out, so nothing moves and no offset compensates it.
+
+- **Tab lag is measured: every click that changes the page writes `SWITCH  a -> b  N ms (first
+  time|repeat)`** (`ScreenTrace.Clicked` + a one-frame `CompositionTarget.Rendering`, click to the
+  frame handed over). **And `SETTLE  <page>  N ms after the click, K builds (M ms, worst W ms)`**
+  counts the page rebuilds that follow (`ScreenTrace.PageBuilt`, from `RenderStatsTab`,
+  `RenderRanking` and `PaintMatches`), because the lag on Statistics, Ranking and Matches came AFTER
+  the first frame, as server answers landed: Statistics rebuilt itself five times on opening. See
+  the "answers rebuild only what moved" bullet in `.Codex/rules/multiplayer.md`. `perf switches` and `perf switchesfirst` drive every tab; the goals are 100 ms
+  repeated and 250 ms the first time, and `compare` fails above them. `testbed.py check <name> --ref
+  <prototype> --block <id> [--title T] -- <launch args>` opens the launcher and leaves prototype,
+  launcher and difference side by side, at 1.25, in `out/check`.
+
+- **Design 105 (`docs/design_avisos_flotantes`) SUPERSEDES what this file says about how a floating
+  notice LOOKS** (the 🎮/📨 icon, "reuses `MpAlertOverlay`'s card look", the green primary button). Every
+  `AppToast` card — in the launcher and on the desktop — is one `AppToast.Build`: a `ToastTone` (Ok,
+  Info, Warn, Neutral), a `ToastIcon` that is a DRAWN pictogram from `Styles/Toasts.xaml` (a character
+  is drawn black by Windows' symbol font and cannot take the tone — that was the bug), and buttons of a
+  `ToastButton` kind: `Action` (blue, the notice asks you to act), `Join` (green, ONLY "Join") and
+  `Solid` (everything else). `AppToast.ButtonKinds` keeps ONE coloured button per notice and draws any
+  other solid; the coloured one sits at the right end. `ModId` puts the mod's icon in the tile with the
+  pictogram as a badge; `Crest` a team's initials; `Important` (border and halo in the tone) is set by
+  the two "your rival came in" notices only — `AppToastTests` counts it. Compact by the maintainer's
+  call: 360 wide, not the design's 420 (see the design index). A card that closes by itself carries a
+  3-px time bar; `ToastCountdown` pauses the bar AND the close under the pointer, and its clock is
+  stopped through its controller. The shadow and the halo are clipped siblings, never an Effect over
+  text. The desktop card is solid (`ToastDesktopBg`) and says "AoE3 Mod Launcher" over its content.
+  Routing (`ShowAppToast`, `ToastRouting`, "Do not disturb") is unchanged. `--preview-toasts[=1|2|3]`
+  shows them, waiting up to 15 s for the window to be in front, since routing sends every card to the
+  desktop while nobody looks at the launcher.
+
+- **Screen 103 of `docs/design_base_launcher_2` SUPERSEDES what this file says about small dialogs,
+  popups and menus.** Every small dialog derives from `Controls/BaseDialog` (bar of 40, a tone tile
+  beside a serif headline, a footer with Cancel beside the one primary button), whose
+  `[ContentProperty("Body")]` is why a derived XAML can keep its x:Names while the window's `Content`
+  is already filled. Escape and the ✕ are Cancel; Enter is the primary button except on
+  `DialogTone.Destructive`, which also makes it red (`Answer` closes, tolerating a non-modal window).
+  A dialog about a mod calls `UseMod`, tinted by that mod and not by the Library's. **There are no
+  Windows message boxes**: `ThemedConfirmDialog.Ask` / `AskThreeWay` / `Notice`, with the technical
+  text in `detail`. The two in `MultiplayerTab` stay because they answer inside `MainWindow.OnClosing`,
+  and `SmallDialogTests.THE_ONE_THAT_MATTERS_NoWindowsMessageBoxOutsideTheClosingPath` counts them.
+  **A bare `ContextMenu` IS themed now**: `Styles/Dialogs.xaml` declares the implicit styles. Header
+  popovers use `BuildSettingsRow` (32 px, no icons, a subtitle became a tooltip). Menus, popovers and
+  toasts follow the glass level through `GlassTheme.FloatingKeys`, with `Spec.Floating` denser than
+  the design's numbers: those assume a blur WPF cannot do behind a popup. `--preview-dialog=small:a..o`
+  paints each one. The two-tone rim below is now a single 1-px rim. The dialog's two glows are in
+  PIXELS (`BaseDialog.PaintGlow`, 520×340 and 420×300 as drawn), not relative to the window, which
+  in a small dialog reaches far less than the design does.
+
+- **Screen 71 of `docs/design_base_launcher` SUPERSEDES these claims further down.** LOCAL FILES is
+  one card of copies with the copy in use first (no longer ordered by folder), and the other copies
+  carry "Use this one" plus a ⋯ menu (`BuildCopyMenu`). The two-step "Something not working?" card is
+  gone: Verify lives in General, and Share diagnostics, logs and Discord live only in the rail, which
+  is where the search's two results now point. "Change mod folder" left the window (Choose folder
+  adds a copy instead). The language cards, addon cards, decks and statistics are rows on `SetCard`,
+  built with `ModRow` / `Controls/ModChips`; a whole language card is no longer a button. Deck tiles
+  are number + 34-px art + name, by the maintainer's decision against the prototype, and the art loads
+  only when the section opens. Flags and small card art stayed in Statistics and the Profile. After
+  "Use this one" or "Choose folder" the row pulses (`PulseActiveRow`, `Pulse`), since the copy in use
+  jumps to the top. `LocalGameCards.BuildHumanGameRow` / `BuildAiGameRow` are the mod
+  window's; the Profile keeps the cards. `UiToggleOn` lets a window colour its switches.
+
+- **A test class that calls `Strings.SetLanguage` must carry `[Collection("wpf-and-language")]`.**
+  Without it the class races every other language test: a full run fails now and then, and the test
+  passes alone. `DialogXamlTests.EnsureResources` also seals every style on the thread that parsed
+  it, because an unsealed style throws on any other thread.
 
 - **AssemblyName ≠ RootNamespace, on purpose.** The shipped binary is
   `Aoe3ModLauncher.exe` (`<AssemblyName>`), but every file's namespace and
@@ -626,8 +1046,9 @@ rather than the reverse.
   install lacks; the list is set on the WoL built-in and applied at the same three sites as
   `RemoveSupersededCompiledXml`, never to a file the payload ships. `SupersedeCompiledXml` can't do
   this job for WoL: it would also remove `randomnames`/`unithelpstrings` `.XMB`, which patched
-  installs keep. A Repair does NOT clean an install already made (verify only covers overlay
-  files); reinstall or delete the ten by hand. (When a patch's
+  installs keep. An install made before this rule is cleaned by Repair WITHOUT a download
+  (`Services/Repair/LeftoverCleanup`, item 17 of the repair-hardening bullet), and Verify names
+  the files as `[leftover]`. (When a patch's
   delete-list DOES remove files during incremental patching, the manifest's per-file
   hashes for them must be pruned — `PruneMissingHashes`; see the manifest-recognition
   bullet.)
@@ -698,8 +1119,9 @@ rather than the reverse.
   repairable by re-copying from the payload ZIP; base-game **engine** files (cloned
   from AoE3 — the curated `EngineCandidates`: the 3 `data\` version-key files +
   `RockallDLL.dll`/`binkw32.dll`/`granny2.dll`/`deformerdlly.dll`) are NOT — a
-  corrupt engine file is reported with the `VerifyEngineSuffix` ("reinstall AoE3")
-  string and is **never** routed into the repair set. `ComputeEngineHashes` skips
+  corrupt engine file is **never** routed into the payload re-lay (the payload does not
+  contain it); Repair puts it back from the player's own AoE3 instead, hash-proven, or
+  says why it cannot (item 15 of the repair-hardening bullet). `ComputeEngineHashes` skips
   any overlay-owned file so a file is never in both maps; don't merge them, or a
   corrupt WoL data file would be mislabelled an unrepairable engine file.
   **(2) Covered files verify against the English snapshot, not the live file.**
@@ -716,9 +1138,11 @@ rather than the reverse.
   `StatusRepairNothing`, but **don't `return`** — fall through so the pending-update
   continuation still runs; **(b) damaged**: re-lay the **WHOLE** overlay via
   `InstallModOnlyAsync` (NOT a granular per-file copy — the old granular branch and
-  `NativeInstallService.RepairFilesAsync` were REMOVED) and do a STRUCTURAL recheck
-  only (`hashPass:false` — a per-file hash over a multi-GB freshly-written install
-  re-reads everything and looks frozen). The **full re-overlay** is also the path for
+  `NativeInstallService.RepairFilesAsync` were REMOVED) and recheck with existence + size
+  for every recorded file and a HASH only for `IntegrityService.RecheckHashSet` (what was
+  damaged before, the probe, the three key files) — a full per-file hash over a multi-GB
+  freshly-written install re-reads everything and looks frozen, and the old structural-only
+  recheck proved too little to say "re-verified". The **full re-overlay** is also the path for
   an update, a version switch, or an old manifest with no `FileHashes`. **Because the
   re-overlay rewrites every overlay file, it also wipes any enabled community ADDON —
   so `RepairInstallAsync`'s tail re-applies them** (`ReapplyAddonsAfterOverlayAsync`),
@@ -733,12 +1157,13 @@ rather than the reverse.
   post-`finally` `else if (updated)` branch → `CheckAsync()` →
   `if (_pendingDownloads.Count > 0) ApplyUpdateWithElevationCheckAsync()`, so a WoL
   repair that re-laid the base snapshot (or an intact-but-behind install) continues
-  straight into the pending patches. **Scope caveat:** verify + repair cover only the
-  mod OVERLAY — base-game **engine** files (the AoE3 clone) are NOT in the verify set
-  and are NOT re-laid by repair (no AoE3 re-clone), so an install broken ONLY by a
-  corrupt engine file verifies as intact and skips; a corrupt engine file surfaced by
-  an explicit "Verify files" still reports `VerifyEngineSuffix` ("reinstall AoE3") and
-  is never repairable here. The gear "Verify files" item
+  straight into the pending patches — **unless the installed version is pinned**
+  (`ActiveModPausedByPin`). **Scope:** Verify and Repair read ONE verdict
+  (`IntegrityService.Diagnose`, item 13 of the repair-hardening bullet), engine files
+  included, so an install broken ONLY by a corrupt engine file no longer "verifies intact"
+  and skips: Repair restores it from the player's own AoE3 when a byte-identical copy
+  exists, and otherwise says exactly that and downloads nothing. The launcher still never
+  RE-CLONES AoE3. The gear "Verify files" item
   is **cancellable** with live progress (current file, bytes, speed via
   `SpeedTracker`, ETA), disabled for `IsStockGame`; an old install with no
   `FileHashes` emits no per-file ticks and degrades to the legacy structural
@@ -769,6 +1194,239 @@ rather than the reverse.
   each handler's phase statically, so it hardcodes the key per handler rather than
   threading `_currentInstallPhase` (install-flow state).
 
+- **Repair was HARDENED (phases 0 and 1 of the repair roadmap) — twelve real bugs, each now a
+  rule. Read this before touching `RepairInstallAsync` or `InstallModOnlyAsync`.** The flow is
+  still verify-first + whole-overlay re-lay (granular restore is a later, opt-in phase); what
+  changed is that everything AROUND the re-lay stopped destroying things.
+  (1) **One eligibility gate — `Services/Repair/RepairEligibility.Evaluate`**, the first
+  statement of `RepairInstallAsync`. The only old check lived on a gear-menu item inside the
+  collapsed legacy panel, while Mod Properties' Repair button and the Verify Retry called the
+  method directly, so DelegatedExternal/Manual mods could be "repaired" and a folder whose
+  manifest names ANOTHER mod had nothing stopping our payload. It reads the manifest's `modId`
+  with a streaming `Utf8JsonReader` over the first 64 KB (`ReadManifestModId`) — a WoL manifest
+  is tens of MB and this runs on the UI thread. Positive evidence only, like detection.
+  (2) **Install identity is CARRIED on every re-overlay — `Services/InstallIdentity.cs`.**
+  `InstallModOnlyAsync` used to derive `ProductGuid`/`AppName` from an install label no repair
+  passes and stamp `clonedAoe3:false`/`aoe3SourcePath:null`. So repairing a COPY re-pointed the
+  PRIMARY's desktop shortcut and its `{guid}_is1` Add/Remove key (the key WoL detection reads) at
+  the copy — and uninstalling the copy afterwards deleted the primary's key — and after any
+  repair or full GitHubReleases update, Uninstall took the overlay-only branch and left the whole
+  multi-GB clone on disk. `ForReoverlay` carries the previous manifest's identity only when
+  `BelongsTo` (mod id ours or in `PreviousIds`; legacy empty id → our GUID or `guid_…`), names as
+  a PAIR. The delta path uses it too. **It stops the damage; it does not heal manifests an older
+  build already reset** — inferring clone status would re-arm a blanket delete on a guess.
+  `CreateShortcuts`/`WriteRegistryEntries`/`WriteManifest` now take the identity, never a label.
+  (3) **The re-overlay REPORTS what it did — `InstallModOnlyAsync` returns
+  `ReoverlayOutcome(Relaid, ManifestWritten)`.** The tail needs `Relaid` (addons, below), and
+  `WriteManifest` now returns false instead of swallowing a failed write, so the repair reports
+  `StatusRepairManifestNotSaved` and stamps nothing rather than "repaired".
+  (4) **`InstallManifest.Save` is ATOMIC** (`install-manifest.json.<guid>.tmp`, flush, move with
+  retries); a truncated manifest used to read back as NO manifest. It never creates the folder.
+  `TryLoad` sets `InstallPath` to the folder it READ from and rebuilds every map
+  `OrdinalIgnoreCase` (case-duplicates merge, last wins; `null` collections → empty). A leftover
+  scratch file is ignored by `EnumerateInstalledItems`/`IsLauncherArtifact` and removed by the
+  overlay-only uninstall (`InstallManifest.IsSaveScratch`).
+  (5) **A plain GitHubReleases repair lays the INSTALLED version, never silently another —
+  `RepairPolicy.PickTarget`**, equality-only (tags have no order; IM uses dd.mm.yyyy). It used to
+  lay the EFFECTIVE tag: a pinned player was moved off the pin and Improvement Mod (installed
+  06.09.2026 > approved 19.07.2026) could be DOWNGRADED when the follow-latest cache was empty.
+  Installed = own manifest's `Version`, else `LastKnownVersion`; empty = effective (the detected-
+  install self-heal). A release that no longer carries a full payload, or an external host (only
+  the approved tag is pinned), asks "X → Y" first. The chosen tag travels as `repairTag`, NEVER
+  through `targetReleaseTag` (that one auto-pins). The update is left to the Update CTA — no
+  auto-chaining, which is how the downgrade would come back.
+  (6) **An INTACT repair stamps only what describes the bytes on disk —
+  `RepairPolicy.StampAfterRepair`**: GitHubReleases → own manifest's version or nothing; WolPatcher
+  → the MD5-detected version or nothing. It used to stamp the effective tag, which hid the Update
+  button for a player who was behind and rang a false "update finished". When it does correct the
+  label it moves `NotifiedInstalledVersion` with it so the reconcile backstop stays quiet.
+  (7) **Addons are re-applied ONLY where files were re-laid** (see `.Codex/rules/addons.md`,
+  `ReapplyRelaidAsync`) and never on the intact route — and so does the WoL PATCH chain, with the
+  files its `.tar.xz` wrote; an owned file the operation DELETED drops its backup so disabling can't
+  resurrect it. Only the delta chain (which does not report its files) keeps the whole-addon re-apply.
+  (8) **A plain repair that re-laid the overlay re-applies the active translation**
+  (`ReapplyActiveTranslationAfterRepair`, a plain `Apply`, BEFORE the addons). It used to run only
+  for updates, so a repair silently dropped the player's language while the UI said it was active.
+  (9) **Antivirus, corrupt downloads, Pause, temp names.** `PayloadFileBlockedException` is caught
+  in repair and opens `AntivirusExclusionDialog` after the finally, with no Retry (a retry
+  re-downloads and is blocked again). `InvalidDataException` gets the same 3-attempt "download
+  again?" loop install has (`RelayWithRetryAsync`). Pause reaches the op's `NativeInstallService`
+  (`_activeNativeInstaller`) — it used to set only legacy flags install and repair no longer read.
+  Payload parts are named `NativeInstallService.PartFileName(url, i)`, not `WolPayload.zip.00N` for
+  every mod, so a cancelled download of one mod can never be RESUMED with another's bytes. The
+  staged overlay re-checks its DESTINATION files exist (the direct path already did).
+  (10) **No truncated files on cancel**: the direct writer checks cancellation BETWEEN entries only.
+  (11) **`Services/OperationJournal`** (in `DataDir\journal\`, never in the install — the in-progress
+  marker there BLOCKS adoption) records that a repair/update is about to write
+  (`InstallModOnlyAsync(beforeFirstWrite:)` / `UpdateService.ApplyUpdatesAsync(beforeFirstWrite:)`,
+  so a cancelled download never counts) and is cleared on success — and on a cancelled WoL patch,
+  which rolls itself back; at launch `MaybeWarnInterruptedOperation` toasts "didn't finish — Repair".
+  (12) **Visible failures**: the dashboard strip mirrors the legacy panel's error text and has a
+  `DashboardRetryButton` (the legacy Retry was inside the collapsed panel), refused if the
+  displayed mod/install changed since the failure. Strings no longer claim "all files verified"
+  after a structural recheck. Also: the WoL-named config overrides (`payloadZipUrls`,
+  `installerZipUrl`, `updateInfoUrl[Alt]`) apply only to profiles with
+  `ModProfile.AcceptsGlobalPayloadOverride` (the WoL built-in; never projected from the catalog),
+  and an in-place overlay's `delete.lst` may only remove files the mod ADDED
+  (`IsPlayersRealGameFolder` → `ApplyUpdateDeletions(explicitOnlyOwnFiles:)`).
+  Pinned by `InstallIdentityTests`, `ManifestSaveTests`, `RepairPolicyTests`,
+  `AddonRelaidReapplyTests`, `OperationJournalTests`.
+  **Phases 2-3 (partly done) — read before touching Verify, Repair, or any writer of
+  `EngineFileHashes`.**
+  (13) **ONE verdict — `Services/IntegrityService.Diagnose` → `IntegrityReport` — read by BOTH
+  "Verify files" and Repair.** They ran different checks, so Verify could say "damaged" and Repair
+  "nothing to repair" on the same install. Findings are typed: `Missing` / `Damaged` (overlay),
+  `Unreadable` (another program holds the file — a sharing/lock violation is NOT damage, and a 5 GB
+  re-download fails on that same file), `Blocked` (the antivirus HResults), `Engine`, `Structural`.
+  `IntegrityService.Route` makes one `RepairRoute` of it: `Nothing` / `Relay` / `InUse` (close the
+  program, download nothing) / `Antivirus` (the exclusion dialog, no retry) / `EngineOnly`. A locked
+  file is retried once after 1.5 s before it counts as `Unreadable`. The WoL-only folder checks
+  became DATA (`ModProfile.StructuralChecks`), so they stop applying to every WolPatcher mod and a
+  future mod gets its own by declaring them. With no translation active a covered file is hashed
+  LIVE (a corrupt string table used to hide behind a healthy `_originals`); with one, through the
+  snapshot as before. A manifest another mod owns contributes no hashes. Read-only, keyed on profile
+  data, never a mod id. Pinned by `IntegrityServiceTests`, where locked-is-not-damaged is the point.
+  (14) **Engine fingerprints are NEVER re-blessed — `Services/EngineBaseline.Merge`.** Every writer
+  (re-overlay, WoL patch recapture, addon recapture) RECOMPUTED `EngineFileHashes` from disk, so a
+  `RockallDLL.dll` corrupt at the next repair became the recorded truth and Verify called it healthy
+  for ever. Now they merge: an entry the operation actually wrote is re-measured, an untouched one
+  keeps its previous fingerprint, one the overlay now owns is dropped, one that existed before the
+  operation and is gone now is dropped. `IsolatedFolder` only (`EngineBaseline.Applies`); the
+  re-overlay and patch writers also require the previous manifest to `BelongsTo` the profile, and a
+  first install (no previous map) still measures fresh. At all three
+  writers: `NativeInstallService.WriteManifest` (`EnginePrior`), `UpdateService`'s post-patch block,
+  `AddonService.RecaptureInto`. Pinned by `EngineBaselineTests`.
+  (15) **Damaged engine files are restored from the PLAYER'S OWN AoE3, and only with byte-identical
+  copies — `Services/Repair/EngineRestore`.** The payload does not contain them, so no re-lay can
+  fix them and "reinstall the mod" was the only answer. Before routing, `RepairInstallAsync` looks
+  for each one in the clean AoE3 folders on the machine (clone source, manual pin, every
+  `AoE3Detector.FindAll` hit passing `IsCleanAoE3Folder`; `root\rel` then `root\bin\rel`) and writes
+  it ONLY when size AND SHA-256 equal the manifest's fingerprint. **The refusals are the feature:**
+  only an `IsolatedFolder` clone whose manifest is ours (`Eligibility`); never a destination that
+  IS or CONTAINS an AoE3 root (one merely INSIDE the game's folder, the default Steam layout, is a
+  clone of its own and stays eligible — refusing it switched the feature off for most installs); never a source inside another registered install, the
+  `(AoE3 vanilla)` aside or the destination itself; never a file the mod ships, a covered file, a
+  `CloneFilesRemovedByPatches` entry or an addon-owned file (`NeverRestore`); never a path absent
+  from `EngineFileHashes`. It writes `<file>.aoe3ml-new` (ignored by `IsLauncherArtifact`), re-hashes
+  the STAGED bytes, backs the damaged original up to
+  `AppPaths.DataDir\engine-backup\<install key>\<time>` (newest 5 sets kept), then moves. A sharing
+  violation is `InUse`, not a failure. Nothing is ever written into the player's real AoE3. What it
+  could not restore gets its own message (`StatusEngineRestoreNoSource` / `StatusEngineRestoreInUse`)
+  instead of the generic one. Pinned by `EngineRestoreTests`, where nearly every case is a refusal.
+  (16) **A WolPatcher payload knows its version — `WolPatcherSettings.PayloadVersion`** (`1.2.0e`
+  on the WoL built-in; `update.wol.payloadVersion` in a catalog manifest). A payload is a snapshot of
+  ONE version while `UpdateInfo.xml` moves on, and `ResolveInstallVersion` guessed: the version
+  DETECTED before a repair (older than the bytes, so recognition re-applied patches the snapshot
+  already holds) and the LATEST UpdateInfo version for a fresh install (newer than the bytes the day
+  a patch ships before a new snapshot — which then hides that patch). `PayloadResolution.Version`
+  travels under the same rule as the SHA pins: only with the profile's OWN urls, never a user
+  mirror. The catalog overlay (`ModRegistry.OverlayPayloadVersion`) takes a declared version, keeps
+  the compiled one only when the catalog merely re-pins the compiled urls, and otherwise leaves it
+  UNKNOWN — a different payload must never inherit `1.2.0e`. **Change it in the SAME edit as the
+  urls**; `CatalogPayloadOverlayTests.TheWolBuiltInDeclaresTheVersionItsUrlsDownload` fails when
+  they disagree. The live catalog's schema needs `payloadVersion` added before a manifest may use it
+  (`additionalProperties: false`); the template schema already has it.
+  (17) **Leftover base-game files are removed from installs ALREADY made, with no download —
+  `Services/Repair/LeftoverCleanup`.** `CloneFilesRemovedByPatches` and the opt-in
+  `SupersedeCompiledXml` run only when an overlay is laid, so an install made before them kept the
+  player's compiled `.XMB` over the mod's `.xml` for ever, and an intact Repair downloaded nothing and
+  changed nothing. The selection IS the install's (`NativeInstallService.SelectCloneFilesToRemove` /
+  `SelectSupersededCompiledXml`) over the manifest's record of what shipped (`OverlayFiles` ∪
+  `FileHashes`) — never wider: a shipped file, an addon-owned file, an `InPlaceOverlay`, a manifest
+  that is not ours, one with no shipped list, or a folder that IS or HOLDS an AoE3 root are all
+  refused (a clone inside the game's folder is the default layout and is not). Verify reports them as `IntegrityKind.Leftover`; alone they route to `RepairRoute.Cleanup`,
+  never to a re-lay. Repair MOVES them to `AppPaths.DataDir\leftover-backup\<install key>\<time>`
+  (newest 5 kept) before routing, names each in the log, and a file held open stays and is reported
+  (`StatusLeftoverInUse`). No manifest write: none of these files is in `FileHashes` or
+  `EngineFileHashes`. Pinned by `LeftoverCleanupTests`, where the refusals are the point.
+  (18) **A re-lay asks for things in the order it can use the answers — R10a.** The plain-repair
+  branch settles the version (the X→Y question) and the payload FIRST, then stops if the launcher
+  already knows it is offline (`StopIfKnownOffline`, observed state only — never a probe), then
+  measures the disk requirement on the real payload, asks for admin LAST, right before the first
+  write, and re-checks the game (the verify above can take minutes). It used to ask for admin and
+  space before knowing any of it, so an offline or declined repair still cost a UAC prompt. The
+  admin prompt carries a ticket, `--repair-now=<modId>` (`:update` for a GitHubReleases update),
+  that the elevated launcher resumes through `ResumeRepairAfterElevationAsync` — only for the ACTIVE,
+  installed mod the ticket names. It is an ARGUMENT, not a file: an elevation may run as another
+  Windows account, whose `%LocalAppData%` is not ours. `App.OnStartup` treats any ticket like
+  `--update-now`, so the startup self-update never restarts out from under it. A picked version is
+  not re-expressible on a command line, so that one has no ticket. Pinned by `RepairResumeTests`,
+  where the malformed tickets are the point.
+  (19) **One `privateSetupPath` key per INSTALL — `SetupPathPatcher.PlanKey`.** Every copy of a
+  stock-exe mod shared one key derived from the display name: repairing copy 2 re-pointed it (copy 1
+  then loaded copy 2's content), uninstalling a copy deleted the key the other still used (product-key
+  prompt), and a catalogue rename made the next repair abort. The key is now the one the exe already
+  names (`ReadPrivateKey`), else the previous manifest's, each kept only while no other LIVE install
+  owns it (`IsKeyOwnedElsewhere`: its `setuppath` names another folder holding a manifest); otherwise
+  the first free of `name`, `name #2` … `#9`. A copy sharing a key is MOVED with `Repatch`, which only
+  rewrites a slot provably written by `Patch` (key + zero padding to 72 chars). `PlanPrivateKeyWrite`
+  uses the same plan — it is the key the elevated helper writes up front, so the CLONE install path
+  passes the previous manifest's key too (`NativeInstallService.InstallAsync`, as
+  `InstallModOnlyAsync` always did): without it, a reinstall over a folder that used " #2" picked a
+  different key at the end than the one the up-front check had asked Windows for, and failed after
+  the download. Uninstall keeps a key another install still uses. Pinned by
+  `PrivateKeyPerInstallTests`, where the refusals are the point.
+  (20) **Results you can act on, and the cost before a big download — R14b.** A Verify that finds
+  problems also raises a toast (`ShowVerifyResultToast`) with **Repair** (refused if the displayed mod
+  changed since) and **Copy list** — the full `FormatLine` list, which otherwise lived only in the
+  log while the status line showed ten; it is what a player pastes when asking for help. And a PLAIN
+  repair whose payload is known to be ≥ 512 MB asks first (`ConfirmRepairCost`, `DlgRepairCost*`):
+  the mod is published as one archive, so fixing one file downloads all of it, and doing that silently
+  was the surprise. Declining is a clean cancel. Updates are not asked — downloading is what they are.
+  **Found by clicking through the real UI, and each was invisible in code review:**
+  (a) **the repair's RESULT was never on screen.** `ShowProgressCompleted` put it only in the hidden
+  legacy subtitle, the strip showed an empty line under "Completed", and the re-check that follows
+  every repair then wrote "Up to date" into `_statusMessage` — so after 4 s the player saw "Up to
+  date" and nothing about what Repair did. The strip now shows the Completed subtitle, and
+  `RestateRepairResult` puts the result back after the re-check unless that re-check offers
+  something to act on (`RepairPolicy.KeepResultAfterRecheck`: pending patches or an update win).
+  (b) **Copy list closed the card and took the Repair button with it** — see `ToastAction.KeepOpen`
+  in the AppToast bullet. (c) **The cost question and the low-space warning that follows it were the
+  white Windows `MessageBox`**; both are `ThemedConfirmDialog` now (below, under the dialog
+  conventions). (d) **A failed Verify showed a CHECKMARK beside "Operation failed"**: the strip's
+  glyph is set per operation when it starts and nothing replaced it on failure. `ShowProgressError`
+  sets the error glyph and colour, and `RefreshIdleProgressPanel` restores the resting glyph.
+  (21) **Granular restore, SHADOW stage — `Services/Repair/RemotePayloadIndex` +
+  `GranularPlanner`.** Before a plain repair's full re-lay, `LogGranularShadowAsync` reads the
+  payload's central directory over HTTP ranges (split `.zip.NNN` parts are one byte stream — every
+  directory offset is into their CONCATENATION, which `PartReader` maps back; Zip64 is parsed, since
+  WoL's payload is 5.28 GB / 54,162 entries — measured, read in ~1.1 s) and LOGS which damaged files a
+  per-file restore could put back and what it would fetch. **It writes nothing and changes no
+  decision**; 30 s bound, any failure is one log line. The verdicts are the refusals that got the
+  earlier granular repair removed: `SizeDiffers` (a later patch changed the file — the payload holds
+  the OLD bytes), `NotInPayload`, `NoFingerprint`, `Unsupported` method, and `Excluded` (addon-owned,
+  a covered file while a translation is active, the exe patched for a private setup key). A size match
+  is necessary, not sufficient: acting would also have to SHA-check the inflated bytes against the
+  manifest. The wrapper rule is `ResolvePayloadPrefix`, so a one-folder payload matches as the install
+  reads it. `RemoteZipIndex` (version fingerprinting) is deliberately left single-asset / non-Zip64.
+  Pinned by `GranularShadowTests`.
+  (22) **Granular restore, ACTING stage — developer mode only — `Services/Repair/GranularRestore`.**
+  With `LauncherConfig.DeveloperMode` on and `GranularRestore.MayAct` true (EVERY damaged file
+  `Coverable`, no `Structural` finding, ≤ 500 files, ≤ 1 GB, each ≤ 256 MB, and ≤ ¼ of the full
+  download when its size is known) a plain repair fetches only those files' bytes over HTTP ranges
+  (local header → data → inflate), and skips the cost question and the multi-GB space check.
+  **Two phases, and nothing is written until the first is complete:** every file is fetched,
+  size- AND SHA-256-checked against the MANIFEST (never the remote CRC) and written to
+  `<file>.aoe3ml-new`; one failure deletes all staging and the ordinary full re-lay runs, WITH its
+  questions. Then each original is backed up to `AppPaths.DataDir\granular-backup\<install key>\<time>`
+  (5 sets kept) and swapped in; a failed swap rolls back the ones already swapped. The journal is
+  opened just before the first swap. The tail treats it like a re-lay of exactly those files
+  (recheck hashes them, addons re-applied only there) but stamps no new version — the bytes are the
+  ones the manifest already names. Measured on this project's own WoL 1.2.0e install: 43,008 of
+  43,141 recorded files coverable, and real files fetched from all three parts matched the manifest
+  byte for byte. Pinned by `GranularRestoreTests`, where the SHA-mismatch, one-bad-file and
+  half-failed-swap cases are the point.
+  **Whether it may act is ONE predicate, `MainWindow.GranularRestoreEnabled`**, read by the repair
+  AND by Verify's text: with it on, a Relay finding says "downloads only the damaged files when it
+  can" (`VerifyRelayGranularBody`); with it off the old "will re-download the mod files"
+  (`DlgVerifyRepairBody`) stays, because for that player it is true. Two copies of the condition is
+  how the text would come to promise a download that does not happen, or the reverse.
+  **It is the default now (2026-11-18), no longer developer mode**: `GranularRestoreEnabled` reads
+  the player's "Download only what changed" (on by default) through the pure
+  `Services/Repair/IncrementalDownloads` — off, the whole download and no shadow plan computed; a
+  release that ships patches only still patches when off (it has no full download). The switch's
+  hint says what it governs. Pinned by `IncrementalDownloadsTests`.
+
 - **The install manifest now carries hashes, and `UpdateService` recognises the
   launcher's own byte-faithful payload FROM the manifest — keep the three maps in
   sync, and re-fingerprint after every patch (after the snapshot, after deletions).**
@@ -798,7 +1456,8 @@ rather than the reverse.
   which now RETURNS the created+overwritten set) and, **after** the translation snapshot
   refresh (so covered files hash `_originals`) and the delete-list, calls
   `NativeInstallService.RecaptureHashes` → merges into `FileHashes`, `PruneMissingHashes`,
-  recomputes `EngineFileHashes`, saves. It's wrapped non-fatal (try/catch +
+  MERGES `EngineFileHashes` (never recomputes it — see item 14 of the repair-hardening bullet),
+  saves. It's wrapped non-fatal (try/catch +
   `DiagnosticLog`) — a patched install is the normal WoL state and must stay verifiable.
   **That same block then re-applies the user's enabled ADDONS** (`ReapplyAddonsAsync`),
   deliberately AFTER the hash refresh — re-applying re-captures those files again with
@@ -1006,7 +1665,9 @@ rather than the reverse.
   delete the whole folder.** `MainWindow.InstallAsync` computes `overlayInPlace`
   (`InstallType == InPlaceOverlay && !addNewSlot`) and routes on it; `addNewSlot` still clones,
   since two overlays can't share one game folder. The chain that makes this safe:
-  `InstallModOnlyAsync` writes `WriteManifest(…, aoe3SourcePath: null, clonedAoe3: false, …)` →
+  a FIRST `InstallModOnlyAsync` has no previous manifest, so `InstallIdentity.ForReoverlay` yields
+  `clonedAoe3: false` / `aoe3SourcePath: null` (a later re-overlay CARRIES whatever the install
+  already recorded — see the repair-hardening bullet) →
   `UninstallService` takes the `overlayOnly` branch → only `OverlayNetNew` is removed and the
   player's AoE3 survives. **Caveat:** files the mod OVERWROTE aren't restored (Napoleonic Era
   overwrites exactly 1 of its 552); uninstall removes what was added, it doesn't revert what
@@ -1249,7 +1910,27 @@ rather than the reverse.
   each Steam library (`SafeEnumerateDirectories`, swallows IO/ACL errors) and probes
   `<game>\bin\age3y.exe` / `<game>\age3y.exe` — so a RENAMED or localized AoE3
   folder is still detected (the hardcoded name list only covers the default). Don't
-  drop this pass back to name-only matching. **Known gap (out of scope):** the
+  drop this pass back to name-only matching. **A fifth pass, `FindByFolderName`, catches
+  `Age of Empires*` folders outside Steam** — directly under each install prefix
+  (Program Files (x86), Program Files, the drive root) and under its `Microsoft Studios`
+  / `Microsoft Games` subfolder, probing `bin\age3y.exe` then `age3y.exe`. It exists
+  because a player's `D:\Program Files (x86)\Age of Empires III - Complete Collection\bin\`
+  matched no fixed name, so the base game read as NOT installed on a machine that had
+  it. Two rules are load-bearing: it is a **one-level listing filtered by the OS**
+  (`EnumerateDirectories(dir, "Age of Empires*")`), never a walk — `FindAll` is on hot
+  paths and crawling drives is the AV signal `FindAllDeep` keeps out of the passive scan;
+  and it accepts only a **clean** base (`data\` beside the exe or its folder, and NO
+  manifest or mod marker at EITHER level), because a mod folder is often named after the
+  game and ships its own `age3y.exe` — matching by name alone would hand the base-game
+  profile a mod to launch. It runs last so a store-labelled hit keeps its label; its own
+  hits carry an empty label (the install dialog's generic "detected" text). Pinned by the
+  `FindByFolderName` cases in `AoE3DetectorTests`, where the refusals are the point.
+  **`FindAll` reuses one probe for `CacheLifetime` (3 s), handing each caller its own copy of
+  the list**: while the launcher starts, the constructor, the install check, the update check
+  and the other mods' scan each ran the whole probe — every fixed drive, the Steam libraries,
+  the registry — within the same moment, several on the UI thread. `Invalidate()` forgets it;
+  `InstallAsync` calls it so an install always looks at the disk afresh.
+  **Known gap (out of scope):** the
   Microsoft Store / Definitive Edition uses a different engine (no `age3y.exe`) and
   is incompatible with the mod fingerprint, so it's intentionally not detected.
   **`FindAll` still misses a real AoE3 in a NON-STANDARD folder (name AND location)
@@ -1302,23 +1983,24 @@ rather than the reverse.
   folder) and no separate clean AoE3 correctly finds nothing to clone — the existing
   WoL is recognized by the mod-detection path instead; this is intended, not a miss.
 
-- **The top nav tab ORDER is runtime-driven, not the XAML order.** The three
-  tabs (LIBRARY / WORKSHOP / MULTIPLAYER) are declared in a fixed left-to-right
-  order in `MainWindow.xaml` (`TopTabBar` StackPanel), but that's just the
-  default-config order. On startup `ApplyTopTabOrder(switchToFirst: true)`
-  re-parents the button children to match `LauncherConfig.TopTabOrder` (stable
-  ids `"library"/"workshop"/"multiplayer"`) and opens the **first** tab in that
-  order — the user's "opens on launch" choice. Users reorder via Launcher
-  Settings → Interface (↑/↓ buttons). **Never read `TopTabOrder` raw** — go
-  through `LauncherConfig.GetTopTabOrder()`, which sanitises a stale/corrupt/
-  hand-edited value (drops unknown ids, de-dupes, appends any missing canonical
-  tab) so a bad config can't permanently hide a tab. After a Settings save the
-  bar re-orders via `ApplyTopTabOrder(switchToFirst: false)` (reorder only — it
-  does NOT yank the user off their current tab; "first opens" is a launch-time
-  rule only).
+- **The nav bar's ORDER and the tab that OPENS are two settings (2026-11-13).**
+  `LauncherConfig.TopTabBarOrder` is where each tab sits (Settings → Interface → "Tab order",
+  Library · Multiplayer by default), and the first entry of `TopTabOrder` is the tab that opens on
+  launch ("Tab on opening"). Each segment moves its own list only (`_barOrder` / `_tabOrder` in
+  `LauncherSettingsDialog`), so moving the tabs never changes which one opens and the reverse.
+  The bar used to be drawn Multiplayer · Library whatever the config said (design 68a fixed it),
+  so nobody ever chose that order and a config without `topTabBarOrder` simply gets the default.
+  `ApplyTopTabOrder(switchToFirst)` refills `TopTabBar` from `GetTopTabBarOrder()` at startup and
+  through `LauncherSettingsDialog.TabOrderChanged` the moment the order changes; only at startup
+  does it switch to the tab that opens. **Never read either array raw** — go through
+  `GetTopTabOrder()` / `GetTopTabBarOrder()`, which share `SanitizeTabOrder` (drops unknown ids,
+  de-dupes, appends any missing tab) so a bad config can never hide a tab. The Workshop stays in
+  both lists although its button is hidden. Pinned by `TopTabOrderTests` and
+  `DialogXamlTests.TheTabOrderAndTheTabThatOpensNeverMoveEachOther`.
 
-- **MainWindow is THREE rows: title bar (36) / nav (54) / content — and the tabs
-  have now moved between them twice, so read this before moving them again.**
+- **MainWindow is THREE rows: title bar (36) / nav (54) / content — the SAME three rows
+  on a laptop window, only lower (34 / 42) — and the tabs have now moved between them four
+  times, so read this before moving them again.**
   Handoff 1a folded the separate nav strip INTO the title bar (five stacked bars
   down to two); the later header reference split it back out, because a chrome row
   carrying only a wordmark can afford to BE the drag handle. Row 0 is the shared
@@ -1328,27 +2010,47 @@ rather than the reverse.
   named panel in MainWindow's namescope so `ApplyTopTabOrder` can clear and refill
   its `Children`) and, on the right, the connection capsule, a divider and the
   account block. Row 2 is the content.
+  **Below 1500 wide or 900 tall the rows are only LOWER — title bar 34, nav 42**
+  (`docs/design_handoff_salas_laptop/`, turns 38-39; `MainWindow.Compact.cs`, one answer from
+  `Services/CompactLayout.cs` with an 8-DIP hysteresis band, re-evaluated on
+  `SizeChanged`/`StateChanged`, launcher-wide). `ApplyCompactHeader` sets heights and nothing
+  else: the bar through `App.MainTitleBarHeightKey`, `MainNav` through `MainNavHeightCompact`,
+  the tabs' style (`NavTabButtonCompact`, Padding 18, `NavTabCompactTextSize` 12) and the
+  capsule's 26-px height. The account block is the wide one, second line and badge included.
+  **Turn 36 had merged everything into ONE 40-px row and was reverted, and the reason is the
+  rule:** a narrow window shows the same blocks as a wide one and only changes how much fits
+  in each. In one row WORKSHOP slid under the Update pill, and the cure — re-parenting the
+  tabs, the capsule and the account block between two host borders, plus a
+  `CompactHeaderLayout` that dropped the wordmark, the version chip and the account name in
+  turn — was a second layout to keep in step with the first. All of it is gone (the hosts,
+  `TitleBarSeam`, `CompactHeaderLayout`, the bare ELO chip). **Don't bring the tabs back into
+  the bar to save 42 px.**
   **The seam belongs to whichever bar sits directly above the content.** It was the
   nav strip's bottom border, then a TOP border on the content wrapper while the tabs
   lived in the bar, and it is the nav row's `BorderThickness="0,0,0,1"` again now —
   the content wrapper's was removed, since two 1px rules in different greys stack
   into a visible double line. Multiplayer draws its own sub-tab bar under this, but
-  Library and Workshop have nothing, so the rule cannot simply be dropped. The title
-  bar itself still has **no bottom border on purpose**; don't give it one.
+  Library and Workshop have nothing, so the rule cannot simply be dropped. The
+  title bar itself has **no bottom border on purpose**, in either layout; don't give it
+  one.
   **Three things are coupled to this and are easy to break:**
-  (1) the bar height must only ever be set through `TitleBarHeightMain`, because
-  `App.ApplyWindowChrome` derives `WindowChrome.CaptionHeight` from the same token
-  and the caption region *is* the drag region — the nav row's height is a SEPARATE
-  token (`MainNavHeight`) for exactly that reason. Grow `TitleBarHeightMain` to
-  cover both rows and the top of every tab starts dragging the window instead of
-  switching tabs; leave it at 46 while the bar renders at 36 and you get the same
-  bug in a 10px band. Silent either way.
+  (1) the bar height must only ever be set through ONE key —
+  `App.MainTitleBarHeightKey(compact)`, i.e. `TitleBarHeightMain` (36) or
+  `TitleBarHeightMainCompact` (34) — because `WindowChrome.CaptionHeight` is derived
+  from the same key and the caption region *is* the drag region. `ApplyWindowChrome`
+  reads it at startup and `App.SyncMainCaptionHeight` updates it (cloning a frozen
+  chrome) in the same call that changes the bar, so the two can never disagree. The
+  nav row's height is a SEPARATE token (`MainNavHeight` / `MainNavHeightCompact`) for
+  exactly that reason. Grow
+  the bar key to cover both rows and the top of every tab starts dragging the window
+  instead of switching tabs; leave the caption at 46 while the bar renders at 36 and
+  you get the same bug in a 10px band. Silent either way.
   (2) **every interactive control in the bar needs `IsHitTestVisibleInChrome` set
-  EXPLICITLY, and it must NOT be set on the content grid** — on the grid it makes
-  the whole bar hit-testable and kills the drag. Nothing in the NAV row needs it at
-  all: that row is below `CaptionHeight`, so it gets ordinary client hit-testing,
-  hover and tooltips for free (which is what lets the connection capsule carry a
-  tooltip at all — in the caption region one could never fire).
+  EXPLICITLY, and it must NOT be set on the content grid** — on the grid it makes the
+  whole bar hit-testable and kills the drag. The tabs, the Connected capsule and the
+  account block live in the nav row in BOTH layouts, which is below `CaptionHeight` and
+  gets ordinary client hit-testing, hover and tooltips for free — so they carry no flag,
+  and turn 36's five flags went with the single-row header.
   (3) the right-hand affordances are **in the bar's own grid now**, not overlaid.
   That retired the hand-computed right margins this bullet used to warn about (bell
   148, offline chip 200, content grid 58, all derived from `ButtonWidth=46 x 3`):
@@ -1379,7 +2081,13 @@ rather than the reverse.
   lands at 0.98-0.999, and `UiScale.SetTextCrispForScale` switches at `< 0.999`: the
   whole Workshop and Multiplayer surface swaps `Display`/`ClearType` for
   `Ideal`/`Grayscale` and every glyph goes soft for a 1% size change. Re-tune these
-  whenever a chrome row's height changes.
+  whenever a chrome row's height changes. **The compact header did NOT require a
+  re-tune, but only just — by arithmetic, not measured:** its chrome is 34 + 42 = 76, so at
+  the 620-px minimum height `ContentHost` is 544 tall, 0.971 of the 560 reference — inside
+  `UiScale.SnapToOneAbove` (0.97) by less than a pixel, so it snaps to 1.0 and keeps
+  ClearType. Grow either compact row by one pixel and the minimum-height window crosses
+  the line. The wide layout only applies at ≥ 900 tall, where 90 px of chrome leaves far
+  more.
   **The launcher-wide ES/EN toggle that lived in the bar is GONE** — the language is
   changed in Launcher Settings, which was always the primary place;
   `LauncherConfig.LanguageExplicitlyChosen` is now written from there alone.
@@ -1387,7 +2095,8 @@ rather than the reverse.
   changed twice:** a 2px underline (it worked because that edge *was* the chrome/
   content seam), then a filled pill once the tabs moved INSIDE the bar and there was
   no seam left to sit on, and a 2px `MpAction` underline again now that the nav row
-  gives them a rule to land on. The 2px is reserved as `Transparent` at rest rather
+  gives them a rule to land on — in both layouts, since the tabs stay in the nav row.
+  The 2px is reserved as `Transparent` at rest rather
   than added when active, and the active tab is deliberately **not** bolded — either
   would resize the button and shuffle its neighbours on every tab switch. One related guard keeps the **content
   below** from reading as if it invades the chrome: the content host is
@@ -1495,6 +2204,108 @@ rather than the reverse.
   chose fidelity to the reference. So a future report of the icon looking soft is a
   known, accepted cost, not a regression to fix — unless the maintainer revisits it.
 
+- **A looping animation is STOPPED through its clock — `BeginAnimation(property, null)` only
+  DETACHES it, and the detached clock keeps WPF drawing a frame every refresh until the garbage
+  collector frees it.** This cost two players a launcher at ~40 % CPU that "froze" and lagged even
+  in the tray: `RankBadge.Stop` used exactly that call, so every badge ever stopped — on going to
+  the tray, and on every rebuild of the players panel and the chat, which happens on each presence
+  and message frame — went on ticking for nobody, and the leftovers piled up between collections.
+  Measured on a fast PC in the tray: 0 badges running, 72-106 redraws a second still driven by
+  their clocks; on the players' laptops each of those frames took ~300 ms and the UI thread never
+  rested. The rule now: a forever animation is started with `CreateClock()` +
+  `ApplyAnimationClock`, the clock is kept, and stopping calls `clock.Controller.Stop()` before
+  detaching (`RankBadge.Start`/`Stop`).
+  **The update pill went further and has no forever animation at all** (2026-11-11): a running
+  clock makes WPF draw every frame even while the value it holds is still, and the pill's
+  "rest" between pulses was exactly that — measured 65 redraws a second with the window idle.
+  `PulseLauncherUpdatePill` plays one FINITE breath (`BreatheLauncherUpdatePill`,
+  `FillBehavior.Stop`, 30 fps, its clocks kept and stopped through their controller) and a
+  `_pillBreathTimer` starts the next; `StopLauncherUpdatePillPulse` stops the timer and the clocks.
+  Measured after: 16 redraws a second, CPU 4.6 % → 3.3 %. Between breaths nothing is drawn.
+  **Since design 110 (2026-11-14) the pill is solid GOLD, and it BEATS with its halo**: the
+  design's 2.4-s halo breath alone read as too quiet, so (the maintainer's call, the same day) the
+  old double pulse of its size (1.08 then 1.05, 680 ms on `LauncherUpdatePillScale`) came back with
+  the ring and glow flaring in step (two siblings behind the face — the Effect is on a shape with
+  no text, and is never animated, because an Effect inside a template is frozen), one beat every
+  3.6 s. The rest between beats is the forever-clock rule above. It holds still under the pointer and with the effects reduced, and
+  the arrow is a drawn `Path` (`Tag="ready"` draws the restart arrow). Pinned by
+  `LauncherUpdatePillTests`, which lifts the button out of `MainWindow.xaml` and builds it. `App.ShowMainWindow` also tells `RankBadge.SetAppActive` the window's real focus right
+  after `Show()`: a window shown without focus never raises `Deactivated`, so lights kept running
+  for nobody.
+  A FINITE animation (a fade, the bell shake) ends on its own and needs none of this. Two more
+  rules came with it, by the maintainer's choice: **looping light is capped at
+  `RankBadge.FrameRate` (30)** — WPF otherwise redraws at the monitor's refresh rate while any clock
+  runs (measured 58 % of a core at 120 Hz against 21 %) — and **it runs only while somebody can see
+  it** (`RankBadge.ShouldRun`: the launcher is the foreground application, the element is on screen,
+  its window is not minimized — a minimized window's content still reports itself VISIBLE, so App
+  re-evaluates every badge on each window's `StateChanged` and on `Application.Activated`/
+  `Deactivated`). The update pill follows the same rule through `MainWindow.RefreshPillPulse`, the
+  only way it is started or stopped. Pinned by `RankBadgeClockTests`, which ticks WPF's time manager
+  by reflection because a window shown from the harness's second STA thread never really shows; its
+  control case (`DetachingAForeverAnimationLeavesItsClockRunning`) is what notices the day WPF
+  changes the premise. **How it was found is the reusable part:** the `LAYOUT STORM` line (see
+  Logging) names the active clocks, which is what showed the "stopped" badges' clocks still running.
+  **And on a slow machine even a light somebody IS watching is too much — so lights are rare,
+  blurs are cached, and a slow PC turns them off.** With every clock fixed, a player's laptop
+  (hardware rendering, 1366×768, memory at 90 %) still paid ~300 ms per frame, and the lights were
+  spread over the whole window, so each frame redrew most of it. Three rules, all in
+  `Controls/RankBadge.cs`: (1) **a badge in a LIST is built still** (`animated: false`, the same
+  badge Windows-animations-off draws — no light layers, no clocks); only the player's own badge
+  (account, profile, result card) and the top `AnimatedTopPlaces` (3) of a ladder move. (2) **A
+  blurred layer with no crisp text in it carries `BitmapCache`** (the badge's aura and numeral glow,
+  the shadow underlays of the alert overlay, toast, activity panel, team countdown and PLAY's
+  halo), so the blur is worked out once instead of every frame — **never on anything holding crisp
+  text**, which would lose ClearType exactly like an Effect. (3) **`Services/EffectsGovernor`**
+  turns every light off for the session (`RankBadge.SetReducedEffects`, which the update pill
+  follows; the Settings choice "Effects and animations: Reduced" turns them off too, through the
+  separate `SetUserReducedEffects`, so switching it back never re-lights a PC the governor found
+  slow) after three watched seconds in a row spending ≥ 400 ms drawing at ≥ 60 ms a frame, or
+  at start on a rendering tier below 2, and logs one `EFFECTS REDUCED` line. Both halves of that
+  rule are needed: a fast PC dragging the window's edge also spends most of a second drawing, in
+  many cheap frames, and must keep its lights. `AOE3ML_SOFTWARE_RENDER=1` forces software
+  rendering — the developer's way to reproduce a weak machine on a fast one.
+  **⚠ And the lights were not the whole of it.** A later bundle from a 1366×768 laptop running
+  v1.0.15f had `EFFECTS REDUCED` — every light off — and still logged `LAYOUT STORM … 0/s layout
+  passes … 246 ms a frame`, hours of it. What was left was a layout that never completed: see the
+  `SizeChanged` gotcha right below. The three rules above still hold; they were not the last
+  cause.
+
+- **A `SizeChanged` handler must never write anything that can move the size it reacts to, and a
+  panel must never hide a child by arranging it into a 0×0 slot — together they froze the Rooms
+  page from v1.0.15 to v1.0.15f.** A player's laptop logged `LAYOUT STORM … 0/s layout passes …
+  246 ms a frame` for hours, with thousands of size changes a second on the same few match lines
+  of the community card; creating a room, which forces synchronous layouts, paid the same loop
+  (`SLOW MP RenderRoomsTab — 16109 ms` in that bundle, though not all of it was this).
+  Two halves, each harmless alone: (1) **WPF never lays an element out smaller than its
+  DesiredSize** — `ArrangeCore` inflates a slot that is too small and clips — so the rows
+  `FitStackPanel` had no room for, arranged into `new Rect(0,0,0,0)`, were laid out at their OWN
+  content's width; (2) **`InlineFlagFit.Apply` ran from the match line's `SizeChanged` and set
+  flags `Collapsed`**, and Visible↔Collapsed changes an element's measure (Visible↔Hidden does
+  not), so the trimmed line's width moved — and in a hidden row that width WAS the row's. The row
+  resized, `SizeChanged` ran Apply again, the answer flipped back, and WPF's layout loop gave up
+  after 153 rounds WITHOUT raising `LayoutUpdated` (hence "0/s layout passes"), re-posted itself
+  and did it all again on the next frame. Fixed on both sides — flags are `Hidden`, never
+  `Collapsed`, and a row that does not fit is arranged at the panel's width with no height — and
+  either side alone settles it (checked). **The rule:** from an element's own `SizeChanged`,
+  write only what cannot reach that element's size through its DesiredSize, a parent that sizes
+  to content, or a slot WPF inflates (`Visibility.Hidden`, a ToolTip, a brush); and a panel hides
+  a child with a slot as wide as the panel (as tall, for a row) and nothing in the other
+  dimension. `FitRowPanel` keeps 0×0 only because its facts hold nothing that writes layout, and
+  its remarks say so. "At the panel's width" holds for a row that STRETCHES (the default, and every
+  row the panel holds): a row aligned Left or Center is arranged at its own DesiredSize inside that
+  slot and the loop is back. **In a bundle it reads as `LAYOUT STORM  NON-CONVERGING`** (see Logging).
+  Pinned by `InlineFlagFitTests.THE_ONE_THAT_MATTERS_HidingAFlagNeverInvalidatesTheLine`,
+  `RoomsActivityLayoutTests.ARowThatDoesNotFitIsLaidOutAtThePanelsWidth` and
+  `CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth`.
+  **A size MEASURED FROM the layout it then decides must ignore rounding — `RoomsActivityLayout.Settle`
+  (2026-11-18).** The community block measures its minimum from what is drawn, and on a 125 % screen
+  75 lays out at 75.2 and 74 at 73.6, so the measurement answered itself: 75 → 74 → 75, a thousand
+  passes a second on the Rooms page of EVERY launcher on the server, for as long as one community
+  match and an empty ladder were on screen (a new community, a restarted server). Found by the
+  two-account rig on its first match; a unit test at 96 DPI cannot see it, which is why the pin is
+  the pure rule (`RoomsActivityLayoutTests.THE_ONE_THAT_MATTERS_RoundingNeverMovesAMeasurementThatIsInUse`).
+  A new measurement replaces the one in use only past `MeasurementTolerance` (2 px).
+
 - **A `ControlTemplate` trigger that paints a template element by `TargetName` CANNOT be
   overridden by a style derived from it — so a template meant to be a `BasedOn` base must
   not hardcode a state colour there.** The sibling of the local-value precedence trap
@@ -1510,8 +2321,8 @@ rather than the reverse.
   `TargetName` into each Style's own triggers, on the control's `Background`, which reaches
   the template through the `TemplateBinding`. Triggers merge base-first down the `BasedOn`
   chain and the last setter wins, so the derived style's state is the one that lands. A
-  style that supplies its OWN `Template` is exempt — that is why `MpRoomActionGhost` and
-  `MpRowJoinButton` legitimately keep a `TargetName` trigger. The implicit global `Button`
+  style that supplies its OWN `Template` is exempt — that is why `MpRowJoinButton` and
+  `QcButtonPrimary` legitimately keep a `TargetName` trigger. The implicit global `Button`
   style solves it a third way, by animating an overlay's `Opacity` rather than a colour.
   Pinned by `DialogXamlTests.NoDerivedStyleDeclaresAStateItsInheritedTemplateStomps`, which
   walks every style in `Styles/*.xaml` and asserts it examined a non-zero number of them.
@@ -1702,7 +2513,12 @@ rather than the reverse.
   migrated into `mods[...]` on `Load()` (which also rewrites a retired
   `multiplayer.lobbyBaseUrl` and clears the session token). The config schema +
   example live in `docs/CONFIGURATION.md` (per-mod dict, not the legacy flat
-  fields). `Save()` is non-atomic and runs from background threads.
+  fields). `Save()` runs from background threads, so it is serialised (`SaveLock`) and goes
+  through `LauncherConfig.WriteWhole`: a `.{guid}.tmp` beside the file, then a `File.Move` over
+  it, three tries; a reader holding the file open (Windows refuses to replace an open file) makes
+  it fall back to an in-place write rather than lose the save. It used to be a plain overwrite
+  from several threads, and a `launcher-config.json.clobbered-…` in a player's data folder is
+  what that left. Pinned by `ConfigSaveTests`.
 
 - **Multi-install copies (`ModState.OtherInstalls`) are hidden/deduped, never
   hard-deleted — a phantom "Mod (2)" in the MODS switcher was a stale registration.**
@@ -1819,8 +2635,12 @@ rather than the reverse.
   load-bearing: (1) **`ModRegistry.PrimeFromCache(repo)`** — synchronous, cache-only (no network,
   no `BackgroundRefreshAsync`), called in the ctor **before** `GetActiveProfile()`. It
   **ignores the cache TTL on purpose** (this pass resolves mod IDENTITY only; the normal refresh
-  right after re-merges and owns staleness) and is safe w.r.t. `ClearVanishedAssets`, which only
-  runs when a PREVIOUS merge existed — the prime is always the first. (2) **The fallback is
+  right after owns staleness) and is safe w.r.t. `ClearVanishedAssets`, which only
+  runs when a PREVIOUS merge existed — the prime is always the first. **When that refresh finds
+  the SAME fresh file** (same fetch time, entry count and local manifests — `CacheStamp`), it
+  keeps the prime's merge instead of repeating it, once: the second merge rebuilt every community
+  profile as new instances, dropping the cached image paths the first ones had picked up, and
+  repainted every list of mods while the window was still opening. (2) **The fallback is
   LOGGED** when the saved id didn't resolve — that silence is what hid the bug. (3)
   **`MainWindow.ReconcileSavedActiveMod`**, called after the startup `WhenAll`, is the backstop
   for a COLD cache (fresh install / cleared cache): if the saved id resolves now and isn't what's
@@ -1855,7 +2675,7 @@ rather than the reverse.
   hard right, and a horizontal StackPanel measures children with INFINITE width, which made the
   name's `CharacterEllipsis` inert (a long name grew the popup instead of trimming) — the same
   lesson as the rooms table. **Column 0 is the mod's ICON**, built by the shared
-  `MainWindow.BuildModIconDisc` (extracted from `BuildModCard` so the switcher and the Workshop
+  `MainWindow.BuildModIconDisc` (shared so the switcher and the Workshop
   cards can't drift on the monogram fallback or the asset kick). It replaced a state glyph that
   was only ever checkmark-or-blank; **the active check moved to its own column beside the star**,
   where it reinforces the gold bold name rather than being the only signal, and inactive rows
@@ -1965,6 +2785,18 @@ rather than the reverse.
   **The dialog is opened AFTER the `finally`, via a `string? antivirusBlockedFile` local set in the
   catch** — showing a modal from inside the catch would block the UI with the install still flagged
   busy and the progress strip frozen mid-run, because the `finally` that clears both hasn't run yet.
+  **The dialog follows `docs/design_archivos_antivirus` (48a/48b)** — navy, a drawn shield (amber
+  before installing, red after; it used to be the LOCK glyph `&#xE72E;`, which says "all safe"),
+  "Copy both" in the header of the card it copies, four numbered steps, one solid button, Cancel as
+  a link. Paths are display-only TextBlocks broken at their separators by
+  `PathDisplay.BreakAtSeparators` (U+200B after each `\`, spaces made non-breaking) — never hand
+  that string to the clipboard or the file system; `_clipboardText` stays the raw paths. "Open
+  Windows Security" only launches `windowsdefender://threatsettings` (checked on Windows 11; the
+  maintainer confirms Windows 10) and still writes nothing. **To look at it, or at the uninstall
+  window, without an antivirus or a delete:** `--preview-antivirus=notice|blocked|notice-one`,
+  `--preview-uninstall=valid|copy|userdata|overlay|invalid|base|nothing`, and
+  `--open-mod-settings=local-files` — all paint only. Point `AOE3ML_DATA_DIR` at a copied config to
+  capture another language without touching the real one.
   **This detection is KNOWN and PERMANENT, so the launcher also warns BEFORE installing.**
   `ModProfile.AntivirusFalsePositiveFile` (set to `AI3\wolai.upl` on the WoL built-in only) makes
   `MainWindow.InstallAsync` show the same dialog in its PREVENTIVE mode right after the install
@@ -2207,7 +3039,10 @@ rather than the reverse.
   `ConnectivityState.OfflineChanged`, marshalled to the dispatcher) toggles a title-bar
   **offline chip** (overlay left of the notification bell, reuses the `MpStatusOffline`
   brush; clicking it re-probes via self-update + active-mod check) and greys the
-  online-only controls — hides the self-update pill, and delegates to
+  online-only controls — hides the self-update pill (and puts it BACK on reconnect while the
+  update is still pending: `LauncherUpdateGate.PillShown(offline, pending)` decides both
+  directions, since hiding and never re-showing it lifted the multiplayer gate for the rest of the
+  session after any short offline spell), and delegates to
   `ModsBrowser.SetOfflineMode` (Workshop "Actualizar") /
   `MultiplayerTab.SetOfflineMode` (sign-in/create/refresh, re-applied at the end of
   `RefreshFromSession` so a session refresh can't silently re-enable them while
@@ -2215,6 +3050,14 @@ rather than the reverse.
   translations; the version picker self-disables offline). Strings are passed INTO
   `ModsBrowser` (it doesn't import the Localization layer). Pinned by
   `OfflineFallbackTests` (`BuildOfflineResultData` + `IsNetworkError`).
+  **`MultiplayerTab.SetOfflineMode(false, …)` is the ONLY writer that gives those three
+  buttons back — `RefreshFromSession` never enables them, it only re-applies the offline
+  state.** The online branch used to restore Refresh alone and leave the other two to "the
+  session logic", which does nothing of the kind: "+ Create room" had exactly one `IsEnabled`
+  writer in the tab and it wrote false, so one network blip disabled it for the rest of the
+  session. The sign-in and refresh click `finally`s write `!_offlineMode` rather than `true`,
+  so going offline mid-click is not undone. Pinned by
+  `OfflineModeButtonsTests.THE_ONE_THAT_MATTERS_GoingBackOnlineGivesBackEveryButtonOfflineTookAway`.
 
 - **Version picker (Mod Properties → General) is GitHubReleases-only and installs
   through the SHARED re-overlay path — not a new install flow.** For an installed
@@ -2644,6 +3487,9 @@ rather than the reverse.
   directory is removed only while empty, and the root only when the launcher created it. Note
   `DoUninstall` loads the manifest at the TOP: phase 2 destroys it on both branches, so reading
   it later would make the whole phase a silent no-op that still reports success.
+  **The seed is checked against the SHA-256 GitHub published for its asset** (2026-11-18,
+  `SeedAssetPick.Sha256`, `SeedMatches`): a seed that does not match is deleted and never unpacked
+  into the save folder; an upload GitHub kept no digest for is used and logged, as before.
   Pinned by `UserDataPayloadTests`, where every case but three is a refusal.
 
 - **A mod may ship PATCH-ONLY releases — the full `.zip` goes up once (a "baseline") and later
@@ -3136,6 +3982,54 @@ rather than the reverse.
   at the end, so the PCA mitigation never applied once. Every mod runs the same 2007 engine, so
   no profile will behave differently.
 
+- **A translation pack is UNTRUSTED input — it may only replace the mod's own covered files,
+  and its id is never handed to the file system unchecked. `Services/TranslationPathPolicy.cs`
+  is the single rule; don't add a second one.** A pack can come from a repository the player
+  added by hand, and its `translation.json` chose both what `Apply` overwrote (each
+  `files[].path`, copied to `Path.Combine(install, path)` as given — so `..` or a rooted path
+  wrote anywhere on the disk) and the folder `InstallPackFromZipAsync` DELETED recursively
+  (`translations\<manifest.Id>`, with an id nobody had looked at, so `..\..` reached a
+  `Directory.Delete(recursive)` outside the install). Five rules now, all load-bearing:
+  (1) **an allow-list, not a filter** — `TryResolveCoveredTarget` maps a pack path onto one of
+  the profile's `Translations.CoveredFiles` (case-insensitive, as Windows is) and the
+  destination is built from the COVERED spelling, never the pack's; structural checks run first
+  (`..`/`.` segments, rooted paths in every spelling, any `:`, a trailing dot or space, device
+  names), because a path that can mean two things on Windows must be refused rather than
+  compared. A final `IsUnderRoot` check follows the `Path.Combine`. Everything refused is logged
+  BY NAME. (2) **`IsSafePackId`** — `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z` (note `\z`: a `$` also
+  matches before a trailing newline), no trailing dot, no device name. Starting with a letter or
+  digit is what keeps out `_originals` and the installer's `.incoming-*` / `.old-*` scratch
+  folders, and `GetPackFolder` THROWS on anything else as the backstop. (3) **extraction is
+  allow-listed and capped** — only `translation.json` (exactly one, ≤ 256 KiB) plus the ROOT
+  entries named after approved files; the bytes are counted while copying (the zip's declared
+  size is whatever its author wrote): 64 MiB per file, 128 MiB in total, 64 MiB for the zip
+  itself (`TranslationService.Max*`). The result is built in `translations\.incoming-<guid>\` and
+  swapped in only when complete (old folder → `.old-<guid>` → deleted; moved back if the swap
+  fails), so a refused pack leaves the previous one exactly as it was. The caller passes the id
+  the player CHOSE (`expectedId`) and a zip naming another is refused. (The apply dialog now
+  splits this into stage → apply → promote with more checks — see the integrity bullet below;
+  `InstallPackFromZip` is stage + promote.) (4) **`ListInstalled`
+  counts a folder only when its NAME is the manifest's id** and skips dot-folders — `Apply`
+  reads `translations\<id>\`, so a folder `foo\` whose manifest says `bar` would apply one pack's
+  files under the other's name. (5) **`TranslationService.ForProfile`** is what every install /
+  apply / reconcile site uses: a profile with NO Translations block accepts no pack at all
+  (with the plain constructor its covered list falls back to WoL's, so a pack sitting on disk
+  could overwrite the stock game's string table — the Language tab lists local packs for every
+  mod). An empty `CoveredFiles` still means the WoL default. The launcher's OWN snapshot and
+  revert are trusted data and stay ungated — and deliberately so: a mod without a block that
+  already has a `_originals` snapshot must keep it fresh, because `ModHashService` reads through
+  it. **Downloads** (`TranslationRegistryService.DownloadPackAsync`): https only through
+  `SafeUrl`, capped as they arrive (`CopyCappedAsync`), and the file must start with `PK\x03\x04`
+  — a share link that answers with a web page is reported as exactly that instead of as a
+  corrupt zip later. `ExportPackageAsync` and the packager dialog validate the id and version
+  with the same policy, so the packager can never build a pack the launcher refuses (and a `..`
+  can't escape its output folder). Pinned by `TranslationPathPolicyTests`,
+  `TranslationApplyPolicyTests` and `TranslationPackInstallTests`, where nearly every case is a
+  refusal and every refusal also checks that nothing outside the install — and no previous pack
+  — was touched. All six packs published today (three folders in `Gorgorito12/translations`,
+  three releases in `papillo12/translations`) are flat zips whose files match their manifests,
+  so none of this refuses a real pack.
+
 - **Community translations are PROFILE-scoped, and the index is re-fetched on
   mod switch.** Two coupled rules: (1) `UpdateService.EffectiveTranslationsRepo()`
   returns the repo from the active `ModProfile.Translations` block, or `""` when
@@ -3155,80 +4049,205 @@ rather than the reverse.
   (`launcher-debug.log` shows "Translation releases scanned: N valid entries") —
   the index was just being discarded without re-fetching.
 
-- **Translations are discovered in DUAL MODE: a `translations/` FOLDER on main +
-  legacy GitHub releases — keyed by content hash, not a release tag.** Publishing
-  via release assets (upload `translation.json` + `.zip`) was clunky, so packs can
-  now be **committed as files** under `translations/<id>/` (a `translation.json` +
-  its `.zip`) on a dedicated repo's main branch. **Each translation also keeps a
-  VERSION HISTORY:** versions live in `translations/<id>/<version>/` subfolders;
-  `FetchFromRepoFolderAsync` reads the whole repo tree in ONE call (the **Git Trees
-  API**, recursive), regex-matches `translations/<lang>(/<version>)?/translation.json`,
-  groups by `<lang>`, reads each manifest via raw CDN, and builds **one
-  `TranslationIndexEntry` per language** whose top-level fields = the NEWEST version
-  (so the menu / dedup / notification are unchanged) plus a
-  `Versions[]` list (newest-first, `TranslationCompat.OrderVersions`: by `date`
-  desc then version, capped at `MaxTranslationVersions`=10). `translation.json`
-  gained a `date` (packager-stamped) for reliable ordering; a flat
-  `translations/<id>/translation.json` (no version subfolder) is read as a single
-  version (back-compat). `TranslationRegistryService` has
-  three entry points: `FetchFromReleasesAsync` (legacy, unchanged),
-  `FetchFromRepoFolderAsync` (the tree-API folder scan above), and
-  `FetchAsync(folderRepo, releasesRepo)` which runs **both** and
-  merges by id with **folder packs winning** (and sorted first, so they rank as
-  "newest" in `OrderForDisplay`). **UI:** the Properties → Language tab shows a
-  **version picker** (combo + Apply, mirroring the GitHubReleases version picker)
-  for any pack with `Versions.Count > 1` (`ModPropertiesDialog.BuildVersionedLanguageCard`);
-  applying a non-newest version clones the entry with that version's
-  URL/hash/compat (`ApplyChosenVersion`). The applied version is remembered in
-  `ModState.ActiveTranslationVersion` (cleared on revert-to-English). The gear
-  menu stays single-entry (newest). The notifier mirrors the tree-API scan and
-  emits the **newest** version's `id@contentHash` (one bell per new version).
-  **Multi-repo caveat:** with several folder repos merged (below), "newest" here
-  means the entry's top-level version, and for an id the DEFAULT repo also ships,
-  `MergeFolderEntries` keeps the top-level fields (gear one-click apply + this
-  notification key) from the **default** repo's entry ("mine is the default") — so
-  a *newer* version of that same id coming from an EXTRA repo is NOT what the gear
-  applies and does NOT re-bell here; it's reachable only via the Properties →
-  Language version picker (labelled by source repo). Top-level `Version` can thus
-  differ from `Versions[0]` in the collision case. The repos come from the profile's
-  `Translations.FolderRepo` (new) + `.Repo` (legacy), resolved by
-  `EffectiveTranslationsFolderRepos()` (PLURAL) + `EffectiveTranslationsRepo()`; the
-  catalog `mod.json` `translations` block gained a `folderRepo` field. **The user can
-  add MULTIPLE folder repos** (Settings → CATALOG & SOURCES, the "Translation sources"
-  subsection — the standalone TRANSLATIONS tab was folded in here to avoid new players
-  reading it as "where to get a translation"): the profile's own folder repo
-  (the default, always first) PLUS `config.ExtraTranslationsFolderRepos` (a hand-added
-  `owner/repo[]`), all fetched and merged. `config.CommunityTranslationsDisabled` (the
-  "Disable" checkbox) turns everything off. `EffectiveTranslationsFolderRepos()` returns
-  the default + extras (de-duped), or an EMPTY list when the profile doesn't participate
-  (no Translations block) or translations are disabled — the participation gate means an
-  added repo can't inject packs into a mod that opted out. The merge is
-  `TranslationRegistryService.MergeFolderEntries` (pure, unit-tested): one entry per id;
-  on an id collision the repos' versions are UNIONED into that entry's `Versions[]`
-  (deduped by contentHash, each version keeps its `SourceRepo`, surfaced in the Mod
-  Properties version picker labelled by repo), and the base/display+one-click-apply
-  metadata comes from the DEFAULT repo's entry when it has that id (else the newest
-  version's owner). `RefreshTranslationIndexAsync` + the notif sweep filter the merged
-  index by `targetMod` so a foreign repo's packs don't pollute the active mod's menu.
-  Each folder repo is fetched in its own try/catch so one bad/rate-limited repo doesn't
-  blank the menu. The deprecated single-string `config.TranslationsFolderRepo` is migrated
-  into the new fields on load (`MigrateTranslationsFolderRepo`). Pinned by
-  `MultiTranslationRepoTests` + `TranslationMergeTests`. **The dedup /
-  notification key is centralized in `TranslationCompat.KeyOf`:** release tag →
-  `id@contentHash` (folder packs) → `id@version` (legacy). `contentHash` is the
-  manifest's field (written by the packager) or recomputed from the files'
-  `translatedHash` via `TranslationCompat.ComputeContentHash` — sort files by
-  path, join `path\ntranslatedHash` with `\n`, SHA-256, first 16 hex. **An
-  IMPROVED pack (changed bytes) yields a new hash → a fresh "new translation"
-  bell with NO release tag and NO manual version bump** — this is what replaces
-  the release-tag "newness" signal for folder packs. The recipe MUST stay
-  byte-identical to the notifier's `computeContentHash` (notifier emits the same
-  `id@contentHash`); pinned by `TranslationCompatTests` (cross-impl value
-  `67426f0ebcfec85f`). The packager (`TranslationService.ExportPackageAsync`)
-  writes `contentHash` + `zip` (the zip filename) into the manifest and the
-  Packager dialog's publish instructions now describe the folder path first
-  (release stays as the legacy alternative). Don't reintroduce an inline `KeyOf`
-  in `MainWindow` — use `TranslationCompat.KeyOf`.
+- **Translations come from SOURCES, and there is ONE CARD PER TRANSLATOR — never a union of
+  several translators under one language id (`Services/TranslationSources.cs`,
+  `TranslationRegistryService.FetchAsync(TranslationSources, modId)`).** A source is a
+  `TranslationSourceRef`: a GitHub repository's `translations/<id>/<version>/` folders (`gh:`,
+  read with ONE recursive Git Trees API call), a repository's legacy releases (`ghr:`), or a
+  `translations-index.json` at any https address (`url:` — Drive, Dropbox, a gist, a website; see
+  the index bullet). `UpdateService.EffectiveTranslationSources()` lists them in fetch order: the
+  profile's own `Translations.FolderRepo` (official), its releases repo (official only when it
+  IS the profile's own `Repo` — **official is decided by identity, never by position in a
+  list**), then `config.ExtraTranslationsFolderRepos`, then `config.ExtraTranslationIndexUrls`,
+  de-duplicated by `Key`. It is EMPTY for a profile with no Translations block or with
+  `CommunityTranslationsDisabled` — the participation gate, so an added source can never inject
+  packs into a mod that takes none. Each source is fetched in its own try/catch
+  (`FetchSourceAsync` → `SourceFetchResult` with `Reachable` / `ErrorKey`), so one dead source
+  never blanks the list. **Fixed layout** `translations/<id>/<version>/translation.json` + its
+  zip; a flat `translations/<id>/translation.json` is still read as one version (back-compat);
+  a `translation.json` at any other depth is skipped and LOGGED with the expected shape, and a
+  folder whose name isn't the manifest's id is logged too (the template's CI enforces the layout
+  on the publishing side). **Grouping is `TranslationSourceGrouping.BuildForMod` (pure):** the
+  target-mod filter runs per VERSION, before grouping — an empty `targetMod` (packs made before
+  the field) is accepted only from the OFFICIAL source, an added source must name the mod — then
+  one `TranslationIndexEntry` per (source, id), keyed everywhere by `CardKey` (`SourceKey|Id`),
+  with `Versions[]` newest-first (`TranslationCompat.OrderVersions`: `date` desc then version,
+  capped at 10) and the top-level fields describing the newest. The old cross-repo union
+  (`MergeFolderEntries`, which put another translator's versions inside the official card under
+  the default repo's name and metadata) is GONE — don't bring it back. The only fold left is the
+  official pair: an official RELEASE whose id the official FOLDER also has is hidden (folder
+  wins); another translator's releases never fold. A card with 2+ versions gets a version picker
+  (`BuildVersionedLanguageCard`), each labelled `"<version> · for <mod versions>"`
+  (`LangCardVerForMod`, `ModPropertiesDialog.VersionLabel`); applying a non-newest one clones the
+  entry with that version's URL / hash / sha256 / source (`ApplyChosenVersion`). The gear menu
+  stays single-entry. **Keys are `TranslationCompat.KeyOf` / `KeyOfVersion`** (same format, so a
+  version and the entry it heads never bell twice): release tag → `id@contentHash` →
+  `id@sha256:<16>` (an index item with no content hash; the prefix can't collide with a 16-hex
+  hash) → `id@version`. The content-hash recipe — files sorted by path, `path\ntranslatedHash`
+  joined with `\n`, SHA-256, first 16 hex — MUST stay byte-identical to the notifier's
+  `computeContentHash` (pinned: cross-implementation value `67426f0ebcfec85f`), and
+  `TranslationCompat.EffectiveContentHash(manifest)` (declared, else computed) is the ONE
+  expression both the advertised hash and the recorded hash come from. Don't reintroduce an
+  inline `KeyOf` in `MainWindow`. `EffectiveTranslationsFolderRepos()` /
+  `EffectiveTranslationsRepo()` remain for the packager and the logs; the deprecated
+  `config.TranslationsFolderRepo` is migrated on load (`MigrateTranslationsFolderRepo`). Pinned
+  by `TranslationSourceGroupingTests`, `MultiTranslationRepoTests`, `TranslationCompatTests` and
+  `TranslationCardRulesTests`.
+
+- **A player follows another translator from the mod's Language tab, and that translator's NEW
+  versions then appear there on their own.** The "Translation sources" block at the bottom of
+  `LanguagePanel` (`TxSourcesSection`) lists every source — the mod's own with an "official"
+  badge and no Remove — with Copy link, plus one box that takes `owner/repo`, a GitHub URL or any
+  https link. `MainWindow.AddTranslationSourceAsync`: (1) `TranslationSourceRef.TryParse` — **the
+  ONE door every source comes through** (this box, Settings, the add-source link); each refusal
+  names its reason (`TxSrcErr*`: a Mega link, a Drive folder, plain http…), because "invalid"
+  tells nobody what to ask the translator for; (2) disabled / already added (by `Key`, the mod's
+  own repo included) / cap (`MaxExtraTranslationSources` = 20 per kind); (3) **the source is
+  fetched ALONE first** — unreachable means not added, with its error; reachable with nothing
+  for this mod is added, with "they will show up when it publishes them"; (4) saved to
+  `ExtraTranslationsFolderRepos` or `ExtraTranslationIndexUrls`, then
+  `_launcherSettingsDialog?.ReloadTranslationSources()` — Settings applies sources instantly
+  through its fingerprint, and its stale working copy would otherwise drop the add on the next
+  change; (5) refresh. Removing forgets the source and deletes nothing. Sources are
+  LAUNCHER-WIDE (each pack's `targetMod` decides which mod shows it); Settings → Translation
+  sources shows the same list with the same validation. **"Keeps appearing"**: the index is
+  re-fetched at startup, on a mod switch, every 6th `_catalogPollTimer` tick (~30 min, gated by
+  `CheckUpdatesOnStartup` — the launcher can sit in the tray for days), and when the Language tab
+  opens on a cache older than `TranslationIndexMaxAge` (10 min, `refreshTranslationsIfStale`).
+  **What the cards mark "in use"**: `PickActiveCard` — the card from the SOURCE it was applied
+  from, else the card listing its CONTENT HASH, else (a config that recorded neither) the
+  official card; null when the applied pack is in no card, and then an installed pack whose hash
+  no card lists gets a LOCAL card (`SourceKey = "local"`), so it can be seen and re-applied.
+  Inside a card `IsActiveVersion` matches by hash whenever both sides have one and by version
+  text only when no hash is recorded — two different packs both said "1.1". A single-version
+  active card whose newest hash differs from the installed one reads "Update"
+  (`LangCardUpdate`) instead of a dead "In use". Order: `OrderCardsForDisplay` (active,
+  compatible, official, fetch order, name). **State**: `ModState.ActiveTranslationContentHash` +
+  `ActiveTranslationSource`, mirrored on `ModInstall` and carried by `SnapshotActive` /
+  `AdoptInstall` / `ClearInstallState`; always written through `SetActiveTranslation(id, version,
+  hash, source)` / `ClearActiveTranslation()`, never field by field. Pinned by
+  `TranslationSourceRefTests`, `TranslationSourceConfigTests` and `TranslationLanguageTabTests`.
+
+- **An index source is one `translations-index.json` at any https address, and share links are
+  converted — or refused with a reason — by `Services/ShareLinkResolver.cs`.** Format (parsed by
+  `TranslationIndexSource.Parse`, pure): `{ "name"?, "translations": [ { id, name, author?,
+  language?, targetMod, version, compatibleWith, zip, sha256, size?, contentHash?, date?,
+  description? } ] }`. **`sha256` (64 hex) and `targetMod` are REQUIRED** — anything at an
+  arbitrary address can change under the player. A malformed item is DROPPED and logged rather
+  than failing the index (one typo mustn't hide a translator's other work); ≤ 200 items, 1 MiB,
+  20 s; JSON comments and trailing commas are forgiven; every string from the file loses control
+  and bidi-override characters before it can label anything. A relative `zip` resolves against
+  the index's address — except on a share host (Drive, Dropbox, gist), where one file's address
+  says nothing about another's and the item is dropped. The resolver: Drive `/file/d/<id>`,
+  `open?id=`, `uc?id=` → `drive.usercontent.google.com/download?id=…&export=download&confirm=t`
+  (keeping `resourcekey`); Drive's large-file "can't scan" page is followed ONCE through
+  `TryParseDriveConfirmForm`, and only when its form posts to that host over https; Dropbox `/s/`
+  and `/scl/fi/` get `dl=1` (keeping `rlkey`); a GitHub `blob` link becomes raw; a gist page
+  becomes `/raw`, and **a raw gist link pinned to one revision is UNPINNED** — pinned, it would
+  never show the next version. Refused, each with its own key: Mega, MediaFire, OneDrive /
+  SharePoint, Google Docs, Drive and Dropbox folders, http, credentials in the URL, any other
+  scheme. A body that starts with `<` is a viewer page (`TxSrcErrHtml`), never parsed or
+  unzipped. An index's `Key` is its normalized RESOLVED address, so two share links to one Drive
+  file are one source. Pinned by `ShareLinkResolverTests` and `TranslationIndexSourceTests`.
+
+- **A download is verified against what the LISTING promised, staged, applied, and only then
+  promoted — so `translations\<id>\` always holds the LAST SUCCESSFULLY APPLIED pack.**
+  `DownloadPackAsync(url, dest, expectedSha256)` goes through the resolver (with the Drive retry),
+  https only, capped, and streams a SHA-256 that must match BEFORE anything is staged
+  (`DlgLangShaMismatch`); an index version without one is refused before downloading
+  (`DlgLangNoSha256`). `StagePackFromZipAsync(zip, PackExpectation(Id, ModId,
+  AdvertisedContentHash, RequireTargetMod))` extracts into `.incoming-<guid>` and refuses: another
+  id than the one chosen; a `targetMod` naming another mod (an empty one only from the mod's own
+  source); any extracted file whose MD5 isn't its `translatedHash` (none recorded is a refusal
+  too — that hash is what ties the bytes to the listing); a content hash that is neither the
+  advertised computed one nor the declared one. A different version TEXT is tolerated — real
+  packs carry one in their folder and another inside the zip. `TranslationApplyDialog` then runs
+  `ApplyStaged` → `PromoteStaged` (only after the apply succeeded) and `DiscardStaged` on Closed;
+  whether to download at all is decided by content hash (`IsSamePack`), never version text.
+  Several translators' packs of one id share that folder, which is why the stale check below
+  can compare against it. **Snapshot guard**: when `_originals` is built just before an apply, a
+  live file byte-identical to the incoming pack file is NOT snapshotted — it would store the
+  translation as "English" and "English" would then restore it. Pinned by
+  `TranslationStagingTests` and `TranslationPackInstallTests`.
+
+- **The bell rings per VERSION (`Services/TranslationNotificationPlanner.cs`), with two traps
+  pinned.** `KeysOf` keys every version of every card, not each card's newest, so a version from
+  a translator the player follows rings even when it isn't the newest of that language.
+  **Trap 1, the flood:** until `ModState.TranslationVersionBaselineSeeded` is set, keys are
+  recorded SILENTLY. **Trap 2, the partial look:** only a COMPLETE look (every source reachable)
+  sets that flag. The background sweep fetches only the sources the player ADDED
+  (`NotifyFromAddedSourcesAsync`; the central feed covers the official packs), so it may seed
+  keys but must never declare the baseline done, or the mod's own older versions would ring the
+  first time it is opened. Same `id@contentHash` format as the feed, so nothing bells twice; the
+  key set is capped at 1000 (`NotificationCenter.TrimTranslationKeys`); the text names the
+  translator (`NotifNewTranslationVersionBody`). Pinned by `TranslationNotificationPlannerTests`.
+
+- **A stale "in use" is checked against the DISK and CLEARED, never re-applied
+  (`TranslationService.AssessApplied`).** From a real player's bundle: the config said
+  `ES-LA v1.0`, the live table was English, there was no `_originals`, the card read "In use"
+  and couldn't be clicked, and "English" failed with "cannot revert". `AssessApplied(id)`
+  compares the live bytes with `translations\<id>\` for approved files only: all equal →
+  Applied, none → NotApplied, some → Mixed, a locked file → Unknown; with no pack to compare, no
+  snapshot either → NotApplied, live == snapshot → NotApplied, otherwise Unknown.
+  `UpdateService.CheckAsync` calls `ReconcileStaleActiveTranslationAsync` after the broad scan —
+  only for a valid install, a profile with a Translations block, and when the copy being checked
+  IS the one the note belongs to (`state.InstallPath`); it assesses off the UI thread and clears
+  back on the caller's thread only if the id / hash / source didn't change meanwhile; Mixed and
+  Unknown change nothing; Applied backfills a missing hash. `StaleTranslationCleared` makes
+  `MainWindow` rebuild the Language tab. "English" is `RevertOrConfirmEnglish` → Reverted /
+  **AlreadyEnglish** (no snapshot, but the disk proves the pack isn't applied: success, not an
+  error the player can't act on) / Failed, through `ForProfile` so the mod's `CoveredFiles` are
+  used. The pack-gone branches of `ReapplyActiveTranslationAfterRepair` and
+  `ReconcileAfterUpdate` assess the same way, and the diagnostic bundle records the verdict, hash
+  and source. Pinned by `TranslationAppliedAssessmentTests`.
+
+- **`wol-launcher://add-source?url=…` (or `?repo=…`) follows a translator in one click, and it
+  is UNTRUSTED like the join link.** `DeepLinkService.TryParseAddSource`: exactly one `url` or
+  `repo` parameter, `url` must be a link and `repo` must not, no control characters (encoded
+  ones included), ≤ 4096 characters, then `TranslationSourceRef.TryParse`.
+  `MainWindow.HandleAddSourceDeepLinkAsync` shows the full `AbsoluteUri`, the IDN (punycode) host
+  and an "unofficial" warning in a `ThemedConfirmDialog` whose DEFAULT is Cancel
+  (`defaultIsCancel`), then runs the same `AddTranslationSourceAsync` and opens the Language tab.
+  A second instance forwards it over the single-instance pipe as `src <canonical link>` (a
+  bounded 4 KiB line read, re-validated by the primary, and never a valid lobby id); a cold start
+  parks it in `App.PendingAddSource` until ContextIdle; `StartupUpdateGate.BuildRelaunchArguments`
+  rebuilds it from the VALIDATED source (a join link wins). Registered by the same
+  `EnableJoinLinks` toggle, relabelled "wol-launcher:// links". Discord doesn't linkify custom
+  schemes — an https bounce route in the lobby backend is a follow-up. Pinned by
+  `DeepLinkAddSourceTests`.
+
+- **The packager publishes so followers get the new version (`TranslationPackagerDialog`,
+  `Services/TranslationIndexWriter.cs`).** The version defaults to the next free
+  `<mod version>-r<N>` (`NextRevision`) — a version names the mod version it is for, and two packs
+  never share a label again; `LooksLikeModVersion` doesn't warn on that shape. The output is
+  `translations/<id>/<version>/`, and a version that already exists locally or in the mod's
+  official repo is warned about (`ListManifestPathsAsync`, paths only; a network failure doesn't
+  block). "Add to my index…" merges the pack into a chosen `translations-index.json`
+  (`TranslationIndexWriter.Merge`: the same id + version is replaced, every other item and
+  unknown field kept, accents written as-is, and a file it can't parse is REFUSED, never
+  "repaired") with sha256, content hash, size and date; the zip link is the https link the
+  translator pasted (checked by the resolver) or a relative path. A test holds the writer to
+  what `TranslationIndexSource.Parse` accepts. The instructions say the important part: replace
+  the SAME index file (Drive "Manage versions", Dropbox overwrite, gist edit) so the link
+  players added keeps working. Pinned by `TranslationIndexWriterTests`.
+
+- **"In use ✓" on a translation is checked against the DISK, and a compiled `.XMB` twin is
+  the likeliest reason the game ignores one — `TranslationService.CheckLive` /
+  `FindShadowingCompiled`.** Reported as "Spanish is on and it doesn't work" with the card
+  saying "In use ✓": that mark came from `ActiveTranslationId` alone, a note the launcher wrote
+  when the copy succeeded. AoE3 reads `data\<file>.xml.XMB` BEFORE the loose `.xml` (the rule
+  behind `CloneFilesRemovedByPatches` / `RemoveSupersededCompiledXml`), and a translation only
+  ever writes the `.xml` — so on an install made before those rules the copy succeeds and the
+  game goes on reading the player's own AoE3 text. `CheckLive` answers `Shadowed` (a twin exists
+  — checked FIRST, since the file can match and still not be read), `NotOnDisk` (the live MD5 is
+  not the pack's `translatedHash`: an update or repair put English back), `Live` or `Unknown`
+  (no hashes to compare, never a guess). The LANGUAGE section raises an amber notice
+  (`LanguageLiveWarning`) off the UI thread and offers **Repair only when
+  `LeftoverCleanup.Select` would really remove every twin** — a mod that SHIPS a compiled copy
+  of a translated file cannot be fixed from there, and offering Repair would send the player
+  round a loop. `Apply` itself reports the twins (`ApplyResult.ShadowingFiles`), so the status
+  line after applying says so instead of "applied". Read-only: removal stays `LeftoverCleanup`'s.
+  Pinned by `TranslationLiveCheckTests`.
 
 - **A version-mismatched translation WARNS, it does NOT block — don't re-disable
   it.** A pack whose `compatibleWith` list doesn't include the installed mod
@@ -3246,13 +4265,13 @@ rather than the reverse.
   mod's files) and the post-update auto-revert-to-English (`ReconcileAfterUpdate`).
   Don't reintroduce `IsEnabled = !incompatible` on the menu item or
   `clickable = !blocked` on the card — incompatibility is a warning, the apply
-  dialog owns the confirmation. **Ordering of the language list is shared via
-  `TranslationCompat.OrderForDisplay`** (active pack → compatible-with-installed-
-  version → newest release → name), used by BOTH the Mod Properties Language tab
-  (`LoadLanguage`) and the gear menu (`PopulateGameLanguageMenu`) so they match —
-  "newest" is the pack id's position in the registry index (GitHub `/releases` is
-  newest-first). Don't revert either to a plain `OrderBy(e => e.Name)`. Pinned by
-  `TranslationCompatTests`.
+  dialog owns the confirmation. **Ordering of the language list**: the gear menu
+  (`PopulateGameLanguageMenu`) uses `TranslationCompat.OrderForDisplay` (active pack →
+  compatible-with-installed-version → newest → name, "newest" being the id's position in the
+  fetched index); the Mod Properties Language tab (`LoadLanguage`), where one id can be several
+  cards, uses `OrderCardsForDisplay` (active CARD → compatible → official → fetch order → name).
+  Don't revert either to a plain `OrderBy(e => e.Name)`. Pinned by `TranslationCompatTests` and
+  `TranslationCardRulesTests`.
 
 - **The multiplayer fingerprint PROBE FILES are per-profile — a mod that ships its own
   `data\` files instead of the base `y` ones must declare them, or its lobby version gate
@@ -3290,7 +4309,13 @@ rather than the reverse.
   IN multiplayer): no-op for English (snapshot == live); `protoy`/`techtreey` have no
   snapshot so they keep hashing the live file (a real OOS still mismatches); falls back
   to the live file when no snapshot exists; host and joiner compute it identically →
-  symmetric. Pinned by `WarsOfLibertyLauncher.Tests/ModHashServiceTests`. **CAVEAT (not
+  symmetric. Pinned by `WarsOfLibertyLauncher.Tests/ModHashServiceTests`. **It runs on the
+  thread pool**: create, join and the mod selection all wait on it from the UI thread, and the
+  probe, each file open and the antivirus scan of that open ran there before the first await —
+  so `MainWindow`'s fingerprint callback starts it with `Task.Run` and every await inside
+  carries `ConfigureAwait(false)` (an async file read can complete synchronously, which is why
+  the `ConfigureAwait` alone is not enough). Pinned by `FingerprintingNeverRunsOnTheCallersThread`.
+  **CAVEAT (not
   yet smoke-tested):** this fixes the LAUNCHER's lobby gate. AoE3 community evidence
   (CRC/version-mismatch and OOS are blamed on `proto`/`techtree`, and vanilla AoE3's
   cross-language MP works) indicates `age3y.exe`'s own LAN version match is centered on
@@ -3381,8 +4406,16 @@ rather than the reverse.
   (`MainWindow` line ~1325, so the wrong game can't launch after a switch), so
   relying on it alone loses a manually-pointed non-standard AoE3 the moment you
   switch mods and back. The manual picker (`BrowseAoE3Button_Click`) writes BOTH:
-  `GameExecutable` (volatile) and `Aoe3ManualPath` (the derived root, never cleared),
-  and `GameLauncher.EnumerateCandidates` yields `Aoe3ManualPath\age3y.exe` +
+  `GameExecutable` (volatile) and `Aoe3ManualPath` (the derived root, never cleared).
+  **It also drops the cached check of every `IsStockGame` profile and, when the base game
+  is the active profile, re-runs `CheckAsync` on the spot — and that is what made the
+  pick work at all.** It used to save the path and stop: the session's `_checkResultCache`
+  still held the base game's "not installed", `CheckAsync`'s sanity check only ever evicts
+  a cached "installed" that vanished (never a "not installed" that now exists), and the
+  stock profile's `UpdateService` ctor resolves no path, so the stale result was replayed
+  on every visit until the launcher restarted. A player's bundle shows three picks in a
+  row with no check after any of them. Every stock profile, not just the active one: the
+  pick can be made from another mod's page. `GameLauncher.EnumerateCandidates` yields `Aoe3ManualPath\age3y.exe` +
   `\bin\age3y.exe` so the general finder survives switches too. **That candidate is
   GATED on `modInstallPath` being empty — it's a BASE-game resolver, NEVER for a mod
   launch.** `Aoe3ManualPath` is the *base* AoE3, which also ships `age3y.exe`; WoL is
@@ -3440,6 +4473,17 @@ rather than the reverse.
   An `id` is permanent: changing one re-announces to everybody, reusing one silently suppresses
   the new item for everyone who saw the old. Pinned by the announcement cases in
   `NotificationCenterTests`.
+
+- **Last month's HIGHLIGHTS ride the bell once a month (2026-11-10) — the one multiplayer item the
+  bell carries** (`NotificationKind.MonthlyHighlights`, `NotificationView.BelongsInTheBell`; the
+  maintainer asked for it "para que todos lo vean"). The notification sweep asks the public
+  `GET /stats/highlights` only in the first `HighlightsNotice.DaysToSay` (7) days of a month and only
+  until that month has been said (`LauncherConfig.NotifiedHighlightsMonth`); a month with no rated
+  match is marked seen silently, an older "previous" month is never said, and a failed request marks
+  nothing so the next sweep tries again. The text is pure (`HighlightsNotice`, `HighlightsNoticeTests`):
+  who climbed most, who played most, the best streak, a category with nobody left out. Clicking opens
+  Ranking › Highlights on that month (`MultiplayerTab.ShowHighlightsOfLastMonth`). It is news, so "Do
+  not disturb" keeps it in the bell without a pop-up.
 
 - **The project's Discord has ONE owner on each side — `LauncherConfig.SupportDiscordUrl`
   (a `const`, like `PrivacyPolicyUrl`) and `Controls/SupportLink` — and WHERE it appears is
@@ -3786,7 +4830,7 @@ rather than the reverse.
   `_assetFetchAttempted`/`_screenshotFetchAttempted` guards on purpose:** an
   ineligible mod must not consume its one attempt, so when it becomes eligible
   later in the session (installed/activated) the same call sites re-enter and
-  the fetch actually runs. The eligibility TRIGGERS are: `BuildModCard` and
+  the fetch actually runs. The eligibility TRIGGERS are: `RefreshModCards` (one kick per mod) and
   `RefreshActiveModBanner` kick `EnsureModAssetsAsync` **unconditionally**
   (the old "only when the brush is null / asset missing" gates are gone —
   with live URL painting the brush is never null, so they'd never re-fire for
@@ -3853,7 +4897,7 @@ rather than the reverse.
   both set `BitmapCreateOptions.IgnoreImageCache` for non-http sources, or a
   same-name replacement would repaint WPF's stale per-URI cached bitmap
   (deliberately NOT set for http URLs — see the disk-cache-policy gotcha
-  above). `BuildModCard` kicks `EnsureModAssetsAsync` unconditionally (gated
+  above). `RefreshModCards` kicks `EnsureModAssetsAsync` unconditionally (gated
   internally) so a mod that dropped its ONLY image still purges the orphan.
   `PurgeRole`/`Clear` are
   anchored to the exact `{modId}-{role}.` prefix (so `Clear("wol")` can't sweep
@@ -4115,10 +5159,26 @@ rather than the reverse.
   **Nothing is uploaded.** Local only, so it needs no consent and no privacy note; the day any of it
   leaves the machine that changes and it becomes opt-in like the multiplayer telemetry.
 
+  **The same file names the OPPONENT, and the card now says who it was** —
+  `AiGameStats.ParseIdentity` reads `<nameid>` (a string-table id), `<icon>` (the AI's portrait)
+  and `<forcedciv>` from the root of the personality file, and `LocalGames.ResolveOpponents` turns
+  them into "vs Ali Pasha (Egyptians)" with the portrait and the flag. ⚠ **Direct children of
+  `<ai>` only**: `<nameid>` recurs inside `<playernames>`, and taking the first at any depth puts
+  a wrong name on the card. The game list is newest-first, units are merged by display name with
+  `RT_*` map props dropped (`LocalGames.UnitLines`), and a unit name the mod cannot resolve is
+  kept but drawn dim — usually a game played with another mod's executable. Pinned by
+  `AiOpponentTests`.
+
 - **Games against PEOPLE get their own group in ModProperties → STATISTICS, read from the player's
   own recordings — and it says little because there is little to say, not because it is
-  unfinished.** `LoadHumanGamesAsync` + `ModPropertiesDialog.BuildHumanGameCard`, with the pure
-  rules in `Services/Multiplayer/LocalMatchView` (pinned by `LocalMatchViewTests`).
+  unfinished.** The reading is `Services/LocalGames` (`ReadHumanMatches`, `LoadAiGamesAsync`,
+  `ResolveDeckArtAsync`; pinned by `LocalGamesTests`) and the cards are `Controls/LocalGameCards`,
+  with the pure rules in `Services/Multiplayer/LocalMatchView` (pinned by `LocalMatchViewTests`).
+  **Two screens show these and both go through that shared code** — this section, and the
+  multiplayer Profile's MATCHES section (see the ProfileWindow bullet in
+  `.Codex/rules/multiplayer.md`). They were copied rather than moved, because the mod window is
+  where a player looks for one mod's files; a second implementation would let the two disagree
+  about what one recording says.
 
   **It does NOT duplicate the match history.** That list comes from the lobby backend and a row
   exists only because the HOST called `POST /matches` at game exit, so a skirmish, a LAN game
@@ -4495,8 +5555,9 @@ rather than the reverse.
   CORRECTED pair (`UHC.DLL` 1,187,840 B, `Startup\uhc.cfg` 13 B). The catalog still says
   `approvedReleaseTag "1.01"` with `followLatest: true`, so installs work only once the
   latest-release lookup has resolved `1.0.0`; when that lookup fails with nothing cached, the
-  install stops before the dialog with a 404 (no download is wasted). The fix is in the catalog
-  repo — point `approvedReleaseTag` at `1.0.0`, or recreate tag `1.01`.
+  install stops before the dialog with a 404 (no download is wasted). **Fixed in the catalog
+  checkout on 2026-11-18** (`approvedReleaseTag` → `1.0.0`); it reaches players once the maintainer
+  commits it there.
   **Enhanced Legacy Edition catalog note (`mods/enhanced-legacy-edition`, 3.0):** ELE ships a
   manual-install zip whose files live in `Art\~ELE` / `Data\~ELE` / `Sound\~ELE`, and runs
   through `age3e.bat`, which moves every loose item of those three folders aside, pulls ELE's
@@ -4855,9 +5916,7 @@ rather than the reverse.
   `InstallAsync` and both `RepairInstallAsync` sites call. **Keep that rule in the one helper**:
   it lived only in `InstallAsync` at first, and because a Steam library folder is writable the
   repair path sailed past the folder check and threw at the HKLM write — *after* the multi-GB
-  download, as a raw non-localized .NET message. The CLONE install path passes the previous
-  manifest's key to `ApplyPrivateSetupPath` (as `InstallModOnlyAsync` always did), so the key
-  planned up front and the one picked at the end are the same.
+  download, as a raw non-localized .NET message.
   **⚠ A WRITABLE FOLDER NEVER RESTARTS THE LAUNCHER FOR THE KEY** (`ElevationService.Decide`,
   pinned): when only the key is missing, Windows is asked for that one write — the launcher runs
   ITSELF elevated as a headless helper, `Aoe3ModLauncher.exe --write-private-key "<key>"
@@ -4886,10 +5945,24 @@ rather than the reverse.
   the `dotnet X.dll` smoke test the process path is `dotnet.exe`, so both the helper and
   `RelaunchElevated` now start the apphost beside the assembly (or `dotnet "<dll>"`), never the
   bare host with launcher arguments. A cancel AFTER the helper ran leaves an orphan key pointing at
-  a folder with no manifest — harmless (it reads as stale and is reused next time). Still missing:
-  an uninstall without admin skips the HKLM delete (`RemovePrivateKey` logs and moves on); the same
-  helper with a `--remove-private-key` verb would close it. Pinned by `PrivateKeyHelperTests` (the
-  refusals are the point) and `ElevationStringsTests`.
+  a folder with no manifest — harmless (it reads as stale and is reused next time). A mod's
+  uninstall without admin still skips the HKLM delete (`RemovePrivateKey` logs and moves on); such a
+  key is a LEFTOVER, and the launcher's OWN uninstall now removes leftovers through the helper's
+  second verb, `--remove-private-key "<key>" …` (`Services/PrivateKeySweep.cs`, 2026-10-28). A key
+  is a leftover only when ALL hold: its name is one a catalogue mod's install could have been given
+  (`SetupPathPatcher.CandidateKeys` — the SAME list `ChooseKey` walks, extracted so the two cannot
+  drift), no live manifest names it (`PrivateSetupPathKey`, read only when something already looks
+  like a leftover), it has an absolute `setuppath` that is PROVABLY gone (`ProbePath`: "not found" on
+  a present drive — access denied, another account's folder or an unplugged drive all keep it), and
+  its `pid`/`digitalproductid`/`doublehash` equal the base key's (`LicenceValuesMatch`: a key with
+  other values was not cloned by the launcher). `IsInvocation` recognises BOTH verbs — otherwise the
+  removal would reach the single-instance mutex and "succeed" doing nothing — `TryParseRemove` takes
+  1-16 distinct allowed keys, and `RunRemove` re-checks each one and touches HKLM only
+  (`RemovePrivateKeyMachine`; `RemovePrivateKey` is now that plus `RemovePrivateKeyUser`, unchanged
+  for mods). The per-user marker goes afterwards, from the launcher, only for keys whose HKLM half
+  is gone, and only when its product folder holds nothing but `1.0` (`RemoveLeftoverUserMarker`).
+  Pinned by `PrivateKeyHelperTests` (the refusals are the point), `PrivateKeySweepTests` (likewise)
+  and `ElevationStringsTests`.
   A permission failure at the end of the install (rare now) still raises
   `SetupPathKeyAccessException` → `StatusPrivateKeyNeedsAdmin`, kept separate from
   `SetupPathPatchException` because the two ask the user for different things (try again so the
@@ -4999,13 +6072,14 @@ rather than the reverse.
   (with `ConverterParameter=invert`) is what swaps the two; a `DataTrigger` can't do it
   because "the icon failed to load" isn't a value the row's bindings can see. Opening
   the panel `MarkAllRead()`s (badge → 0, items stay). Click → `NavigateToNotification`
-  (`LoadModProfile` + `SwitchTopTab(TopTab.Play)`; NewTranslation also opens
-  `MenuGameLanguage`). **Detection hooks**: update-available in `ApplyCheckResult`
+  (`LoadModProfile` + `SwitchTopTab(TopTab.Play)`; NewTranslation opens Mod Properties on
+  the Language tab, `ShowLanguageTab`). **Detection hooks**: update-available in `ApplyCheckResult`
   (`MaybeNotifyUpdateAvailable`, skips pinned / unknown-version); update-finished
   REPLACES the old direct `ShowToast` in `ApplyAsync`'s success block (so one toast,
   not two — the toast now rides `ToastRequested → ShowToast`); new-translation in
-  `RefreshTranslationIndexAsync` (`NotifyNewTranslations`, **seeds a silent baseline
-  on first fetch** so a full catalog doesn't flood on first launch). **All installed
+  `RefreshTranslationIndexAsync` (`NotifyNewTranslations`, one key per VERSION, **seeds a
+  silent baseline on the first complete look** — see the per-version notification bullet in
+  the translations section). **All installed
   mods**, not just the active one: `SweepInstalledModsForNotificationsAsync` runs
   `new UpdateService(_config, profile).CheckAsync()` + translations fetch for each
   installed non-active, non-stock mod — sequential, gated by `CheckUpdatesOnStartup`,
@@ -5142,7 +6216,9 @@ rather than the reverse.
   backward compat** — room items persisted by OLDER builds still render/click; no new
   room items are ever added. **Gating (load-bearing):** the tick early-returns unless
   `_config.NotifyNewRooms` (a dedicated Settings toggle, default true — now = toast +
-  dot, no longer bell — separate from `ShowToastNotifications`) **AND**
+  dot, no longer bell — separate from `ShowToastNotifications`; the WS push
+  `OnNewRoomFromWs` obeys it too, read before any card, dot or sound — it ignored it until
+  2026-10-28) **AND**
   `_config.CheckUpdatesOnStartup` (metered/silent mode) **AND** the session is
   `SignedIn`. **Budget:** `/lobbies` is 60/min·2000/day per IP; 90 s ⇒ ~960/day — don't
   drop the interval (per-IP cap is shared behind NAT/Radmin). Detection lives ONLY in
@@ -5163,6 +6239,11 @@ rather than the reverse.
   shadow) but has no scrim, times out (~9 s), and carries optional action buttons
   (Join/Ignore). Wired to `MultiplayerTab` via the `showAppToast` callback in
   `MultiplayerView.Attach`.
+  **An action CLOSES the card unless it says `KeepOpen`** (`ToastAction(..., KeepOpen, DoneLabel)`,
+  both optional so every existing call is unchanged). Use it for an action that is not the card's
+  answer: the Verify card's "Copy list" closed the card and took its Repair button along, which was
+  the one worth pressing next. `DoneLabel` replaces the caption after the click, because a clipboard
+  write happens off screen and the button is the only place left to say it worked.
   **`MainWindow.ShowAppToast` ROUTES the card to the surface the user can actually see —
   ONE surface per event, never two.** Looking at the window → in-window (`ToastHost`)
   — **unless the card asks for `ToastOptions.PreferDesktop`, which skips that branch and
@@ -5175,9 +6256,14 @@ rather than the reverse.
   and the ORDER of the two checks is load-bearing: the suppression sits AFTER the
   in-window branch, so a launcher in the foreground during a game still draws in-window,
   which is harmless because the game is not the frontmost window then. Continuing:
-  **game running (`_isGameRunning`) → nothing** (a topmost window can knock AoE3 out of
+  **game running → nothing** (a topmost window can knock AoE3 out of
   full-screen, and a room invite is useless mid-match; the bell entry and sound still
-  happen); otherwise (minimised, in the tray, buried) → **`Controls/DesktopToastWindow`**,
+  happen). "Running" is `_isGameRunning` (the dashboard's PLAY) **OR
+  `MultiplayerTab.IsGameRunning`** (`InGame`, or a resumed match whose exit was not seen yet) —
+  until 2026-10-28 only the first was read, so a desktop card could float over a MULTIPLAYER
+  game. Not `IsMatchActive`: that includes the result hold after the game closed, and would hide
+  the very result cards the hold exists for. Otherwise (minimised, in the tray, buried) →
+  **`Controls/DesktopToastWindow`**,
   a `Topmost`, `ShowInTaskbar=false` window pinned to the bottom-right of
   `SystemParameters.WorkArea` that hosts the SAME card. It reuses `AppToast` untouched
   because `AppToast.Show` takes any `Panel` and resolves brushes via `Application.Current`
@@ -5186,6 +6272,28 @@ rather than the reverse.
   deliberate exception to the repo's no-transparency rule for dialogs — the card has
   rounded corners and a shadow over an arbitrary desktop, and it is small and transient),
   and it closes itself once its panel empties so an invisible topmost window can't linger.
+  **"Do not disturb" (`LauncherConfig.DoNotDisturb`, off by default, first row of Settings →
+  General → NOTIFICATIONS, applied the instant it is touched) silences every UNASKED pop-up —
+  the in-window card, the desktop card AND the tray balloon — while the bell keeps recording
+  everything.** The rule is the pure `Services/ToastRouting.Decide(dnd, cause, looking,
+  preferDesktop, gameRunning)`, read FIRST in `ShowAppToast`; with the setting off it is exactly
+  the old routing (pinned case by case). Each card says what it is in
+  `ToastOptions.Cause` (`ToastCause`): **`News`** (the default — a caller that forgets to say is
+  silenced, which gets noticed, rather than breaking the promise the setting makes) is silenced;
+  **`Answer`** (the reply to the player's own click: Verify's result, an invite sent / refused /
+  to someone playing, "muted", a recording saved or downloaded, the compat layer removed, PLAY
+  cancelled, a game that closed at once, the developer previews, and results recorded nowhere
+  else — an interrupted operation, a match result with no room window, a missing recording) and
+  **`Request`** (a call with a clock on it: a ROOM INVITE — it exists only as this card, expires
+  in minutes, and already has its own switch, "Let players invite me" — and the tournament pushes
+  `match_ready` / `room_opened` / `match_replay`, since an organiser can disqualify a no-show,
+  `MultiplayerTab.TournamentToastCause`) still show. The tray balloon goes through
+  `ShowToast(title, body, bypassDoNotDisturb)` → `ToastRouting.ShouldShowBalloon`; only the
+  "finishing the match result" balloon from `OnClosing` bypasses it. **The funnel is pinned**
+  (`ToastFunnelTests`): `AppToast.Show(` and `DesktopToastWindow.Show(` appear only in
+  `ShowAppToast`, `ShowBalloonTip(` exactly three times in MainWindow — a third path would
+  silently ignore the setting. The bell's tooltip adds a line while it is on
+  (`NotifBellDoNotDisturb`), and the startup log says `doNotDisturb=`.
   **Seeing any of this without a second player: `MainWindow.PreviewNotificationToasts`**,
   reachable from Settings → Developer and from the **`--preview-toasts`** launch argument.
   A real invite needs another account on another machine, which makes "how does it look"
@@ -5215,7 +6323,11 @@ rather than the reverse.
   lobby, rate-limits (`globalChatInvitesPerMin`), and routes `{type:"invite", from,
   lobbyId, roomName, modId}` to the target's one socket + acks the sender
   `invite_sent`. The recipient's `HandleInviteFrame` shows an AppToast whose Join runs
-  the SAME `JoinByLobbyIdAsync` as the deep link. Invite errors (`invite_*`) surface as a
+  the SAME `JoinByLobbyIdAsync` as the deep link — **after `bringMultiplayerToFront`**
+  (MainWindow's `BringToForeground()` + the Multiplayer tab, passed through `Attach`), because the
+  invite is `PreferDesktop` and is pressed with the window in the tray or behind another app;
+  without it the join opened a room window over a launcher nobody could see, which is what the
+  new-room card had always avoided. Invite errors (`invite_*`) surface as a
   toast, not the chat composer notice. **Receiver-side anti-spam (3 client-only gates in
   `HandleInviteFrame`, complement the backend's sender-side rate-limit + room-membership
   validation — no backend change):** each incoming invite is dropped SILENTLY (no toast, no
@@ -5229,7 +6341,17 @@ rather than the reverse.
   `from.login`) so a griefer's repeat invites collapse to one identity; the toast's ✕ /
   auto-dismiss still handle "ignore just this one". Don't persist the mute set or drop the
   cooldown; if the community grows, THEN lower `globalChatInvitesPerMin` / add backend
-  strike-timeout (like the global chat), not now. (2) **lobby_created** — POST /lobbies broadcasts it
+  strike-timeout (like the global chat), not now. **An invite to a player IN A MATCH is not
+  sent — whoever invites is warned instead** (`Services/Multiplayer/InviteTarget.Decide`,
+  asked for by a player: "warning whoever invites that they are playing would be enough"). The
+  target's launcher shows no card while their game runs (`ShowAppToast`'s `_isGameRunning`
+  branch) and nothing queues it, so the invite was simply lost — and it spent gate (c)'s
+  cooldown, so the invite after the match was dropped too — while the inviter read "Invite
+  sent". Keyed on the presence `status == "in_game"` the server sends; any other or missing
+  status still SENDS, so an older backend changes nothing. The chip keeps its look, its tooltip
+  names the player and the match (`MpInviteTooltipInGame`), and a click raises an in-window
+  toast (`MpInviteTargetInGame`) with nothing on the wire. Pinned by `InviteTargetTests`.
+  (2) **lobby_created** — POST /lobbies broadcasts it
   (backend `announceLobbyCreated`, **skips private rooms**); `HandleLobbyCreatedFrame`
   hands it to `MainWindow.OnNewRoomFromWs`, which SHARES the poll's dedup (`_knownLobbyIds`
   + `NotifiedRoomIds.TryMarkRoomNotified`), gates (not my room, mod installed), shows the
@@ -5248,7 +6370,7 @@ rather than the reverse.
 
 - **Seeing a populated tournament bracket without running one: `MultiplayerTab.ShowDemoTournaments`**,
   reachable from Settings → Developer and from the **`--demo-tournaments`** launch argument,
-  which takes a scenario: `--demo-tournaments=teams`, `=myroom`, `=waiting`, `=registration`,
+  which takes a scenario: `--demo-tournaments=teams`, `=big32`, `=myroom`, `=waiting`, `=registration`,
   `=finished`, or `=dialog` for the new-tournament modal. Six samples and not four, because a
   person is one entrant in a tournament and an entrant has one live match: `Playable`,
   `JoinRoom`, `ReturnToRoom` and `WaitingOpponent` are four answers to one question and no
@@ -5269,10 +6391,13 @@ rather than the reverse.
   brackets while everything still renders. `DialogXamlTests` renders all four in both
   languages, so the samples double as the only automated check that the code-built cards
   resolve every token they use.
-  **The buttons are real but inert** — they say so and do nothing — for the same reason the
-  toast preview's are: a preview that genuinely tried to seed a tournament nobody created
-  would be worse than no preview. The detail pane also carries a banner saying the data is
-  fabricated, because a populated bracket is indistinguishable from a real one in a screenshot.
+  **The buttons WORK, against a server simulated inside the launcher** (`TournamentSimulator`
+  behind `ITournamentApi`), so a sample can be played from its first match to a champion with
+  the production confirmations, refusals and refresh — and nothing leaves the launcher. Every
+  tournament call goes through `TournamentApi`, never `_session.Api`; the rules are in
+  `.Codex/rules/multiplayer.md` (TOURNAMENTS). The detail pane carries an amber strip saying
+  the data is fabricated, because a populated bracket is indistinguishable from a real one in
+  a screenshot.
   **The argument only works with no launcher running.** The single-instance mutex ends a
   second process before its window exists, so with one already open the argument merely raises
   it. That is why there are two doors, exactly as for `--preview-toasts`; the Settings button
@@ -5319,7 +6444,10 @@ rather than the reverse.
   `case "chat"`, lobby `HandleChat`), NEVER inside `AppendGlobalChatLine` /
   `AppendChatLine` / `ReplayChatRing` / `RenderGlobalChatState` (those replay
   HISTORY on join and must stay silent), and skipped when the line's `userId` ==
-  `_session.CurrentUser.Id` (no sound for your own message). (3) **Connect** —
+  `_session.CurrentUser.Id` (no sound for your own message). A lobby TAUNT (a bare number)
+  replaces the blip — except on a PC that cannot play taunts (no Windows Media Player), where
+  `TauntService.Play` returns false and the line falls through to `PlayChat` under these same
+  rules. (3) **Connect** —
   `PlayConnect` on `HandleMemberJoined` (someone joins your room, not you), in
   `MainWindow.PollNewRoomsAsync` (a new room appears), and in `ParseOnlineUsers`
   for a genuinely-new presence `userId`. The presence path is the noisy one:
@@ -5328,6 +6456,12 @@ rather than the reverse.
   pops), then one pop per frame for a new non-self id (the Connect throttle
   smooths the rest). Don't move the chat sound into the shared append helpers, and
   don't drop the presence baseline seed — both re-introduce a sound flood.
+  **"Do not disturb" quiets the AMBIENT sounds only** (`SoundService.DoNotDisturb`, set at startup
+  and by `ApplyInstantSettings`; pure rule `ShouldPlay(enabled, dnd, ambient)`): the bell's ding
+  for news, a room opening (poll and push), a player coming online, the GLOBAL chat — each call
+  passes `ambient: true`. A sound with no card reads like a fault, which is why the Windows setting
+  of the same name does the same. Your room's chat and joins, the invite's sound (the invite still
+  shows) and Success/Error of your own operations follow only the Sounds switch.
 
 - **The Discord room announcement carries a "Join" DEEP LINK that opens the
   launcher and AUTO-JOINS the room — and this made the launcher SINGLE-INSTANCE.**
@@ -5337,9 +6471,13 @@ rather than the reverse.
   scheme**, so the link is HTTPS → a backend **bounce route `GET /j/:id`**
   (`index.ts`, public, no DB, validates `^[A-Za-z0-9]{1,32}$`) returns a tiny HTML
   page that redirects the browser to `wol-launcher://join/<id>`. The launcher
-  registers that scheme per-user in `App.OnStartup` via
-  `Services/DeepLinkService.EnsureRegistered()` (HKCU `Software\Classes`,
-  idempotent, self-healing exe path — mirrors `StartupRegistrationService`);
+  registers that scheme per-user in `MainWindow`'s constructor (and again from Settings when
+  the toggle changes) via
+  `Services/DeepLinkService.EnsureRegistered(SelfInstallService.ResolveAutoStartExe())` (HKCU
+  `Software\Classes`, idempotent, self-healing — and pointed at the SAME copy the Run key gets:
+  the installed one when there is a runnable one, else the running .exe. It used to follow
+  whichever copy ran last, so a loose copy in Downloads took the links over from the installed
+  launcher; it now also logs what it replaced, `DeepLink: wol-launcher:// now opens 'X' (was 'Y')`);
   `DeepLinkService.TryParseJoin` treats the URI as UNTRUSTED (any web page can fire
   it) and only ever yields a validated lobby id (pinned by `DeepLinkServiceTests`).
   **Single-instance (NEW behaviour):** a deep link fired while the launcher is open
@@ -5409,9 +6547,10 @@ rather than the reverse.
   `privateSetupPath` bullet. All of them share `RelaunchElevatedForFolder`'s themed prompt, which
   names the mod and the folder. Detection/recognition is READ-only (probes, marker,
   `data\*.xml`, HKLM/HKCU reads, `FindAllDeep`/`ModInstallScanner`, "Change folder"),
-  so it never needs admin in any folder. The elevate-on-demand relaunch has NO
-  auto-resume except the WoL update path — the user re-triggers the action in the
-  elevated instance (same as install/uninstall). The only ways to auto-start an *elevated* app silently are a Scheduled
+  so it never needs admin in any folder. The elevate-on-demand relaunch auto-resumes the
+  WoL update (`--update-now`) and, since R10a, a Repair or a GitHubReleases update
+  (`--repair-now=<modId>[:update]`, `Services/Repair/RepairResume`); install, uninstall and a
+  picked version are re-triggered by hand in the elevated instance. The only ways to auto-start an *elevated* app silently are a Scheduled
   Task (highest-privilege logon trigger — the Voobly model) or a Service; both are
   heavier and a stronger AV persistence signal on an unsigned binary, so they were
   deliberately rejected. **Don't restore `requireAdministrator`** — it re-breaks
@@ -5516,7 +6655,12 @@ rather than the reverse.
   `Apply(plan.Register)` runs every launch, which self-heals the registered exe path
   (the portable binary moves) and clears a stale key after an opt-out.
   **The Run key targets the STABLE installed copy when one exists, NOT the volatile
-  running exe — this closed a confirmed "auto-start did nothing" bug.** The self-heal
+  running exe — this closed a confirmed "auto-start did nothing" bug.** (The
+  `wol-launcher://` scheme follows the same resolver now, and both registrations log what they
+  replaced — `StartupRegistrationService.DescribeChange`: "was not registered" / "unchanged" /
+  "was '…'" — because three loose copies on one disk each re-registered themselves every launch
+  and no log said which had been displaced. A duplicate instance's log lines name their own copy
+  too: `(this copy: '<path>' <tag>)`.) The self-heal
   used to write `Environment.ProcessPath`, so launching a portable/dev build
   (`publish\`, `bin\Debug\`, a moved download) re-pointed the key at THAT path — and
   if it was gone by the next Windows login (a `build-release.ps1` that wiped `publish\`,
@@ -5588,7 +6732,15 @@ rather than the reverse.
   `Shutdown()`" covers all six real-exit sites: tray Exit + game-start-close (via
   `RequestHardExit`), brand-menu Exit, the two elevated relaunches (install/update),
   self-update, self-install. (`App.OnStartup`'s second-instance `Shutdown()` is exempt —
-  it runs before a MainWindow exists.) `CloseToTray` is **INDEPENDENT of the "Run in
+  it runs before a MainWindow exists.) **But a USER's Exit must not call `Shutdown()` at
+  all — `RequestHardExit` calls `Close()`** (tray Exit, brand-menu Exit, game-start-close and
+  the deferred exit after a match result all go through it). During `Application.Shutdown`
+  WPF raises `Closing` but IGNORES `Cancel`, so the two things `OnClosing` exists to do — wait
+  for a match result still being sent, and honour a "No" to "quit during a match?" — never
+  happened for the ordinary way to quit; OnClosing's own tail calls `Shutdown()` once the close
+  really proceeds. Only the relaunch paths keep `Shutdown()` (a new process is already waiting
+  on the mutex). Pinned by `ExitRoutingTests`; details in `.Codex/rules/multiplayer.md`.
+  `CloseToTray` is **INDEPENDENT of the "Run in
   background" bundle** (it adds NO registry/persistence, so no new AV signal) and is
   toggled by its own re-surfaced "Minimize to tray on close" checkbox
   (`MinimizeToTrayCheck`, wired to `_config.CloseToTray` in `LauncherSettingsDialog`
@@ -5736,32 +6888,58 @@ rather than the reverse.
   It lives at startup rather than in the swap because the folder it exists for was put in that
   state by a release that had none of this code. Pinned by `LauncherUpdateServiceTests`
   (`ABuildOutputIsNeverTouched` is the one that matters).
-  **The counterpart is `SelfInstallService.UninstallAndExit(removeUserData)` — a clean
-  "Uninstall from my PC" for the self-installed copy (there is no MSI/Inno, so the app
-  never appears in Windows "Add or remove programs").** In-process it removes the
-  auto-start Run key (`StartupRegistrationService.Apply(enabled:false)`), the
-  `wol-launcher://` deep-link scheme (`DeepLinkService.EnsureUnregistered`) and the
-  Desktop + Start-Menu shortcuts (`RemoveShortcuts`, keyed to the shared `ShortcutName`
-  const so it deletes exactly what `CreateShortcuts` wrote) — none of which touch the
-  running exe. The install FOLDER can't be deleted while its exe runs, so a detached
-  `cmd` (pure, testable `BuildDeferredDeleteScript(pid, canonicalDir, dataDir?)`: waits
-  on the PID via `tasklist`, delays with `ping` NOT `timeout` — `timeout` needs a console
-  stdin and fails detached — then `rmdir /s /q`, self-deletes with `del "%~f0"`) does it
-  after the hard-exit. **Load-bearing invariants:** (1) it NEVER touches installed MODS
-  (WoL / AoE3) — those are the user's own game folders, uninstalled separately via
-  `UninstallService`; (2) `removeUserData` is an explicit CHOICE surfaced as a YesNoCancel
-  confirm (`DlgLauncherSettingsUninstallConfirmBody`): Yes = uninstall + delete
-  `%LocalAppData%\AoE3ModLauncher` (settings/logs/cache), No = uninstall but KEEP settings
-  (the safe default, so a reinstall keeps preferences), Cancel = nothing — "keep" is the
-  reason `dataDir` is nullable in the script; (3) the `DangerButton` "Uninstall from my
-  PC" row in Launcher Settings → Maintenance shows ONLY when `IsInstalled()` (the exact
-  counterpart of the "Install on this PC" row, which hides then) — a portable exe has no
-  "installation" to remove, you just delete the file. On success it hard-exits
-  (`HardExitRequested = true` so the close-to-tray intercept doesn't hide+lock the exe);
-  a failed script write/launch returns false WITHOUT exiting so the UI reports it (the
-  already-done Run-key/shortcut removals are a harmless partial state). Pinned by
-  `AutoStartTargetTests` (`BuildDeferredDeleteScript`: waits-on-pid + self-deletes;
-  null dataDir keeps user data; non-null removes both).
+  **The counterpart is "Uninstall from this PC" — `SelfInstallService.UninstallAndExit(config,
+  removeUserData, exitLauncher)` behind the themed `SelfUninstallDialog` (2026-10-28) — and a
+  PORTABLE exe gets it too, as "Remove from this PC".** There is no MSI/Inno, so the launcher never
+  appears in "Add or remove programs"; this is its only uninstall. It used to be a white
+  `MessageBox` YesNoCancel, offered only to the installed copy, that left the temp folder, Task
+  Manager's record, leftover mod keys and any redirected game folder behind — and whose script
+  deleted NOTHING for a player whose user folder is not plain ASCII. The rules, all load-bearing:
+  (1) **It NEVER touches an installed mod, the player's Age of Empires III or their saved games,
+  and the window says so by NAME** (`InstalledModNames`: the mods with an install on disk, by
+  display name, a folder name for one that left the catalogue, never an id). A mod is uninstalled
+  from its own menu; mods keep their private keys, so they keep working without the launcher.
+  (2) **What goes is planned by the pure `PlanRemoval`**: the installed copy's folder, the scratch
+  folder `%TEMP%\WarsOfLibertyLauncher`, the self-update leftovers beside a portable exe (`.old`,
+  `.new`, the CURRENT `.new.part` the startup sweep deliberately keeps, the legacy pair), and the
+  data folder ONLY when its box is ticked — unticked by default; the window lists what it holds
+  (settings, AI statistics, deck history, addon copies, logs, Repair backups) and warns in amber
+  about recordings still waiting to upload and about Repair's backups. Every folder must exist,
+  carry the name the launcher gives it (a moved data folder must hold `launcher-config.json`),
+  pass `IsSafeToDeleteTree` (never a root, never a folder that IS or CONTAINS a special folder:
+  profile, Documents, Downloads, Program Files, Windows…) and NOT hold the running exe — except the
+  installed copy's own folder when that IS what runs. **A portable exe and its folder are never
+  deleted**; the window says "this file stays — delete it yourself".
+  (3) **The order keeps it safe** (`LauncherSettingsDialog.UninstallButton_Click`): blockers
+  (`UninstallBlockerFor`: a game running, a match whose result is owed, an install/update/repair,
+  the launcher running as ANOTHER Windows account — whose data, registry and shortcuts are that
+  account's) are checked before the window, after it and after the key prompt; then
+  `RestoreGameFolders` (a mod redirect left in place once the launcher is gone would keep the real
+  `My Games\Age of Empires 3` or `bin\` renamed "(AoE3 vanilla)" for good — it stops with a reason
+  when it cannot put them back); then the leftover keys (in this process when elevated, else ONE
+  helper prompt; declining keeps them); then `UninstallAndExit`, which starts the delete script
+  BEFORE removing anything, then removes the Run key, Task Manager's `StartupApproved` record
+  (`ForgetStartupApproval`), `wol-launcher://` and the shortcuts, and — when the data stays —
+  `ForgetOnUninstall` (auto-start off, or another copy would register itself again; the Discord
+  session cleared, its token is plain text) and leaves through `RequestHardExit`. If the window
+  does not close (`_windowClosed` false) the script is killed and nothing is deleted.
+  (4) **The script (`BuildDeferredDelete`) names no path and waits on a LOCK FILE.** Every path
+  arrives in an environment variable (`AOE3ML_DEL_n`, `AOE3ML_FILE_n`, `AOE3ML_LOCK`, `AOE3ML_SYS`,
+  and the script's own via `AOE3ML_SCRIPT`) and the text is ASCII: cmd reads a script in the
+  console code page, so the old one mangled `C:\Users\José` and deleted nothing, and a `%`, `&` or
+  `!` in a path became syntax. It waits for `aoe3ml-uninstall-<guid>.lock`, which the launcher
+  holds open (`FileShare.None` + `DeleteOnClose`, in a STATIC field so it cannot be finalized
+  early) until the process ends — never for a PID, which can be reused and which a failing
+  `tasklist` made read as "exited". `ping` is called by its System32 path and cmd starts IN
+  System32 with `/d /v:off /s /c ""%AOE3ML_SCRIPT%""` (cmd searches the current folder first, and
+  a portable exe lives in Downloads); a missing variable ends the script before any delete; after
+  `MaxWaitTicks` (300 s) it gives up and deletes nothing; it deletes twice, seconds apart (an
+  antivirus scanning just-released files), then itself.
+  Pinned by `SelfUninstallTests` (the plan's refusals, the script, and one test that RUNS the real
+  script on a folder under a `José 100% & !` path — nothing moves while the lock is held, then
+  exactly the given folder and file go), `PrivateKeySweepTests`, `PrivateKeyHelperTests` and
+  `DialogXamlTests.TheSelfUninstallWindowCancelsByDefaultAndListsOnlyWhatIsThere`. No test calls
+  `UninstallAndExit`.
 
 - **The launcher self-update (`LauncherUpdateService`) verifies before it
   swaps, and the swap is reversible — don't loosen either.** Detection is
@@ -5781,9 +6959,12 @@ rather than the reverse.
   already `v1.0.13` and went quiet **permanently**. The maintainer's own log had printed the
   contradiction all along — `Current tag: 'v1.0.13', AssemblyVersion: 1.0.12.0` — and nothing
   acted on it, so that line now carries the binary's stamp AND the conclusion, which it never
-  did. `MainWindow.CheckForLauncherUpdateInnerAsync` also **re-stamps the saved tag from the
-  binary and drops the cached ETag** whenever `SavedTagContradictsBinary` says they disagree;
-  the two must go together, see (4). The saved tag survives as the FALLBACK for the reason it
+  did — and the conclusion names the BINARY too: `nothing newer than 'vX'` is labelled through
+  `LauncherUpdateService.EffectiveCurrentTag`, the same tag the decision runs on, where it used
+  to print the saved tag and read `'—'` on every copy that never updated itself (pinned by
+  `NoUpdate_IsLabelledWithTheRunningBinary`). `MainWindow.CheckForLauncherUpdateInnerAsync` also **re-stamps the saved tag from the
+  binary** whenever `SavedTagContradictsBinary` says they disagree. (It used to drop the cached
+  ETag with it, and that was not enough — see (4) for what replaced it.) The saved tag survives as the FALLBACK for the reason it
   was ever first — a build published without `-Version` carries no stamp and cannot say what
   it is. This closed a
   real bug: an empty saved tag used to fall through to prompt-on-any-difference,
@@ -5820,24 +7001,54 @@ rather than the reverse.
   never left with no executable at the launcher's own path. `CleanupOldVersion`
   (called early on startup) also sweeps an orphaned staged update, not just
   `.old` — see the SELF-UPDATE STAGING FILE bullet below for what it sweeps and
-  the one thing it must never touch. (4) **Conditional fetch (ETag/304)** —
-  `CheckAsync` sends `If-None-Match` with `config.LauncherUpdateETag` and
-  returns `NoUpdate` on `304 Not Modified`, sparing the unauthenticated GitHub
-  rate-limit (60 req/h per IP — a real concern behind shared NAT / Radmin). The
-  ETag is threaded through **every** return path (including the `catch`, which
-  preserves the cached value so a transient failure doesn't force a full fetch)
-  and persisted by the caller in `MainWindow.CheckForLauncherUpdateInnerAsync`
-  only when it changed. **The 304 shortcut rested on two claims and BOTH were false**, which
-  is the other half of the bug in (1): that the binary never moves backwards — a hand-swapped
-  `.exe` does exactly that, and the ETag fingerprints the REMOTE release, so nothing about a
-  local downgrade invalidates it — and that anything not installed was saved as
+  the one thing it must never touch. (4) **Conditional fetch (ETag/304) — and the ETag
+  travels WITH the release it fingerprints.** `CheckAsync` caches GitHub's ETag together with
+  the tag that same response named (`LauncherConfig.LauncherReleaseETag` +
+  `LauncherReleaseTag`) and sends `If-None-Match` **only when `ShouldSendCachedETag` says that
+  release is not newer than the running binary** (`EvaluateUpdate` would not offer it here). So
+  a `304 Not Modified` can only ever mean "the latest is still a release I am not older than" —
+  no update, correct by construction — while still sparing the unauthenticated GitHub
+  rate-limit (60 req/h per IP — a real concern behind shared NAT / Radmin). Every return path
+  carries the pair (`ResponseETag` + `ResponseETagTag`: the `catch` hands the cached pair back
+  unchanged, and a 200 with no `tag_name` has no tag and is not cached), and
+  `MainWindow.CheckForLauncherUpdateInnerAsync` persists it after EVERY check through
+  `ReleaseETagToPersist` — an update pending included, which is safe because a newer release's
+  ETag is never sent — logging `cached the ETag of release vX`. **That write is BEST-EFFORT,
+  and so is the saved-tag re-stamp in (1):** both run before the pill, the bell and the
+  multiplayer gate are decided, and `LauncherConfig.Save` is a bare `File.WriteAllText`, so a
+  config the antivirus holds open used to throw out of the method and leave that session with
+  none of the three. A failed save logs `could not cache the ETag…` and keeps the values in
+  memory for the next successful one. **Why the pair, from a real
+  bundle:** the config is shared by every copy of the launcher on the machine, and a player
+  ran a v1.0.15b copy from the Desktop, started with Windows, beside v1.0.15f. The f copy cached
+  v1.0.15f's ETag in the old `launcherUpdateETag`; the b copy's startup gate sent it, got a 304
+  and reported "nothing newer" — the ETag fingerprints the REMOTE release and says nothing
+  about the binary asking — and b's MainWindow saved that ETag straight back, although it had
+  just dropped it for the saved-tag contradiction in (1). Stuck on every launch for as long as
+  v1.0.15f stayed the latest release. **The legacy `launcherUpdateETag` is blanked on EVERY
+  load** (`MigrateLegacyLauncherETag` + the pure `ApplyLegacyLauncherETagMigration`), not once,
+  because older copies sharing the config keep writing it and each blanking lets such a copy
+  ask a real question; nothing moves to the pair, since the old value never said which release
+  it was. An older copy that SAVES the config drops the pair (it does not know the keys) —
+  harmless: the next check is a full one and caches it again. **The 304 shortcut originally
+  rested on two claims and BOTH were false**: that the binary never moves backwards — a
+  hand-swapped `.exe` does exactly that — and that anything not installed was saved as
   `SkippedLauncherTag`, which is now **dead code** (`MainWindow` passes `""` and the only
   writer sets `""`; the persistent dismissal was removed when the pill replaced the modal).
-  So the mismatch check in (1) clears the ETag, and **the manual button forces a check with no
-  `If-None-Match`** — a check somebody asked for by hand must ask a real question, and
-  answering it out of a cached 304 is precisely what makes it look broken. A genuinely new
-  release changes GitHub's ETag →
-  `200` → re-evaluated. Asset selection (`FindExeAsset`) prefers the exact name
+  **A check that gets NO answer says so — `UpdateCheckResult.CheckFailed`.** The catch
+  (offline, the gate's 6-s cancellation, a 403/5xx) hands the cached pair back unchanged as
+  before, through `LauncherUpdateService.FailedCheck`, and now also flags it: it used to be
+  shaped exactly like a 304, and every reader treated "no answer" as "nothing newer" — see
+  item (d) of the startup auto-update bullet for what that cost.
+  **The manual button still forces a check with no `If-None-Match`** — now a backstop, since a
+  304 is the truth, at one request on a path that runs once. A genuinely new release changes
+  GitHub's ETag → `200` → re-evaluated. Pinned by
+  `LauncherUpdateServiceTests.THE_ONE_THAT_MATTERS_TwoCopiesSharingAConfigEachGetTheTruth`
+  (b, f, b, b, f, b, reading CheckAsync's own request through
+  `LauncherUpdateService.BuildLatestReleaseRequest`: offered exactly on the b's, and f's launches
+  still a 304 — it used to call `ShouldSendCachedETag` itself, so reverting the call site left it
+  green), the `ShouldSendCachedETag` theory, `StartupUpdateStateTests` and
+  `LauncherConfigMigrationTests`. Asset selection (`FindExeAsset`) prefers the exact name
   `Aoe3ModLauncher.exe`, falling back to the first `.exe` only when there's no
   exact match, and the `HttpClient` has a 15 s timeout so a slow GitHub doesn't
   stall the startup `WhenAll`. The dialog also surfaces the release `body` as a
@@ -5851,8 +7062,9 @@ rather than the reverse.
   `a`=1…`z`=26, `aa`=27) packed into `Version.Revision`, so `1.0.5 < 1.0.5a < 1.0.5b
   < 1.0.6` compares with plain numeric `Version` ordering — change `LetterRank` and
   you change the whole comparison. `EvaluateUpdate` gained a `currentInformationalTag`
-  param and its **effective-current** priority is now `saved tag → informational tag
-  → numeric AssemblyVersion`. The informational tag comes from the new
+  param and its **effective-current** priority is now `informational tag → saved tag
+  → numeric AssemblyVersion` (see (1) — the binary outranks the saved tag;
+  `EffectiveCurrentTag` is that rule's one definition). The informational tag comes from the new
   `CurrentInformationalTag` (reads `AssemblyInformationalVersionAttribute`, strips
   SourceLink `+commit` metadata, never null — falls back to
   `FormatVersionTag(CurrentVersion)`), which `build-release.ps1` stamps with the full
@@ -5867,8 +7079,8 @@ rather than the reverse.
   permanently silencing it. Instead `LauncherUpdatePill` (`MainWindow.xaml`, a gold
   pill in the title bar, `IsHitTestVisibleInChrome` so the drag handler doesn't eat
   the click) is shown on **every** launch a newer version exists — no permanent
-  dismiss — pulses once per session (`PulseLauncherUpdatePill` /
-  `StopLauncherUpdatePillPulse`) and on click (`LauncherUpdatePill_Click`) opens the
+  dismiss — breathes while somebody can see it (`PulseLauncherUpdatePill` /
+  `StopLauncherUpdatePillPulse`, finite breaths on a timer — see the animation-clock bullet) and on click (`LauncherUpdatePill_Click`) opens the
   existing download/restart dialog. Strings `LauncherUpdatePill` /
   `LauncherUpdatePillTooltip`.
   **(7) There is a MANUAL check, in Settings -> Maintenance**, and it exists because there was no
@@ -5878,9 +7090,10 @@ rather than the reverse.
   `CheckForLauncherUpdateAsync(force: true)`, which already skips `If-None-Match` and opens the
   dialog itself; the dialog reports the outcome inline through a `Func<Task<bool?>>` callback
   because it is NOT modal and the main window's status bar sits behind it (the same reason the
-  mod's own "check for updates" reports inline). **`null` from that callback means the server was
-  never reached, and it says something different from "up to date"** — collapsing the two is how a
-  broken check reads as a healthy one.
+  mod's own "check for updates" reports inline). **`null` from that callback means no answer —
+  never reached, timed out, or an HTTP error (`_lastLauncherCheckFailed`) — and it says something
+  different from "up to date"** — collapsing the two is how a broken check reads as a healthy one.
+  It used to test `IsOffline` alone, so a 403 or a timeout read as "up to date".
   **(8) The release notes are LINKIFIED** (`Services/LinkedText.cs`, pure + `LinkedTextTests`).
   The notes are shown verbatim from the release body, and those bodies are now a single bare URL
   pointing at a `releases/vX.Y.Z.md` in this repo — so the panel rendered a dead address the reader
@@ -6013,15 +7226,34 @@ rather than the reverse.
   only thing a user sees all launch. (d) **MainWindow CONSUMES the gate's check**
   (`App.TakeStartupUpdateCheck()`) instead of asking GitHub again two seconds later — verified:
   one request per launch, and the pill still lights from it. Never on the `force` path, which
-  deliberately bypasses the ETag.
+  deliberately bypasses the ETag. **And never a FAILED check** (offline, no answer within 6 s, an
+  HTTP error): `StartupUpdateGate.HandOver` returns null for one (the gate logs `could not
+  check` and its outcome is `AutoUpdateDecision.CheckFailed`), so MainWindow asks itself. Handed
+  over, a failed check read as "nothing newer": MainWindow cleared the pending update, collapsed
+  the pill and opened multiplayer, and nothing asked again — a logon start before the network
+  was up spent the whole tray session that way. MainWindow likewise leaves the pill, the pending
+  update and the gate exactly as they were on a failed check of its own (`could not check - the
+  pill and the multiplayer gate stay as they were`), and **asks again on the offline→online
+  edge** (`OnConnectivityChanged`, ETag-conditional, only while `checkUpdatesOnStartup`, guarded
+  by `_launcherCheckInFlight` because a check's own success can raise that edge). In the tray the
+  edge itself waits on something touching the network — the catalog refresh, at worst every
+  ~15 min. Pinned by `StartupUpdateHandoverTests` and `AFailedCheckSaysSo_AndHandsTheCachedPairBack`. The gate sends the release ETag PAIR it reads from
+  `StartupUpdateState` (never the legacy key), so the answer it hands over is the truth for this
+  binary and MainWindow persists the pair from it; it used to send the legacy ETag even when it
+  had just corrected a contradictory saved tag, and the 304 that came back was the "nothing
+  newer" that kept the v1.0.15b copy in (4) stuck.
   **Config reads/writes go through `Services/StartupUpdateState.cs`, never `LauncherConfig.Load()`**
-  (six migrations and a rewrite, a second opinion about the config — the same reasoning as
+  (its migrations and a rewrite, a second opinion about the config — the same reasoning as
   `App.ReadTextScaleSetting`), and the writes are surgical `JsonNode` read-modify-writes so a
   key a NEWER build wrote survives untouched.
-  **Not covered, on purpose:** a release that appears while the launcher is already open still
-  shows the pill; and the launcher respects `checkUpdatesOnStartup` (documented as "metered,
-  stay off the network"), which is the only opt-out and is checked FIRST. Those users stay
-  covered by the server's own `launcher_too_old` refusal, which forces the dialog.
+  **The open launcher looks again about every 30 minutes (2026-11-18)** — the 6th tick of
+  `_catalogPollTimer`, gated by `LauncherUpdateGate.ShouldCheckPeriodically` (the setting,
+  online, nothing pending, no game running), ETag-conditional. A release found while the player is
+  in a room, a match or a search shows the pill and the bell at once but closes multiplayer only
+  once he is out (`ShouldCloseNow`, `_deferredUpdateGate`, applied beside the pending session
+  rejection); create, join and rematch check the gate in code (`RefusedForLauncherUpdate`). The
+  launcher still respects `checkUpdatesOnStartup` ("metered, stay off the network"), and those
+  users stay covered by the server's `launcher_too_old` refusal. Pinned by `PeriodicSelfCheckTests`.
   **First-release caveat:** this ships IN release N and therefore first fires when N+1 exists —
   getting onto N is still the pill.
 
@@ -6039,7 +7271,8 @@ engine** and the UI binds to it.
   `ProfileWindow`, which are non-modal + resizable + single-instance — see the dedicated bullet
   under Runtime conventions for the contract.
 - **`Models/`** — plain schema/DTO types: `LauncherConfig` (`launcher-config.json`,
-  lives next to the `.exe`), `UpdateInfo` (`UpdateInfo.xml` schema),
+  in `%LocalAppData%\AoE3ModLauncher\` and SHARED by every copy of the launcher on the machine —
+  see the AppPaths bullet), `UpdateInfo` (`UpdateInfo.xml` schema),
   `InstallManifest` (`install-manifest.json`, drives uninstall — and now also
   carries the `KeyFileHashes`/`FileHashes`/`EngineFileHashes` + `FileFingerprint`
   integrity data for verify/repair/version-recognition; see that gotcha),
@@ -6211,10 +7444,14 @@ engine** and the UI binds to it.
    BOTH the destination drive (against the full estimate) and, if `%TEMP%` is on a
    different volume, the temp drive (against the payload allowance) — amber warning
    line + `_spaceWarning`; on OK, `_spaceWarning` triggers a Yes/No confirm but never
-   blocks. Repair (`MainWindow.ConfirmRepairSpaceOk`) uses `RepairAllowanceBytes`
-   (3 GiB — repair re-overlays only, NO clone) and is checked **right before each
-   `InstallModOnlyAsync` re-download** (NOT at the top) so a "plain repair intact"
-   (no download) never false-warns; declining throws `OperationCanceledException`
+   blocks. Repair (`MainWindow.ConfirmRepairSpaceOk`) measures the REAL payload
+   (`MeasurePayloadBytesAsync`: the release listing's size, else a HEAD per part) and asks
+   `DiskSpaceService.RepairTempRequirement` — 2× the payload for a direct extraction, 3× staged,
+   because the parts and the concatenated zip briefly coexist — falling back to the fixed
+   `RepairAllowanceBytes` (3 GiB) only when the size is unknown. The fixed guess could never warn
+   for WoL (~5.3 GB) and over-warned small mods. It is checked **once the payload is known and
+   right before each `InstallModOnlyAsync` re-download** (NOT at the top) so a "plain repair
+   intact" (no download) never false-warns; declining throws `OperationCanceledException`
    (caught as a clean cancel). Strings `DiskSpace{Calculating,WarningLine,ConfirmTitle,
    ConfirmInstallBody,ConfirmRepairBody,ConfirmDownloadBody}`. Load-bearing: the estimate
    is deliberately conservative (exact clone + fixed slack), unknown free space never
@@ -6240,7 +7477,7 @@ engine** and the UI binds to it.
    sits in `MainWindow`, not `UpdateService`, because a service must not open dialogs.
    (2) **Repair**, which used to check the install folder — where a repair barely writes
    — and now checks `InstallTempRoot` too (`OverlayHeadroomBytes` 1 GiB on the install
-   side, the full allowance on temp); with the game on D: and `%TEMP%` on a small C:
+   side, the measured requirement above on temp); with the game on D: and `%TEMP%` on a small C:
    there was previously no warning at all. (3) **The launcher self-update**
    (`LauncherUpdateDialog`, before the download) against a THIRD volume nothing else
    looks at — the one holding the running `.exe`, via the new public
@@ -6299,6 +7536,29 @@ engine** and the UI binds to it.
    Anyone still carrying such a manifest lost their Age of Empires III to one Uninstall click.
    The no-manifest branch is deliberately unchanged: a launcher-made clone whose manifest went
    missing still gets a normal folder removal, which is the correct uninstall for it.
+   **A folder that CONTAINS an AoE3 root, or a drive root, is refused by `Plan` itself
+   (`NotAValidInstall`, `UninstallPlan.ContainsBaseGame`), before any other check.** That gap
+   was real and untested: the exact AoE3 root already went overlay-only, but an owned,
+   probe-matching PARENT of the game (a Steam library, `steamapps\common`) got the blanket
+   delete. `ContainsAoe3Root` compares whole path segments (`…\Age Of Empires 3 Mods` does not
+   contain `…\Age Of Empires 3`) and is FALSE for a path that is itself a root — Steam's mod
+   root holds its own `bin\` game folder, and that exact case must stay overlay-only. `Plan`
+   takes an optional `aoe3Roots` list so tests run the real plan against a fake AoE3
+   (`UninstallSafetyTests`, where the files-still-there assertion is the point).
+   **Any registered copy can be uninstalled, through the SAME plan, dialog and service —
+   `MainWindow.RunUninstallAsync(profile, path, copyInstallId)`.** "Uninstall…" on an inactive
+   copy (Mod Properties → LOCAL FILES) calls `UninstallCopyAsync`, which only looks the copy up;
+   on success it `RemoveInstall(id)`s and never touches the active copy's state. Two rules keep
+   a copy from reaching the active one: `UninstallOptions.AllowProfileFallbacks = false` (with
+   no manifest, the shortcut and registry cleanup used to fall back on `{DisplayName}.lnk` and
+   `profile.EffectiveProductGuid` — which every copy of a mod shares), and the saved-games option
+   is hidden for a copy (all copies share one My Games folder). **There is no "reset launcher
+   settings" option any more**: it deleted the whole config and the uninstall tail then saved
+   the in-memory config straight back, so it reset nothing while saying it did.
+   **UninstallDialog shows nothing it cannot back up:** refused plans hide every action (Close
+   only, 49d); "your other copies are not touched" appears only when there are some; an
+   in-place overlay says "the mod's files are removed from this folder", never "this folder is
+   deleted". Counts use `N0` in the LAUNCHER's language. Pinned by `FilesAndAntivirusDialogTests`.
    **Uninstall ELEVATES ON DEMAND:** since
    the launcher runs `asInvoker`, deleting an install under a protected folder
    (Program Files) needs admin, so `MainWindow.RunUninstallAsync` probes
@@ -6326,21 +7586,31 @@ engine** and the UI binds to it.
    clean human 1v1 whose recording can be read — the real winner; see the
    History-subtab and result-wiring gotchas in `.Codex/rules/multiplayer.md`).
    Everything the recording can't answer stays a 0.5 draw, which the History row
-   renders as no badge at all rather than as "Draw". Replay UPLOAD remains
-   scaffolded/not surfaced.
-   **A 2v2/3v3 RATES, on a SEPARATE team ladder** (`elo_ratings.mode = 'team'`, which the
-   schema has carried since day one, so it cost no migration; 2v2 and 3v3 share it). The teams
-   come from the recording, joined to Discord accounts through the in-game names each launcher
-   publishes in the room (`set_ingame_name`), and naming ONE loser names a whole side. It rates
+   renders as no badge at all rather than as "Draw". The recording of a COMPETITIVE match
+   is uploaded by the reporter's launcher straight to an S3 bucket (Oracle Object Storage)
+   through a presigned URL — the bytes never pass through the lobby server — and any
+   signed-in player downloads it from History; opt-out in Settings → Games. See the
+   competitive-recordings bullet in `.Codex/rules/multiplayer.md`.
+   **RATING V3 (design handoff 55, `docs/design_elo/`) changed the ladder's model**: one
+   continuous ladder per mode with NO seasons, placement (10 rated matches in 1v1, 5 in Teams)
+   before a player is on the table, the table ordered by rating, streaks, a server-side anti-farm
+   discount, refunds after a ban, the month's highlights, and teams CHOSEN IN THE ROOM. The rules
+   are the ELO V3 section of `.Codex/rules/multiplayer.md`; the player guide is `docs/ELO.md`.
+   **A 2v2/3v3 RATES, on a SEPARATE team ladder** (`player_ratings` mode `team` since v3; 2v2 and
+   3v3 share it). **The sides are chosen in the room and frozen at Start (`teams_at_start`); the
+   recording's map-setup string must agree or the match is stored `teams_mismatch`, and the losing
+   side is the one every member of which was a RESIGN TARGET** — read from the whole stream, because the
+   outcome block is only the last resignation. The first competitive 2v2s scored nothing because
+   neither was read (`teamid` was -1 for all four); see the team-match bullet in
+   `.Codex/rules/multiplayer.md`, which also covers the in-game names each launcher publishes
+   (`set_ingame_name`, now resent until the server confirms it) and the confirmation that needs
+   none of them. It rates
    only with **one reading from each side that agree, on the same game** — so a team match is
    stored `awaiting_confirmation` and released when the opposing side's reading lands. The 1v1
-   ladder is untouched, and every surface that shows a rating still shows that one; the RANKING
-   subtab is the only place both appear. **A recording of more than two humans DOES carry outcome
-   blocks — measured, on a four-player file that turned out to hold two of them** (which also
-   kills `A == B` and `C == humans` as general rules; they are 1v1 properties). What is still
-   unmeasured is a real TEAM game, since that file is a free-for-all: with no usable block the
-   match reports 0.5 and stays unrated, exactly as before, and `ReplayOutcome.EliminatedSlots`
-   plus the team diagnostic line are what the first real 2v2 answers it with. Related and
+   ladder is untouched. **A player has two rank badges** (`RankBadgeChoice`, design handoff 51):
+   the room decides which one shows when it can (1v1 room → 1v1, 2v2/3v3 → team), the player's
+   server-stored choice decides everywhere else, and the ELO beside a badge is that badge's
+   ladder's — see the team-badge bullet under RANK BADGES in `.Codex/rules/multiplayer.md`. Related and
    load-bearing: the trailer was being sought in the last **8**
    bytes of a recording and the block routinely sits further back, which was silently losing
    **one competitive 1v1 in five**; it now scans 512 and validates each candidate (20 of 20
@@ -6352,9 +7622,10 @@ engine** and the UI binds to it.
    the server refuses any other size for a competitive room. The format decides which of the
    competitive promises apply: walking out is a forfeit **only in 1v1**, because the server
    refuses to decide a team game that way. Only a room created with the *competitive* box
-   ticked can score, and in one the launcher confirms Record Game before every
-   start, holds the host in the room until the result is sent, and looks harder for
-   the recording. Walking out of one after five minutes is a forfeit, decided by the
+   ticked can score, and in one the launcher ticks Record Game for the host (asking
+   only when that failed or the last match went unrecorded), keeps the host a member of
+   the room until the result is sent (the window itself closes at once), and looks harder
+   for the recording. Walking out of one after five minutes is a forfeit, decided by the
    server — and **walking out means leaving the room or closing the LAUNCHER, never closing
    the game**: AoE3 has no reconnection, so every launcher reports its own exit
    (`game_exited`) and the server stores it, but it deliberately decides nothing on that — in
@@ -6465,6 +7736,13 @@ the default, `InPlaceOverlay`), update mechanisms (`GitHubReleases` recommended,
 `DelegatedExternal`, `Manual`), and the tier-based auto-merge + SHA-256 security
 model enforced by the catalog repo's CI. The JSON schema lives at
 `aoe3-mods-catalog-template/schema/mod.schema.json`.
+**It is split in two since 2026-11-12:** `MODDING.md` is the reference (every field, what it
+is, when to set it, short), and `docs/MODDING-TROUBLESHOOTING.md` goes the other way, from a
+symptom a modder sees to the field that fixes it, with the real incident behind each field that
+exists because of a problem (marker, privateSetupPath, supersedeCompiledXml, userDataPayload…).
+A field that comes out of an incident gets a short row in `MODDING.md` and its why in the
+troubleshooting page; change both in the same edit. `MODDING.md`'s section numbers are cited
+from this file, the code and `package-mod-payload.ps1` — don't renumber them.
 
 **Per-mod OWNERSHIP gate in the catalog CI (governance, not consumed by the
 launcher).** The catalog's `classify_pr.py` now decides auto-merge by WHO opens
@@ -6547,8 +7825,8 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   account's folder is resolved **exactly** (name → SID → `ProfileImagePath`, then
   `Directory.Exists`) or not shown at all — `C:\Users\<name>` is wrong for Microsoft
   accounts, and a plausible wrong path sends the player looking in the wrong place.
-  Surfaces: a one-time themed `CrossUserAccountDialog` (modelled on
-  `AntivirusExclusionDialog`; it **copies the paths, never opens them** — launching
+  Surfaces: a one-time themed `CrossUserAccountDialog` (it **shows the paths as selectable
+  text, never opens them** — launching
   `explorer.exe` from the elevated process opens the shell as that account again),
   which runs FIRST in `MainWindow`'s `Loaded` and **suppresses both the self-install
   offer and the tray seed balloon**, because a durable install under the wrong
@@ -6609,7 +7887,92 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   non-blocking queued logger that **rotates** at each launch (`Reset()` shifts a ring
   of `KeepPreviousLogs`=5 generations back one — `launcher-debug.prev.log`, then
   `launcher-debug.prev2..5.log` — then truncates) and writes `launcher-debug.log`. Log messages are **always English** (they're for bug
-  reports), even though the UI is localized. **Bug-report bundle:**
+  reports), even though the UI is localized.
+  **Only the PRIMARY instance rotates** — `Reset()` runs in `App.OnStartup` after the
+  single-instance decision, and so do the two redirect self-heals. A duplicate launch used to
+  rotate the RUNNING launcher's log on its way to forwarding "show yourself" and exiting, so a
+  player double-clicking the .exe because the launcher "would not open" destroyed the very log
+  a bundle is for (measured: a 69-line session cut off mid-start). A duplicate now appends its
+  one line to the running launcher's file. Pinned in `LayoutStormDetectorTests` by source order.
+  **A slow TIMER TICK names its timer**: every tick used to read
+  `DispatcherTimer+<>c.<Restart>b__21_0` — the same line for ~25 timers of ours plus WPF's own
+  tooltip and menu timers — so `DescribeOperation` now reads the timer out of the operation's
+  private `_args` and appends `→ timer every N: Type.Handler [tag]` (`DescribeTimer`, interval
+  printed invariant; pinned by `UiThreadAttributionTests`, whose real-tick test is what proves the
+  private field still holds). **Both lines carry the GC pause** (`(GC n ms)` from 20 ms up —
+  `GC.GetTotalPauseDuration()` sampled per operation and per stall tick), which separates a memory
+  problem from a slow handler. The multiplayer ticks are timed whole (`SLOW  MP radmin tick` /
+  `lobby` / `in-game` / `rooms-ping` / `rooms-list`, `Radmin assistant refresh`, `layout storm
+  tick`), and so is the startup `MainWindow.Show` and `HideToTrayAtStartup` — a v1.0.15b bundle has
+  a single 148-s operation right after "window shown" that nothing named. **Opening a room window
+  is timed per step** (`SLOW  MP OpenLobbyWindow: build` / `paint before Show` / `Show (layout +
+  Loaded)`): the 16-s room open in a real bundle was ONE operation — the first session pass —
+  and was paid inside the window's synchronous `Show()`, which runs the thread's whole layout
+  queue. `PerfCounters` count `OpenLobbyWindow`, `RefreshFromSession` and `RenderRoomPanel`, so a
+  `LAYOUT STORM` line can name a re-render loop. The Radmin assistant's auto-open runs at
+  ApplicationIdle (it used to run inside the startup Show when Multiplayer was the first tab).
+  **⚠ `UI OP` keeps the operations in flight in `Services/InFlightOperations` — a STACK, never a
+  `ConditionalWeakTable` (2026-11-13).** The table took one add and one remove per dispatcher
+  operation, hundreds a second while anything animates, and a weak table does not reuse a removed
+  slot: it resizes into new internal containers and leaves the old ones behind. Measured on the
+  testbed's 30-minute tab-switching soak, private memory climbed 213 → 339 MB (~235 MB/h, a heap
+  diff showed 90,000 such containers gained in ten minutes) in every launcher from v1.0.14h on;
+  with the stack it stays flat at 210-237 MB. Operations on one dispatcher only NEST, never
+  interleave, so a stack is exact; one that never completes is dropped with the one below it, and
+  `Capacity` bounds the rest. Pinned by `InFlightOperationsTests` (a million operations leave
+  nothing, and the real hooks on a real dispatcher). **The 60-s `idle` scenario cannot see a leak
+  like this; `perf soak` (30 min) can — run it after touching anything that runs per operation or
+  per frame.**
+  **The UI thread is watched three ways**, all started there: `UI STALL` (the dispatcher could
+  not run for N ms), `UI OP` (which operation held it), and **`LAYOUT STORM`**
+  (`StartLayoutStormWatch` → the pure `Services/LayoutStormDetector`). The first two only see an
+  operation of 250 ms or more, so on a fast PC a storm of 3-ms frames left no trace at all; the
+  storm watch COUNTS layout passes and redraws per second instead, so it reads the same on every
+  machine. A storm is sustained layout passes (an idle page runs none) or redraws nobody can see
+  (hidden, minimized, launcher in the background) or far above the badges' 30-fps cap; it is
+  logged once a minute plus an `over after N s` line, and names the elements changing size, the
+  `Services/PerfCounters` that moved, the gauges (badges animating), the window and tab state,
+  the focused element and **the running animation clocks** (`DescribeActiveClocks`, read from
+  WPF's time manager by reflection — its root keeps its children in a WEAK list, `_rootChildren`;
+  the public `Children` is always empty). **That description — window, focus, clocks — is built
+  only for a line that is WRITTEN**, and the counters are read only for the storm's baseline and
+  its line (`LayoutStormDetector.Observe` takes them as `Func`s): it used to be built on every hot
+  second, ~59 times a minute for nothing, on the UI thread the storm was saturating. The gauges
+  stay eager because the effects governor reads them every second. **Few but expensive frames are a storm too**
+  (`SlowRenderMsPerSecond`, 500 ms of a second drawing, line marked `slow frames` with the cost
+  per frame): the first version only counted HOW MANY, and a laptop drawing two or three 300-ms
+  frames a second — its UI thread busy 101 s of 104 — produced no storm line at all. **A storm
+  in which, for a MAJORITY of its seconds (and at least two), no layout pass completed while
+  each redraw saw ≥ 50 size changes is a layout that never completes, and the line leads with it:
+  `LAYOUT STORM  NON-CONVERGING: no layout pass completed in N of M s, …`**
+  (`LayoutStormDetector.IsNonConverging`, applied to each second on its own,
+  `NonConvergingSizeChangesPerRedraw`). It used to be applied to the whole storm, so a single
+  completed pass in any one second — often the ordinary first layout of the second the loop
+  began — hid the verdict for the rest of a storm that can last hours (pinned by
+  `ACompletedPassAtTheStormsStartDoesNotHideNonConverging`). The line also names the
+  busiest SINGLE element and its count — counted in `TickLayoutStorm` before the elements are
+  grouped by name, which is the only way to see one element resizing hundreds of times a second.
+  WPF's layout loop gives up after 153 rounds without raising `LayoutUpdated`, which is what
+  counts as a pass, so a handler that moves the size it reacts to reads as `0/s layout passes`
+  beside thousands of size changes; the v1.0.15 line said exactly that and, read alone, pointed
+  away from the cause (see the `SizeChanged` gotcha). A redraw-only storm — animations, VS's
+  WpfTap — changes no size and is never called that. The same
+  1-second tick feeds `EffectsGovernor`, whose one `EFFECTS REDUCED` line says the lights went off
+  and why. The log header also records `Rendering: WPF tier N`
+  (0 = software, every redraw paid for by the CPU), and the start is marked with `TIMING` lines
+  (`MainWindow constructed`, `multiplayer tab attaching`, `first tab chosen`, `MainWindow
+  constructor finished, showing it`, `window Loaded`, `window shown`) because the whole
+  construction and show is ONE dispatcher operation, which the stall watch can only report as a
+  total. **`TAB  <tab>[/<subtab>]` is written whenever the page on screen changes**
+  (`Services/ScreenTrace`, only on a change): a player's lag bundle showed nothing but slow
+  redraws from the moment the multiplayer data arrived and could not say which page was showing.
+  **⚠ A `LAYOUT STORM` of redraws "driven by animations" with `no active animation clocks` while
+  the launcher runs FROM VISUAL STUDIO is not the launcher.** VS's XAML diagnostics inject
+  `Microsoft.VisualStudio.DesignTools.WpfTap.dll`, which subscribes to
+  `CompositionTarget.Rendering` — and that forces WPF to draw every frame, measured at 63 a second
+  for 23 minutes with the window in the tray. The launcher's own assembly never touches
+  `CompositionTarget`. Measure CPU and storms on a build started OUTSIDE the debugger (the Release
+  `.exe`, or `dotnet …dll`). **Bug-report bundle:**
   `DiagnosticLog.ExportBundle(zipPath)` zips the shareable diagnostics — every
   top-level `*.log` and `*snapshot*` file in `AppPaths.DataDir`, copied to a temp
   **staging** folder first (so a concurrent log write can't corrupt the zip) — and
@@ -6619,7 +7982,11 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   from ModProperties' **"📤 Share diagnostics"** button (`shareDiagnostics`
   callback → `MainWindow.ShareDiagnostics`: Save dialog defaulting to the Desktop
   → `ExportBundle` → reveal in Explorer, ready to drag into Discord). Strings
-  `ModPropShareDiagnostics*`. **The bundle ALSO folds in the active mod's GAME
+  `ModPropShareDiagnostics*`. **Nothing in the export blocks the UI thread:** the install snapshot
+  is AWAITED (`TryWriteInstallSnapshotAsync`, its hashing and probing inside a `Task.Run`, the
+  file written there too) — it used to block ~2 s on `.GetAwaiter().GetResult()`, every time a
+  player did what support asks, usually because the launcher was already freezing — and
+  `_sharingDiagnostics` stops a second click from starting a second export over the first. **The bundle ALSO folds in the active mod's GAME
   user-data OOS/sync artifacts — this is what makes an in-game OUT-OF-SYNC report
   diagnosable.** `ShareDiagnostics` resolves
   `UserDataService.GetUserDataFolder(profile.UserDataFolder)` (`My Games\<folder>`;
@@ -6703,6 +8070,12 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a
   literal in XAML/code. A missing key renders as the key itself (a visible
   signal). `Strings.SetLanguage` raises `LanguageChanged` for live refresh.
+  **Dates, month names and clock times are formatted in `Strings.Culture` — the
+  launcher's language — never `CultureInfo.CurrentCulture`, which follows WINDOWS.**
+  The Profile's history printed "29 AGO" and "7:09 p. m." in an English launcher on
+  a Spanish Windows because three sites asked `CurrentCulture`; `ChatTimeFormat`,
+  `LocalGameCards` and the chat day divider had each spelled the right rule out by
+  hand, which is why it is one property now.
   **The `es` register is NEUTRAL LATIN-AMERICAN (es-419): TUTEO** (`tú`, `tienes`,
   `haz clic`) — **never voseo** (`vos`, `tenés`, `Descargá`, `Instalalo`) and
   **never peninsular** (`Pulsa`, `Ajustes`, `ordenador`, `fichero`, `rellenar`).
@@ -6842,10 +8215,37 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   nothing visibly wrong. `MouseEnter` re-evaluates (a block whose TEXT changed without its
   width changing, like a room's age ticking in a fixed column), which works precisely because
   layout has already put a tooltip there for the service to find.
+  **What those events cost is ONE comparison, not a measure.** The content width is cached under
+  a key of the text, fonts, brushes and pictures (`MeasureCache`, `ContentKey`) and measured in the
+  block's OWN `TextFormattingMode` and DPI — Display in the launcher, Ideal under `UiScale`'s
+  shrink; the old measure was always Ideal and decided cuts a few pixels off what was drawn. A
+  resize re-decides "is it cut?" from the cached width, and **a line that stays cut keeps the SAME
+  tooltip object** — it used to withdraw, measure, clone and rebuild on every `SizeChanged` and
+  `Loaded`, for every cut line. `InlineFlagFit` keeps its widths the same way (`FitCache`) and
+  returns at once on an unchanged width. Pinned by `TextMeasureCacheTests` and by the flagged-rows
+  sweep, which now runs with the reveal ON and asserts the shown line's tooltip is never rebuilt.
   (d) **`TextBlock.Text` is NOT the text a block shows.** It reports only content assigned
   through that property; a block built by adding `Run`s answers the empty string, so an
   emptiness guard written on it refuses exactly the run-built totals line this feature exists
   for. `RevealText.PlainTextOf` is the reader.
+  (e) **A line with PICTURES in it is revealed with its pictures, and only inert ones.** The
+  community match row puts each player's flag inside line 1 as an `InlineUIContainer`, and
+  `CloneText` used to refuse any inline that is not a `Run` — so the one line most likely to be
+  cut was the one line that could never be read on hover (reported). It now restates a `Border`
+  with NO child (a flag chip: size, corners, fill, rim) or an `Image` (source, size, stretch) as a
+  NEW element, always visible and with no tooltip of its own, keeping the container's
+  `BaselineAlignment`; anything else in an inline — a `Hyperlink`, a `Button`, a `Border` holding
+  content — still refuses the whole reveal, because a copy that drops it would be a reveal that
+  lies about what the line says. The overflow measure counts each picture at its NOMINAL width
+  (`Width + Margin`, `RevealText.NominalWidth`), visible or not. Its sibling is
+  `Controls/InlineFlagFit`, which HIDES the pictures past the "…" — WPF trims runs but goes on
+  drawing embedded elements after the ellipsis — and shares `MeasureOne` and `OverflowSlack` with
+  this class so the two cannot disagree about where the cut is. **It hides with
+  `Visibility.Hidden`, NEVER `Collapsed`:** it runs from the line's own `SizeChanged`, and
+  Collapsed changes the line's measure — the non-converging layout that froze the Rooms page from
+  v1.0.15 to v1.0.15f (see the `SizeChanged` gotcha). Hidden keeps the flag's width on the line,
+  which is also what the NOMINAL-width decision already assumed. Pinned by
+  `DialogXamlTests.ACutLineWithFlagsRevealsWithItsFlags`, whose `Button` case is the refusal.
   **Deliberately out of scope, and it is a limit rather than an oversight: a WRAPPING block.**
   Such a block is cut by HEIGHT and no width measurement can see it — so the rooms table's
   two-line room name keeps the hand-written `TooltipHelper.Wrap` it already had, and is the one
@@ -6981,7 +8381,12 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   WPF positions elements at sub-pixel coordinates that ClearType smudges. The
   class handler catches every `Window` subclass uniformly, current and future,
   so **don't add these as XAML attributes on new Windows** — they're applied
-  globally. Three legacy Windows (`MainWindow`, `RadminAssistantWindow`,
+  globally. **A hot-path window may apply them EARLIER** — `App.PrepareBeforeShow(this)` in its
+  constructor, after `InitializeComponent` — so the SAME values exist before its first measure
+  (they are AffectsMeasure and inherited, so arriving at Loaded throws the first layout away).
+  `LobbyWindow` does: it was measured up to three times inside its own `Show()`. Loaded then
+  re-applies identical values, a no-op. Pinned by
+  `DialogXamlTests.THE_ONE_THAT_MATTERS_TheRoomWindowIsDressedBeforeItsFirstLayout`. Three legacy Windows (`MainWindow`, `RadminAssistantWindow`,
   `ModPropertiesDialog`) still carry redundant `TextOptions.*` XAML attributes
   from before this was centralised; harmless (the values match) but not the
   pattern to copy.
@@ -7277,8 +8682,22 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `BorderThickness` draws INSIDE its bounds, so a card is `BorderThickness=1` and a row is
   `"0,0,0,1"` — same pixels, same colours — and the last row uses `SetRowLast` to drop the line
   rather than a negative margin. Don't "fix" either with an `Effect` or a `DropShadow`.
-  **Disabled state is a colour here too** (`SetToggle`, `SetActionButton`), never an `Opacity`
-  layer — the launcher-wide rule.
+  **Disabled state is a colour here too** (`SetToggle`, the solid buttons), never an `Opacity`
+  layer — the launcher-wide rule. **The ONE exception is the secondary buttons** (`SetActionButton`
+  and everything derived from it that is not solid): since `docs/design_botones_secundarios`
+  (variant 52a — the maintainer's pick over the handoff's 52b) they carry a fill of their own,
+  `UiButton*`, and a disabled one keeps that fill at `Opacity` 0.5 so it does not fall back to an
+  empty rim. Maintainer's call, and it costs ClearType on the caption while disabled. ⚠ That
+  setter lives in the BASE style, so **every solid style derived from it must reset `Opacity` to
+  1 in its own disabled trigger** (`SetActionButtonPrimary` does, and `SetSolidButton`,
+  `SetDiagButton` and the footer primaries inherit it; `SetInlinePillButton` does its own) —
+  forget it and a disabled Verify or Save dims with nothing to explain why. Pinned by
+  `SecondaryButtonFillTests.ADisabledSecondaryButtonDimsAndASolidOneDoesNot`, verified to fail
+  without the reset. "Uninstall from my PC" uses `SetActionButtonDanger`; a red caption written
+  as a LOCAL value on a neutral button beats the style's triggers and keeps the neutral fill.
+  `SetActionCard` — the two large LOCAL FILES card-buttons, Install another copy and Add a folder
+  you already have (52d) — wears the same fill, rim, pressed and 0.5 disabled, and its
+  `SetIconTile` steps one shade lighter so the icon still stands out on it.
   **State lives in each Style's own triggers on `Background`/`BorderBrush`, which the templates
   `TemplateBind`** — never in a `TargetName` setter, so `SetActionButtonSm/Lg/Primary` and
   `SetFooter*Button` can derive from `SetActionButton` and still override it. That is the trap
@@ -7487,6 +8906,37 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   and any debouncing (it filters every panel's logical tree on each keystroke, which is fine at
   this size).
 
+  **`SectionSearch.Keywords` — how an element whose caption is a PLAIN STRING becomes findable
+  (`docs/design_share_diagnostics`, 50a-50c).** Players could not find *Share diagnostics*, and
+  the search could not either, for two independent reasons: its caption is a string `Content`,
+  which `TextOf` never reads, and `Matches` looks for the whole query — `diagnostico` is not
+  inside "diagnostics". Keywords are an attached string property that `TextOf` appends for the
+  element AND every logical descendant, so `Matches` is unchanged and the launcher's settings
+  window (which sets none) behaves exactly as before. **Load them through
+  `SectionSearch.KeywordsFor(captionKey, keywordKey)`**, which joins the English AND Spanish
+  values of every key: the player types in their own language, not the UI's, and passing the
+  CAPTION key is what makes the element's own name findable — reading string `Content` in
+  `TextOf` instead would have changed what the settings window matches. A card with no rows
+  (the trouble card sits in `LocalTopRow` beside the active copy) is still matched whole through
+  the keywords of a button inside it. Pinned by `SectionSearchKeywordsTests`, with every query
+  run against both UI languages.
+  **The mod window adds a RESULTS LIST on top of the filter** (`ModPropertiesDialog.SearchResults.cs`):
+  a popup under `ModSearchShell` with up to five entries from a short declared table
+  (`SearchTargets` — element, section, title, glyph, group, ring target), the keyword that
+  matched (`SectionSearch.MatchingKeyword`), ↑↓/↵/Esc in the box's `PreviewKeyDown`, and a
+  "found it" ring drawn by an `Adorner` for ~3 s (no transition with the system's animations
+  off). Two things are load-bearing: the popup is **not** tracked by `ChromePopups` — `App`
+  closes tracked popups whenever a secondary window is activated, which is this dialog — and it
+  opens **only while the dialog is visible and the box has focus**, so a test that builds the
+  window never throws a popup window onto the desktop. The count beside the heading
+  (`ModSearchCount`) follows the same hits. Pinned by `ShareDiagnosticsVisibilityTests`.
+  **The diagnostics card itself is two steps** (Verify, then a TEAL block whose solid
+  `SetDiagButton` is the one deliberate second solid button in a card) **plus a fixed
+  `RailDiagBox` in the rail** that runs the same `_shareDiagnostics` from every section. Teal
+  (`UiDiag*`) is reserved for diagnostics alone. The rail box carries `MaxWidth =
+  SetModRailTextWidth` for the reason the footer does — the rail is an `Auto` column measured at
+  infinity — and `ShareDiagnosticsVisibilityTests.TheRailBoxNeverWidensTheRail` measures it there.
+
 - **Launcher settings is FIVE sections, not seven, and a section can show more than one panel —
   `LauncherSettingsDialog.ShowSection`.** General · Interface · **Games** (new) · **Mods and
   updates** (the old Updates + Catalog & Sources) · **Advanced** (the old Maintenance + Privacy
@@ -7552,18 +9002,37 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   methods call `RefreshFooter` themselves. Pinned by
   `DialogXamlTests.TheSettingsFooterAppliesInstantlyAndOnlyCountsWhatCanStillBeRefused`.
 
-- **Six settings switches STORE a value that nothing reads yet, on purpose — and one of
-  them must never be wired the obvious way.** `AutoUpdateMods`, `UpdateChannel`,
-  `DownloadLimitKbps`, `VerifyDownloadSignatures`, `ShowMyElo` and `ReplayUploadPolicy` are
-  in `LauncherConfig` and on the settings screens because the handoff's layout needs the row
-  to exist and the value has to survive a restart; the behaviour behind each is separate
-  work. They are documented as stored-and-unread at their declarations, so a reader who
-  finds one does not conclude the feature is broken.
-  ⚠ **`VerifyDownloadSignatures` is the dangerous one.** The SHA-256 check on a download is
-  ALREADY conditional — it runs when the publisher pinned a hash — so wiring this switch to
-  "skip the check" would turn a safety net off and be a straight security downgrade. If it is
-  ever wired, the only correct reading is the inverse: *warn me when a payload arrives with no
-  pinned hash*.
+- **The stored-but-unread settings are gone (2026-11-18): the useful ones are real, the rest
+  were removed.** `AutoUpdateMods` (off by default) updates installed mods by itself through
+  `MainWindow.AutoUpdateMods.cs` and the pure `Services/ModAutoUpdatePolicy` — never a window:
+  anything that would need an answer (administrator rights, a private key, disk) is refused, it
+  never starts beside a game (by process, launched by us or not), in a room, a match or a search,
+  or while another operation runs, and gives up on a version after two attempts. The mod on screen
+  first; then, one per tick, the mods the notification sweep found behind
+  (`NoteBehindForAutoUpdate`), each through its OWN `UpdateService` passed as the target of the
+  same `ApplyAsync` / `RepairInstallAsync` (`target:`; inside, every read goes through that
+  service, `_operatingService` feeds the shared progress, pause and bell code, and only the mod on
+  screen re-checks the screen afterwards). **While it runs `Services/Unattended` answers for the
+  player**: a question owned by the main window is "no" and a notice is a toast — the antivirus
+  window included, as a toast whose button opens it later (`AvBlockedToast*`). Triggers: an Update
+  CTA appearing (5 s), the sweep (30 s), 90 s after a game. Not automated: installs, repairs,
+  version picks, an install of unknown version, a pinned version. Pinned by `UnattendedTests` and
+  `OtherModAutoUpdateTests`. `DownloadLimitKbps` is real
+  (`Services/DownloadThrottle`: one token bucket shared by every download, read per chunk; the
+  startup self-update is exempt through `LauncherUpdateService.DownloadUpdateAsync(throttled:
+  false)`). `DeltaDownloadsOnly` governs granular repair and patching (see the repair bullet).
+  `ShowMyElo` mirrors the server's `rating_private` (see multiplayer.md). **The Beta channel and
+  "Verify the signature" rows were removed**: there is no beta channel, and GitHub's per-asset
+  digest is ALWAYS verified now (`Services/GitHubDigest`, the one parser; mod payloads, split parts
+  and fresh-install baselines carry it into the per-part SHA check) — integrity, not authenticity;
+  the catalog pins remain the authenticity layer. The two config fields stay, marked "no longer
+  shown". Pinned by `RemovedSettingsRowsTests`, `DownloadThrottleTests`,
+  `ModAutoUpdatePolicyTests`, `GitHubDigestTests`.
+- **`--update-now[=fresh|copy]` and `--repair-now=<id>:update[:fresh|:copy]` carry the install
+  context through the elevated relaunch** (`Services/UpdateNowArg`, `RepairResume.ContextOf`), so
+  the bell after an install that needed administrator rights says "installed". `App.OnStartup`
+  uses `UpdateNowArg.IsPresent`, never an exact match, or the startup self-update would restart
+  out from under the job. Pinned by `UpdateNowArgTests`.
 
 - **Maximize-respects-taskbar is set globally — don't roll your own per-Window.**
   The same `App.OnStartup` class handler that wires HiDPI crispness also
@@ -7631,8 +9100,13 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   geometry as DependencyProperties (`Height`, `ButtonWidth`, `GlyphSize`, `TitleSize`)
   whose defaults are the compact tokens, and the template TemplateBinds the buttons +
   title to them; **MainWindow opts out by setting
-  `Height="{StaticResource TitleBarHeightMain}"` + `ButtonWidth="46"` + `GlyphSize="10"`
-  locally** (local values beat the implicit-style setters). Per-window config is
+  `Height="{StaticResource TitleBarHeightMain}"` +
+  `ButtonWidth="{StaticResource TitleBarButtonWidthMain}"` (46) + `GlyphSize="10"`
+  locally** (local values beat the implicit-style setters). In the compact layout
+  `ApplyCompactHeader` swaps the first two to resource references on
+  `TitleBarHeightMainCompact` (34) and `TitleBarButtonWidthMainCompact` (44). The 44 is
+  DPI-clean; the 34 is NOT at 125 % (42.5 px) — the handoff's value, kept knowingly, the
+  same property the wide nav's 54 already has. Per-window config is
   **only** via DependencyProperties — `Title`,
   `TitleIcon` (ImageSource), `Content` (extra bar content: MainWindow's brand
   dropdown button, ModProperties' version badge, PublishMod/Radmin subtitle),
@@ -7653,9 +9127,11 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   SizeToContent≠Manual), so a misconfig can't show a dead button. **WindowChrome is applied CENTRALLY**
   in `App.OnAnyWindowLoaded` (`ApplyWindowChrome`) to every `WindowStyle=None`
   window — CaptionHeight = the window's own bar-height token (the slim
-  `TitleBarHeight` for secondaries, `TitleBarHeightMain` for MainWindow, branched
-  by qualified type) so the whole bar is the native drag region,
-  ResizeBorderThickness = 6 if resizable else 0 — so **no
+  `TitleBarHeight` for secondaries, `App.MainTitleBarHeightKey(mw.IsCompactChrome)` for
+  MainWindow, branched by qualified type) so the whole bar is the native drag region,
+  ResizeBorderThickness = 6 if resizable else 0 (the same `ApplyWindowChrome` may run EARLIER
+  through `App.PrepareBeforeShow` — `LobbyWindow` does; **MainWindow must not**, its tray parking
+  depends on when its chrome attaches) — so **no
   window declares `<WindowChrome>` in XAML anymore**, and drag / double-click-
   maximize / restore-on-drag / min-size / DPI / multi-monitor all come free and
   native (no DragMove/OnStateChanged code per window). The buttons wire to
@@ -7794,8 +9270,13 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   by design — don't make them uniform.** A handler closes the Properties
   window *only* when its flow lands on the **main window**: Verify / Repair
   (their progress runs on the main-window progress strip, which a non-modal
-  Properties window would otherwise cover) and Uninstall (the mod is gone
-  afterwards, so the open view would be stale). The path pickers (Change mod
+  Properties window would otherwise cover). **Uninstall no longer closes it** (maintainer's
+  call): the uninstall window is opened with the Properties window as its OWNER
+  (`MainWindow.UninstallActiveAsync` / `UninstallCopyAsync` take an `owner`, threaded into
+  `RunUninstallAsync` for the dialog and the elevation prompt), so it appears over it rather
+  than behind it, and the tail calls `_modPropertiesDialog?.RefreshData()` so the stale view
+  refreshes itself. The LOCAL FILES cards are always side by side (1 : 1) and the window opens
+  at 1040 wide; see the design_archivos_antivirus notes in the handoff index. The path pickers (Change mod
   folder / Change AoE3 folder) and the backup/restore dialogs **used to
   close too, but no longer do** (the maintainer found the vanishing window
   jarring): those are modals that appear **on top** with nothing to uncover,
@@ -7836,9 +9317,25 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   — the gear-menu modals (Aoe3Picker, CreateLobby, etc.) still use the
   default white WPF chrome and `.ShowDialog()` and are next in line for
   the same treatment.
+- **A yes/no question is `ThemedConfirmDialog.Ask(owner, title, body, confirm, cancel, tone)` —
+  not a new single-purpose prompt window and not a white `MessageBox`.** It exists because there
+  was no generic one: every themed prompt (`SelfInstallPromptDialog`, `BackgroundConsentDialog`,
+  `RemoveFromCollectionDialog`…) hardcodes its strings, so the repair's download-cost question and
+  the low-disk-space warning straight after it (`DiskSpacePrompt`, five callers) stayed white in a
+  dark flow. Only the confirm button answers yes; Cancel, ✕ and Escape are all no, which is the
+  `MessageBox` contract those callers were written against. The only `MessageBox` calls left are the
+  two in `MultiplayerTab` that MUST stay one (they run synchronously inside `MainWindow.OnClosing`,
+  which needs the answer before it returns). Pinned by
+  `DialogXamlTests.TheThemedConfirmLoadsInBothLanguages_AndNeverAnswersOnItsOwn`.
 
 ## Conventions
 
+- **Two texts on one line never touch.** Keep at least 8 px between them, 10 in a data row, and the
+  one that can grow ends in an ellipsis instead of running into its neighbour. It is a rule because
+  it kept happening: on the account menu "Descubrimiento" ran straight into "Sin clasificar", and the
+  profile had the same fault. In a `* | Auto` row the gap is a `Margin` on the star text, which also
+  carries `TextTrimming`; a space inside the string is not a gap. Check the longest Spanish string at
+  the narrowest width on a real capture, because a measure cannot see it: both texts report a fit.
 - File-scoped namespaces, `Nullable` enabled, `ImplicitUsings` enabled.
 - Doc-comments explain **why** code exists, not what it does. Don't add comments
   that restate the code.

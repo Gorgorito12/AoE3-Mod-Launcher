@@ -66,6 +66,7 @@ public partial class MainWindow
         var hero = mod.ResolveHeroSources().FirstOrDefault();
         var brush = _config.ShowModImage && !LibraryReducedEffects && hero != null ? BuildHeroFillBrush(hero) : null;
         var accent = ModTheme.AccentOf(mod.AccentColor, _config.UseModColor);
+        PaintTournamentAccentGlow(accent);
         TournamentBlur.Background = null;
         TournamentBlur.Visibility = Visibility.Collapsed;
         if (brush == null)
@@ -92,6 +93,27 @@ public partial class MainWindow
         }
         if (brush.ImageSource is BitmapImage { IsDownloading: true } remote) remote.DownloadCompleted += (_, _) => Soften();
         else Soften();
+    }
+
+    /// <summary>The design's own fallback light (radial, 85 % / 10 %), over the cover too, so the
+    /// page reads as the tournament's mod and not as the navy every page shares.</summary>
+    private void PaintTournamentAccentGlow(Color accent)
+    {
+        bool show = GlassTheme.Normalize(_config.GlassLevel) != GlassTheme.Solid && !LibraryReducedEffects;
+        TournamentAccentGlow.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show) return;
+        var glow = new RadialGradientBrush
+        {
+            Center = new Point(.85, .08),
+            GradientOrigin = new Point(.85, .08),
+            RadiusX = .75,
+            RadiusY = .9,
+        };
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x52, accent.R, accent.G, accent.B), 0));
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x1A, accent.R, accent.G, accent.B), .45));
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x00, accent.R, accent.G, accent.B), 1));
+        glow.Freeze();
+        TournamentAccentGlow.Fill = glow;
     }
 
     /// <summary>CSS <c>center 25%/cover</c>, as the Library.</summary>

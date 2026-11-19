@@ -52,6 +52,36 @@ internal static class MpAlertOverlay
         => ShowAsync(host, title, body, primaryLabel, cancelLabel, danger, isConfirm: true);
 
     /// <summary>
+    /// <see cref="ConfirmAsync"/> with a tick box above the buttons, for a "don't ask me again for
+    /// a while" beside a question. The box's answer is returned whichever button was pressed; the
+    /// caller decides whether a cancelled question may still be silenced.
+    /// </summary>
+    public static async Task<(bool Confirmed, bool Checked)> ConfirmWithCheckAsync(
+        Grid host,
+        string title,
+        string body,
+        string primaryLabel,
+        string cancelLabel,
+        string checkLabel)
+    {
+        var label = new TextBlock { Text = checkLabel, TextWrapping = TextWrapping.Wrap };
+        label.SetResourceReference(TextBlock.ForegroundProperty, "WindowMuted");
+        label.SetResourceReference(TextBlock.FontSizeProperty, "DialogBodySize");
+        var check = new CheckBox
+        {
+            Content = label,
+            Style = (Style)Application.Current.FindResource("WindowCheckBox"),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(46, 0, 0, 16),
+        };
+        // Ticked in the colour of the room's mod, like its other choices.
+        check.SetResourceReference(Control.ForegroundProperty, "ModAccentBrush");
+        System.Windows.Automation.AutomationProperties.SetAutomationId(check, "MpAlertCheck");
+        var confirmed = await ShowAsync(host, title, body, primaryLabel, cancelLabel, danger: false, isConfirm: true, check);
+        return (confirmed, check.IsChecked == true);
+    }
+
+    /// <summary>
     /// Show a single-button notice (just "OK") over <paramref name="host"/>.
     /// The returned Task always resolves true once dismissed; callers that
     /// only inform can ignore the result. Used for the join/create error
@@ -184,7 +214,8 @@ internal static class MpAlertOverlay
         string primaryLabel,
         string? cancelLabel,
         bool danger,
-        bool isConfirm)
+        bool isConfirm,
+        CheckBox? check = null)
     {
         var tcs = new TaskCompletionSource<bool>();
 
@@ -293,6 +324,9 @@ internal static class MpAlertOverlay
         words.Children.Add(lead);
         header.Children.Add(words);
         stack.Children.Add(header);
+
+        // Under the words, lined up with them rather than with the tile.
+        if (check != null) stack.Children.Add(check);
 
         // Button row, right-aligned. Cancel (neutral) then primary, so the
         // primary sits at the far right where the eye lands last.

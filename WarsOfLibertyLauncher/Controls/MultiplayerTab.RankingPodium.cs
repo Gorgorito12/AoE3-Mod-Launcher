@@ -354,11 +354,7 @@ public partial class MultiplayerTab
             Child = layers,
         };
         card.SetResourceReference(Border.BackgroundProperty, "GlassPanel");
-        if (isMe)
-        {
-            card.Cursor = System.Windows.Input.Cursors.Hand;
-            card.MouseLeftButtonUp += (_, _) => OpenOwnProfileFromRanking();
-        }
+        LinkRankingPlayer(card, isMe, row.UserId, row.DisplayName, row.DiscordUsername, row.AvatarUrl);
         return card;
     }
 
@@ -447,6 +443,27 @@ public partial class MultiplayerTab
     private void RenderRankingYou(IReadOnlyList<LeaderboardRow> ranked, IReadOnlyList<PlacementRow> placing, bool team, int ladderSize)
     {
         RankingYouHost.Children.Clear();
+        // "Show my ELO" is off: he is not on the public table, and the card says why rather than
+        // leaving him to look for a row that is not there.
+        if (!_eloPreview && _cachedStanding?.RatingPrivate == true)
+        {
+            _rankingYouShown = true;
+            RankingYouHost.Visibility = Visibility.Visible;
+            RankingYouHost.Margin = new Thickness(0, 0, 0, PageGap);
+            var note = StatsProse(Strings.Get("RkYouPrivate"), "StatsProseSize", "StatsProse");
+            note.TextWrapping = TextWrapping.Wrap;
+            var card = new Border
+            {
+                Child = note,
+                Padding = new Thickness(14, 12, 14, 12),
+                CornerRadius = new CornerRadius(10),
+                BorderThickness = new Thickness(1),
+            };
+            card.SetResourceReference(Border.BackgroundProperty, "GlassPanel");
+            card.SetResourceReference(Border.BorderBrushProperty, "MpRimSoft");
+            RankingYouHost.Children.Add(card);
+            return;
+        }
         var own = OwnLadder(team);
         var you = YourStandingView.For(ranked, placing, RankingViewerId, ladderSize, own);
         _rankingYouShown = you != null;
@@ -466,6 +483,25 @@ public partial class MultiplayerTab
     {
         if (_eloPreview) ShowPreviewProfile(refund: false);
         else OpenProfileWindow();
+    }
+
+    /// <summary>
+    /// A ranking plate, podium card or placement tile opens that player's profile. The viewer's
+    /// own goes the old way (the sample profile under the preview); under the preview another
+    /// player's opens nothing, since the samples have no profile.
+    /// </summary>
+    private void LinkRankingPlayer(FrameworkElement element, bool isMe, string? userId, string? displayName,
+        string? login, string? avatarUrl)
+    {
+        if (isMe)
+        {
+            element.Cursor = System.Windows.Input.Cursors.Hand;
+            element.MouseLeftButtonUp += (_, _) => OpenOwnProfileFromRanking();
+            return;
+        }
+        if (_eloPreview) return;
+        var name = string.IsNullOrEmpty(displayName) ? login : displayName;
+        AttachProfileLink(element, userId, name, login, avatarUrl);
     }
 
     /// <summary>The viewer's name and picture, for his own card: the session's, or the preview's.</summary>

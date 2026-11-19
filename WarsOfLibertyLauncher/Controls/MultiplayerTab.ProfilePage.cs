@@ -50,6 +50,7 @@ public partial class MultiplayerTab
 
     private void RenderProfileRail(Panel host, LobbyUserSummary user)
     {
+        if (_renderingOtherProfile) host.Children.Add(BuildBackToOwnProfile());
         host.Children.Add(BuildProfileHeader(user));
         host.Children.Add(BuildProfileNav());
         if (BuildProfileFacts() is { } facts) host.Children.Add(facts);
@@ -239,7 +240,7 @@ public partial class MultiplayerTab
         var (ladders, _) = ProfileLadders(standing);
         noGames = ProfileModeView.NoGamesAnywhere(ladders);
         return noGames
-            ? Strings.Get("MpProfileNoMatchesYou")
+            ? Strings.Get(_renderingOtherProfile ? "MpProfileNoMatchesThem" : "MpProfileNoMatchesYou")
             : ProfileModeView.StatusLine(new[]
             {
                 ProfileModeView.StatusSegment(ladders.Default, ModeName(false),
@@ -267,6 +268,8 @@ public partial class MultiplayerTab
                      (ProfileSection.Decks, "MpProfileSectionDecks", decks),
                  })
         {
+            // Decks are the viewer's own files: another player's page has no such section.
+            if (_renderingOtherProfile && section == ProfileSection.Decks) continue;
             var inner = new Grid();
             inner.ColumnDefinitions.Add(new ColumnDefinition());
             inner.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -399,7 +402,9 @@ public partial class MultiplayerTab
                 return;
         }
 
-        if (BuildRefundNotice() is { } refund) body.Children.Add(refund);
+        if (!_renderingOtherProfile && BuildRefundNotice() is { } refund) body.Children.Add(refund);
+        if (BuildVersusCard() is { } versus) body.Children.Add(versus);
+        if (_renderingOtherProfile && _cachedStanding?.RatingPrivate == true) body.Children.Add(BuildPrivateRatingNotice());
         if (BuildProfileModeCards() is { } modeCards) body.Children.Add(modeCards);
 
         var curve = BuildProfileCurveCard();
@@ -429,7 +434,8 @@ public partial class MultiplayerTab
             }
         }
 
-        if (BuildBadgeModeCard(PreviewProfileUser() ?? _session?.CurrentUser!) is { } badgeCard)
+        if (!_renderingOtherProfile
+            && BuildBadgeModeCard(PreviewProfileUser() ?? _session?.CurrentUser!) is { } badgeCard)
             body.Children.Add(badgeCard);
     }
 
@@ -632,7 +638,7 @@ public partial class MultiplayerTab
         else
         {
             string words = _curveShowsTeam
-                ? Strings.Get("MpProfileCurveTeamWait")
+                ? Strings.Get(_renderingOtherProfile ? "MpProfileCurveTeamWaitThem" : "MpProfileCurveTeamWait")
                 : points.Count == 2
                     ? Strings.Format("MpProfileCurveCompact",
                         (int)Math.Round(points[0]), (int)Math.Round(points[1]),
@@ -766,7 +772,7 @@ public partial class MultiplayerTab
                 Orientation = Orientation.Horizontal,
                 Margin = new Thickness(0, 7, 0, 0),
                 Background = Brushes.Transparent,
-                ToolTip = TooltipHelper.Wrap(Strings.Get("MpProfileStreakPipsTip")),
+                ToolTip = TooltipHelper.Wrap(Strings.Get(_renderingOtherProfile ? "MpProfileStreakPipsTipThem" : "MpProfileStreakPipsTip")),
             };
             for (int i = 0; i < recent.Count; i++)
             {
@@ -1085,7 +1091,7 @@ public partial class MultiplayerTab
             var title = StatsText(label, "StatsHeaderSize", ink, FontWeights.Bold);
             title.Margin = new Thickness(0, 0, 0, 8);
             side.Children.Add(title);
-            foreach (var line in lines) side.Children.Add(BuildHistoryPlayerRow(line));
+            foreach (var line in lines) side.Children.Add(BuildHistoryPlayerRow(line, LinkHistoryPlayer));
             return side;
         }
 

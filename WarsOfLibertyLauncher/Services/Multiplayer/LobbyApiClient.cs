@@ -212,6 +212,16 @@ public class LobbyApiClient : IDisposable
     // Lobbies
     // ---------------------------------------------------------------
 
+    /// <summary>A room as somebody outside it may see it (read-only window). 404 = gone or not yours to see.</summary>
+    public Task<LobbyLiveResponse> GetLobbyLiveAsync(string lobbyId, string? code = null, CancellationToken ct = default)
+        => GetAsync<LobbyLiveResponse>(
+            $"lobbies/{Uri.EscapeDataString(lobbyId)}/live" + (string.IsNullOrEmpty(code) ? "" : "?code=" + Uri.EscapeDataString(code)),
+            requireAuth: false, ct);
+
+    /// <summary>A tournament room's chat, for its owner and co-organisers; 404 for anybody else.</summary>
+    public Task<LobbyLiveChatResponse> GetLobbyLiveChatAsync(string lobbyId, CancellationToken ct = default)
+        => GetAsync<LobbyLiveChatResponse>($"lobbies/{Uri.EscapeDataString(lobbyId)}/live/chat", requireAuth: true, ct);
+
     public Task<LobbyListResponse> ListLobbiesAsync(CancellationToken ct = default)
         => GetAsync<LobbyListResponse>("lobbies", requireAuth: false, ct);
 
@@ -233,6 +243,17 @@ public class LobbyApiClient : IDisposable
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Sends the civilizations a participant's recording names (<see cref="MatchCivsRequest"/>).
+    /// Null from a server that predates the route (404/405): the launcher then simply has no way
+    /// to add them, as before.
+    /// </summary>
+    public async Task<MatchCivsResponse?> SendMatchCivsAsync(MatchCivsRequest req, CancellationToken ct = default)
+    {
+        try { return await PostAsync<MatchCivsResponse>("matches/civs", req, requireAuth: true, ct); }
+        catch (LobbyApiException ex) when (ex.Status is 404 or 405) { return null; }
     }
 
     /// <summary>
@@ -296,6 +317,14 @@ public class LobbyApiClient : IDisposable
     /// </summary>
     public Task<BadgeModeResponse> SetBadgeModeAsync(string mode, CancellationToken ct = default)
         => PostAsync<BadgeModeResponse>("me/badge-mode", new BadgeModeRequest { BadgeMode = mode },
+            requireAuth: true, ct);
+
+    /// <summary>
+    /// "Show my ELO" (server migration 0034). Off takes the player off the public ladder and hides
+    /// his number from everybody else; he keeps seeing it. A server without the route answers 404.
+    /// </summary>
+    public Task<RatingVisibilityResponse> SetRatingVisibilityAsync(bool showRating, CancellationToken ct = default)
+        => PostAsync<RatingVisibilityResponse>("me/rating-visibility", new RatingVisibilityRequest { ShowRating = showRating },
             requireAuth: true, ct);
 
     /// <summary>
@@ -562,6 +591,13 @@ public class LobbyApiClient : IDisposable
     /// or abandoned tournament with no game played.</summary>
     public Task<object> DeleteTournamentAsync(string id, CancellationToken ct = default)
         => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/delete", null, true, ct);
+
+    public Task<object> SetTournamentVisibilityAsync(string id, string visibility, CancellationToken ct = default)
+        => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/visibility",
+            new Dictionary<string, object?> { ["visibility"] = visibility }, true, ct);
+
+    public Task<object> RenewTournamentCodeAsync(string id, CancellationToken ct = default)
+        => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/invite-code", null, true, ct);
 
     public Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default)
         => PostAsync<object>(

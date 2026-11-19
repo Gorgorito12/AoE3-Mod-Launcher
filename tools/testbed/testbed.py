@@ -40,6 +40,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 import zlib
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -53,6 +54,42 @@ SANDBOX = OUT / "sandbox"    # fake mod installs: anything a button writes lands
 STATE = OUT / "state.json"
 LOG = RUN / "launcher-debug.log"
 REAL_DATA = pathlib.Path(os.environ["LOCALAPPDATA"]) / "AoE3ModLauncher"
+ACCOUNT = None               # set by --as: a second or third launcher, each with its own folders
+SERVER = OUT / "server"      # the two-account rig's local lobby server: database, log, its pid
+SERVER_PORT = 8799
+SERVER_URL = f"http://127.0.0.1:{SERVER_PORT}"
+BACKEND = pathlib.Path(os.environ.get("AOE3ML_BACKEND") or (REPO.parent / "wol-launcher-lobby-node"))
+RECORDINGS = OUT / "recordings"  # real recordings the simulated games leave behind
+
+
+def use_account(name):
+    """Points every per-run path at account NAME's own folders. Without --as nothing changes, so
+    every existing script keeps using `run`, `state.json` and `documents` exactly as before. The
+    sandbox stays shared: every account then has the same mod, so the same fingerprint."""
+    global ACCOUNT, RUN, DOCUMENTS, STATE, LOG
+    if not name:
+        return
+    if not re.fullmatch(r"[a-z]", name):
+        sys.exit("testbed: --as takes one lowercase letter (a, b, c)")
+    ACCOUNT = name
+    RUN = OUT / f"run-{name}"
+    DOCUMENTS = OUT / f"documents-{name}"
+    STATE = OUT / f"state-{name}.json"
+    LOG = RUN / "launcher-debug.log"
+
+
+def all_run_pids():
+    """Every launcher the testbed started and still owns, whatever the account: the safety check
+    must not count a second test launcher as the player's."""
+    pids = []
+    for state in OUT.glob("state*.json"):
+        try:
+            pid = json.loads(state.read_text())["pid"]
+        except (OSError, ValueError, KeyError):
+            continue
+        if exe_of(pid).lower() == str(EXE).lower():
+            pids.append(pid)
+    return pids
 FFMPEG = r"C:\Tools\ffmpeg\ffmpeg.exe"
 NO_ACTIVATE_MOVE = 0x0001 | 0x0004 | 0x0010  # SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE
 
@@ -275,6 +312,16 @@ def seed_documents():
                 shutil.copy2(item, target / "Savegame" / item.name)
 
 
+def real_install(mod_id):
+    """The player's install of MOD_ID, read from his config (the path only, never his session)."""
+    try:
+        data = json.loads((REAL_DATA / "launcher-config.json").read_text(encoding="utf-8-sig"))
+        path = data.get("mods", {}).get(mod_id, {}).get("installPath")
+        return pathlib.Path(path) if path and pathlib.Path(path).is_dir() else None
+    except (OSError, ValueError):
+        return None
+
+
 def seed(args):
     """A data folder with every first-run question already answered, and no account in it: the
     player's config holds a Discord token and is never read here, only the public catalog cache."""
@@ -290,6 +337,18 @@ def seed(args):
     wol = SANDBOX / "Wars of Liberty"
     fake_install(wol, "wol", "1.2.0e", engine + [
         "age3y.exe", "data/stringtabley.xml", "data/protoy.xml", "data/techtreey.xml", "data/unithelpstringsy.xml", "art/zulushield/x.ddt"])
+    real_wol = real_install("wol")
+    if real_wol:
+        # Read, never written: the civilization list and the text it names, so a match played by
+        # the two-account rig shows real civilization names instead of nothing.
+        for rel in ("data/civs.xml", "data/stringtabley.xml"):
+            if (real_wol / rel).exists():
+                shutil.copy2(real_wol / rel, wol / rel)
+        # The launcher reads the English snapshot before the live table when there is one, and an
+        # earlier translation sweep may have left one here: it must say the same.
+        snapshot = wol / "translations" / "_originals"
+        if snapshot.is_dir() and (real_wol / "data/stringtabley.xml").exists():
+            shutil.copy2(real_wol / "data/stringtabley.xml", snapshot / "stringtabley.xml")
     other = SANDBOX / "Improvement Mod"
     fake_install(other, "improvement-mod", "24.07.2026", engine + ["age3m.exe", "data/protom.xml"])
     copy = SANDBOX / "WoL Torneo"
@@ -323,7 +382,28 @@ def seed(args):
     }
     if args.glass:
         config["glassLevel"] = args.glass
+    if getattr(args, "mp", False):
+        config.update(multiplayer_seed())
     (RUN / "launcher-config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
+
+
+def multiplayer_seed():
+    """What a launcher of the two-account rig starts with: signed in as its account on the local
+    server, and every question that would put a window over the script already answered. The
+    server's address is NOT here: the harness reads it from AOE3ML_LOBBY_URL, so the config keeps
+    the production address and the migration that rewrites a local one never runs."""
+    if not ACCOUNT:
+        sys.exit("testbed: --mp needs --as a|b|c")
+    token_file = SERVER / f"token-{ACCOUNT}.json"
+    if not token_file.exists():
+        sys.exit(f"testbed: no token for {ACCOUNT}; use `--as {ACCOUNT} token`")
+    token = json.loads(token_file.read_text(encoding="utf-8"))
+    return {
+        "multiplayer": {"sessionToken": token["token"], "sessionExpiresAt": token["expires_at"],
+                        "cachedUser": token["user"]},
+        "lanHelperChoice": False, "radminAssistantMode": "Never", "radminAssistantSkipped": True,
+        "gameRecordingNoticeShown": True,
+    }
 
 
 # --- launch and close ------------------------------------------------------------------------------
@@ -369,6 +449,9 @@ def launch(args):
                AOE3ML_SANDBOX=str(SANDBOX))
     if args.software:
         env["AOE3ML_SOFTWARE_RENDER"] = "1"
+    if getattr(args, "mp", False):
+        env["AOE3ML_LOBBY_URL"] = SERVER_URL
+        env["AOE3ML_FAKE_GAME"] = str(RUN / "fake-game.json")
     foreground = user32.GetForegroundWindow()
     started = time.time()
     process = subprocess.Popen([str(EXE), "--no-update-gate", *args.rest], cwd=EXE.parent, env=env)
@@ -387,7 +470,9 @@ def launch(args):
     time.sleep(0.5)
     for window in windows(process.pid):
         place(window)
-    if args.size and not args.max:
+    if getattr(args, "half", None):
+        tile(process.pid, args.half)
+    elif args.size and not args.max:
         fit(process.pid, *map(int, args.size.lower().split("x")))
     stolen = user32.GetForegroundWindow() != foreground
     monitor = test_monitor()
@@ -413,6 +498,212 @@ def close():
         subprocess.run(["taskkill", "/F", "/PID", str(pid)], check=False, capture_output=True)
     STATE.unlink(missing_ok=True)
     print(f"testbed: closed {pid}")
+
+
+def close_all():
+    """Closes every account's launcher this testbed started, and only those."""
+    global RUN, DOCUMENTS, STATE, LOG
+    for state in sorted(OUT.glob("state*.json")):
+        name = state.stem[len("state-"):] if state.stem.startswith("state-") else None
+        if name:
+            use_account(name)
+        else:
+            RUN, DOCUMENTS, STATE, LOG = OUT / "run", OUT / "documents", state, OUT / "run" / "launcher-debug.log"
+        close()
+
+
+def tile(pid, where):
+    """Puts the main window in the left, right or a third of the test monitor, so two or three
+    launchers can be watched (and photographed) at once."""
+    monitor = test_monitor()
+    left, top, right, bottom = monitor["work"]
+    width = right - left
+    slots = {"left": (0, 2), "right": (1, 2), "first": (0, 3), "second": (1, 3), "third": (2, 3)}
+    index, count = slots[where]
+    found = windows(pid)
+    if not found:
+        return
+    main = max(found, key=lambda w: (w["rect"][2] - w["rect"][0]) * (w["rect"][3] - w["rect"][1]))
+    w = width // count
+    user32.SetWindowPos(main["hwnd"], None, left + index * w, top, w, bottom - top, 0x0004 | 0x0010)
+    time.sleep(0.3)
+
+
+# --- the two-account rig: a local server, test accounts, simulated games ---------------------------
+
+def node20():
+    """A portable Node 20, fetched once by npx into its cache: the backend's sqlite driver has no
+    build for the Node installed on this machine, and nothing is installed system-wide."""
+    cached = SERVER / "node20.txt"
+    if cached.exists() and pathlib.Path(cached.read_text().strip()).exists():
+        return cached.read_text().strip()
+    out = subprocess.run("npx -y node@20 -e \"console.log(process.execPath)\"", shell=True,
+                         cwd=BACKEND, capture_output=True, text=True, timeout=600)
+    path = out.stdout.strip().splitlines()[-1] if out.stdout.strip() else ""
+    if not path or not pathlib.Path(path).exists():
+        sys.exit(f"testbed: could not get Node 20 through npx: {out.stderr.strip()[:300]}")
+    SERVER.mkdir(parents=True, exist_ok=True)
+    cached.write_text(path)
+    return path
+
+
+def server_env():
+    """Dev mode on a throwaway database, and every outward connection switched off: no Discord
+    post and no recording storage, whatever a .env in the backend says (process variables win)."""
+    env = dict(os.environ, HOST="127.0.0.1", PORT=str(SERVER_PORT), DB_PATH=str(SERVER / "lobby.db"),
+               DEV_AUTH_BYPASS="true", JWT_SIGNING_KEY="testbed-local", PUBLIC_BASE_URL=SERVER_URL)
+    for name in ("DISCORD_WEBHOOK_URL", "DISCORD_ADMIN_WEBHOOK_URL", "DISCORD_HIGHLIGHTS_WEBHOOK_URL",
+                 "REPLAY_S3_ENDPOINT", "REPLAY_S3_BUCKET", "REPLAY_S3_ACCESS_KEY", "REPLAY_S3_SECRET_KEY",
+                 "REPLAY_S3_REGION", "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"):
+        env[name] = ""
+    return env
+
+
+def server_pid():
+    state = SERVER / "state.json"
+    if not state.exists():
+        return None
+    pid = json.loads(state.read_text())["pid"]
+    return pid if exe_of(pid).lower() == node20().lower() else None
+
+
+def server_up():
+    try:
+        with urllib.request.urlopen(SERVER_URL + "/health", timeout=2) as response:
+            return response.status == 200
+    except OSError:
+        return False
+
+
+def server(action, fresh=False):
+    SERVER.mkdir(parents=True, exist_ok=True)
+    if action == "start":
+        if server_pid():
+            print("testbed: the local server is already running")
+            return
+        if fresh:
+            for f in SERVER.glob("lobby.db*"):
+                f.unlink()
+            for f in SERVER.glob("token-*.json"):
+                f.unlink()
+        if not BACKEND.exists():
+            sys.exit(f"testbed: no backend at {BACKEND} (set AOE3ML_BACKEND)")
+        log = open(SERVER / "server.log", "w", encoding="utf-8")
+        process = subprocess.Popen([node20(), "--import", "tsx", "src/index.ts"], cwd=BACKEND, env=server_env(),
+                                   stdout=log, stderr=subprocess.STDOUT)
+        (SERVER / "state.json").write_text(json.dumps({"pid": process.pid}))
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            if process.poll() is not None:
+                sys.exit("testbed: the server exited; see `server log`")
+            if server_up():
+                print(f"testbed: local server on {SERVER_URL}, pid {process.pid}")
+                return
+            time.sleep(0.5)
+        sys.exit("testbed: the server did not answer in 60 s; see `server log`")
+    elif action == "stop":
+        pid = server_pid()
+        if pid:  # proved by its exe path: the portable Node, never another node process
+            subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
+            print(f"testbed: stopped the server ({pid})")
+        (SERVER / "state.json").unlink(missing_ok=True)
+    elif action == "log":
+        path = SERVER / "server.log"
+        print(path.read_text(encoding="utf-8", errors="replace")[-6000:] if path.exists() else "")
+
+
+def token(display):
+    """Signs the account into the local server: one users row of its own and a session."""
+    if not ACCOUNT:
+        sys.exit("testbed: token needs --as a|b|c")
+    out = subprocess.run([node20(), "--import", "tsx", "scripts/dev-token.ts", ACCOUNT, display or f"Test{ACCOUNT.upper()}"],
+                         cwd=BACKEND, env=server_env(), capture_output=True, text=True, timeout=120)
+    if out.returncode != 0:
+        sys.exit(f"testbed: dev-token failed: {out.stderr.strip()[:300]}")
+    (SERVER / f"token-{ACCOUNT}.json").write_text(out.stdout.strip(), encoding="utf-8")
+    print(f"testbed: {ACCOUNT} signed in as {json.loads(out.stdout)['user']['display_name']}")
+
+
+def recording_players(path):
+    """The human players a recording names, by slot, read from its header the way the launcher
+    reads it (`l33t`, size, zlib; then [nChars][UTF-16 key][type][value]). The file NAME is no
+    use: it is a sanitised copy ('El_Taita' for 'El Taita')."""
+    data = pathlib.Path(path).read_bytes()
+    if data[:4] != b"l33t":
+        sys.exit(f"testbed: {path} is not a recording")
+    body = zlib.decompress(data[8:])
+    start = body.find("gameplayer".encode("utf-16-le"))
+    if start < 4:
+        sys.exit(f"testbed: no player list in {path}")
+    pos = start - 4
+    values = {}
+    sizes = {1: 4, 2: 4, 5: 1}
+    while pos + 8 <= len(body):
+        count = struct.unpack_from("<I", body, pos)[0]
+        if count == 0xFFFFFFFF or count > 200:
+            break
+        key = body[pos + 4: pos + 4 + 2 * count].decode("utf-16-le", errors="replace")
+        pos += 4 + 2 * count
+        kind = struct.unpack_from("<I", body, pos)[0]
+        pos += 4
+        if kind == 9:
+            n = struct.unpack_from("<I", body, pos)[0]
+            values[key] = body[pos + 4: pos + 4 + 2 * n].decode("utf-16-le", errors="replace")
+            pos += 4 + 2 * n
+        elif kind in sizes:
+            if kind == 2:
+                values[key] = struct.unpack_from("<i", body, pos)[0]
+            pos += sizes[kind]
+        else:
+            break
+    players = {}
+    for key, value in values.items():
+        match = re.fullmatch(r"gameplayer(\d+)name", key)
+        if match and isinstance(value, str) and value:
+            players[int(match.group(1))] = value
+    return players
+
+
+def fakegame(recording, slot, seconds, mod_folder):
+    """The next game this account "plays": it lasts SECONDS and leaves RECORDING, and this
+    account's profile is named after slot SLOT of it, so the launcher finds itself in the file."""
+    if not ACCOUNT:
+        sys.exit("testbed: fakegame needs --as a|b|c")
+    source = pathlib.Path(recording)
+    if not source.exists():
+        # The recordings `seed_documents` copied from the player's folder, kept in one place so a
+        # fresh account (whose documents start empty) can still use them.
+        found = [RECORDINGS / recording] + list(OUT.glob(f"documents*/My Games/*/Savegame/{recording}"))
+        found = [f for f in found if f.exists()]
+        if not found:
+            sys.exit(f"testbed: no recording {recording!r} (looked in {RECORDINGS} and the documents folders)")
+        RECORDINGS.mkdir(parents=True, exist_ok=True)
+        source = RECORDINGS / recording
+        if not source.exists():
+            shutil.copy2(found[0], source)
+    players = recording_players(source)
+    if slot not in players:
+        sys.exit(f"testbed: slot {slot} is not a player of that recording: {players}")
+    name = players[slot]
+    users3 = DOCUMENTS / "My Games" / mod_folder / "Users3"
+    profiles = list(users3.glob("*.xml")) if users3.is_dir() else []
+    if not profiles:
+        sys.exit(f"testbed: no profile in {users3}; launch this account once first")
+    for profile in profiles:
+        text = profile.read_text(encoding="utf-16")
+        text, n = re.subn(r"<OnlineName>.*?</OnlineName>", f"<OnlineName>{name}</OnlineName>", text, flags=re.S)
+        if n == 0:
+            text = re.sub(r'(optionskirmishnickname">)[^<]*', lambda m: m.group(1) + name, text)
+        profile.write_text(text, encoding="utf-16")
+    RUN.mkdir(parents=True, exist_ok=True)
+    (RUN / "fake-game.json").write_text(json.dumps({"seconds": seconds, "recording": str(source)}), encoding="utf-8")
+    print(f"testbed: {ACCOUNT} plays as {name!r} (slot {slot}), {seconds} s, then leaves {source.name}")
+
+
+def admin(rest):
+    """The backend's admin CLI on the rig's database."""
+    command = [node20(), "--import", "tsx", "scripts/admin.ts", *rest]
+    sys.exit(subprocess.run(command, cwd=BACKEND, env=server_env()).returncode)
 
 
 # --- pictures --------------------------------------------------------------------------------------
@@ -847,8 +1138,8 @@ def machine_state():
                   "installs": {k: v.get("installPath") for k, v in data.get("mods", {}).items()}}
     listing = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Aoe3ModLauncher.exe", "/FO", "CSV", "/NH"],
                              capture_output=True, text=True).stdout
-    own = run_pid()
-    pids = sorted(int(p) for p in re.findall(r'^"[^"]+","(\d+)"', listing, re.M) if int(p) != own)
+    own = set(all_run_pids())
+    pids = sorted(int(p) for p in re.findall(r'^"[^"]+","(\d+)"', listing, re.M) if int(p) not in own)
     def names(folder, pattern="*.lnk"):
         return sorted(item.name for item in folder.glob(pattern)) if folder.is_dir() else []
     def uninstall(root):
@@ -899,10 +1190,13 @@ def uia(rest):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--as", dest="account", help="a, b or c: another launcher with its own folders")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("build")
     sub.add_parser("monitors")
     p = sub.add_parser("launch")
+    p.add_argument("--mp", action="store_true", help="signed in on the local server, simulated games on")
+    p.add_argument("--half", choices=("left", "right", "first", "second", "third"))
     p.add_argument("--size")
     p.add_argument("--max", action="store_true")
     p.add_argument("--lang", default="es")
@@ -911,7 +1205,22 @@ def main():
     p.add_argument("--checks", action="store_true", help="update checks on at start, as a player has them")
     p.add_argument("--keep", action="store_true", help="keep the data folder of the last run")
     p.add_argument("rest", nargs="*")
-    sub.add_parser("close")
+    p = sub.add_parser("close")
+    p.add_argument("--all", action="store_true", help="every account's launcher")
+    p = sub.add_parser("server")
+    p.add_argument("action", choices=("start", "stop", "log"))
+    p.add_argument("--fresh", action="store_true", help="a new empty database and no accounts")
+    p = sub.add_parser("token")
+    p.add_argument("--name", help="the account's display name")
+    p = sub.add_parser("fakegame")
+    p.add_argument("recording")
+    p.add_argument("--slot", type=int, required=True, help="which player of the recording this account is")
+    p.add_argument("--seconds", type=int, default=190)
+    p.add_argument("--mod-folder", default="Wars of Liberty")
+    p = sub.add_parser("players")
+    p.add_argument("recording")
+    p = sub.add_parser("admin")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
     sub.add_parser("windows")
     p = sub.add_parser("place")
     p.add_argument("--title")
@@ -973,6 +1282,7 @@ def main():
     p = sub.add_parser("uia")
     p.add_argument("rest", nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    use_account(args.account)
 
     if args.command == "build":
         sys.exit(subprocess.run(["dotnet", "build", str(REPO / "WarsOfLibertyLauncher"), "-c", "Release", "-v", "q",
@@ -985,7 +1295,17 @@ def main():
     elif args.command == "launch":
         launch(args)
     elif args.command == "close":
-        close()
+        close_all() if args.all else close()
+    elif args.command == "server":
+        server(args.action, args.fresh)
+    elif args.command == "token":
+        token(args.name)
+    elif args.command == "fakegame":
+        fakegame(args.recording, args.slot, args.seconds, args.mod_folder)
+    elif args.command == "players":
+        print(json.dumps(recording_players(args.recording), ensure_ascii=False))
+    elif args.command == "admin":
+        admin(args.rest)
     elif args.command == "windows":
         for w in windows():
             print(f"{w['hwnd']} {w['rect']} {w['title']}")

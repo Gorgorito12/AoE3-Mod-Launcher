@@ -24,12 +24,29 @@ internal static class RepairResume
 
     internal sealed record Ticket(string ModId, bool Update);
 
-    /// <summary>The argument for <paramref name="modId"/>, or null when the id could not round-trip.</summary>
-    internal static string? Build(string? modId, bool update)
+    /// <summary>The argument for <paramref name="modId"/>, or null when the id could not round-trip.
+    /// <paramref name="context"/> ("fresh" or "copy") rides on an update, after it:
+    /// <c>--repair-now=id:update:fresh</c>.</summary>
+    internal static string? Build(string? modId, bool update, string? context = null)
     {
         var id = (modId ?? "").Trim();
         if (!IdPattern.IsMatch(id)) return null;
-        return $"{Arg}={id}{(update ? UpdateSuffix : "")}";
+        var ctx = update && context is "fresh" or "copy" ? ":" + context : "";
+        return $"{Arg}={id}{(update ? UpdateSuffix : "")}{ctx}";
+    }
+
+    /// <summary>The install context a ticket carries ("fresh", "copy"), or null.</summary>
+    internal static string? ContextOf(IEnumerable<string>? args)
+    {
+        foreach (var raw in args ?? Enumerable.Empty<string>())
+        {
+            var a = (raw ?? "").Trim();
+            if (!a.StartsWith(Arg + "=", StringComparison.OrdinalIgnoreCase)) continue;
+            foreach (var ctx in new[] { "fresh", "copy" })
+                if (a.EndsWith(UpdateSuffix + ":" + ctx, StringComparison.OrdinalIgnoreCase)) return ctx;
+            return null;
+        }
+        return null;
     }
 
     /// <summary>The first well-formed ticket among <paramref name="args"/>, or null.</summary>
@@ -40,6 +57,8 @@ internal static class RepairResume
             var a = (raw ?? "").Trim();
             if (!a.StartsWith(Arg + "=", StringComparison.OrdinalIgnoreCase)) continue;
             var value = a[(Arg.Length + 1)..];
+            foreach (var ctx in new[] { ":fresh", ":copy" })
+                if (value.EndsWith(UpdateSuffix + ctx, StringComparison.OrdinalIgnoreCase)) value = value[..^ctx.Length];
             bool update = value.EndsWith(UpdateSuffix, StringComparison.OrdinalIgnoreCase);
             if (update) value = value[..^UpdateSuffix.Length];
             if (IdPattern.IsMatch(value)) return new Ticket(value, update);

@@ -892,8 +892,8 @@ public static partial class Strings
         ["DlgSettingsUpdAutoTitle"] = new() { [LangEn] = "Update mods automatically", [LangEs] = "Actualizar mods automáticamente" },
         ["DlgSettingsUpdAutoDesc"] = new()
         {
-            [LangEn] = "If your version does not match the host's, you cannot join their room.",
-            [LangEs] = "Si tu versión no coincide con la del anfitrión, no puedes entrar en su sala.",
+            [LangEn] = "The open mod updates by itself when nothing is in the way: never during a game or a room, and never if it would need administrator rights or more disk. If your version does not match the host's, you cannot join their room.",
+            [LangEs] = "El mod abierto se actualiza solo cuando nada lo impide: nunca durante una partida o en una sala, y nunca si necesita permisos de administrador o más disco. Si tu versión no coincide con la del anfitrión, no puedes entrar en su sala.",
         },
         ["DlgSettingsUpdDeltaTitle"] = new()
         {
@@ -902,28 +902,8 @@ public static partial class Strings
         },
         ["DlgSettingsUpdDeltaDesc"] = new()
         {
-            [LangEn] = "Incremental patches instead of the whole mod. Turn it off if an update fails.",
-            [LangEs] = "Parches incrementales en vez del mod entero. Desactívalo si una actualización falla.",
-        },
-        ["DlgSettingsUpdChannelTitle"] = new()
-        {
-            [LangEn] = "Channel",
-            [LangEs] = "Canal",
-        },
-        ["DlgSettingsUpdChannelDesc"] = new()
-        {
-            [LangEn] = "Beta gets patches sooner, with more risk of bugs.",
-            [LangEs] = "Beta recibe antes los parches, con más riesgo de fallos.",
-        },
-        ["DlgSettingsUpdChannelStable"] = new()
-        {
-            [LangEn] = "Stable",
-            [LangEs] = "Estable",
-        },
-        ["DlgSettingsUpdChannelBeta"] = new()
-        {
-            [LangEn] = "Beta",
-            [LangEs] = "Beta",
+            [LangEn] = "Updates download the patches and Repair only the damaged files, when that is safe. Off, both download the whole mod. Turn it off if an update or a repair fails.",
+            [LangEs] = "Las actualizaciones bajan los parches y Reparar solo los archivos dañados, cuando es seguro. Apagado, las dos bajan el mod entero. Desactívalo si una actualización o una reparación falla.",
         },
         ["DlgSettingsUpdLimitTitle"] = new()
         {
@@ -965,16 +945,6 @@ public static partial class Strings
             [LangEn] = "{0} mods available",
             [LangEs] = "{0} mods disponibles",
         },
-        ["DlgSettingsVerifyTitle"] = new()
-        {
-            [LangEn] = "Verify the signature of downloads",
-            [LangEs] = "Verificar la firma de las descargas",
-        },
-        ["DlgSettingsVerifyDesc"] = new()
-        {
-            [LangEn] = "Checks each file's hash before installing it.",
-            [LangEs] = "Comprueba el hash de cada archivo antes de instalarlo.",
-        },
         // --- GAMES (4b).
         ["DlgSettingsGroupRanking"] = new() { [LangEn] = "RANKING", [LangEs] = "RANKING" },
         ["DlgSettingsRecOffTitle"] = new()
@@ -999,9 +969,14 @@ public static partial class Strings
         },
         ["DlgSettingsShowEloDesc"] = new()
         {
-            [LangEn] = "It shows in rooms, the lobby and the ranking. Turning it off leaves the public table.",
-            [LangEs] = "Aparece en las salas, el lobby y la clasificación. Al desactivarlo sales de la tabla pública.",
+            [LangEn] = "Other players see it in rooms, results and your profile. Off, you leave the public ranking and they see \"Hidden\"; you still see your own, and your record stays public.",
+            [LangEs] = "Los demás lo ven en las salas, los resultados y tu perfil. Apagado, sales de la clasificación pública y ven «Oculto»; tú sigues viendo el tuyo y tu historial sigue siendo público.",
         },
+        ["DlgSettingsLanHelperManual"] = new() { [LangEn] = "Set it up by hand…", [LangEs] = "Configurarlo a mano…" },
+        ["DlgSettingsLanHelperNoGame"] = new() { [LangEn] = "{0} has no game executable the launcher can find. Install it, or open its folder from the Library first.", [LangEs] = "{0} no tiene un ejecutable del juego que el launcher encuentre. Instálalo, o abre su carpeta desde la Biblioteca primero." },
+        ["DlgSettingsShowEloShown"] = new() { [LangEn] = "Your rating is shown again.", [LangEs] = "Tu ELO vuelve a verse." },
+        ["DlgSettingsShowEloHidden"] = new() { [LangEn] = "Your rating is now private.", [LangEs] = "Tu ELO ahora es privado." },
+        ["DlgSettingsShowEloFailed"] = new() { [LangEn] = "The server could not store it. Try again in a moment.", [LangEs] = "El servidor no pudo guardarlo. Prueba de nuevo en un momento." },
         // The opt-out for uploading competitive recordings (ReplayUploadService.Decide). One
         // switch, on by default: implicit consent, stated in every competitive room.
         ["DlgSettingsReplayUpTitle"] = new() { [LangEn] = "Upload my competitive recordings", [LangEs] = "Subir mis grabaciones competitivas" },
@@ -5624,6 +5599,8 @@ public static partial class Strings
             [LangEn] = "{0} opened a room",
             [LangEs] = "{0} abrió una sala",
         },
+        ["MpChatRoomClosed"] = new() { [LangEn] = "Closed", [LangEs] = "Cerrada" },
+        ["MpChatRoomSeats"] = new() { [LangEn] = "{0}/{1}", [LangEs] = "{0}/{1}" },
         // Shown INSTEAD of the list when a search matches nothing. Without it an empty
         // panel reads as "there are no rooms" when they are only filtered out.
         ["MpRoomsNoMatches"] = new()
@@ -5903,6 +5880,8 @@ public static partial class Strings
         ["MpGlobalChatPresence"] = new() { [LangEn] = "{0} connected", [LangEs] = "{0} conectados" },
         ["MpGlobalChatPlaceholder"] = new() { [LangEn] = "Write a message…", [LangEs] = "Escribe un mensaje…" },
         ["MpGlobalChatSend"] = new() { [LangEn] = "Send", [LangEs] = "Enviar" },
+        ["MpEloHiddenPrivate"] = new() { [LangEn] = "Hidden", [LangEs] = "Oculto" },
+        ["MpEloHiddenPrivateTip"] = new() { [LangEn] = "This player keeps his rating private.", [LangEs] = "Este jugador mantiene su ELO en privado." },
         ["MpGlobalChatEmpty"] = new() { [LangEn] = "No messages yet. Say hi! 👋", [LangEs] = "Todavía no hay mensajes. ¡Saluda! 👋" },
         ["MpGlobalChatConnecting"] = new() { [LangEn] = "Connecting…", [LangEs] = "Conectando…" },
         ["MpGlobalChatSlowMode"] = new() { [LangEn] = "You're sending too fast — wait a moment.", [LangEs] = "Estás enviando muy rápido, espera un momento." },
@@ -6555,6 +6534,138 @@ public static partial class Strings
             [LangEn] = "Could not spawn the game process.",
             [LangEs] = "No se pudo iniciar el proceso del juego.",
         },
+        ["LanHelperAskTitle"] = new()
+        {
+            [LangEn] = "Enter the game's room by itself?",
+            [LangEs] = "¿Entrar sola a la sala del juego?",
+        },
+        ["LanHelperAskBody"] = new()
+        {
+            [LangEn] = "The launcher can make {0} open the LAN room and join the match without you touching the menus. For that it copies two files into the game's folder. It replaces nothing, and you can remove it any time in Settings → Games. Some antivirus programs may warn about a new file in the game's folder.",
+            [LangEs] = "El launcher puede hacer que {0} abra la sala LAN y se una a la partida sin que toques los menús. Para eso copia dos archivos en la carpeta del juego. No reemplaza nada, y puedes quitarlo cuando quieras en Configuración → Partidas. Algunos antivirus pueden avisar de un archivo nuevo en la carpeta del juego.",
+        },
+        ["LanHelperAskDetailLabel"] = new()
+        {
+            [LangEn] = "What is copied",
+            [LangEs] = "Qué se copia",
+        },
+        ["LanHelperAskYes"] = new()
+        {
+            [LangEn] = "Turn it on",
+            [LangEs] = "Activar",
+        },
+        ["LanHelperAskNo"] = new()
+        {
+            [LangEn] = "No, thanks",
+            [LangEs] = "No, gracias",
+        },
+        ["LanHelperNeedsAdminTitle"] = new()
+        {
+            [LangEn] = "Windows protects that folder",
+            [LangEs] = "Windows protege esa carpeta",
+        },
+        ["LanHelperNeedsAdminBody"] = new()
+        {
+            [LangEn] = "The launcher cannot write in {0} without administrator rights. Open the launcher once as administrator and enter a room: it will be installed then. Until that, you enter the LAN room by hand as always.",
+            [LangEs] = "El launcher no puede escribir en {0} sin permisos de administrador. Abre el launcher una vez como administrador y entra a una sala: se instalará entonces. Mientras tanto, entras a la sala LAN a mano como siempre.",
+        },
+        ["LanHelperInstalled"] = new()
+        {
+            [LangEn] = "{0} will now enter the LAN room by itself when the match starts.",
+            [LangEs] = "{0} entrará sola a la sala LAN cuando empiece la partida.",
+        },
+        ["LanHelperInstallFailed"] = new()
+        {
+            [LangEn] = "Could not set up the automatic LAN room ({0}). You can enter by hand: Multiplayer → LAN.",
+            [LangEs] = "No se pudo preparar la entrada automática a la sala LAN ({0}). Puedes entrar a mano: Multijugador → LAN.",
+        },
+        ["DlgSettingsGroupLan"] = new()
+        {
+            [LangEn] = "LAN ROOM",
+            [LangEs] = "SALA LAN",
+        },
+        ["DlgSettingsLanHelper"] = new()
+        {
+            [LangEn] = "Enter the LAN room by itself",
+            [LangEs] = "Entrar sola a la sala LAN",
+        },
+        ["DlgSettingsLanHelperHint"] = new()
+        {
+            [LangEn] = "When a match starts from a room, the game opens the LAN room and joins without you touching the menus. It copies two files into the game's folder; turning this off removes them.",
+            [LangEs] = "Cuando empieza una partida desde una sala, el juego abre la sala LAN y se une sin que toques los menús. Copia dos archivos en la carpeta del juego; al apagarlo se quitan.",
+        },
+        ["DlgSettingsLanHelperTip"] = new()
+        {
+            [LangEn] = "Copies dinput8.dll and engine-ext\\engine-ext.cfg next to the game's executable, for each game you play from a room. It replaces no file of the game. Some antivirus programs may warn about the new file.",
+            [LangEs] = "Copia dinput8.dll y engine-ext\\engine-ext.cfg junto al ejecutable del juego, para cada juego que juegues desde una sala. No reemplaza ningún archivo del juego. Algunos antivirus pueden avisar del archivo nuevo.",
+        },
+        ["DlgSettingsLanHelperPending"] = new()
+        {
+            [LangEn] = "It will be installed the next time you enter a room.",
+            [LangEs] = "Se instalará la próxima vez que entres a una sala.",
+        },
+        ["DlgSettingsLanHelperIn"] = new()
+        {
+            [LangEn] = "Installed in:\n{0}",
+            [LangEs] = "Instalado en:\n{0}",
+        },
+        ["DlgSettingsLanHelperLeft"] = new()
+        {
+            [LangEn] = "Could not be removed from (close the game and switch it off again):\n{0}",
+            [LangEs] = "No se pudo quitar de (cierra el juego y vuelve a apagarlo):\n{0}",
+        },
+        // The LAN helper set up by hand (LanHelperSetupDialog) and its room chip.
+        ["LanSetupBar"] = new() { [LangEn] = "Automatic entry to the LAN room", [LangEs] = "Entrada automática a la sala LAN" },
+        ["LanSetupTitle"] = new() { [LangEn] = "{0} can enter the LAN room by itself", [LangEs] = "{0} puede entrar sola a la sala LAN" },
+        ["LanSetupTitleFailed"] = new() { [LangEn] = "The files couldn't be copied into {0}", [LangEs] = "No se pudieron copiar los archivos en {0}" },
+        ["LanSetupTitleActive"] = new() { [LangEn] = "{0} enters the LAN room by itself", [LangEs] = "{0} entra sola a la sala LAN" },
+        ["LanSetupLeadOff"] = new() { [LangEn] = "When the match starts, the game opens the LAN room and joins it without you touching the menus. It needs two files next to the game. Copy them now, or do it by hand below.", [LangEs] = "Al empezar la partida, el juego abre la sala LAN y se une sin que toques los menús. Necesita dos archivos junto al juego. Cópialos ahora, o hazlo a mano abajo." },
+        ["LanSetupLeadProtected"] = new() { [LangEn] = "Windows protects the game's folder, so the launcher can't copy the two files on its own. It can do it with one administrator permission, or you can copy them by hand below.", [LangEs] = "Windows protege la carpeta del juego, así que el launcher no puede copiar los dos archivos solo. Puede hacerlo con un permiso de administrador, o puedes copiarlos a mano abajo." },
+        ["LanSetupLeadFailed"] = new() { [LangEn] = "The copy failed ({0}). Try again, or copy them by hand below. Until then you enter the LAN room by hand as always.", [LangEs] = "La copia falló ({0}). Vuelve a intentarlo, o cópialos a mano abajo. Mientras tanto entras a la sala LAN a mano como siempre." },
+        ["LanSetupLeadActive"] = new() { [LangEn] = "Both files are in the game's folder. When the match starts, the game opens the LAN room and joins it by itself.", [LangEs] = "Los dos archivos están en la carpeta del juego. Al empezar la partida, el juego abre la sala LAN y se une solo." },
+        ["LanSetupLeadByMod"] = new() { [LangEn] = "This game already brings its own automatic entry. Nothing needs to be copied.", [LangEs] = "Este juego ya trae su propia entrada automática. No hace falta copiar nada." },
+        ["LanSetupLeadForeign"] = new() { [LangEn] = "There is already a dinput8.dll from another program in the game's folder. The launcher won't replace it: you enter the LAN room by hand.", [LangEs] = "Ya hay un dinput8.dll de otro programa en la carpeta del juego. El launcher no lo reemplaza: entras a la sala LAN a mano." },
+        ["LanSetupLeadUnsupported"] = new() { [LangEn] = "This game's executable isn't one the automatic entry knows, so you enter the LAN room by hand.", [LangEs] = "El ejecutable de este juego no es uno que la entrada automática conozca, así que entras a la sala LAN a mano." },
+        ["LanSetupCopyNow"] = new() { [LangEn] = "Copy the files", [LangEs] = "Copiar los archivos" },
+        ["LanSetupCopyNowTip"] = new() { [LangEn] = "Copies dinput8.dll and engine-ext\\engine-ext.cfg next to the game's executable. It replaces no file of the game.", [LangEs] = "Copia dinput8.dll y engine-ext\\engine-ext.cfg junto al ejecutable del juego. No reemplaza ningún archivo del juego." },
+        ["LanSetupAsAdmin"] = new() { [LangEn] = "Do it as administrator", [LangEs] = "Hacerlo como administrador" },
+        ["LanSetupAsAdminTip"] = new() { [LangEn] = "Windows asks for permission once; the launcher copies the two files and doesn't restart.", [LangEs] = "Windows pide permiso una vez; el launcher copia los dos archivos y no se reinicia." },
+        ["LanSetupClose"] = new() { [LangEn] = "Close", [LangEs] = "Cerrar" },
+        ["LanSetupStepsTitle"] = new() { [LangEn] = "OR DO IT YOURSELF", [LangEs] = "O HAZLO TÚ" },
+        ["LanSetupStep1"] = new() { [LangEn] = "**Save the two files** on your Desktop.", [LangEs] = "**Guarda los dos archivos** en tu Escritorio." },
+        ["LanSetupStep2"] = new() { [LangEn] = "**Open the game's folder**:", [LangEs] = "**Abre la carpeta del juego**:" },
+        ["LanSetupStep3"] = new() { [LangEn] = "**Copy {0} and the {1} folder** into it, next to {2}. If an {1} folder is already there, add the line {3} to its cfg instead of replacing it.", [LangEs] = "**Copia {0} y la carpeta {1}** dentro, junto a {2}. Si ya hay una carpeta {1}, añade la línea {3} a su cfg en vez de reemplazarla." },
+        ["LanSetupStep4"] = new() { [LangEn] = "**Check** that it took.", [LangEs] = "**Comprueba** que quedó." },
+        ["LanSetupSave"] = new() { [LangEn] = "Save and open", [LangEs] = "Guardar y abrir" },
+        ["LanSetupCopyPath"] = new() { [LangEn] = "Copy", [LangEs] = "Copiar" },
+        ["LanSetupCopied"] = new() { [LangEn] = "Copied", [LangEs] = "Copiado" },
+        ["LanSetupOpenFolder"] = new() { [LangEn] = "Open", [LangEs] = "Abrir" },
+        ["LanSetupCheck"] = new() { [LangEn] = "Check", [LangEs] = "Comprobar" },
+        ["LanSetupSaved"] = new() { [LangEn] = "Saved in {0}", [LangEs] = "Guardado en {0}" },
+        ["LanSetupSaveFailed"] = new() { [LangEn] = "The files couldn't be saved ({0}).", [LangEs] = "No se pudieron guardar los archivos ({0})." },
+        ["LanSetupCopyFailed"] = new() { [LangEn] = "The copy failed ({0}). Copy them by hand below.", [LangEs] = "La copia falló ({0}). Cópialos a mano abajo." },
+        ["LanSetupAdminDeclined"] = new() { [LangEn] = "Windows was told no. You can still copy the files by hand below.", [LangEs] = "Se le dijo que no a Windows. Aún puedes copiar los archivos a mano abajo." },
+        ["LanSetupAdminCannot"] = new() { [LangEn] = "That folder can't be passed to the administrator copy. Copy the files by hand below.", [LangEs] = "Esa carpeta no se le puede pasar a la copia como administrador. Copia los archivos a mano abajo." },
+        ["LanSetupActive"] = new() { [LangEn] = "Active: {0} enters the LAN room by itself.", [LangEs] = "Activa: {0} entra sola a la sala LAN." },
+        ["LanSetupNotYet"] = new() { [LangEn] = "It isn't in place yet.", [LangEs] = "Todavía no quedó." },
+        ["LanSetupMissingDll"] = new() { [LangEn] = "dinput8.dll isn't in the game's folder yet.", [LangEs] = "dinput8.dll todavía no está en la carpeta del juego." },
+        ["LanSetupMissingCfg"] = new() { [LangEn] = "dinput8.dll is there, but engine-ext\\engine-ext.cfg with the line lanAutoStart isn't.", [LangEs] = "dinput8.dll está, pero falta engine-ext\\engine-ext.cfg con la línea lanAutoStart." },
+        ["LanSetupReadme"] = new()
+        {
+            [LangEn] = "Automatic entry to the LAN room for {0} (AoE3 Mod Launcher)\r\n\r\nCopy {2} and the {3} folder into:\r\n{1}\r\n\r\nThey go next to the game's executable. If there is already an {3} folder there, add the line {4} to its engine-ext.cfg instead of replacing it.\r\n\r\nTo remove it: delete {2} and the {3} folder, or switch it off in the launcher (Settings > Games).",
+            [LangEs] = "Entrada automática a la sala LAN para {0} (AoE3 Mod Launcher)\r\n\r\nCopia {2} y la carpeta {3} en:\r\n{1}\r\n\r\nVan junto al ejecutable del juego. Si ya hay una carpeta {3} ahí, añade la línea {4} a su engine-ext.cfg en vez de reemplazarla.\r\n\r\nPara quitarlo: borra {2} y la carpeta {3}, o apágalo en el launcher (Configuración > Partidas).",
+        },
+        ["LanCardTitle"] = new() { [LangEn] = "AUTOMATIC ENTRY", [LangEs] = "ENTRADA AUTOMÁTICA" },
+        ["LanCardOnBody"] = new() { [LangEn] = "When the match starts, your game opens the LAN room and joins by itself.", [LangEs] = "Al empezar la partida, tu juego abre la sala LAN y entra solo." },
+        ["LanCardOffBody"] = new() { [LangEn] = "Off: when the match starts, you enter the LAN room by hand (Multiplayer → LAN).", [LangEs] = "Apagada: al empezar la partida entras a la sala LAN a mano (Multijugador → LAN)." },
+        ["LanCardNotSetUpBody"] = new() { [LangEn] = "Not set up for this game yet: you enter the LAN room by hand.", [LangEs] = "Todavía no está preparada para este juego: entras a la sala LAN a mano." },
+        ["LanCardCannotBody"] = new() { [LangEn] = "This game can't enter by itself: you enter the LAN room by hand.", [LangEs] = "Este juego no puede entrar solo: entras a la sala LAN a mano." },
+        ["LanCardSetUp"] = new() { [LangEn] = "Set up", [LangEs] = "Preparar" },
+        ["LanCardWhy"] = new() { [LangEn] = "Why?", [LangEs] = "¿Por qué?" },
+        ["LanCardSwitchOffTip"] = new() { [LangEn] = "Switch it off to enter the LAN room by hand. Nothing is removed from your game; it stays off for your next rooms.", [LangEs] = "Apágala para entrar a la sala LAN a mano. No se quita nada de tu juego; queda apagada para tus próximas salas." },
+        ["LanCardSwitchOnTip"] = new() { [LangEn] = "Switch it on so your game enters the LAN room by itself.", [LangEs] = "Enciéndela para que tu juego entre solo a la sala LAN." },
+        ["RoomLanAuto"] = new() { [LangEn] = "enters by itself", [LangEs] = "entra solo" },
+        ["RoomLanManual"] = new() { [LangEn] = "enters by hand", [LangEs] = "entra a mano" },
         ["MpCreateDialogRules"] = new()
         {
             [LangEn] = "GAME RULES",
@@ -6595,10 +6706,10 @@ public static partial class Strings
             [LangEn] = "Treaty - No Blockade",
             [LangEs] = "Tratado: sin bloqueo",
         },
-        ["MpCreateDialogRulesTreatyHint"] = new()
+        ["MpCreateDialogRulesCompetitiveHint"] = new()
         {
-            [LangEn] = "Some mods, such as Wars of Liberty, mark the treaties as not supported.",
-            [LangEs] = "Algunos mods, como Wars of Liberty, marcan los tratados como no admitidos.",
+            [LangEn] = "Competitive matches are always played with Standard rules, like the quick match and tournaments.",
+            [LangEs] = "Las partidas competitivas se juegan siempre con reglas Estándar, como la partida rápida y los torneos.",
         },
         ["MpCreateDialogRulesStandardDesc"] = new()
         {
@@ -6781,15 +6892,13 @@ public static partial class Strings
         ["MpPreflightHelpBody"] = new()
         {
             [LangEn] = "On the AoE3 multiplayer setup screen, before the match starts, there is a "
-                     + "\u201CRecord Game\u201D checkbox. It comes up unticked EVERY match and the "
-                     + "launcher cannot tick it for you \u2014 both ways of doing that were tried and "
-                     + "neither works. Without a recording the match has no readable winner and counts "
-                     + "for nobody.",
-            [LangEs] = "En la pantalla de configuraci\u00F3n de la partida multijugador de AoE3, antes de "
-                     + "empezar, hay una casilla \u201CRecord Game\u201D. Aparece desmarcada en CADA "
-                     + "partida y el launcher no puede marcarla por ti \u2014 se probaron las dos formas "
-                     + "de hacerlo y ninguna funciona. Sin grabaci\u00F3n la partida no tiene un ganador "
-                     + "legible y no cuenta para nadie.",
+                     + "“Record Game” checkbox. In a competitive room the launcher ticks it "
+                     + "for the host before the game opens; leave it ticked. Without a recording the "
+                     + "match has no readable winner and counts for nobody.",
+            [LangEs] = "En la pantalla de configuración de la partida multijugador de AoE3, antes de "
+                     + "empezar, hay una casilla “Record Game”. En una sala competitiva el "
+                     + "launcher se la marca al anfitrión antes de que abra el juego; déjala "
+                     + "marcada. Sin grabación la partida no tiene un ganador legible y no cuenta para nadie.",
         },
         // The third item, competitive rooms only. It is a RULE, not a task, and it exists
         // because the abandonment penalty was written in exactly one place — the
@@ -7366,9 +7475,8 @@ public static partial class Strings
             [LangEn] = "{0} room",
             [LangEs] = "Sala de {0}",
         },
-        // Asked before EVERY competitive start, not once per room: AoE3's own Record Game box
-        // comes up unticked for each match and the launcher cannot tick it. This is the last
-        // moment the player is looking at us rather than at the game.
+        // Asked before a competitive start only when the launcher could not tick the lobby's
+        // Record Game box itself (RecordGameNotice.CouldNotTick); see the next pair for the other case.
         ["MpStartConfirmRecordTitle"] = new()
         {
             [LangEn] = "Before you start",
@@ -7376,14 +7484,12 @@ public static partial class Strings
         },
         ["MpStartConfirmRecordBody"] = new()
         {
-            [LangEn] = "When the game opens, tick Record Game on the match setup screen. It is a "
-                     + "box inside Age of Empires III that comes up unticked every single match, "
-                     + "and the launcher can't tick it for you. Without a recording there is no "
+            [LangEn] = "The launcher couldn't tick Record Game for you this time. When the game "
+                     + "opens, tick it on the match setup screen. Without a recording there is no "
                      + "way to tell who won, and the match won't score.",
-            [LangEs] = "Cuando abra el juego, marca «Record Game» en la pantalla de la partida. "
-                     + "Es una casilla del propio Age of Empires III que vuelve desmarcada en "
-                     + "cada partida, y el launcher no puede activarla por ti. Sin grabación no "
-                     + "hay forma de saber quién ganó, y la partida no puntúa.",
+            [LangEs] = "Esta vez el launcher no pudo marcarte «Record Game». Cuando abra el juego, "
+                     + "márcala en la pantalla de la partida. Sin grabación no hay forma de saber "
+                     + "quién ganó, y la partida no puntúa.",
         },
         // The same prompt once the launcher has EVIDENCE. It leads with the fact rather than the
         // instruction, because a reminder that reads identically every time stops being read —
@@ -7396,13 +7502,16 @@ public static partial class Strings
         ["MpStartConfirmRecordBodyAgain"] = new()
         {
             [LangEn] = "The previous competitive match left no recording, so it counted for "
-                     + "nobody. The box is inside Age of Empires III and the launcher cannot tick "
-                     + "it for you: when the game opens, tick Record Game on the match setup "
-                     + "screen — it comes up unticked every single match.",
+                     + "nobody. The launcher ticks Record Game before the game opens: when it does, "
+                     + "check that it is still ticked on the match setup screen, and don't untick it.",
             [LangEs] = "La partida competitiva anterior no dejó grabación, así que no contó para "
-                     + "nadie. La casilla está dentro de Age of Empires III y el launcher no "
-                     + "puede marcarla por ti: cuando abra el juego, marca «Record Game» en la "
-                     + "pantalla de la partida — vuelve desmarcada en cada partida.",
+                     + "nadie. El launcher marca «Record Game» antes de que abra el juego: cuando "
+                     + "abra, comprueba que siga marcada en la pantalla de la partida y no la desmarques.",
+        },
+        ["MpStartConfirmSnooze"] = new()
+        {
+            [LangEn] = "Don't remind me for 7 days",
+            [LangEs] = "No recordármelo durante 7 días",
         },
         ["MpStartConfirmRecordYes"] = new()
         {
@@ -7410,38 +7519,26 @@ public static partial class Strings
             [LangEs] = "Entendido, empezar",
         },
         ["MpStartConfirmRecordNo"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
-        // Held, not asked: leaving here hands the host role to the opponent and the server then
-        // refuses the report outright, so there is no upside to weigh against.
-        ["MpLeaveBlockedTitle"] = new()
+        // Leaving during the result hold: the window goes, the room is left a moment later.
+        ["MpDetachedTitle"] = new()
         {
-            [LangEn] = "One moment",
-            [LangEs] = "Espera un momento",
+            [LangEn] = "Sending your match result",
+            [LangEs] = "Enviando el resultado de tu partida",
         },
-        ["MpLeaveBlockedReading"] = new()
+        ["MpDetachedBodyHost"] = new()
         {
-            [LangEn] = "The recording is still being read to work out who won. Leaving now would "
-                     + "cost both players the result.",
-            [LangEs] = "Estamos leyendo la grabación para saber quién ganó. Si sales ahora, la "
-                     + "partida no va a contar para ninguno de los dos.",
+            [LangEn] = "The room closes by itself as soon as the result is sent, in a few seconds. You'll see it here.",
+            [LangEs] = "La sala se cierra sola en cuanto se envíe el resultado, en unos segundos. Lo verás aquí.",
+        },
+        ["MpDetachedBodyGuest"] = new()
+        {
+            [LangEn] = "The room closes by itself when the result arrives, in a few seconds. You'll see it here.",
+            [LangEs] = "La sala se cierra sola cuando llegue el resultado, en unos segundos. Lo verás aquí.",
         },
         // Held for a different reason than the other two: nothing of ours is outstanding, so
         // leaving costs nobody the report — it costs only this player the sight of their own
         // result. Say that, rather than borrowing the host's "it won't count" wording, which
         // would be false here.
-        ["MpLeaveBlockedWaitingHost"] = new()
-        {
-            [LangEn] = "The host is still closing their game. The result arrives in a moment — "
-                     + "leave now and you will not see it.",
-            [LangEs] = "El anfitrión todavía está cerrando su juego. El resultado llega en un "
-                     + "momento; si sales ahora no lo vas a ver.",
-        },
-        ["MpLeaveBlockedReporting"] = new()
-        {
-            [LangEn] = "The result is on its way to the server. Leaving now makes it refuse the "
-                     + "report, and the match counts for nobody.",
-            [LangEs] = "Estamos enviando el resultado. Si sales ahora el servidor lo rechaza y "
-                     + "la partida no cuenta para nadie.",
-        },
         // Closing the launcher AFTER the game has closed but before the result is settled. The
         // ordinary mid-match warning would be false here — nothing is running to be cut short.
         ["MpCloseDuringResultBody"] = new()
@@ -8062,26 +8159,6 @@ public static partial class Strings
             // the time teaches players to ignore the half that isn't.
             [LangEn] = "⚠ If you haven't ticked \"Record Game\" on AoE3's setup screen, this match won't be able to count.",
             [LangEs] = "⚠ Si no marcaste \"Record Game\" en la pantalla de configuración de AoE3, esta partida no va a poder contar.",
-        },
-        ["MpRecordBandTitle"] = new()
-        {
-            [LangEn] = "So the match counts",
-            [LangEs] = "Para que la partida cuente",
-        },
-        ["MpRecordBandHost"] = new()
-        {
-            [LangEn] = "Tick \"Record Game\" on Age of Empires III's own setup screen before you start. Without the recording there is no way to tell who won, and the match counts for nobody's rating.",
-            [LangEs] = "Marca \"Record Game\" en la pantalla de configuración de Age of Empires III antes de empezar. Sin la grabación no hay forma de saber quién ganó, y la partida no cuenta para la puntuación de nadie.",
-        },
-        ["MpRecordBandGuest"] = new()
-        {
-            [LangEn] = "Remind the host to tick \"Record Game\" in Age of Empires III. Only their recording is read, so without it this match counts for nobody's rating — yours included.",
-            [LangEs] = "Recuérdale al anfitrión que marque \"Record Game\" en Age of Empires III. Solo se lee su grabación, así que sin ella la partida no cuenta para la puntuación de nadie, incluida la tuya.",
-        },
-        ["MpRecordBandDismiss"] = new()
-        {
-            [LangEn] = "Don't show this again",
-            [LangEs] = "No mostrar más",
         },
         ["DlgSettingsRecordReminder"] = new() { [LangEn] = "Remind me to record", [LangEs] = "Recordarme grabar" },
         ["DlgSettingsRecordReminderHint"] = new() { [LangEn] = "A notice at the start if recording is off.", [LangEs] = "Un aviso al empezar si la grabación está apagada." },
@@ -8986,6 +9063,12 @@ public static partial class Strings
         ["DlgSelfUninstallItemTemp"] = new() { [LangEn] = "The temporary files from installs", [LangEs] = "Los archivos temporales de instalaciones" },
         ["DlgSelfUninstallItemUpdateLeftovers"] = new() { [LangEn] = "Leftovers of an earlier update", [LangEs] = "Restos de una actualización anterior" },
         ["DlgSelfUninstallItemKeys"] = new() { [LangEn] = "{0} registry keys left by mods you already uninstalled", [LangEs] = "{0} claves del registro de mods que ya desinstalaste" },
+        ["DlgSelfUninstallItemLanHelperOne"] = new() { [LangEn] = "The LAN helper's two files, from 1 game folder", [LangEs] = "Los dos archivos del ayudante LAN, de 1 carpeta del juego" },
+        ["DlgSelfUninstallItemLanHelper"] = new() { [LangEn] = "The LAN helper's two files, from {0} game folders", [LangEs] = "Los dos archivos del ayudante LAN, de {0} carpetas del juego" },
+        ["DlgSelfUninstallLanHelperUac"] = new() { [LangEn] = "One is in a protected folder: Windows will ask for administrator permission.", [LangEs] = "Una está en una carpeta protegida: Windows te pedirá permiso de administrador." },
+        ["DlgSelfUninstallLanHelperLeft"] = new() { [LangEn] = "The LAN helper could not be removed from:\n{0}\n\nUninstall anyway? Those two files would stay in the game folder.", [LangEs] = "No se pudo quitar el ayudante LAN de:\n{0}\n\n¿Desinstalar de todos modos? Esos dos archivos quedarían en la carpeta del juego." },
+        ["DlgSelfUninstallLanHelperLeftTitle"] = new() { [LangEn] = "LAN helper still in place", [LangEs] = "El ayudante LAN sigue ahí" },
+        ["DlgSelfUninstallLanHelperLeftConfirm"] = new() { [LangEn] = "Uninstall anyway", [LangEs] = "Desinstalar igual" },
         ["DlgSelfUninstallItemKeysOne"] = new() { [LangEn] = "1 registry key left by a mod you already uninstalled", [LangEs] = "1 clave del registro de un mod que ya desinstalaste" },
         ["DlgSelfUninstallKeysUac"] = new() { [LangEn] = "Windows will ask for administrator permission to remove them.", [LangEs] = "Windows te pedirá permiso de administrador para quitarlas." },
         ["DlgSelfUninstallSafeMods"] = new() { [LangEn] = "Staying: {0}, with their cities, saved games and recordings. Age of Empires III is not touched.", [LangEs] = "Se quedan: {0}, con sus ciudades, partidas guardadas y grabaciones. Age of Empires III no se toca." },
@@ -10053,6 +10136,23 @@ public static partial class Strings
         {
             [LangEn] = "Antivirus removed a mod file during install: {0}. The mod was not installed.",
             [LangEs] = "El antivirus eliminó un archivo del mod durante la instalación: {0}. El mod no se instaló.",
+        },
+
+        // An automatic update the antivirus broke: a toast instead of the window (Services.Unattended).
+        ["AvBlockedToastTitle"] = new()
+        {
+            [LangEn] = "Antivirus stopped an automatic update",
+            [LangEs] = "El antivirus detuvo una actualización automática",
+        },
+        ["AvBlockedToastBody"] = new()
+        {
+            [LangEn] = "It removed {0}. Your mod is as it was; exclude its folders and update by hand.",
+            [LangEs] = "Eliminó {0}. Tu mod quedó como estaba; excluye sus carpetas y actualiza a mano.",
+        },
+        ["AvBlockedToastShow"] = new()
+        {
+            [LangEn] = "Show how",
+            [LangEs] = "Ver cómo",
         },
 
         // -------- Antivirus exclusion notice (AntivirusExclusionDialog) --------

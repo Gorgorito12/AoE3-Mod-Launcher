@@ -60,6 +60,26 @@ public partial class MainWindow
             case "createroom":
                 PreviewCreateRoom(variant);
                 break;
+            case "lanhelper" when variant is "manual" or "manual-ok" or "manual-admin":
+            {
+                var mod = ModRegistry.Find("wol") ?? ModRegistry.Default;
+                var dialog = new LanHelperSetupDialog(mod,
+                    variant == "manual-admin"
+                        ? @"C:\Program Files (x86)\Wars of Liberty\age3y.exe"
+                        : @"D:\Juegos\Wars of Liberty\age3y.exe",
+                    variant == "manual" ? "Access to the path is denied." : null,
+                    variant == "manual-ok" ? Services.Multiplayer.LanHelperState.Installed : Services.Multiplayer.LanHelperState.Missing,
+                    previewWritable: variant != "manual-admin");
+                dialog.ShowOver(this);
+                break;
+            }
+            case "lanhelper":
+                Controls.MultiplayerTab.AskLanHelper(this,
+                    ModRegistry.Find(variant == "tad" ? "aoe3-tad" : "wol") ?? ModRegistry.Default,
+                    variant == "tad"
+                        ? @"C:\Program Files (x86)\Steam\steamapps\common\Age Of Empires 3\bin"
+                        : @"D:\Juegos\Wars of Liberty");
+                break;
             case "newtournament":
                 PreviewNewTournament(variant);
                 break;

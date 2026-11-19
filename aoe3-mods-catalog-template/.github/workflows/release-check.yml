@@ -1,0 +1,75 @@
+# Can every GitHubReleases mod still be installed? (.github/scripts/check_releases.py)
+#
+# A catalog entry goes stale with nothing in the catalog changing: a modder re-tags or deletes a
+# release, or uploads the payload under another name, and every install fails while CI stays green.
+#
+#   - schedule / workflow_dispatch: checks every mod and keeps ONE issue per mod, titled
+#     "Release check: <id>". Opened or updated only when the findings CHANGE, closed when the mod
+#     is clean again. An INCONCLUSIVE run (GitHub 5xx, rate limit, timeout) opens and closes
+#     nothing. Issue bodies never @-mention anybody.
+#   - pull_request touching a manifest: checks the changed mods with a READ-ONLY token and fails on
+#     an error, so a tag bump to a tag that does not exist can no longer auto-merge. The script is
+#     taken from the BASE branch, like classify_pr.py, so a PR cannot rewrite its own check.
+
+name: Release check
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "mods/*/mod.json"
+
+permissions:
+  contents: read
+
+jobs:
+  pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Use the base branch's checker
+        # Only the PR that first adds the checker finds none on the base branch; every later PR
+        # runs the base's copy, so a PR can never rewrite the check it is judged by.
+        run: |
+          git checkout "origin/${{ github.event.pull_request.base.ref }}" -- .github/scripts/check_releases.py .github/scripts/check_releases_cases.json             || echo "The base branch has no checker yet; using this PR's."
+      - name: Check the changed mods
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE_SHA"...HEAD -- 'mods/*/mod.json' | cut -d/ -f2 | sort -u)
+          if [ -z "$changed" ]; then echo "No manifest changed."; exit 0; fi
+          python .github/scripts/check_releases.py --only $changed
+
+  scheduled:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Unit tests of the checker
+        run: python .github/scripts/test_check_releases.py
+      - name: Check every mod
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/check_releases.py --json report.json || true
+      - name: One issue per mod
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/release_issues.py report.json --repo "${{ github.repository }}"

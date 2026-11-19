@@ -23,7 +23,7 @@ public static partial class Strings
         ["RtPanelStake"] = new() { [LangEn] = "WHAT'S AT STAKE", [LangEs] = "QUÉ ESTÁ EN JUEGO" },
         ["RtNote1v1"] = new() { [LangEn] = "Only the two players of this match can join: there are no free seats and no code to share.", [LangEs] = "Solo pueden entrar los dos jugadores del cruce: no hay plazas libres ni código que compartir." },
         ["RtNoteTeams"] = new() { [LangEn] = "The bracket sets the sides and line-ups: a game played with others does not count.", [LangEs] = "Los bandos y las alineaciones los fija el cuadro: si se juega con otros, la partida no cuenta." },
-        ["RtCountsBody"] = new() { [LangEn] = "Before you start in AoE3, tick «Record Game». The result is read from the recording: without it, the match does not move on.", [LangEs] = "Antes de empezar en AoE3, marca «Record Game». El resultado se lee de la grabación: sin ella, el cruce no avanza." },
+        ["RtCountsBody"] = new() { [LangEn] = "The launcher ticks «Record Game» for the host; leave it ticked in AoE3. The result is read from the recording: without it, the match does not move on.", [LangEs] = "El launcher le marca «Record Game» al anfitrión; déjala marcada en AoE3. El resultado se lee de la grabación: sin ella, el cruce no avanza." },
         ["RtSide"] = new() { [LangEn] = "Side {0}", [LangEs] = "Bando {0}" },
         ["RtSeedTip"] = new() { [LangEn] = "Seed", [LangEs] = "Cabeza de serie" },
 

@@ -361,14 +361,22 @@ public class LauncherUpdateService
         string? expectedSha256 = null,
         IProgress<DownloadProgress>? progress = null,
         CancellationToken ct = default,
-        Action? onVerifying = null)
+        Action? onVerifying = null,
+        bool throttled = true)
     {
         var currentExe = Environment.ProcessPath;
         if (string.IsNullOrEmpty(currentExe))
             throw new InvalidOperationException("Cannot determine current executable path.");
 
+        // Flows with this call only (AsyncLocal), so an in-app download running at the same time
+        // keeps its limit.
+        SkipThrottle.Value = !throttled;
         await DownloadUpdateForAsync(currentExe, downloadUrl, expectedSha256, progress, ct, onVerifying);
     }
+
+    /// <summary>The startup self-update is exempt from the download limit (the player is looking at
+    /// a splash and nothing else); the in-app one is not.</summary>
+    private static readonly AsyncLocal<bool> SkipThrottle = new();
 
     /// <summary>The download, for a named executable: the integration test runs it on a
     /// disposable copy, because the real one would be the test host.</summary>
@@ -413,7 +421,7 @@ public class LauncherUpdateService
             DiagnosticLog.Write($"Staged update file is locked, continuing: {ex.Message}");
         }
 
-        var downloader = new DownloadService();
+        var downloader = new DownloadService { Throttled = !SkipThrottle.Value };
         await downloader.DownloadFileAsync(downloadUrl, newExe, progress, ct);
 
         DiagnosticLog.Write("Launcher update download complete; verifying.");
@@ -1144,11 +1152,8 @@ public class LauncherUpdateService
     /// </summary>
     private static string? ExtractExpectedSha256(string? assetDigest, string? releaseBody)
     {
-        if (!string.IsNullOrWhiteSpace(assetDigest))
-        {
-            var m = Regex.Match(assetDigest, @"sha256:([0-9a-fA-F]{64})", RegexOptions.IgnoreCase);
-            if (m.Success) return m.Groups[1].Value.ToLowerInvariant();
-        }
+        // One rule for GitHub's digest, shared with the mod payloads (GitHubDigest).
+        if (GitHubDigest.TryParseSha256(assetDigest) is { } fromDigest) return fromDigest;
 
         if (!string.IsNullOrWhiteSpace(releaseBody))
         {

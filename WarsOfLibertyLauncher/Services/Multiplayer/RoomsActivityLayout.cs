@@ -133,6 +133,24 @@ public static class RoomsActivityLayout
     /// The least height the rooms block keeps: its own chrome (title, column headings, the
     /// list's padding) and <see cref="MinRoomRows"/> rows — all of them when there are fewer.
     /// </summary>
+    /// <summary>
+    /// How far a new measurement of the block must move before it replaces the one in use. Layout
+    /// rounding at a fractional display scale moves an element by up to a pixel between passes.
+    /// </summary>
+    public const double MeasurementTolerance = 2;
+
+    /// <summary>
+    /// The block's sizes are measured from the layout they then change, so a measurement that
+    /// moves with rounding answers itself: measured at 75 the cards came out 74, at 74 they came
+    /// out 75 (75 lays out at 75.2 and 74 at 73.6 on a 125 % screen), and the Rooms page ran that
+    /// loop 1000 times a second for as long as one community match and an empty ladder were on
+    /// screen. Found by the two-account rig, on every launcher of the server at once. A change
+    /// within <see cref="MeasurementTolerance"/> keeps the old value; a real change (the text
+    /// size, a new row) is far larger.
+    /// </summary>
+    public static double Settle(double? current, double measured)
+        => current is { } kept && Math.Abs(measured - kept) <= MeasurementTolerance ? kept : measured;
+
     public static double RoomsMinHeight(double chrome, int rows, double rowHeight)
         => Math.Max(0, chrome) + Math.Min(MinRoomRows, Math.Max(0, rows)) * (rowHeight + RowSpacing);
 

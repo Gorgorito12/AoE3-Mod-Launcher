@@ -48,6 +48,8 @@ public partial class MultiplayerTab
     private void HandleMatchesChangedFrame(JsonElement json)
     {
         var users = MatchesChanged.UserIds(json);
+        // Another player's profile naming one of them asks again (cheap: only when open).
+        OtherProfilesChanged(users);
         QueueMatchesChanged(MatchesChanged.IncludesViewer(users, _session?.CurrentUser?.Id));
     }
 

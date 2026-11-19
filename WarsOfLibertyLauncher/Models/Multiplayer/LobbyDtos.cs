@@ -249,6 +249,14 @@ public class LobbySummary
     [JsonPropertyName("competitive")]
     public bool Competitive { get; set; }
 
+    /// <summary>
+    /// The Game Rules the host's game opens with (<c>LanAutoStartArgs</c>: 0 Standard … 7 King of
+    /// the Hill). Null from a server older than the field, which must read as "not stated", never
+    /// as Standard: such a room may well be a treaty only its creator knows about.
+    /// </summary>
+    [JsonPropertyName("game_rules")]
+    public int? GameRules { get; set; }
+
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
 
@@ -284,6 +292,7 @@ public class LobbySummary
         CurrentPlayers = detail.CurrentPlayers,
         IsPrivate = detail.IsPrivate,
         Competitive = detail.Competitive,
+        GameRules = detail.GameRules,
         TournamentMatchId = detail.TournamentMatchId,
         TournamentId = detail.TournamentId,
         Status = detail.Status,
@@ -294,6 +303,82 @@ public class LobbyListResponse
 {
     [JsonPropertyName("lobbies")]
     public List<LobbySummary> Lobbies { get; set; } = new();
+
+    /// <summary>True when the server answers <c>GET /lobbies/:id/live</c>, so "See match" may open
+    /// the read-only window. Null from an older server: a 404 there cannot tell it from a closed room.</summary>
+    [JsonPropertyName("live_view")]
+    public bool? LiveView { get; set; }
+}
+
+/// <summary><c>GET /lobbies/:id/live</c>: a room as somebody outside it may see it. Every field
+/// may be missing; a player being placed, or one who keeps his rating private, has no rating.</summary>
+public class LobbyLiveResponse
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("title")] public string? Title { get; set; }
+    [JsonPropertyName("mod_id")] public string? ModId { get; set; }
+    [JsonPropertyName("competitive")] public bool? Competitive { get; set; }
+    [JsonPropertyName("max_players")] public int? MaxPlayers { get; set; }
+    [JsonPropertyName("spectator_slots")] public int? SpectatorSlots { get; set; }
+    [JsonPropertyName("game_rules")] public int? GameRules { get; set; }
+    [JsonPropertyName("status")] public string? Status { get; set; }
+    /// <summary>waiting | playing | ended.</summary>
+    [JsonPropertyName("phase")] public string? Phase { get; set; }
+    [JsonPropertyName("started_at")] public string? StartedAt { get; set; }
+    [JsonPropertyName("tournament_id")] public string? TournamentId { get; set; }
+    [JsonPropertyName("tournament_match_id")] public string? TournamentMatchId { get; set; }
+    [JsonPropertyName("members")] public List<LobbyLiveMember>? Members { get; set; }
+    [JsonPropertyName("result")] public LobbyLiveResult? Result { get; set; }
+}
+
+public class LobbyLiveMember
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("display_name")] public string? DisplayName { get; set; }
+    [JsonPropertyName("discord_username")] public string? DiscordUsername { get; set; }
+    [JsonPropertyName("avatar_url")] public string? AvatarUrl { get; set; }
+    [JsonPropertyName("role")] public string? Role { get; set; }
+    [JsonPropertyName("team")] public int? Team { get; set; }
+    [JsonPropertyName("ready")] public bool? Ready { get; set; }
+    [JsonPropertyName("rating")] public double? Rating { get; set; }
+    [JsonPropertyName("games_played")] public int? GamesPlayed { get; set; }
+    [JsonPropertyName("rating_team")] public double? RatingTeam { get; set; }
+    [JsonPropertyName("games_played_team")] public int? GamesPlayedTeam { get; set; }
+}
+
+public class LobbyLiveResult
+{
+    [JsonPropertyName("match_id")] public string? MatchId { get; set; }
+    [JsonPropertyName("ended_at")] public string? EndedAt { get; set; }
+    [JsonPropertyName("duration_seconds")] public int? DurationSeconds { get; set; }
+    [JsonPropertyName("rated")] public bool? Rated { get; set; }
+    [JsonPropertyName("decided_by")] public string? DecidedBy { get; set; }
+    [JsonPropertyName("players")] public List<LobbyLiveResultPlayer>? Players { get; set; }
+}
+
+public class LobbyLiveResultPlayer
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("display_name")] public string? DisplayName { get; set; }
+    [JsonPropertyName("avatar_url")] public string? AvatarUrl { get; set; }
+    [JsonPropertyName("team")] public int? Team { get; set; }
+    [JsonPropertyName("civ")] public string? Civ { get; set; }
+    [JsonPropertyName("result")] public double? Result { get; set; }
+}
+
+/// <summary><c>GET /lobbies/:id/live/chat</c>: a tournament room's chat, for its organisers only.</summary>
+public class LobbyLiveChatResponse
+{
+    [JsonPropertyName("chat")] public List<LobbyLiveChatLine>? Chat { get; set; }
+}
+
+public class LobbyLiveChatLine
+{
+    [JsonPropertyName("id")] public string? Id { get; set; }
+    [JsonPropertyName("user_id")] public string? UserId { get; set; }
+    [JsonPropertyName("login")] public string? Login { get; set; }
+    [JsonPropertyName("body")] public string? Body { get; set; }
+    [JsonPropertyName("at")] public long? At { get; set; }
 }
 
 /// <summary>
@@ -378,6 +463,14 @@ public class LobbyDetail
     public bool Competitive { get; set; }
 
     /// <summary>
+    /// The Game Rules the host's game opens with (<c>LanAutoStartArgs</c>: 0 Standard … 7 King of
+    /// the Hill). Null from a server older than the field, which must read as "not stated", never
+    /// as Standard: such a room may well be a treaty only its creator knows about.
+    /// </summary>
+    [JsonPropertyName("game_rules")]
+    public int? GameRules { get; set; }
+
+    /// <summary>
     /// The bracket slot this room belongs to, or null for an ordinary room.
     ///
     /// <para><b>It changes what the room IS, not just what it is labelled.</b> A room carrying
@@ -442,6 +535,14 @@ public class CreateLobbyRequest
     /// </summary>
     [JsonPropertyName("competitive")]
     public bool Competitive { get; set; }
+
+    /// <summary>
+    /// The Game Rules the host wants if the room ends up casual. A request, like
+    /// <see cref="Competitive"/>: the server makes a ranked room Standard and echoes what it
+    /// stored on <see cref="CreateLobbyResponse.GameRules"/>.
+    /// </summary>
+    [JsonPropertyName("game_rules")]
+    public int GameRules { get; set; }
 }
 
 public class CreateLobbyResponse
@@ -463,6 +564,10 @@ public class CreateLobbyResponse
     /// </summary>
     [JsonPropertyName("spectator_slots")]
     public int SpectatorSlots { get; set; }
+
+    /// <summary>The Game Rules the room actually got; null from a server older than the field.</summary>
+    [JsonPropertyName("game_rules")]
+    public int? GameRules { get; set; }
 }
 
 public class JoinLobbyRequest
@@ -948,6 +1053,40 @@ public class ConfirmMatchResponse
 }
 
 /// <summary>
+/// <c>POST /matches/civs</c>: the civilizations and home cities a participant's recording names,
+/// and nothing else — no result, no seed. It exists for the HOST, whose report usually goes out
+/// before the recording is on disk and who may not confirm his own report; the server only fills
+/// gaps with it. An older server answers 404 and nothing changes.
+/// </summary>
+public class MatchCivsRequest
+{
+    [JsonPropertyName("lobby_id")]
+    public string LobbyId { get; set; } = "";
+
+    [JsonPropertyName("civs")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? Civs { get; set; }
+
+    [JsonPropertyName("home_cities")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? HomeCities { get; set; }
+}
+
+/// <summary>Answer to <c>POST /matches/civs</c>: <c>Matched</c> false when the lobby has no stored
+/// match yet; <c>Filled</c> how many gaps it filled.</summary>
+public class MatchCivsResponse
+{
+    [JsonPropertyName("ok")]
+    public bool Ok { get; set; }
+
+    [JsonPropertyName("matched")]
+    public bool Matched { get; set; }
+
+    [JsonPropertyName("filled")]
+    public int Filled { get; set; }
+}
+
+/// <summary>
 /// A match that had been stored WITHOUT a result was decided afterwards, from a recording one
 /// of its two players read after the report had already gone out.
 ///
@@ -1088,6 +1227,14 @@ public class EloSnapshot
     [JsonPropertyName("badge_mode")]
     public string? BadgeMode { get; set; }
 
+    /// <summary>
+    /// Whether this player keeps his rating private (server migration 0034). Null from an older
+    /// server — which is what keeps the "Show my ELO" setting hidden there, since it could not
+    /// store the choice. Settable for the same optimistic repaint as <see cref="BadgeMode"/>.
+    /// </summary>
+    [JsonPropertyName("rating_private")]
+    public bool? RatingPrivate { get; set; }
+
     // ---- Rating v3 (design 55d-55f, 55n) ----
 
     [JsonPropertyName("placement_required")]
@@ -1114,6 +1261,19 @@ public class BadgeModeResponse
 {
     [JsonPropertyName("badge_mode")]
     public string? BadgeMode { get; set; }
+}
+
+/// <summary><c>POST /me/rating-visibility</c> (server migration 0034).</summary>
+public class RatingVisibilityRequest
+{
+    [JsonPropertyName("show_rating")]
+    public bool ShowRating { get; set; }
+}
+
+public class RatingVisibilityResponse
+{
+    [JsonPropertyName("show_rating")]
+    public bool ShowRating { get; set; }
 }
 
 public class RatingChange
@@ -1979,6 +2139,11 @@ public class WsRoomMemberFlags
     [JsonPropertyName("ingameName")]
     public string? InGameName { get; set; }
 
+    /// <summary>Whether the member's game enters the LAN game by itself (<c>set_lan_auto</c>).
+    /// Null until announced and from a backend that predates it: then the roster shows no mark.</summary>
+    [JsonPropertyName("lanAuto")]
+    public bool? LanAuto { get; set; }
+
     /// <summary>The member's Discord avatar URL, so the roster can paint their real
     /// photo. Null for legacy rooms that don't send it → the roster falls back to a
     /// monogram. camelCase key, rides inside the room-state member object.</summary>
@@ -2079,6 +2244,13 @@ public class WsRoomState
     /// </summary>
     [JsonPropertyName("teams_locked")]
     public bool? TeamsLocked { get; set; }
+
+    /// <summary>
+    /// The room's Game Rules, sent with every room_state: how a member who reconnects, and a host
+    /// promoted after the creator left, learn them. Null from an older server.
+    /// </summary>
+    [JsonPropertyName("game_rules")]
+    public int? GameRules { get; set; }
 }
 
 // (Pre-n2n: this file used to carry WsPeerEndpoint / WsPeerAnnounce /
@@ -2255,6 +2427,14 @@ public class TournamentListResponse
     /// an older one, which would turn a private request into a public tournament in silence.</summary>
     [JsonPropertyName("private_tournaments")]
     public bool? PrivateTournaments { get; set; }
+
+    /// <summary>True when the server answers the read-only room view, so Supervise may open it.</summary>
+    [JsonPropertyName("live_view")]
+    public bool? LiveView { get; set; }
+
+    /// <summary>True when the owner may change a tournament's visibility and renew its code.</summary>
+    [JsonPropertyName("visibility_editable")]
+    public bool? VisibilityEditable { get; set; }
 }
 
 /// <summary>What <c>GET /tournaments/by-code/:code</c> answers: the tournament a code opens.</summary>

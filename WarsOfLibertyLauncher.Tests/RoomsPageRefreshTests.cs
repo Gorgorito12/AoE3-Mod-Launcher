@@ -166,7 +166,7 @@ public class RoomsPageRefreshTests
 
             MultiplayerTab.FillMyPing(text, 250.0);
             Assert.Equal(WarsOfLibertyLauncher.Localization.Strings.Format("RmMyPing", 250), text.Text);
-            Assert.Same(System.Windows.Application.Current.FindResource("RmPingSlow"), text.Foreground);
+            Assert.Same(System.Windows.Application.Current.FindResource("RmPingBad"), text.Foreground);
         });
         Assert.Null(error);
     }

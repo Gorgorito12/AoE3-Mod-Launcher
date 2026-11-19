@@ -262,6 +262,13 @@ public class ModCatalogInstall
     public bool? SupersedeCompiledXml { get; set; }
 
     /// <summary>
+    /// Projected into <see cref="ModProfile.NoTreatyRules"/>. True when the mod's treaty rules do
+    /// not work, so rooms for it do not offer them. Null/false (default) offers all eight entries.
+    /// </summary>
+    [JsonPropertyName("noTreatyRules")]
+    public bool? NoTreatyRules { get; set; }
+
+    /// <summary>
     /// When true, the mod writes to the SHARED vanilla <c>My Games\Age of Empires 3\</c>
     /// folder; the launcher junction-redirects the standard folder to
     /// <c>userDataFolder</c> around launch to give it an exclusive save folder.

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using WarsOfLibertyLauncher.Localization;
@@ -39,12 +40,114 @@ public partial class MultiplayerTab
     private string _tournamentFilter = "all";
     private string _tournamentQuery = "";
     private double _bracketZoom = 100;
+
+    /// <summary>The zoom the player chose for a tournament this session; one not here fits itself
+    /// (<see cref="BracketZoom.Auto"/>), and the last fit is kept so a repaint does not jump.</summary>
+    private readonly Dictionary<string, double> _bracketZoomManual = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, double> _bracketZoomAuto = new(StringComparer.Ordinal);
+
+    /// <summary>The sheet's size at 100 %, for the fit.</summary>
+    private Size _bracketSheetSize;
+
+    /// <summary>How far right the centred sheet starts, so the round titles stay over their columns.</summary>
+    private double _bracketHeadOffset;
     private readonly Dictionary<string, TournamentTab> _tournamentTabs = new(StringComparer.Ordinal);
 
     private TournamentDetail? _pageTournament;
     private Color _pageAccent = ModAccent.Navy;
+
+    /// <summary>The open tournament's mod colour on the page's chrome; null with none open.</summary>
+    private TournamentAmbient? _ambient;
+
+    /// <summary>The picked tab or filter: the mod's selection fill, the old blue with none open.</summary>
+    private Brush ActiveChipFill() => _ambient is { } a ? Solid(a.ActiveFill) : Ink("#233A5C");
+
+    private Brush ActiveChipRim() => _ambient is { } a ? Solid(a.ActiveRim) : Brushes.Transparent;
+
+    /// <summary>The accent the filters were last painted in, so a new tournament repaints them.</summary>
+    private Color? _filtersAccent;
+
+    /// <summary>A panel's rim in the mod's colour, lit from the top.</summary>
+    private Brush AmbientRim()
+    {
+        if (_ambient is not { } a) return PanelRim;
+        var rim = new LinearGradientBrush { StartPoint = new Point(.5, 0), EndPoint = new Point(.5, 1) };
+        rim.GradientStops.Add(new GradientStop(a.PanelRimTop, 0));
+        rim.GradientStops.Add(new GradientStop(a.PanelRimBottom, .55));
+        rim.Freeze();
+        return rim;
+    }
     private readonly Dictionary<string, Border> _bracketCards = new(StringComparer.Ordinal);
     private ScrollViewer? _bracketScroll;
+
+    /// <summary>
+    /// Drag the bracket to move it (rule in <see cref="BracketPan"/>). Tunnelling handlers on the
+    /// scroller, so a drag that started on a card ends with the card's click swallowed, and a short
+    /// press is left alone for the card. Empty space is hit-testable through a transparent fill.
+    /// </summary>
+    private static void AttachBracketPan(ScrollViewer scroll)
+    {
+        if (scroll.Background == null) scroll.Background = Brushes.Transparent;
+        Point start = default;
+        double startX = 0, startY = 0;
+        bool armed = false, panning = false;
+
+        static bool OnScrollBar(object source)
+        {
+            for (var d = source as DependencyObject; d != null; d = VisualTreeHelper.GetParent(d) ?? LogicalTreeHelper.GetParent(d))
+            {
+                if (d is System.Windows.Controls.Primitives.ScrollBar) return true;
+                if (d is ScrollViewer) return false;
+            }
+            return false;
+        }
+
+        scroll.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            armed = BracketPan.MayPan(scroll.ExtentWidth, scroll.ExtentHeight, scroll.ViewportWidth, scroll.ViewportHeight,
+                OnScrollBar(e.OriginalSource));
+            panning = false;
+            if (!armed) return;
+            start = e.GetPosition(scroll);
+            startX = scroll.HorizontalOffset;
+            startY = scroll.VerticalOffset;
+        };
+        scroll.PreviewMouseMove += (_, e) =>
+        {
+            if (!armed || e.LeftButton != MouseButtonState.Pressed) return;
+            var now = e.GetPosition(scroll);
+            double dx = now.X - start.X, dy = now.Y - start.Y;
+            if (!panning)
+            {
+                if (!BracketPan.Starts(dx, dy)) return;
+                panning = scroll.CaptureMouse();
+                if (!panning) { armed = false; return; }
+                scroll.Cursor = Cursors.SizeAll;
+            }
+            var (x, y) = BracketPan.Offsets(startX, startY, dx, dy, scroll.ScrollableWidth, scroll.ScrollableHeight);
+            scroll.ScrollToHorizontalOffset(x);
+            scroll.ScrollToVerticalOffset(y);
+            e.Handled = true;
+        };
+        scroll.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (panning)
+            {
+                scroll.ReleaseMouseCapture();
+                scroll.Cursor = null;
+                e.Handled = true;
+            }
+            armed = false;
+            panning = false;
+        };
+        scroll.LostMouseCapture += (_, _) =>
+        {
+            if (!panning) return;
+            scroll.Cursor = null;
+            panning = false;
+            armed = false;
+        };
+    }
     private ScaleTransform? _bracketScale;
     private TranslateTransform? _bracketHeadShift;
     private FrameworkElement? _bracketHost, _bracketHeads, _bracketSheetHost;
@@ -53,6 +156,7 @@ public partial class MultiplayerTab
     private FrameworkElement? _bracketEmptyView, _peopleView, _organiseView, _tournamentContentCard, _tournamentCallCard;
     private FrameworkElement? _tournamentStepsRow, _tournamentCallSub, _bracketTools;
     private TextBlock? _tournamentTitle, _tournamentSearchCount, _zoomText;
+    private Border? _zoomBox;
     private Grid? _tournamentHead;
     private FlexLine? _tournamentTabRow;
     private TextBox? _tournamentSearch;
@@ -271,8 +375,8 @@ public partial class MultiplayerTab
                 Height = 30,
                 Padding = new Thickness(12, 0, 12, 0),
                 Margin = new Thickness(0, 0, 6, 6),
-                Background = on ? Ink("#233A5C") : Frozen(0x80, 0x0A, 0x13, 0x21),
-                BorderBrush = on ? Brushes.Transparent : Frozen(0x1A, 0xFF, 0xFF, 0xFF),
+                Background = on ? ActiveChipFill() : Frozen(0x80, 0x0A, 0x13, 0x21),
+                BorderBrush = on ? ActiveChipRim() : Frozen(0x1A, 0xFF, 0xFF, 0xFF),
                 Tag = 15d,
             };
             chip.SetResourceReference(StyleProperty, "TournamentChip");
@@ -535,6 +639,14 @@ public partial class MultiplayerTab
 
         var t = _tournamentDetail;
         _pageTournament = t;
+        _ambient = t == null ? null : TournamentAmbient.For(AccentOfTournament(t));
+        TournamentsListPane.BorderBrush = AmbientRim();
+        Color? accent = t == null ? null : AccentOfTournament(t);
+        if (accent != _filtersAccent)
+        {
+            _filtersAccent = accent;
+            RenderTournamentFilters();
+        }
         if (t == null)
         {
             _setTournamentBackdrop?.Invoke(null);
@@ -544,6 +656,8 @@ public partial class MultiplayerTab
 
         var me = TournamentViewerId(t);
         _pageAccent = AccentOfTournament(t);
+        _bracketZoom = _bracketZoomManual.TryGetValue(t.Id, out var chosen) ? chosen
+            : _bracketZoomAuto.TryGetValue(t.Id, out var fitted) ? fitted : 100;
         if (!_tournamentTabs.ContainsKey(t.Id)) _tournamentTabs[t.Id] = TournamentPage.DefaultTab(t, me);
         // The tab that was open may not exist any more: an organiser's, after losing the role.
         if (_tournamentTabs[t.Id] == TournamentTab.Organise && !TournamentPermissions.IsOwnerOrManager(t, me))
@@ -623,8 +737,10 @@ public partial class MultiplayerTab
         {
             var line = new StackPanel { Orientation = Orientation.Horizontal };
             line.Children.Add(new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 0, 7, 0), Background = TournamentIcon(t) });
-            line.Children.Add(Say(ResolveModDisplayName(mod.Id), "SetControlSize", "#DCE7F5", FontWeights.SemiBold));
-            var chip = Pill(line, 26, 5, 10, chipFill, chipRim, 13);
+            // The mod's own chip wears its colour; the state chip beside it keeps the state's.
+            var ambient = _ambient ?? TournamentAmbient.For(_pageAccent);
+            line.Children.Add(Say(ResolveModDisplayName(mod.Id), "SetControlSize", ToHex(ambient.ChipText), FontWeights.SemiBold));
+            var chip = Pill(line, 26, 5, 10, Solid(ambient.ChipFill), Solid(ambient.ChipRim), 13);
             chip.Margin = new Thickness(0, 0, 8, 6);
             chips.Children.Add(chip);
         }
@@ -868,7 +984,11 @@ public partial class MultiplayerTab
             }
             primary.SetResourceReference(StyleProperty, "TournamentChip");
             primary.Click += (_, _) => RunCall(t, call.Primary, call.Match);
-            buttons.Children.Add(primary);
+            // The one action of the page glows in the mod's colour (a blurred sibling, never an
+            // Effect on the button's text); deleting stays plain red.
+            buttons.Children.Add(call.Primary == TournamentPrimary.Delete
+                ? primary
+                : WithGlow(primary, 10, 22, .55, _pageAccent));
         }
         if (call.Secondary is TournamentPrimary.Enter or TournamentPrimary.MyEntry && call.Primary != call.Secondary)
         {
@@ -903,7 +1023,7 @@ public partial class MultiplayerTab
             CornerRadius = new CornerRadius(14),
             VerticalAlignment = VerticalAlignment.Bottom,
             BorderThickness = new Thickness(call.Champion ? 1.5 : 1),
-            BorderBrush = call.Champion ? Tint(StateColors.Gold, .85) : Frozen(0x1F, 0xFF, 0xFF, 0xFF),
+            BorderBrush = call.Champion ? Tint(StateColors.Gold, .85) : AmbientRim(),
             Child = grid,
         };
         if (!call.Champion)
@@ -930,19 +1050,20 @@ public partial class MultiplayerTab
 
     /// <summary>A gold glow as a sibling under the card: an Effect on the card would take ClearType
     /// from every word on it. Only the champion wears it.</summary>
-    private static FrameworkElement WithGlow(FrameworkElement card, double radius, double blur, double strength)
+    private static FrameworkElement WithGlow(FrameworkElement card, double radius, double blur, double strength, Color? color = null)
     {
         // A slow machine, or a player who asked for fewer effects, gets the card alone.
         if (RankBadge.ReducedEffects) return card;
-        var host = new Grid { VerticalAlignment = card.VerticalAlignment };
+        var glow = color ?? StateColors.Gold;
+        var host = new Grid { VerticalAlignment = card.VerticalAlignment, HorizontalAlignment = card.HorizontalAlignment };
         host.Children.Add(new Border
         {
-            Background = Solid(StateColors.Gold),
+            Background = Solid(glow),
             CornerRadius = new CornerRadius(radius),
             Margin = new Thickness(2),
             IsHitTestVisible = false,
             CacheMode = new BitmapCache(),
-            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = StateColors.Gold, BlurRadius = blur, ShadowDepth = 0, Opacity = strength },
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = glow, BlurRadius = blur, ShadowDepth = 0, Opacity = strength },
         });
         host.Children.Add(card);
         return host;
@@ -1206,8 +1327,8 @@ public partial class MultiplayerTab
                 Height = 30,
                 Padding = new Thickness(14, 0, 14, 0),
                 Margin = new Thickness(tab == TournamentTab.Bracket ? 0 : 3, 0, 0, 0),
-                Background = on ? Ink("#233A5C") : Brushes.Transparent,
-                BorderBrush = Brushes.Transparent,
+                Background = on ? ActiveChipFill() : Brushes.Transparent,
+                BorderBrush = on ? ActiveChipRim() : Brushes.Transparent,
                 Tag = 7d,
             };
             button.SetResourceReference(StyleProperty, "TournamentChip");
@@ -1284,16 +1405,31 @@ public partial class MultiplayerTab
             var button = new Button { Content = glyph, Width = 32, Height = 32, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = Ink("#DCE7F5"), Background = Brushes.Transparent, BorderBrush = Brushes.Transparent, ToolTip = TooltipHelper.Wrap(Strings.Get(tip)), Tag = 7d };
             button.SetResourceReference(StyleProperty, "TournamentChip");
             Spoken(button, delta > 0 ? "TournamentZoomIn" : "TournamentZoomOut", Strings.Get(tip));
-            button.Click += (_, _) => SetBracketZoom(_bracketZoom + delta);
+            button.Click += (_, _) => ChooseBracketZoom(_bracketZoom + delta);
             return button;
         }
         _zoomText = Say(_bracketZoom + " %", "SetDescSize", "#C3D2E5", FontWeights.SemiBold, mono: true);
         _zoomText.Width = 46;
         _zoomText.TextAlignment = TextAlignment.Center;
-        zoom.Children.Add(Step("−", "TpZoomOut", -20));
+        _zoomText.VerticalAlignment = VerticalAlignment.Center;
+        zoom.Children.Add(Step("−", "TpZoomOut", -BracketZoom.ButtonStep));
         zoom.Children.Add(_zoomText);
-        zoom.Children.Add(Step("+", "TpZoomIn", 20));
-        tools.Children.Add(new Border { Height = 32, CornerRadius = new CornerRadius(7), Background = Ink("#1A2C48"), BorderBrush = SecondaryRim, BorderThickness = new Thickness(1), Child = zoom });
+        zoom.Children.Add(Step("+", "TpZoomIn", BracketZoom.ButtonStep));
+        var fit = new Button
+        {
+            Content = Say(Strings.Get("TpZoomFit"), "SetDescSize", "#DCE7F5", FontWeights.SemiBold),
+            Height = 32, Padding = new Thickness(10, 0, 10, 0),
+            Background = Brushes.Transparent, BorderBrush = Brushes.Transparent,
+            ToolTip = TooltipHelper.Wrap(Strings.Get("TpZoomFitTip")), Tag = 7d,
+        };
+        fit.SetResourceReference(StyleProperty, "TournamentChip");
+        Spoken(fit, "TournamentZoomFit", Strings.Get("TpZoomFit"));
+        fit.Click += (_, _) => FitBracketZoom();
+        zoom.Children.Add(new Border { Width = 1, Margin = new Thickness(2, 7, 2, 7), Background = Frozen(0x1F, 0xFF, 0xFF, 0xFF) });
+        zoom.Children.Add(fit);
+        _zoomBox = new Border { Height = 32, CornerRadius = new CornerRadius(7), Background = Ink("#1A2C48"),
+            BorderBrush = _ambient is { } zoomTone ? Solid(zoomTone.ToolRim) : SecondaryRim, BorderThickness = new Thickness(1), Child = zoom };
+        tools.Children.Add(_zoomBox);
         line.Children.Add(tools);
         return line;
     }
@@ -1421,7 +1557,7 @@ public partial class MultiplayerTab
         _organiseView = TournamentPermissions.IsOwnerOrManager(t, me) ? BuildOrganise(t, me) : null;
         if (_organiseView != null) host.Children.Add(_organiseView);
 
-        var card = new Border { CornerRadius = new CornerRadius(14), BorderBrush = PanelRim, BorderThickness = new Thickness(1), Child = host };
+        var card = new Border { CornerRadius = new CornerRadius(14), BorderBrush = AmbientRim(), BorderThickness = new Thickness(1), Child = host };
         card.SetResourceReference(Border.BackgroundProperty, "GlassPanel");
         // What is inside follows the rounded corners, the strip of rounds first of all.
         host.SizeChanged += (_, e) => host.Clip = new RectangleGeometry(new Rect(e.NewSize), 13, 13);
@@ -1456,7 +1592,8 @@ public partial class MultiplayerTab
     {
         var sheet = TournamentPage.Sheet(t);
         var canvas = new Canvas { Width = sheet.Width, Height = sheet.Height };
-        var line = Frozen(0x29, 0xFF, 0xFF, 0xFF);
+        // The draw's lines in the mod's tone; your path and the champion's stay brighter on top.
+        var line = _ambient is { } amb ? Solid(amb.Line) : Frozen(0x29, 0xFF, 0xFF, 0xFF);
         foreach (var l in sheet.Lines) canvas.Children.Add(Bar(l, line));
 
         var mine = (t.Matches ?? new()).FirstOrDefault(m => MatchCards.For(m, me, t.Entrants)
@@ -1512,8 +1649,12 @@ public partial class MultiplayerTab
             canvas.Height = SmallSheetHeight;
         }
 
+        _bracketSheetSize = new Size(canvas.Width, canvas.Height);
         _bracketScale = new ScaleTransform(_bracketZoom / 100, _bracketZoom / 100);
-        var scaled = new Border { Child = canvas, LayoutTransform = _bracketScale, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        SetBracketTextMode(canvas, _bracketZoom);
+        // Centred while it is smaller than the panel; a bigger sheet fills its slot, so the
+        // alignment does nothing and it scrolls from the top-left as before.
+        var scaled = new Border { Child = canvas, LayoutTransform = _bracketScale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _bracketSheetHost = scaled;
 
         var scroll = new ScrollViewer
@@ -1525,6 +1666,35 @@ public partial class MultiplayerTab
         };
         scroll.SetResourceReference(StyleProperty, "BothWaysScroll");
         _bracketScroll = scroll;
+        var tournamentId = t.Id;
+        // The scroller sits in a star cell, so its size never depends on the sheet: fitting from
+        // here cannot loop. Only while the player has not chosen a zoom for this tournament.
+        scroll.SizeChanged += (_, _) =>
+        {
+            if (!ReferenceEquals(scroll, _bracketScroll)) return;
+            if (!_bracketZoomManual.ContainsKey(tournamentId))
+            {
+                var auto = BracketZoom.Auto(_bracketSheetSize.Width, _bracketSheetSize.Height, scroll.ViewportWidth, scroll.ViewportHeight);
+                _bracketZoomAuto[tournamentId] = auto;
+                if (Math.Abs(auto - _bracketZoom) > .5) { SetBracketZoom(auto); return; }
+            }
+            AlignBracketHeads();
+        };
+        scroll.ScrollChanged += (_, _) => AlignBracketHeads();
+        scroll.PreviewMouseWheel += (_, e) =>
+        {
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+            e.Handled = true;
+            var onSheet = e.GetPosition(canvas);
+            var onScreen = e.GetPosition(scroll);
+            ChooseBracketZoom(_bracketZoom + Math.Sign(e.Delta) * BracketZoom.WheelStep);
+            scroll.UpdateLayout();
+            double z = _bracketZoom / 100;
+            scroll.ScrollToHorizontalOffset(Math.Max(0, onSheet.X * z - onScreen.X));
+            scroll.ScrollToVerticalOffset(Math.Max(0, onSheet.Y * z - onScreen.Y));
+        };
+
+        AttachBracketPan(scroll);
 
         _bracketHeadShift = new TranslateTransform();
         var heads = BuildBracketHeads(t, sheet, width);
@@ -1535,11 +1705,10 @@ public partial class MultiplayerTab
             ClipToBounds = true,
             Padding = new Thickness(0, 12, 0, 9),
             Background = Frozen(0xE0, 0x0C, 0x16, 0x26),
-            BorderBrush = Frozen(0x12, 0xFF, 0xFF, 0xFF),
+            BorderBrush = _ambient is { } stripTone ? Solid(stripTone.Hairline) : Frozen(0x12, 0xFF, 0xFF, 0xFF),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = heads,
         };
-        scroll.ScrollChanged += (_, e) => { if (e.HorizontalChange != 0 && _bracketHeadShift != null) _bracketHeadShift.X = -scroll.HorizontalOffset; };
 
         var left = new Grid();
         left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1758,6 +1927,10 @@ public partial class MultiplayerTab
         bool live = state is MatchCardState.InProgress or MatchCardState.SuperviseRoom;
         var text = ModAccent.TextOn(_pageAccent);
         bool champion = OnChampionsPath(t, m);
+        // A match you already played (or will): your way through the draw, rimmed in the mod's colour.
+        bool onMyPath = !mine && !string.IsNullOrEmpty(me) && t.Entrants != null
+            && t.Entrants.Any(e => (e.Id == m.Entrant1Id || e.Id == m.Entrant2Id)
+                && e.MemberIds != null && e.MemberIds.Contains(me, StringComparer.Ordinal));
         card.Background = mine ? Solid(ModAccent.SelectionFill(_pageAccent))
             : live ? LiveCardFill
             : m.Status == "bye" ? Frozen(0x8C, 0x12, 0x21, 0x3A) : Ink("#12213A");
@@ -1769,6 +1942,7 @@ public partial class MultiplayerTab
             : mine ? Tint(_pageAccent, .65)
             : live ? Tint(StateColors.Blue, .8)
             : champion ? Tint(StateColors.Gold, .55)
+            : onMyPath ? Tint(_pageAccent, .40)
             : Frozen(0x1A, 0xFF, 0xFF, 0xFF);
     }
 
@@ -2052,7 +2226,9 @@ public partial class MultiplayerTab
         stack.Children.Add(head);
 
         bool team = TournamentPage.IsTeam(t);
-        var state = MatchCards.For(m, me, t.Entrants, _demoTournaments && TournamentPermissions.IsOwnerOrManager(t, me));
+        // Supervise: the fabricated tournaments, or a real one on a server with the read-only view.
+        var state = MatchCards.For(m, me, t.Entrants,
+            (_demoTournaments || _tournaments?.LiveView == true) && TournamentPermissions.IsOwnerOrManager(t, me));
         bool bye = state == MatchCardState.Bye;
         bool decided = m.Status == "done" && !string.IsNullOrEmpty(m.WinnerEntrantId);
         stack.Children.Add(BuildPickSide(t, m, m.Entrant1Id, 1, me, team, decided));
@@ -2285,17 +2461,57 @@ public partial class MultiplayerTab
         _bracketScroll.ScrollToVerticalOffset(Math.Max(0, _mineBox.Y * z - 80));
     }
 
+    /// <summary>A zoom the player chose (a button, the wheel, Fit): kept for this tournament, so it
+    /// stops fitting itself.</summary>
+    private void ChooseBracketZoom(double value)
+    {
+        var z = BracketZoom.Clamp(value);
+        if (_pageTournament is { } t) _bracketZoomManual[t.Id] = z;
+        SetBracketZoom(z);
+    }
+
+    /// <summary>Fit: the whole sheet on screen, chosen like any other zoom.</summary>
+    private void FitBracketZoom()
+    {
+        if (_bracketScroll is not { } scroll) return;
+        ChooseBracketZoom(BracketZoom.Fit(_bracketSheetSize.Width, _bracketSheetSize.Height, scroll.ViewportWidth, scroll.ViewportHeight));
+    }
+
+    /// <summary>
+    /// The sheet's text off the pixel grid while it is scaled, back on it at exactly 100 %: text laid
+    /// out for one size and then stretched by a transform smudges (the same switch
+    /// <see cref="UiScale.SetTextCrispForScale"/> makes for a shrunken surface).
+    /// </summary>
+    private static void SetBracketTextMode(DependencyObject sheet, double percent)
+    {
+        bool scaled = Math.Abs(percent - 100) > .5;
+        TextOptions.SetTextFormattingMode(sheet, scaled ? TextFormattingMode.Ideal : TextFormattingMode.Display);
+        TextOptions.SetTextRenderingMode(sheet, scaled ? TextRenderingMode.Grayscale : TextRenderingMode.ClearType);
+        TextOptions.SetTextHintingMode(sheet, scaled ? TextHintingMode.Animated : TextHintingMode.Fixed);
+    }
+
+    /// <summary>The round titles over their columns: shifted by where the centred sheet starts and
+    /// by the horizontal scroll.</summary>
+    private void AlignBracketHeads()
+    {
+        if (_bracketScroll is not { } scroll || _bracketHeadShift == null) return;
+        double sheetWidth = _bracketSheetSize.Width * _bracketZoom / 100;
+        _bracketHeadOffset = Math.Max(0, (scroll.ViewportWidth - sheetWidth) / 2);
+        _bracketHeadShift.X = _bracketHeadOffset - scroll.HorizontalOffset;
+    }
+
     /// <summary>The zoom is one transform: the cards stay where they are and nothing is rebuilt but
     /// the strip of rounds, whose widths follow it.</summary>
     private void SetBracketZoom(double value)
     {
-        _bracketZoom = Math.Clamp(value, 60, 100);
+        _bracketZoom = BracketZoom.Clamp(value);
         if (_zoomText != null) _zoomText.Text = _bracketZoom + " %";
         if (_bracketScale != null)
         {
             _bracketScale.ScaleX = _bracketZoom / 100;
             _bracketScale.ScaleY = _bracketZoom / 100;
         }
+        if (_bracketSheetHost is Border { Child: Canvas sheetCanvas }) SetBracketTextMode(sheetCanvas, _bracketZoom);
         var t = _pageTournament;
         if (t != null && _bracketHeads is StackPanel old && old.Parent is Border strip)
         {
@@ -2306,6 +2522,8 @@ public partial class MultiplayerTab
             strip.Child = heads;
             _bracketHeads = heads;
         }
+        // The extent changes on the next layout and raises ScrollChanged, which aligns again.
+        AlignBracketHeads();
     }
 
     // ---------------------------------------------------------------- participants
@@ -2517,8 +2735,25 @@ public partial class MultiplayerTab
         return fill;
     }
 
+    /// <summary>The players of an entry whose profile can be opened: never the viewer, never a sample.</summary>
+    private IEnumerable<(string Id, string Name, string? Photo)> EntrantProfiles(TournamentEntrant e, string? me)
+    {
+        if (_demoTournaments || _session?.Status != MultiplayerSession.SessionStatus.SignedIn) yield break;
+        if (e.Members is { Count: > 0 } members)
+        {
+            foreach (var m in members)
+                if (!string.IsNullOrEmpty(m.UserId) && m.UserId != me)
+                    yield return (m.UserId, m.DisplayName ?? e.DisplayName ?? "", m.AvatarUrl);
+            yield break;
+        }
+        // An older server: the captain is the player of a solo entry.
+        if (!string.IsNullOrEmpty(e.CaptainUserId) && e.CaptainUserId != me && e.Kind != "team")
+            yield return (e.CaptainUserId!, e.DisplayName ?? "", null);
+    }
+
     private FrameworkElement? BuildEntrantActions(TournamentDetail t, TournamentEntrant e, string? me, bool needsTeam)
     {
+        bool team = TournamentPage.IsTeam(t);
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0, 0, 0) };
         void Act(string caption, Brush? ink, Func<Task> action)
         {
@@ -2551,8 +2786,21 @@ public partial class MultiplayerTab
         // What an organiser does TO somebody takes a deliberate extra click. A request is not in
         // the tournament yet: Reject is its answer.
         var menu = new ContextMenu();
+        // Whose entry this is, first: one player in a 1v1, each member of a team. Real
+        // tournaments only, signed in — the sample players have no profile to ask for.
+        foreach (var (id, who, photo) in EntrantProfiles(e, me))
+        {
+            var view = new MenuItem
+            {
+                Header = team ? Strings.Format("TpViewProfileOf", who) : Strings.Get("TpViewProfile"),
+            };
+            view.Click += (_, _) => OpenProfileOf(id, who, null, photo);
+            menu.Items.Add(view);
+        }
+        bool hasProfileItems = menu.Items.Count > 0;
         if (TournamentPermissions.CanAwardOrDisqualify(t, me) && e.Status is "confirmed" or "waitlist")
         {
+            if (hasProfileItems) menu.Items.Add(new Separator());
             var dq = new MenuItem { Header = Strings.Get("MpTournamentDisqualify") };
             dq.Click += (_, _) => _ = ConfirmDisqualifyAsync(t, e);
             menu.Items.Add(dq);
@@ -2627,8 +2875,24 @@ public partial class MultiplayerTab
                 try { Clipboard.SetText(code); } catch { return; }
                 if (copy != null) copy.Content = Strings.Get("TpOrgCodeCopied");
             });
+            var codeButtons = new List<Button> { copy };
+            if (TournamentPermissions.CanRenewCode(t, me, VisibilityEditable))
+                codeButtons.Add(Secondary(Strings.Get("TpOrgCodeRenew"), () => _ = ConfirmRenewCodeAsync(t)));
             Tile(Strings.Get("TpOrgCode"), "#CBA7F2", Strings.Get("TpOrgCodeBody"),
-                Frozen(0x4D, 0xA0, 0x6E, 0xF0), codeText, copy);
+                Frozen(0x4D, 0xA0, 0x6E, 0xF0), codeText, codeButtons.ToArray());
+        }
+        if (TournamentPermissions.CanChangeVisibility(t, me, VisibilityEditable))
+        {
+            var segment = new SegmentRow();
+            segment.SetOptions(new[]
+            {
+                new SegmentOption("public", Strings.Get("TpOrgVisibilityPublic")),
+                new SegmentOption("private", Strings.Get("TpOrgVisibilityPrivate")),
+            });
+            segment.Selected = t.IsPrivate ? "private" : "public";
+            segment.Picked += key => _ = ConfirmVisibilityAsync(t, (string)key);
+            segment.Margin = new Thickness(0, 12, 0, 0);
+            Tile(Strings.Get("TpOrgVisibility"), "#A8BCD2", Strings.Get("TpOrgVisibilityBody"), rim, segment);
         }
         if (TournamentPermissions.CanAppointManagers(t, me) || t.Managers is { Count: > 0 })
         {

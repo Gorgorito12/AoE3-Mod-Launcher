@@ -196,6 +196,9 @@ public partial class AntivirusExclusionDialog : Window
         Window? owner, string modDisplayName, string antivirusFile,
         string installFolder, out bool dontShowAgain)
     {
+        dontShowAgain = false;
+        // An install is never automatic, but if one ever were: no window, no install.
+        if (Services.Unattended.Skip(owner, "antivirus notice", modDisplayName)) return false;
         var dlg = new AntivirusExclusionDialog(modDisplayName, antivirusFile, installFolder, preventive: true);
 
         if (owner != null) dlg.Owner = owner;
@@ -213,6 +216,11 @@ public partial class AntivirusExclusionDialog : Window
     /// </summary>
     public static void ShowBlocked(Window? owner, string blockedFile, string installFolder)
     {
+        // An automatic update the antivirus broke: a toast whose button opens this window later.
+        if (Services.Unattended.SkipNotice(owner, Strings.Get("AvBlockedToastTitle"),
+                Strings.Format("AvBlockedToastBody", blockedFile), warning: true,
+                reopen: () => ShowBlocked(owner, blockedFile, installFolder)))
+            return;
         var dlg = new AntivirusExclusionDialog("", blockedFile, installFolder, preventive: false);
 
         if (owner != null) dlg.Owner = owner;

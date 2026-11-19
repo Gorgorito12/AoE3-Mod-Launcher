@@ -132,6 +132,21 @@ public static class LauncherUpdateGate
     /// rest of the session while the pending release was still known. Offline still means no
     /// pill and no gate.</para>
     /// </summary>
+    /// <summary>
+    /// Whether multiplayer may close for a pending update NOW: never in a room, a match (its
+    /// result included) or a quick-match search — the update waits until the player is out.
+    /// </summary>
+    public static bool ShouldCloseNow(bool inRoom, bool matchActive, bool searching)
+        => !inRoom && !matchActive && !searching;
+
+    /// <summary>
+    /// Whether the open launcher should look for its own update on this tick (~every 30 min):
+    /// the player allows checks, the launcher is online, nothing is already pending, and no game
+    /// is running (a download beside a match costs ping for nothing).
+    /// </summary>
+    public static bool ShouldCheckPeriodically(bool checksAllowed, bool offline, bool updatePending, bool gameRunning)
+        => checksAllowed && !offline && !updatePending && !gameRunning;
+
     public static bool PillShown(bool offline, LauncherUpdateService.UpdateCheckResult? pending)
         => !offline && pending?.UpdateAvailable == true;
 }

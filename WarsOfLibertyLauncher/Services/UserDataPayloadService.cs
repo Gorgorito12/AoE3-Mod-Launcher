@@ -190,8 +190,18 @@ public static class UserDataPayloadService
         return take;
     }
 
-    /// <summary>Which release the seed asset was found on, and where to fetch it.</summary>
-    internal readonly record struct SeedAssetPick(string Tag, string Url);
+    /// <summary>Which release the seed asset was found on, where to fetch it, and the SHA-256 GitHub
+    /// published for it (null on a release uploaded before GitHub kept one).</summary>
+    internal readonly record struct SeedAssetPick(string Tag, string Url, string? Sha256 = null);
+
+    /// <summary>
+    /// Whether the downloaded seed may be used: yes when GitHub published no digest (older
+    /// uploads; logged by the caller), yes when it equals what arrived, NO otherwise — a seed that
+    /// does not match is never unpacked into the player's save folder.
+    /// </summary>
+    internal static bool SeedMatches(string? expectedSha256, string actualSha256)
+        => string.IsNullOrEmpty(expectedSha256)
+           || string.Equals(expectedSha256, actualSha256, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Finds the seed asset across the repo's releases, so that a modder who forgets to attach it
@@ -224,7 +234,7 @@ public static class UserDataPayloadService
             if (release == null) return null;
             foreach (var a in release.Assets)
                 if (string.Equals(a.Name, assetName, StringComparison.OrdinalIgnoreCase))
-                    return new SeedAssetPick(release.Tag, a.Url);
+                    return new SeedAssetPick(release.Tag, a.Url, a.Sha256);
             return null;
         }
 
@@ -328,6 +338,22 @@ public static class UserDataPayloadService
             Directory.CreateDirectory(tempDir);
             var zipPath = Path.Combine(tempDir, $"{profile.Id}-userdata.zip");
             await new DownloadService().DownloadFileAsync(asset.Value.Url, zipPath, null, ct);
+
+            // GitHub's published digest, the same integrity check every payload gets. Off the UI
+            // thread like Seed below, and synchronous inside it for the same reason.
+            var expected = asset.Value.Sha256;
+            var actual = await Task.Run(() => HashService.ComputeSha256(zipPath), ct);
+            if (!SeedMatches(expected, actual))
+            {
+                DiagnosticLog.Write(
+                    $"User-data payload '{profile.UserDataPayload}' from '{asset.Value.Tag}' does not match " +
+                    $"the digest GitHub published (expected {expected}, got {actual}) — not seeded.");
+                TryDelete(zipPath);
+                return new ApplyResult(ApplyStatus.Failed, 0, 0, 0, root);
+            }
+            if (string.IsNullOrEmpty(expected))
+                DiagnosticLog.Write(
+                    $"User-data payload '{profile.UserDataPayload}': GitHub published no digest for it; used unchecked.");
 
             // OFF the UI thread. Seed opens a zip, writes files and hashes each one; the caller
             // awaits this from InstallAsync, whose continuations run on the dispatcher. Belt to

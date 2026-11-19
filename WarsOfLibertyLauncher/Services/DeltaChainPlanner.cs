@@ -28,7 +28,8 @@ internal static class DeltaChainPlanner
     // ---------------------------------------------------------------- input
 
     /// <summary>One asset on a release, as the listing reports it.</summary>
-    internal sealed record ReleaseAssetSnapshot(string Name, long Size, string Url);
+    /// <param name="Sha256">GitHub's published digest for the asset (lowercase hex), or null.</param>
+    internal sealed record ReleaseAssetSnapshot(string Name, long Size, string Url, string? Sha256 = null);
 
     /// <summary>One release and everything attached to it.</summary>
     internal sealed record ReleaseSnapshot(
@@ -189,6 +190,10 @@ internal static class DeltaChainPlanner
     /// actually download it expand the parts again through <see cref="BaselineUrlsOf"/> — the
     /// step already carries its release's whole asset list, so nothing has to be threaded.</para>
     /// </summary>
+    /// <summary>Whether this release carries a full payload (a baseline), by the same rule the planner uses.</summary>
+    internal static bool HasFullPayload(ReleaseSnapshot release, string? nonPayloadAsset)
+        => FullZipOf(release, nonPayloadAsset) != null;
+
     private static ReleaseAssetSnapshot? FullZipOf(ReleaseSnapshot release, string? nonPayloadAsset)
     {
         var names = release.Assets.Select(a => a.Name).ToList();
@@ -213,6 +218,20 @@ internal static class DeltaChainPlanner
     /// <see cref="PlanStep.HostReleaseAssets"/> rather than stored, so there is exactly one rule
     /// deciding what the parts of a release are and it lives in <c>GitHubReleaseDownloader</c>.
     /// </summary>
+    /// <summary>The digests parallel to <see cref="BaselineUrlsOf"/>: "" for a part GitHub published
+    /// none for, null when none has one (an older release).</summary>
+    internal static string[]? BaselineDigestsOf(PlanStep step)
+    {
+        var assets = step.HostReleaseAssets;
+        if (assets == null || assets.Count == 0) return null;
+        var parts = GitHubReleaseDownloader.PickPayloadPartIndices(assets.Select(a => a.Name).ToList(), null);
+        IEnumerable<ReleaseAssetSnapshot> chosen = parts.Count > 0
+            ? parts.Select(i => assets[i])
+            : assets.Where(a => string.Equals(a.Url, step.AssetUrl, StringComparison.Ordinal)).Take(1);
+        var digests = chosen.Select(a => a.Sha256 ?? "").ToArray();
+        return digests.Length == 0 || digests.All(d => d.Length == 0) ? null : digests;
+    }
+
     internal static IReadOnlyList<string> BaselineUrlsOf(PlanStep step)
     {
         var assets = step.HostReleaseAssets;

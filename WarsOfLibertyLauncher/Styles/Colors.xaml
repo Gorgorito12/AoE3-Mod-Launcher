@@ -436,8 +436,8 @@
     <SolidColorBrush x:Key="MpDanger" Color="#8E3F37"/>
     <SolidColorBrush x:Key="MpDangerHover" Color="#A65049"/>
 
-    <!-- The rooms list's ping colours are RmPing* (design 86: green under 100 ms, amber over 150),
-         banded by RoomActionRule.PingBrushKey. -->
+    <!-- The ping colours are RmPing*, a traffic light banded by RoomActionRule.PingBrushKey:
+         green under 100 ms, amber up to 150, red above (it was green / white / amber). -->
 
     <!-- ==== Rooms-table navy refresh (mockup-driven) — MP-only, no external
          consumers, so no leak into non-MP chrome. ==== -->
@@ -543,7 +543,7 @@
     <SolidColorBrush x:Key="RmHeading" Color="#61779A"/>
     <SolidColorBrush x:Key="RmPingGood" Color="#7FE0A8"/>
     <SolidColorBrush x:Key="RmPingSlow" Color="#F5BD76"/>
-    <SolidColorBrush x:Key="RmPingPlain" Color="#DCE7F5"/>
+    <SolidColorBrush x:Key="RmPingBad" Color="#F0A6A6"/>
     <SolidColorBrush x:Key="RmPingUnknown" Color="#61779A"/>
     <SolidColorBrush x:Key="RmRowBg" Color="#0AFFFFFF"/>
     <SolidColorBrush x:Key="RmRowHover" Color="#12FFFFFF"/>

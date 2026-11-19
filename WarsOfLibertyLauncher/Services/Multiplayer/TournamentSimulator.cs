@@ -473,6 +473,36 @@ internal sealed class TournamentSimulator
         return PreviewOutcome.Nothing;
     }
 
+    /// <summary><c>POST /tournaments/:id/visibility</c>: the owner, before the bracket is drawn.</summary>
+    internal PreviewOutcome SetVisibility(string id, string visibility)
+    {
+        var t = AsOwner(id);
+        if (t.Status is not ("draft" or "registration" or "ready"))
+            throw new LobbyApiException(409, "visibility_locked", "The bracket is drawn; the visibility can no longer change.", null);
+        bool wantPrivate = visibility == "private";
+        if (wantPrivate == t.IsPrivate) return PreviewOutcome.Nothing;
+        t.Visibility = wantPrivate ? "private" : "public";
+        t.InviteCode = wantPrivate ? NewCode() : null;
+        return PreviewOutcome.Nothing;
+    }
+
+    /// <summary><c>POST /tournaments/:id/invite-code</c>: the owner, a private tournament only.</summary>
+    internal PreviewOutcome RenewCode(string id)
+    {
+        var t = AsOwner(id);
+        if (!t.IsPrivate) throw new LobbyApiException(409, "not_private", "Only a private tournament has a code.", null);
+        t.InviteCode = NewCode();
+        return PreviewOutcome.Nothing;
+    }
+
+    private static string NewCode()
+    {
+        const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        var chars = new char[8];
+        for (int i = 0; i < chars.Length; i++) chars[i] = alphabet[System.Security.Cryptography.RandomNumberGenerator.GetInt32(alphabet.Length)];
+        return new string(chars);
+    }
+
     /// <summary>The server's <c>has_games</c>: a slot decided by a game.</summary>
     private static bool HasGames(TournamentDetail t)
         => (t.Matches ?? new List<TournamentMatch>()).Any(m => m.Status == "done" && m.Outcome == "played");

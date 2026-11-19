@@ -46,6 +46,7 @@ public static partial class Strings
         ["RkYouProfile"] = new() { [LangEn] = "View my profile →", [LangEs] = "Ver mi perfil →" },
         ["RkYouOf"] = new() { [LangEn] = "of {0}", [LangEs] = "de {0}" },
         ["RkYouFirst"] = new() { [LangEn] = "You're first on the table.", [LangEs] = "Vas primero en la tabla." },
+        ["RkYouPrivate"] = new() { [LangEn] = "You are not on the public table: your rating is hidden. Turn on \"Show my ELO\" in Settings → Games to appear again.", [LangEs] = "No estás en la tabla pública: tu ELO está oculto. Activa «Mostrar mi ELO» en Configuración → Partidas para volver a aparecer." },
         ["RkYouNext"] = new() { [LangEn] = "You need {0} ELO to reach place {1}.", [LangEs] = "Te faltan {0} ELO para el {1}.º puesto." },
         ["RkYouNextAge"] = new() { [LangEn] = "You need {0} ELO to reach place {1} and rise to {2}.", [LangEs] = "Te faltan {0} ELO para el {1}.º puesto y subir a {2}." },
         ["RkYouLeftOne"] = new() { [LangEn] = "1 rated match left to enter the table.", [LangEs] = "Te queda 1 partida puntuada para entrar en la tabla." },

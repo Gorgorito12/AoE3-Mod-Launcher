@@ -95,6 +95,65 @@ public partial class LauncherSettingsDialog : Window
     public Func<string?>? SelfUninstallBlocker { get; set; }
 
     /// <summary>
+    /// Whether the signed-in player keeps his rating private, as his standing says; null when the
+    /// server cannot store it (or nobody is signed in), which keeps the "Show my ELO" row hidden.
+    /// </summary>
+    public Func<bool?>? CurrentRatingPrivate { get; set; }
+
+    /// <summary>Sends "Show my ELO" to the server; true when it was stored.</summary>
+    public Func<bool, System.Threading.Tasks.Task<bool>>? SetRatingVisible { get; set; }
+
+    /// <summary>Shows the row with the server's answer, and sends the switch when it is touched.
+    /// Called by MainWindow once the two callbacks above are set.</summary>
+    public void InitRatingVisibility()
+    {
+        var current = CurrentRatingPrivate?.Invoke();
+        ShowEloRow.Visibility = current == null ? Visibility.Collapsed : Visibility.Visible;
+        if (current == null)
+        {
+            // The standing may still be on its way (the window can open before it lands): look
+            // again for a while, then leave the row hidden — an older server never sends it.
+            if (CurrentRatingPrivate != null && _ratingRetries++ < 20)
+            {
+                var again = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                again.Tick += (_, _) => { again.Stop(); if (IsLoaded) InitRatingVisibility(); };
+                again.Start();
+            }
+            return;
+        }
+        _settingRatingSwitch = true;
+        ShowEloCheck.IsChecked = current == false;
+        _settingRatingSwitch = false;
+        _config.ShowMyElo = current == false;
+        ShowEloCheck.Checked += (_, _) => _ = SendRatingVisibilityAsync(true);
+        ShowEloCheck.Unchecked += (_, _) => _ = SendRatingVisibilityAsync(false);
+    }
+
+    private bool _settingRatingSwitch;
+    private int _ratingRetries;
+
+    private async System.Threading.Tasks.Task SendRatingVisibilityAsync(bool show)
+    {
+        if (_settingRatingSwitch || SetRatingVisible == null) return;
+        ShowEloCheck.IsEnabled = false;
+        var ok = false;
+        try { ok = await SetRatingVisible(show); }
+        catch (Exception ex) { DiagnosticLog.Write($"Settings: rating visibility failed: {ex.Message}"); }
+        ShowEloCheck.IsEnabled = true;
+        if (!ok)
+        {
+            // Put the switch back where the server still is, and say so.
+            _settingRatingSwitch = true;
+            ShowEloCheck.IsChecked = !show;
+            _settingRatingSwitch = false;
+            SetHint(ShowEloResult, Strings.Get("DlgSettingsShowEloFailed"), success: false);
+            return;
+        }
+        _config.ShowMyElo = show;
+        SetHint(ShowEloResult, Strings.Get(show ? "DlgSettingsShowEloShown" : "DlgSettingsShowEloHidden"), success: true);
+    }
+
+    /// <summary>
     /// Closes the launcher for the uninstall and says whether it really closed, so the delete
     /// script can be stopped if it did not. Null shuts the application down directly.
     /// </summary>
@@ -259,6 +318,11 @@ public partial class LauncherSettingsDialog : Window
         GameRecordingTitle.Text = Strings.Get("DlgSettingsGameRecording");
         GameRecordingHint.Text = Strings.Get("DlgSettingsGameRecordingHint");
         SetTip(GameRecordingCheck, "DlgSettingsGameRecordingTip");
+        GroupLanLabel.Text = Strings.Get("DlgSettingsGroupLan");
+        LanHelperTitle.Text = Strings.Get("DlgSettingsLanHelper");
+        LanHelperHint.Text = Strings.Get("DlgSettingsLanHelperHint");
+        LanHelperManualButton.Content = Strings.Get("DlgSettingsLanHelperManual");
+        SetTip(LanHelperCheck, "DlgSettingsLanHelperTip");
         RecordReminderTitle.Text = Strings.Get("DlgSettingsRecordReminder");
         RecordReminderHint.Text = Strings.Get("DlgSettingsRecordReminderHint");
         SetTip(RecordReminderCheck, "DlgSettingsRecordReminderTip");
@@ -338,10 +402,6 @@ public partial class LauncherSettingsDialog : Window
         AutoUpdateHint.Text = Strings.Get("DlgSettingsUpdAutoDesc");
         DeltaOnlyTitle.Text = Strings.Get("DlgSettingsUpdDeltaTitle");
         DeltaOnlyHint.Text = Strings.Get("DlgSettingsUpdDeltaDesc");
-        ChannelTitle.Text = Strings.Get("DlgSettingsUpdChannelTitle");
-        ChannelHint.Text = Strings.Get("DlgSettingsUpdChannelDesc");
-        ChannelStableRadio.Content = Strings.Get("DlgSettingsUpdChannelStable");
-        ChannelBetaRadio.Content = Strings.Get("DlgSettingsUpdChannelBeta");
         DownloadLimitTitle.Text = Strings.Get("DlgSettingsUpdLimitTitle");
         DownloadLimitHint.Text = Strings.Get("DlgSettingsUpdLimitDesc");
         BuildDownloadLimitItems();
@@ -370,9 +430,6 @@ public partial class LauncherSettingsDialog : Window
         ClearCacheHint.Text = Strings.Format("DlgSettingsCatalogCount", ModRegistry.All.Count);
         SetTip(ClearCacheButton, "DlgLauncherSettingsClearCacheTip");
 
-        VerifyDownloadsTitle.Text = Strings.Get("DlgSettingsVerifyTitle");
-        VerifyDownloadsBadge.Text = Strings.Get("DlgSettingsBadgeRecommended");
-        VerifyDownloadsHint.Text = Strings.Get("DlgSettingsVerifyDesc");
 
         TxSourcesHeader.Text = Strings.Get("DlgLauncherSettingsTxSourcesHeader");
         TxDefaultLabel.Text = string.IsNullOrEmpty(DefaultTranslationsRepo)
@@ -513,6 +570,8 @@ public partial class LauncherSettingsDialog : Window
         GameRecordingCheck.IsChecked = _config.EnableGameRecording;
         // Shown the positive way round — the config stores "muted", the box offers "remind me".
         RecordReminderCheck.IsChecked = !_config.GameRecordingReminderMuted;
+        LanHelperCheck.IsChecked = _config.LanHelperChoice == true;
+        RefreshLanHelperStatus();
         CloseOnGameCheck.IsChecked = _config.CloseLauncherOnGameStart;
         // Close-to-tray opt-out — independent of the master toggle above.
         MinimizeToTrayCheck.IsChecked = _config.CloseToTray;
@@ -532,11 +591,7 @@ public partial class LauncherSettingsDialog : Window
         // so a choice survives; nothing consumes them yet. See LauncherConfig.AutoUpdateMods.
         AutoUpdateCheck.IsChecked = _config.AutoUpdateMods;
         DeltaOnlyCheck.IsChecked = _config.DeltaDownloadsOnly;
-        bool beta = string.Equals(_config.UpdateChannel, "beta", StringComparison.OrdinalIgnoreCase);
-        ChannelBetaRadio.IsChecked = beta;
-        ChannelStableRadio.IsChecked = !beta;
         SelectDownloadLimit(_config.DownloadLimitKbps);
-        VerifyDownloadsCheck.IsChecked = _config.VerifyDownloadSignatures;
         ShowEloCheck.IsChecked = _config.ShowMyElo;
         // One switch over the stored policy: anything but "never" shares (the old "ask"
         // default included — implicit consent, stated in every competitive room).
@@ -900,6 +955,7 @@ public partial class LauncherSettingsDialog : Window
             ["developerMode"] = B(DeveloperModeCheck),
             ["gameRecording"] = B(GameRecordingCheck),
             ["recordReminder"] = B(RecordReminderCheck),
+            ["lanHelper"] = B(LanHelperCheck),
             ["textScale"] = T(TextScaleCombo),
             ["tabOrder"] = string.Join(",", _tabOrder),
             ["barOrder"] = string.Join(",", _barOrder),
@@ -908,9 +964,7 @@ public partial class LauncherSettingsDialog : Window
             ["openPostUpdate"] = B(OpenPostUpdateCheck),
             ["autoUpdateMods"] = B(AutoUpdateCheck),
             ["deltaOnly"] = B(DeltaOnlyCheck),
-            ["channel"] = ChannelBetaRadio.IsChecked == true ? "beta" : "stable",
             ["downloadLimit"] = SelectedDownloadLimit().ToString(),
-            ["verifyDownloads"] = B(VerifyDownloadsCheck),
             ["showElo"] = B(ShowEloCheck),
             ["replayUpload"] = B(ShareReplaysCheck),
             ["catalog"] = catalog,
@@ -1153,10 +1207,8 @@ public partial class LauncherSettingsDialog : Window
     /// <summary>
     /// The download-limit choices.
     ///
-    /// <para>Nothing throttles anything yet — the value is stored and unread, like the
-    /// three settings beside it. The entries are plain KB/s so that when
-    /// <c>DownloadService</c>'s copy loop does learn to sleep, the number it needs is
-    /// already the one on screen.</para>
+    /// <para>Real since 2026-11-18: <c>DownloadThrottle</c> reads it on every chunk of every
+    /// download the launcher makes, shared, so two downloads share the limit.</para>
     /// </summary>
     private void BuildDownloadLimitItems()
     {
@@ -1383,6 +1435,57 @@ public partial class LauncherSettingsDialog : Window
     /// Clearing the marker makes it "never touched", which is the one state that writes.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// The LAN helper's switch. On is consent: the next room installs it for that room's game.
+    /// Off takes it out of every folder it went into. A switch nobody touched writes nothing, so
+    /// "never asked" stays "never asked" and the first room can still ask.
+    /// </summary>
+    private void ApplyLanHelperChoice()
+    {
+        var wanted = LanHelperCheck.IsChecked == true;
+        if (wanted == (_config.LanHelperChoice == true)) return;
+        if (wanted)
+        {
+            _config.LanHelperChoice = true;
+        }
+        else
+        {
+            _config.LanHelperChoice = false;
+            // Every folder it went into; a protected one costs ONE administrator prompt for all of
+            // them. Anything still left is listed under the switch.
+            _ = RemoveLanHelpersAsync();
+        }
+        RefreshLanHelperStatus();
+    }
+
+    private async System.Threading.Tasks.Task RemoveLanHelpersAsync()
+    {
+        await Services.Multiplayer.LanHelperService.RemoveEverywhereAsync(_config.LanHelperFolders);
+        _config.Save();
+        RefreshLanHelperStatus();
+    }
+
+    /// <summary>Opens the LAN helper's setup window for the mod open in the Library (MainWindow).</summary>
+    public Action? OpenLanHelperSetup { get; set; }
+
+    private void LanHelperManualButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenLanHelperSetup?.Invoke();
+        RefreshLanHelperStatus();
+    }
+
+    /// <summary>Where it is installed today, or that the next room will install it.</summary>
+    private void RefreshLanHelperStatus()
+    {
+        var folders = _config.LanHelperFolders;
+        LanHelperStatus.Text = _config.LanHelperChoice != true
+            ? (folders.Count > 0 ? Strings.Format("DlgSettingsLanHelperLeft", string.Join("\n", folders)) : "")
+            : folders.Count == 0
+                ? Strings.Get("DlgSettingsLanHelperPending")
+                : Strings.Format("DlgSettingsLanHelperIn", string.Join("\n", folders));
+        LanHelperStatus.Visibility = LanHelperStatus.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void RecordingOffButton_Click(object sender, RoutedEventArgs e)
     {
         // "Switch it on" has to mean the launcher is allowed to, or the write is undone
@@ -1683,6 +1786,21 @@ public partial class LauncherSettingsDialog : Window
             }
 
             if (orphans.Count > 0) await RemoveLeftoverKeysAsync(orphans, elevated);
+
+            // The LAN helper is the one thing the launcher put inside a game folder. It goes
+            // BEFORE the exit, because the list of folders lives in the config the uninstall may
+            // delete; a folder that could not be cleaned is named, and the player decides.
+            if (_config.LanHelperFolders.Count > 0)
+            {
+                var left = await Services.Multiplayer.LanHelperService.RemoveEverywhereAsync(_config.LanHelperFolders);
+                _config.Save();
+                if (left.Count > 0 && !ThemedConfirmDialog.Ask(this,
+                        Strings.Get("DlgSelfUninstallLanHelperLeftTitle"),
+                        Strings.Format("DlgSelfUninstallLanHelperLeft", string.Join("\n", left)),
+                        Strings.Get("DlgSelfUninstallLanHelperLeftConfirm"), Strings.Get("BtnCancel"),
+                        ConfirmTone.Caution, defaultIsCancel: true))
+                    return;
+            }
 
             blocked = Blocked();
             if (blocked != null)
@@ -2290,9 +2408,9 @@ public partial class LauncherSettingsDialog : Window
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
         _config.AutoUpdateMods = AutoUpdateCheck.IsChecked == true;
         _config.DeltaDownloadsOnly = DeltaOnlyCheck.IsChecked == true;
-        _config.UpdateChannel = ChannelBetaRadio.IsChecked == true ? "beta" : "stable";
         _config.DownloadLimitKbps = SelectedDownloadLimit();
-        _config.VerifyDownloadSignatures = VerifyDownloadsCheck.IsChecked == true;
+        // Read on every chunk: a download already running slows down within a fraction of a second.
+        Services.DownloadThrottle.LimitKbps = _config.DownloadLimitKbps;
         _config.ShowMyElo = ShowEloCheck.IsChecked == true;
         var wasSharingReplays = ReplayUploadService.IsSharingEnabled(_config.ReplayUploadPolicy);
         _config.ReplayUploadPolicy = ShareReplaysCheck.IsChecked == true ? "always" : "never";
@@ -2318,6 +2436,7 @@ public partial class LauncherSettingsDialog : Window
         // would be writing to files the launcher has no reason to hold open.
         _config.EnableGameRecording = GameRecordingCheck.IsChecked == true;
         _config.GameRecordingReminderMuted = RecordReminderCheck.IsChecked != true;
+        ApplyLanHelperChoice();
 
         // Text size (Interface section). Already applied live by the combo, so there is
         // nothing to re-apply here — only the choice to persist.

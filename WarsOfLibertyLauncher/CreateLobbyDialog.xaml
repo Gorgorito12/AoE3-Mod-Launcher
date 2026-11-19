@@ -201,6 +201,14 @@
                                           Foreground="{DynamicResource UiTextStrong}"
                                           FontSize="{DynamicResource FontSizeBody}"
                                           SelectionChanged="GameRulesCombo_SelectionChanged"/>
+                                <!-- A competitive room plays Standard only: a fixed line, not a one-entry dropdown. -->
+                                <Border x:Name="GameRulesFixed" Visibility="Collapsed" Margin="0,7,0,0"
+                                        Padding="12,8" CornerRadius="6" BorderThickness="1"
+                                        Background="{DynamicResource MpAppBg}"
+                                        BorderBrush="{DynamicResource MpMatchesFieldRim}">
+                                    <TextBlock x:Name="GameRulesFixedText" Foreground="{DynamicResource UiTextStrong}"
+                                               FontSize="{DynamicResource FontSizeBody}"/>
+                                </Border>
                                 <TextBlock x:Name="GameRulesDescription" Style="{DynamicResource GlassRowBody}" Margin="0,8,0,0"/>
                                 <TextBlock x:Name="GameHint" Style="{DynamicResource GlassHint}" Margin="0,8,0,0"/>
                             </StackPanel>

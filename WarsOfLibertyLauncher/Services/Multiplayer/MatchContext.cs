@@ -103,6 +103,14 @@ public sealed record MatchContext(
     public int ExpectedHumans => Participants.Count;
 
     /// <summary>
+    /// The room's sides at Start (account → 1 or 2), from the countdown's <c>teams</c>; null for a
+    /// room without sides. Read only by the civilization pairing
+    /// (<see cref="MatchSlotMap.ResolveForBadges"/>), which pairs the last unnamed player of a side
+    /// with the last slot of the recording's matching team.
+    /// </summary>
+    public IReadOnlyDictionary<string, int>? Sides { get; init; }
+
+    /// <summary>
     /// Take the facts of the match that is about to start.
     ///
     /// <para>The roster is captured at START, not at exit, on purpose: it can churn during a

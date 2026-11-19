@@ -1,0 +1,23 @@
+<controls:BaseDialog x:Class="WarsOfLibertyLauncher.LanHelperSetupDialog"
+                     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
+                     Width="540"
+                     Tone="Caution">
+    <!-- The automatic entry to the LAN room, set up by hand: the two files, the exact folder,
+         and a check that it took. The footer's primary is the launcher doing it (as administrator
+         when the folder is protected); the card is the player doing it. -->
+    <StackPanel>
+        <Border x:Name="StepsCard" Style="{StaticResource SetCard}" BorderBrush="{DynamicResource UiCardRim}">
+            <StackPanel>
+                <TextBlock x:Name="StepsTitle" Style="{StaticResource SetCardLabel}" Margin="16,12,16,10"/>
+                <StackPanel x:Name="StepsHost" Margin="16,0,16,14"/>
+            </StackPanel>
+        </Border>
+        <StackPanel x:Name="StatusRow" Orientation="Horizontal" Margin="2,12,0,0" Visibility="Collapsed">
+            <Ellipse x:Name="StatusDot" Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,9,0"/>
+            <TextBlock x:Name="StatusText" FontSize="{DynamicResource SetControlSize}" FontWeight="SemiBold"
+                       TextWrapping="Wrap" MaxWidth="460" VerticalAlignment="Center"/>
+        </StackPanel>
+    </StackPanel>
+</controls:BaseDialog>

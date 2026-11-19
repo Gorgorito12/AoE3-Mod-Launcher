@@ -1052,19 +1052,14 @@
                         </Grid>
                         <!-- Shown while the mod is installing/updating: the whole
                              language list is locked (see SetModBusy). -->
+                        <!-- The shared amber notice (a real consequence: the list is locked), not
+                             the gold of the old theme. -->
                         <Border x:Name="LanguageBusyHint"
+                                Style="{StaticResource SetNoticeAmber}"
                                 MaxWidth="520" HorizontalAlignment="Left"
                                 Margin="0,0,0,10"
-                                Padding="12,8"
-                                CornerRadius="6"
-                                Background="{DynamicResource BgPanel}"
-                                BorderBrush="{DynamicResource AccentBrush}"
-                                BorderThickness="1"
                                 Visibility="Collapsed">
-                            <TextBlock x:Name="LanguageBusyHintText"
-                                       Foreground="{DynamicResource AccentBrush}"
-                                       FontSize="{DynamicResource FontSizeBody}"
-                                       TextWrapping="Wrap"/>
+                            <TextBlock x:Name="LanguageBusyHintText" TextWrapping="Wrap"/>
                         </Border>
                         <!-- The active pack checked against the DISK (LoadLanguage →
                              VerifyActiveTranslationAsync): "in use" used to be read from the

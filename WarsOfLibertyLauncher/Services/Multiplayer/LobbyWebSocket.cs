@@ -302,6 +302,11 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     public Task SendSetInGameNameAsync(string name, CancellationToken ct = default) =>
         SendAsync(new { type = "set_ingame_name", name }, ct);
 
+    /// <summary>Whether this player's game enters the LAN game by itself (the LAN helper), for the
+    /// roster's mark. An older server answers unknown_type, which is ignored.</summary>
+    public Task SendSetLanAutoAsync(bool auto, CancellationToken ct = default) =>
+        SendAsync(new { type = "set_lan_auto", auto }, ct);
+
     /// <summary>
     /// Host-only: ask the server to kick a member. The server validates we're
     /// the host, tells the target it was kicked, and closes its socket (the

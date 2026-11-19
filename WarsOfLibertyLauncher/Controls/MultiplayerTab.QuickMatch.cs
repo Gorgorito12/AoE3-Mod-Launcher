@@ -497,12 +497,15 @@ public partial class MultiplayerTab
     private async Task RematchAsync()
     {
         if (_demoRoomSample != null || _session?.Api == null || _roomResult is not { } result) return;
+        if (RefusedForLauncherUpdate("start a rematch")) return;
         var rival = _roomMembers.Values.FirstOrDefault(
             m => string.Equals(m.Login, result.RivalLogin, StringComparison.Ordinal));
         var modId = _currentLobbyModId;
         var title = _roomTitle;
         var seats = RoomPlayingSeats();
         var competitive = _currentLobbyIsCompetitive;
+        // The same match again means the same rules: read before ExitResultPhase clears the room.
+        var rules = _currentLobbyGameRules;
         var rating = _roomResult.RivalRatingShown;
         if (rival == null || string.IsNullOrEmpty(modId) || ModRegistry.Find(modId) is not { } profile
             || _computeModFingerprint == null)
@@ -541,10 +544,11 @@ public partial class MultiplayerTab
                 SpectatorSlots = 0,
                 Password = null,
                 Competitive = competitive,
+                GameRules = rules,
             });
             await EnterCreatedRoomAsync(created, modId, newTitle, seats, isPrivate: false,
                 isCompetitive: created.Competitive, spectatorSlots: created.SpectatorSlots,
-                competitiveDowngraded: false);
+                competitiveDowngraded: false, gameRules: created.GameRules ?? rules);
         }
         catch (Exception ex)
         {

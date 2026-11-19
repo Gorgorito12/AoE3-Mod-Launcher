@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -523,5 +523,30 @@ public class UserDataPayloadTests
 
         Assert.Equal(stored, profile.UserDataFolder);
         Assert.Equal("userdata.zip", profile.UserDataPayload);
+    }
+
+    [Fact]
+    public void THE_SEED_IS_CHECKED_AGAINST_THE_DIGEST_GITHUB_PUBLISHED()
+    {
+        var digest = new string('a', 64);
+        Assert.True(UserDataPayloadService.SeedMatches(digest, digest.ToUpperInvariant()));
+        // A seed that does not match is never unpacked into the player's save folder.
+        Assert.False(UserDataPayloadService.SeedMatches(digest, new string('b', 64)));
+        // An upload GitHub kept no digest for is used, as before (the caller logs it).
+        Assert.True(UserDataPayloadService.SeedMatches(null, new string('b', 64)));
+    }
+
+    [Fact]
+    public void ThePickCarriesTheAssetsDigest()
+    {
+        var graph = new[]
+        {
+            new DeltaChainPlanner.ReleaseSnapshot("1.0", false, new[]
+            {
+                new DeltaChainPlanner.ReleaseAssetSnapshot("userdata.zip", 1, "https://x/1.0/userdata.zip", "abc"),
+            }),
+        };
+        var pick = UserDataPayloadService.SelectSeedAsset(graph, "1.0", null, "userdata.zip");
+        Assert.Equal("abc", pick?.Sha256);
     }
 }

@@ -199,6 +199,10 @@
     <Resource Include="Assets\Sounds\success.wav" />
     <Resource Include="Assets\Sounds\error.wav" />
     <Resource Include="Assets\Sounds\found.wav" />
+    <!-- The optional LAN helper (things-new EngineExt, built from its claude/lan-autostart branch).
+         A manifest resource, not a WPF one: LanHelperService reads it by name, and so do its tests.
+         Its SHA-256 is pinned in LanHelperService.CurrentSha256; see Assets\LanHelper\README.md. -->
+    <EmbeddedResource Include="Assets\LanHelper\dinput8.dll" LogicalName="LanHelper.dinput8.dll" />
 
     <!-- AoE3 taunts (1..33) for the lobby chat: typing "11" plays taunt 11 for
          everyone in the room, each in THEIR launcher's language — see

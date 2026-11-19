@@ -381,6 +381,12 @@ public partial class MultiplayerTab
         }
         hostLine.Children.Insert(0, hostText);
         host.Children.Add(hostLine);
+        // The host's photo and name open his profile (the row's action keeps its own button).
+        if (!_demoRooms && lobby.Host is { } h)
+        {
+            AttachProfileLink(avatar, h.Id, hostName, h.DiscordUsername, h.AvatarUrl);
+            AttachProfileLink(hostText, h.Id, hostName, h.DiscordUsername, h.AvatarUrl);
+        }
         if (BuildRoomHostRating(lobby, hostIsMe) is { } rating)
         {
             rating.Margin = new Thickness(0, 3, 0, 0);
@@ -556,7 +562,19 @@ public partial class MultiplayerTab
             }
             return tb;
         }
-        if (rating is not double r) return null;
+        if (rating is not double r)
+        {
+            // Placed, and still no number: the host keeps his rating private (server migration
+            // 0034). Said in a word rather than left blank, which reads as a fault.
+            var required = team ? StatsDemoData.PlacementTeam : StatsDemoData.PlacementDefault;
+            if (RatingDisplay.IsPrivateRating(rating, played, required) && !hostIsMe)
+            {
+                tb.Text = Strings.Get("MpEloHiddenPrivate");
+                tb.ToolTip = TooltipHelper.Wrap(Strings.Get("MpEloHiddenPrivateTip"));
+                return tb;
+            }
+            return null;
+        }
         number.Text = PlacementView.RatingText(r);
         tb.Inlines.Add(number);
         tb.Inlines.Add(new System.Windows.Documents.Run(" ELO"));
@@ -581,6 +599,13 @@ public partial class MultiplayerTab
             yield return RoomChip(label != null ? Strings.Format("RmChipCasual", label) : Strings.Format("RmChipCasualPlayers", size),
                 "RmDotCasual", "RmTextHost", Strings.Get("MpRoomCasualTooltip"));
         }
+        // Second, so the chat's room card (which shows two) says the mode and the rules. Only
+        // when stated and not Standard; neutral, because the list mixes mods and a rule is
+        // neither a state nor any one viewer's.
+        if (LanAutoStartArgs.ShowsRulesChip(lobby.GameRules))
+            yield return RoomChip(Strings.Format("RoomRulesChip", Strings.Get(LanAutoStartArgs.RulesLabelKey(lobby.GameRules!.Value))),
+                "MpTextMuted", "RmTextHost", Strings.Format("RoomRulesTip",
+                    CreateLobbyDialog.RulesDescription(lobby.GameRules!.Value)));
         // Purple, the colour a password room wears everywhere else (the create dialog, the room).
         if (lobby.IsPrivate && !facts.Mine)
             yield return RoomChip(Strings.Get("RmChipPassword"), "MpPrivate", "MpPrivateText",
@@ -802,7 +827,13 @@ public partial class MultiplayerTab
                 };
                 break;
             case RoomAction.SeeMatch:
-                btn.Click += (_, _) => { if (_demoRooms) DemoRoomsSay(caption); else OpenPlayersPeek(btn); };
+                // The read-only window when the server offers it; the players peek otherwise.
+                btn.Click += (_, _) =>
+                {
+                    if (_demoRooms) DemoRoomsSay(caption);
+                    else if (_roomsLiveView) OpenLiveMatchWatch(lobby.Id, lobby.Title, lobby.ModId);
+                    else OpenPlayersPeek(btn);
+                };
                 break;
         }
         fire = () => btn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));

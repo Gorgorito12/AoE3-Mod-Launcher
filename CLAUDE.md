@@ -1421,8 +1421,11 @@ rather than the reverse.
   can" (`VerifyRelayGranularBody`); with it off the old "will re-download the mod files"
   (`DlgVerifyRepairBody`) stays, because for that player it is true. Two copies of the condition is
   how the text would come to promise a download that does not happen, or the reverse.
-  **Not yet done** (roadmap): making it the default (with an "always reinstall everything"
-  setting), decided on the shadow numbers from ordinary players' repairs.
+  **It is the default now (2026-11-18), no longer developer mode**: `GranularRestoreEnabled` reads
+  the player's "Download only what changed" (on by default) through the pure
+  `Services/Repair/IncrementalDownloads` — off, the whole download and no shadow plan computed; a
+  release that ships patches only still patches when off (it has no full download). The switch's
+  hint says what it governs. Pinned by `IncrementalDownloadsTests`.
 
 - **The install manifest now carries hashes, and `UpdateService` recognises the
   launcher's own byte-faithful payload FROM the manifest — keep the three maps in
@@ -2294,6 +2297,14 @@ rather than the reverse.
   Pinned by `InlineFlagFitTests.THE_ONE_THAT_MATTERS_HidingAFlagNeverInvalidatesTheLine`,
   `RoomsActivityLayoutTests.ARowThatDoesNotFitIsLaidOutAtThePanelsWidth` and
   `CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth`.
+  **A size MEASURED FROM the layout it then decides must ignore rounding — `RoomsActivityLayout.Settle`
+  (2026-11-18).** The community block measures its minimum from what is drawn, and on a 125 % screen
+  75 lays out at 75.2 and 74 at 73.6, so the measurement answered itself: 75 → 74 → 75, a thousand
+  passes a second on the Rooms page of EVERY launcher on the server, for as long as one community
+  match and an empty ladder were on screen (a new community, a restarted server). Found by the
+  two-account rig on its first match; a unit test at 96 DPI cannot see it, which is why the pin is
+  the pure rule (`RoomsActivityLayoutTests.THE_ONE_THAT_MATTERS_RoundingNeverMovesAMeasurementThatIsInUse`).
+  A new measurement replaces the one in use only past `MeasurementTolerance` (2 px).
 
 - **A `ControlTemplate` trigger that paints a template element by `TargetName` CANNOT be
   overridden by a style derived from it — so a template meant to be a `BasedOn` base must
@@ -3476,6 +3487,9 @@ rather than the reverse.
   directory is removed only while empty, and the root only when the launcher created it. Note
   `DoUninstall` loads the manifest at the TOP: phase 2 destroys it on both branches, so reading
   it later would make the whole phase a silent no-op that still reports success.
+  **The seed is checked against the SHA-256 GitHub published for its asset** (2026-11-18,
+  `SeedAssetPick.Sha256`, `SeedMatches`): a seed that does not match is deleted and never unpacked
+  into the save folder; an upload GitHub kept no digest for is used and logged, as before.
   Pinned by `UserDataPayloadTests`, where every case but three is a refusal.
 
 - **A mod may ship PATCH-ONLY releases — the full `.zip` goes up once (a "baseline") and later
@@ -5541,8 +5555,9 @@ rather than the reverse.
   CORRECTED pair (`UHC.DLL` 1,187,840 B, `Startup\uhc.cfg` 13 B). The catalog still says
   `approvedReleaseTag "1.01"` with `followLatest: true`, so installs work only once the
   latest-release lookup has resolved `1.0.0`; when that lookup fails with nothing cached, the
-  install stops before the dialog with a 404 (no download is wasted). The fix is in the catalog
-  repo — point `approvedReleaseTag` at `1.0.0`, or recreate tag `1.01`.
+  install stops before the dialog with a 404 (no download is wasted). **Fixed in the catalog
+  checkout on 2026-11-18** (`approvedReleaseTag` → `1.0.0`); it reaches players once the maintainer
+  commits it there.
   **Enhanced Legacy Edition catalog note (`mods/enhanced-legacy-edition`, 3.0):** ELE ships a
   manual-install zip whose files live in `Art\~ELE` / `Data\~ELE` / `Sound\~ELE`, and runs
   through `age3e.bat`, which moves every loose item of those three folders aside, pulls ELE's
@@ -7231,12 +7246,14 @@ rather than the reverse.
   (its migrations and a rewrite, a second opinion about the config — the same reasoning as
   `App.ReadTextScaleSetting`), and the writes are surgical `JsonNode` read-modify-writes so a
   key a NEWER build wrote survives untouched.
-  **Not covered, on purpose:** a release that appears while the launcher is already open is
-  NOT noticed by that session — nothing re-checks GitHub periodically. It shows the pill from
-  the next launch, or sooner through the offline chip or Settings → Maintenance → Check now (the
-  server's `launcher_too_old` refusal also forces the check); and the launcher respects `checkUpdatesOnStartup` (documented as "metered,
-  stay off the network"), which is the only opt-out and is checked FIRST. Those users stay
-  covered by the server's own `launcher_too_old` refusal, which forces the dialog.
+  **The open launcher looks again about every 30 minutes (2026-11-18)** — the 6th tick of
+  `_catalogPollTimer`, gated by `LauncherUpdateGate.ShouldCheckPeriodically` (the setting,
+  online, nothing pending, no game running), ETag-conditional. A release found while the player is
+  in a room, a match or a search shows the pill and the bell at once but closes multiplayer only
+  once he is out (`ShouldCloseNow`, `_deferredUpdateGate`, applied beside the pending session
+  rejection); create, join and rematch check the gate in code (`RefusedForLauncherUpdate`). The
+  launcher still respects `checkUpdatesOnStartup` ("metered, stay off the network"), and those
+  users stay covered by the server's `launcher_too_old` refusal. Pinned by `PeriodicSelfCheckTests`.
   **First-release caveat:** this ships IN release N and therefore first fires when N+1 exists —
   getting onto N is still the pill.
 
@@ -7605,9 +7622,10 @@ engine** and the UI binds to it.
    the server refuses any other size for a competitive room. The format decides which of the
    competitive promises apply: walking out is a forfeit **only in 1v1**, because the server
    refuses to decide a team game that way. Only a room created with the *competitive* box
-   ticked can score, and in one the launcher confirms Record Game before every
-   start, holds the host in the room until the result is sent, and looks harder for
-   the recording. Walking out of one after five minutes is a forfeit, decided by the
+   ticked can score, and in one the launcher ticks Record Game for the host (asking
+   only when that failed or the last match went unrecorded), keeps the host a member of
+   the room until the result is sent (the window itself closes at once), and looks harder
+   for the recording. Walking out of one after five minutes is a forfeit, decided by the
    server — and **walking out means leaving the room or closing the LAUNCHER, never closing
    the game**: AoE3 has no reconnection, so every launcher reports its own exit
    (`game_exited`) and the server stores it, but it deliberately decides nothing on that — in
@@ -8984,19 +9002,37 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   methods call `RefreshFooter` themselves. Pinned by
   `DialogXamlTests.TheSettingsFooterAppliesInstantlyAndOnlyCountsWhatCanStillBeRefused`.
 
-- **Five settings switches STORE a value that nothing reads yet, on purpose — and one of
-  them must never be wired the obvious way.** `AutoUpdateMods`, `UpdateChannel`,
-  `DownloadLimitKbps`, `VerifyDownloadSignatures` and `ShowMyElo` are in `LauncherConfig` and
-  on the settings screens because the handoff's layout needs the row to exist and the value
-  has to survive a restart; the behaviour behind each is separate work. They are documented
-  as stored-and-unread at their declarations, so a reader who finds one does not conclude the
-  feature is broken. (`ReplayUploadPolicy` used to be the sixth; it is READ now — one switch,
-  "Share my competitive match recordings", that is the opt-out for the recording upload.)
-  ⚠ **`VerifyDownloadSignatures` is the dangerous one.** The SHA-256 check on a download is
-  ALREADY conditional — it runs when the publisher pinned a hash — so wiring this switch to
-  "skip the check" would turn a safety net off and be a straight security downgrade. If it is
-  ever wired, the only correct reading is the inverse: *warn me when a payload arrives with no
-  pinned hash*.
+- **The stored-but-unread settings are gone (2026-11-18): the useful ones are real, the rest
+  were removed.** `AutoUpdateMods` (off by default) updates installed mods by itself through
+  `MainWindow.AutoUpdateMods.cs` and the pure `Services/ModAutoUpdatePolicy` — never a window:
+  anything that would need an answer (administrator rights, a private key, disk) is refused, it
+  never starts beside a game (by process, launched by us or not), in a room, a match or a search,
+  or while another operation runs, and gives up on a version after two attempts. The mod on screen
+  first; then, one per tick, the mods the notification sweep found behind
+  (`NoteBehindForAutoUpdate`), each through its OWN `UpdateService` passed as the target of the
+  same `ApplyAsync` / `RepairInstallAsync` (`target:`; inside, every read goes through that
+  service, `_operatingService` feeds the shared progress, pause and bell code, and only the mod on
+  screen re-checks the screen afterwards). **While it runs `Services/Unattended` answers for the
+  player**: a question owned by the main window is "no" and a notice is a toast — the antivirus
+  window included, as a toast whose button opens it later (`AvBlockedToast*`). Triggers: an Update
+  CTA appearing (5 s), the sweep (30 s), 90 s after a game. Not automated: installs, repairs,
+  version picks, an install of unknown version, a pinned version. Pinned by `UnattendedTests` and
+  `OtherModAutoUpdateTests`. `DownloadLimitKbps` is real
+  (`Services/DownloadThrottle`: one token bucket shared by every download, read per chunk; the
+  startup self-update is exempt through `LauncherUpdateService.DownloadUpdateAsync(throttled:
+  false)`). `DeltaDownloadsOnly` governs granular repair and patching (see the repair bullet).
+  `ShowMyElo` mirrors the server's `rating_private` (see multiplayer.md). **The Beta channel and
+  "Verify the signature" rows were removed**: there is no beta channel, and GitHub's per-asset
+  digest is ALWAYS verified now (`Services/GitHubDigest`, the one parser; mod payloads, split parts
+  and fresh-install baselines carry it into the per-part SHA check) — integrity, not authenticity;
+  the catalog pins remain the authenticity layer. The two config fields stay, marked "no longer
+  shown". Pinned by `RemovedSettingsRowsTests`, `DownloadThrottleTests`,
+  `ModAutoUpdatePolicyTests`, `GitHubDigestTests`.
+- **`--update-now[=fresh|copy]` and `--repair-now=<id>:update[:fresh|:copy]` carry the install
+  context through the elevated relaunch** (`Services/UpdateNowArg`, `RepairResume.ContextOf`), so
+  the bell after an install that needed administrator rights says "installed". `App.OnStartup`
+  uses `UpdateNowArg.IsPresent`, never an exact match, or the startup self-update would restart
+  out from under the job. Pinned by `UpdateNowArgTests`.
 
 - **Maximize-respects-taskbar is set globally — don't roll your own per-Window.**
   The same `App.OnStartup` class handler that wires HiDPI crispness also

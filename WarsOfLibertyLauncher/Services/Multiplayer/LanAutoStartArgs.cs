@@ -52,6 +52,39 @@ public static class LanAutoStartArgs
 
     public static bool IsTreaty(int rules) => rules is >= Treaty10 and <= TreatyNoBlockade;
 
+    private static readonly IReadOnlyList<int> StandardOnly = new[] { Standard };
+    private static readonly IReadOnlyList<int> WithoutTreaties =
+        OfferedRules.Where(r => !IsTreaty(r)).ToArray();
+
+    /// <summary>
+    /// The entries a room may use. A competitive room plays Standard only, like the quick match and
+    /// tournament rooms: one ladder, one way to play it. A mod that marks the treaties unsupported
+    /// (<c>ModProfile.NoTreatyRules</c>) never offers them.
+    /// </summary>
+    public static IReadOnlyList<int> RulesOfferedFor(bool competitive, bool noTreaty) =>
+        competitive ? StandardOnly : noTreaty ? WithoutTreaties : OfferedRules;
+
+    /// <summary>The rules a room is created with: the choice when that room may use it, else Standard.</summary>
+    public static int EffectiveRules(int chosen, bool competitive, bool noTreaty) =>
+        RulesOfferedFor(competitive, noTreaty).Contains(chosen) ? chosen : Standard;
+
+    /// <summary>
+    /// The rules a room plays with, as every member must see them (server migration 0033): the
+    /// SERVER's value whenever it sent one — it is the same for the creator, a joiner, a host
+    /// promoted after the creator left and a rematch — else <paramref name="localChoice"/>, which
+    /// is what an older server leaves the creator with and Standard for everybody else. Always
+    /// through <see cref="EffectiveRules"/>, so a value this mod cannot use is never launched.
+    /// </summary>
+    public static int RoomRules(int? serverRules, int localChoice, bool competitive, bool noTreaty) =>
+        EffectiveRules(serverRules ?? localChoice, competitive, noTreaty);
+
+    /// <summary>
+    /// Whether a room's rules deserve a chip: only when they were STATED and are not Standard. A
+    /// chip on every room saying "Standard" says nothing, and an older server's silence is not a
+    /// claim that the room is Standard.
+    /// </summary>
+    public static bool ShowsRulesChip(int? rules) => rules is { } r && r != Standard && OfferedRules.Contains(r);
+
     public static string RulesLabelKey(int rules) => rules switch
     {
         Classic => "MpCreateDialogRulesClassic",
@@ -88,17 +121,72 @@ public static class LanAutoStartArgs
     /// The arguments for this player, with a leading space, or "" when there is none to give.
     /// <paramref name="gameRules"/> is the host's choice; Standard, an entry not offered, or a
     /// joiner adds nothing.
+    ///
+    /// <para><paramref name="forceStandard"/> (a competitive room) passes Standard EXPLICITLY: the
+    /// game's Game Rules dropdown opens on whatever the host last picked by hand, so leaving the
+    /// argument out would not guarantee Standard. <paramref name="enabled"/> false (the player
+    /// switched the automatic entry off in the room) gives nothing at all.</para>
     /// </summary>
-    public static string For(bool isHost, string? hostRadminIp, int gameRules = Standard)
+    public static string For(bool isHost, string? hostRadminIp, int gameRules = Standard,
+        bool forceStandard = false, bool enabled = true)
     {
+        if (!enabled) return "";
         if (isHost)
         {
+            if (forceStandard) return $" {HostToken} {RulesToken}={Standard}";
             return gameRules != Standard && IsOfferedRules(gameRules)
                 ? $" {HostToken} {RulesToken}={gameRules}"
                 : " " + HostToken;
         }
         var address = Normalize(hostRadminIp);
         return address == null ? "" : $" {JoinToken}=\"{address}\"";
+    }
+
+    /// <summary>
+    /// Whether a cfg enables the key: a line whose first word is <c>lanAutoStart</c>, in any case, not
+    /// a comment. The cfg reader's own rules: a first word starting with <c>#</c> is a comment, and so
+    /// is anything after <c>//</c>.
+    /// </summary>
+    internal static bool CfgEnablesLanAutoStart(IEnumerable<string> lines)
+    {
+        foreach (var raw in lines)
+        {
+            var line = raw;
+            var slash = line.IndexOf("//", System.StringComparison.Ordinal);
+            if (slash >= 0) line = line[..slash];
+            var first = line.Split(new[] { ' ', '\t', '=' }, System.StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault();
+            if (first != null && string.Equals(first, "lanAutoStart", System.StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Which cfg of an install turns the key on, or null when none does: <c>Startup\*.cfg</c> (read
+    /// by a things-new <c>UHC.dll</c>) or <c>engine-ext\engine-ext.cfg</c> (its <c>dinput8.dll</c>,
+    /// beside another DLL). Read-only, best-effort: it only feeds a log line, so a player's report
+    /// says whether the game could act on the argument at all.
+    /// </summary>
+    public static string? CfgEnablingLanAutoStart(string? installPath)
+    {
+        if (string.IsNullOrWhiteSpace(installPath)) return null;
+        try
+        {
+            var candidates = new List<string>();
+            var startup = System.IO.Path.Combine(installPath, "Startup");
+            if (System.IO.Directory.Exists(startup))
+                candidates.AddRange(System.IO.Directory.GetFiles(startup, "*.cfg"));
+            var engineExt = System.IO.Path.Combine(installPath, "engine-ext", "engine-ext.cfg");
+            if (System.IO.File.Exists(engineExt)) candidates.Add(engineExt);
+            foreach (var cfg in candidates)
+                if (CfgEnablesLanAutoStart(System.IO.File.ReadLines(cfg)))
+                    return System.IO.Path.GetRelativePath(installPath, cfg);
+        }
+        catch (System.Exception)
+        {
+        }
+        return null;
     }
 
     /// <summary>

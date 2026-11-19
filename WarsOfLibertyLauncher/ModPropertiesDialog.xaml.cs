@@ -2590,6 +2590,12 @@ public partial class ModPropertiesDialog : Window
             : Strings.Get("AddonsGroupCatalogHint");
         AddonsEmptyHint.Visibility = imported.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (imported.Count == 0) AddonsEmptyHint.Text = Strings.Get("AddonsEmptyHint");
+
+        // The rail's count: addons ON in this install (hidden at 0). The pill was in the XAML and
+        // nothing ever filled it.
+        int active = AddonRegistry.All.Count(e => enabled.Contains(e.Id)) + imported.Count(a => enabled.Contains(a.Id));
+        TabAddonsCountText.Text = active.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        TabAddonsCount.Visibility = active > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>

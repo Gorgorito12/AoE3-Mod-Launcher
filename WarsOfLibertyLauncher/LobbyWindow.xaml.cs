@@ -130,6 +130,15 @@ public partial class LobbyWindow : Window
     /// <summary>Explain where AoE3 hides the per-match Record Game checkbox.</summary>
     public Action? OnRecordHelp { get; set; }
 
+    /// <summary>The host of a casual room starts without waiting for everyone (asked first).</summary>
+    public Action? OnForceStart { get; set; }
+
+    /// <summary>The automatic-entry card's button: set the entry up, or see why it cannot be.</summary>
+    public Action? OnLanSetup { get; set; }
+
+    /// <summary>The automatic-entry card's switch, with its new state.</summary>
+    public Action<bool>? OnLanSwitch { get; set; }
+
     /// <summary>Copy the room code (the alone-in-the-room box).</summary>
     public Action? OnCopyRoomCode { get; set; }
 
@@ -396,6 +405,13 @@ public partial class LobbyWindow : Window
         => OnCopyCodeChip?.Invoke();
 
     private void RoomSecondaryButton_Click(object sender, RoutedEventArgs e) => OnFooterSecondary?.Invoke();
+    private void RoomForceStartLink_Click(object sender, RoutedEventArgs e) => OnForceStart?.Invoke();
+    private void RoomLanAction_Click(object sender, RoutedEventArgs e) => OnLanSetup?.Invoke();
+
+    /// <summary>Checked/Unchecked rather than Click: a keyboard toggle and an accessibility tool's
+    /// Toggle change the state without a click. A repaint that sets the same state raises nothing,
+    /// and one that changes it reports what the setting already is, which changes nothing.</summary>
+    private void RoomLanSwitch_Changed(object sender, RoutedEventArgs e) => OnLanSwitch?.Invoke(RoomLanSwitch.IsChecked == true);
     private void RoomViewBracketButton_Click(object sender, RoutedEventArgs e) => OnViewBracket?.Invoke();
     private void RematchButton_Click(object sender, RoutedEventArgs e) => OnRematch?.Invoke();
     private void RoomRecordMute_Click(object sender, RoutedEventArgs e) => OnMuteRecordReminder?.Invoke();

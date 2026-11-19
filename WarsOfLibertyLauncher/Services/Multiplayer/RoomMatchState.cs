@@ -115,6 +115,23 @@ public static class RoomMatchState
            && secondsSinceGameExit < ResultGraceSeconds;
 
     /// <summary>
+    /// Whether a room window the player closed during the hold may now really leave the room.
+    ///
+    /// <para>The hold no longer keeps the window on screen: pressing Leave or ✕ hides it at once,
+    /// and the launcher stays a MEMBER behind it until this says yes. Staying a member is the
+    /// whole point (leaving hands the host role over and the server refuses the report), and
+    /// hiding the window is what makes that invisible to the player.</para>
+    ///
+    /// <para>The host goes as soon as his own result chain has finished. The guest goes when his
+    /// result has arrived, because leaving earlier is what used to cost him the sight of it.
+    /// Both go at <see cref="ResultGraceSeconds"/> whatever is still outstanding: the same
+    /// ceiling the hold always had, so a stalled chain still cannot keep anybody in a room.</para>
+    /// </summary>
+    public static bool FinishDetachedLeave(bool isHost, ResultPhase phase, bool resultKnown, double secondsSinceHoldStart)
+        => secondsSinceHoldStart >= ResultGraceSeconds
+           || (phase == ResultPhase.None && (isHost || resultKnown));
+
+    /// <summary>
     /// How far into a competitive match a walkout has to be before it forfeits — the
     /// launcher's copy of the server's <c>COMPETITIVE_ABANDON_SECONDS</c> (300).
     ///

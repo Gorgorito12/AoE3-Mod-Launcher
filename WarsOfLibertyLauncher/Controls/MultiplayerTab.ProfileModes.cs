@@ -191,7 +191,7 @@ public partial class MultiplayerTab
             case ProfileModeShape.NoGames:
                 body.Children.Add(new TextBlock
                 {
-                    Text = Strings.Format("MpProfileModeEmptyYou",
+                    Text = Strings.Format(_renderingOtherProfile ? "MpProfileModeEmptyThem" : "MpProfileModeEmptyYou",
                         ModeName(team).ToLower(Strings.Culture), PlacementRequiredFor(ladder, team)),
                     Margin = new Thickness(0, 6, 0, 0),
                     FontSize = (double)Application.Current.FindResource("MpMetaSize"),
@@ -221,6 +221,23 @@ public partial class MultiplayerTab
     private void FillRankedCard(StackPanel body, LadderStanding ladder, bool inactive, bool legacy, bool team)
     {
         var rating = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+        if (SubjectRatingHidden(ladder))
+        {
+            // Somebody else who keeps his rating private: the server sent no number, and drawing
+            // the field would print 0. Record and streaks below stay.
+            var hidden = new TextBlock
+            {
+                Text = Strings.Get("MpEloHiddenPrivate"),
+                FontFamily = (FontFamily)Application.Current.FindResource("DisplayFont"),
+                FontSize = (double)Application.Current.FindResource("ProfileRatingSize"),
+                FontWeight = FontWeights.Bold,
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                ToolTip = TooltipHelper.Wrap(Strings.Get("MpEloHiddenPrivateTip")),
+            };
+            rating.Children.Add(hidden);
+            body.Children.Add(rating);
+            return;
+        }
         rating.Children.Add(new TextBlock
         {
             Text = PlacementView.RatingText(ladder.Rating),
@@ -390,8 +407,17 @@ public partial class MultiplayerTab
             Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
             ToolTip = TooltipHelper.Wrap(Strings.Get("MpEloProvisionalTip")),
         };
-        figure.Inlines.Add(new Run(PlacementView.RatingText(ladder.Rating)));
-        figure.Inlines.Add(new Run("?") { Foreground = (Brush)Application.Current.FindResource("MpCaution") });
+        if (SubjectRatingHidden(ladder))
+        {
+            // Somebody else being placed: his rating is his until placement ends (55).
+            figure.Inlines.Add(new Run(RatingDisplay.PlacementLabel(played, required, shortForm: false)));
+            figure.ToolTip = TooltipHelper.Wrap(Strings.Get("MpEloHiddenPlacementTip"));
+        }
+        else
+        {
+            figure.Inlines.Add(new Run(PlacementView.RatingText(ladder.Rating)));
+            figure.Inlines.Add(new Run("?") { Foreground = (Brush)Application.Current.FindResource("MpCaution") });
+        }
         rating.Children.Add(figure);
 
         var progress = StatsProse(Strings.Get("MpProfileProvisional"), "StatsProseSize", "StatsProse");
@@ -433,7 +459,7 @@ public partial class MultiplayerTab
             empty.Children.Add(title);
             empty.Children.Add(new TextBlock
             {
-                Text = Strings.Get("MpH2HEmptyYou"),
+                Text = Strings.Get(_renderingOtherProfile ? "MpH2HEmptyOther" : "MpH2HEmptyYou"),
                 Margin = new Thickness(0, 5, 0, 0),
                 FontSize = (double)Application.Current.FindResource("MpMetaSize"),
                 LineHeight = 18,
@@ -478,7 +504,7 @@ public partial class MultiplayerTab
                 BorderThickness = new Thickness(0, 1, 0, 0),
                 Child = new TextBlock
                 {
-                    Text = Strings.Get("MpH2HEmptyYou"),
+                    Text = Strings.Get(_renderingOtherProfile ? "MpH2HEmptyOther" : "MpH2HEmptyYou"),
                     FontSize = (double)Application.Current.FindResource("MpMetaSize"),
                     Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
                     TextWrapping = TextWrapping.Wrap,

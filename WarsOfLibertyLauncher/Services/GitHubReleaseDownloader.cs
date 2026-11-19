@@ -57,8 +57,9 @@ public class GitHubReleaseDownloader
     /// declared its SHA in the catalog — in that case the caller MUST verify the downloaded file's
     /// hash and reject mismatches. That path is single-url by construction (one template, one
     /// pinned hash), so the list is parallel to <see cref="Urls"/> and never disagrees in length.
-    /// For regular GitHub-hosted assets it stays null because the launcher trusts the asset CDN
-    /// inherently.</para>
+    /// For regular GitHub-hosted assets it carries GitHub's own per-asset digest when the release
+    /// publishes one (2026-11-18): integrity rather than authenticity, but it turns a corrupt or
+    /// truncated download into a retry instead of a broken install. Null for older releases.</para>
     ///
     /// <para><see cref="Size"/> is the TOTAL across every part, and <c>-1</c> when unknown
     /// (external URLs the launcher hasn't probed); callers fall back to Content-Length.</para>
@@ -263,7 +264,7 @@ public class GitHubReleaseDownloader
                     if (string.IsNullOrWhiteSpace(a.Name)) continue;
                     if (string.IsNullOrWhiteSpace(a.BrowserDownloadUrl)) continue;
                     assets.Add(new DeltaChainPlanner.ReleaseAssetSnapshot(
-                        a.Name, a.Size, a.BrowserDownloadUrl));
+                        a.Name, a.Size, a.BrowserDownloadUrl, GitHubDigest.TryParseSha256(a.Digest)));
                 }
 
                 list.Add(new DeltaChainPlanner.ReleaseSnapshot(r.TagName, r.Prerelease, assets));
@@ -466,7 +467,7 @@ public class GitHubReleaseDownloader
             DiagnosticLog.Write(
                 $"GitHubReleases: resolved {parts.Count}-part asset '{release.Assets[parts[0]].Name}' " +
                 $"({totalBytes} bytes total) in release '{tag}'");
-            return new ResolvedPayload(partUrls, totalBytes, null);
+            return new ResolvedPayload(partUrls, totalBytes, DigestsOf(parts.Select(i => release.Assets[i]), tag));
         }
 
         // Parts present but unusable: say WHICH part is missing rather than "no asset matching".
@@ -481,7 +482,7 @@ public class GitHubReleaseDownloader
 
         DiagnosticLog.Write(
             $"GitHubReleases: resolved asset '{asset.Name}' ({asset.Size} bytes) at {asset.BrowserDownloadUrl}");
-        return new ResolvedPayload(new[] { asset.BrowserDownloadUrl }, asset.Size, null);
+        return new ResolvedPayload(new[] { asset.BrowserDownloadUrl }, asset.Size, DigestsOf(new[] { asset }, tag));
     }
 
     /// <summary>
@@ -527,6 +528,7 @@ public class GitHubReleaseDownloader
                 copied += read;
                 await dst.WriteAsync(buffer.AsMemory(0, read), ct);
                 progress?.Report((copied, expected));
+                await DownloadThrottle.WaitAsync(read, ct);
             }
         }
 
@@ -851,5 +853,25 @@ public class GitHubReleaseDownloader
 
         [JsonPropertyName("browser_download_url")]
         public string BrowserDownloadUrl { get; set; } = "";
+
+        /// <summary>GitHub's "sha256:…" for the asset, on releases uploaded since mid-2025.</summary>
+        [JsonPropertyName("digest")]
+        public string? Digest { get; set; }
+    }
+
+    /// <summary>
+    /// The SHA-256 of each asset as GitHub published it, parallel to the urls, or null when none
+    /// carries one (older releases). A part without one is "" — the per-part check then skips that
+    /// part only. Always verified (2026-11-18): integrity, see <see cref="GitHubDigest"/>.
+    /// </summary>
+    private static IReadOnlyList<string>? DigestsOf(IEnumerable<GitHubAsset> assets, string tag)
+    {
+        var list = assets.Select(a => GitHubDigest.TryParseSha256(a.Digest) ?? "").ToList();
+        if (list.All(d => d.Length == 0))
+        {
+            DiagnosticLog.Write($"GitHubReleases: release '{tag}' publishes no digest; the download is checked by its size only.");
+            return null;
+        }
+        return list;
     }
 }

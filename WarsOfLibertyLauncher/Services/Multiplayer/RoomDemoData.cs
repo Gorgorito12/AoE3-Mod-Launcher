@@ -73,6 +73,9 @@ public static class RoomDemoData
         public required bool Competitive { get; init; }
         public required IReadOnlyList<Seat> Players { get; init; }
 
+        /// <summary>The room's Game Rules as the server would state them (Standard by default).</summary>
+        public int GameRules { get; init; }
+
         /// <summary>Paint the room as a quick match still waiting for its rival (design 96).</summary>
         public bool QuickSearch { get; init; }
 
@@ -334,6 +337,8 @@ public static class RoomDemoData
             {
                 Name = id, Code = "7KQ2WX", RoomName = night, Seats = 4, Competitive = false,
                 Players = new[] { Gorgo(), Cuzco(), Malinche() }, ViewerId = "demo-gorgo", Chat = Casual(3),
+                // A casual room with rules other than Standard, so the header's rules chip is seen.
+                GameRules = LanAutoStartArgs.KingOfTheHill,
             },
             "87d" => new()
             {

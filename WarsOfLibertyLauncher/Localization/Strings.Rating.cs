@@ -135,12 +135,32 @@ public static partial class Strings
         ["MpProfilePlacementLine"] = new() { [LangEn] = "Placement {0}", [LangEs] = "Posicionamiento {0}" },
         ["MpPlacementLeft"] = new() { [LangEn] = "{0} more rated matches to enter the table.", [LangEs] = "Faltan {0} partidas puntuadas para entrar en la tabla." },
         ["MpPlacementLeftOne"] = new() { [LangEn] = "1 more rated match to enter the table.", [LangEs] = "Falta 1 partida puntuada para entrar en la tabla." },
+        ["MpProfileModeEmptyThem"] = new()
+        {
+            [LangEn] = "No rated matches in {0} yet. The first {1} are placement.",
+            [LangEs] = "Todavía no tiene partidas puntuadas en {0}. Las primeras {1} son de posicionamiento.",
+        },
+        ["MpProfileCurveTeamWaitThem"] = new() { [LangEn] = "The Teams ELO shows once placement is over.", [LangEs] = "El ELO de Equipos se muestra cuando termine el posicionamiento." },
+        ["MpProfileStreakPipsTipThem"] = new() { [LangEn] = "The last rated matches, oldest to newest", [LangEs] = "Las últimas partidas puntuadas, de la más antigua a la más reciente" },
         ["MpProfileModeEmptyYou"] = new()
         {
             [LangEn] = "You haven't played rated matches in {0} yet. Your first {1} are placement.",
             [LangEs] = "Todavía no jugaste partidas puntuadas en {0}. Tus primeras {1} son de posicionamiento.",
         },
         ["MpProfileModeEmptyOther"] = new() { [LangEn] = "No rated matches in {0} yet.", [LangEs] = "Todavía no jugó partidas puntuadas en {0}." },
+        ["MpProfileNoMatchesThem"] = new() { [LangEn] = "No rated matches yet.", [LangEs] = "Todavía no tiene partidas puntuadas." },
+        ["MpProfileOfTitle"] = new() { [LangEn] = "Profile · {0}", [LangEs] = "Perfil · {0}" },
+        ["MpProfileOpenTip"] = new() { [LangEn] = "See {0}'s profile", [LangEs] = "Ver el perfil de {0}" },
+        ["MpProfileBackToMine"] = new() { [LangEn] = "‹ My profile", [LangEs] = "‹ Mi perfil" },
+        ["MpProfileVersusTitle"] = new() { [LangEn] = "You vs {0}", [LangEs] = "Tú contra {0}" },
+        ["MpProfileVersusRecord"] = new() { [LangEn] = "You won {0}, lost {1} · {2} matches between you", [LangEs] = "Ganaste {0}, perdiste {1} · {2} partidas entre los dos" },
+        ["MpProfileVersusRecordOne"] = new() { [LangEn] = "You won {0}, lost {1} · 1 match between you", [LangEs] = "Ganaste {0}, perdiste {1} · 1 partida entre los dos" },
+        ["MpProfileVersusNever"] = new() { [LangEn] = "You have never played against each other.", [LangEs] = "Nunca han jugado entre ustedes." },
+        ["MpProfileVersusNoneRecent"] = new() { [LangEn] = "No meetings in his last 50 matches.", [LangEs] = "Ningún encuentro en sus últimas 50 partidas." },
+        ["MpProfileVersusYouWon"] = new() { [LangEn] = "You won", [LangEs] = "Ganaste" },
+        ["MpProfileVersusYouLost"] = new() { [LangEn] = "You lost", [LangEs] = "Perdiste" },
+        ["MpProfileVersusNoWinner"] = new() { [LangEn] = "No winner", [LangEs] = "Sin ganador" },
+        ["MpProfilePrivateNotice"] = new() { [LangEn] = "{0} keeps the rating private: you see the record and the history, not the ELO.", [LangEs] = "{0} mantiene su ELO en privado: ves su historial y sus partidas, no su ELO." },
         ["MpProfileNoMatchesYou"] = new()
         {
             [LangEn] = "You haven't played rated matches yet. Your first match in each mode starts its placement.",

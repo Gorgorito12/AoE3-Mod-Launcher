@@ -99,13 +99,19 @@ public static class RoomActionRule
         _ => "RmGroupUnavailable",
     };
 
-    /// <summary>The ping's colour band: green under 100 ms, amber over 150, plain between, faint
-    /// when unknown.</summary>
+    /// <summary>
+    /// The ping's colour, a traffic light that says what the signal bars say: green under 100 ms
+    /// (three or four bars), amber up to 150 (two), red above (one), faint when unknown.
+    ///
+    /// <para>The middle band used to be plain white and the worst one amber, so two bars read as
+    /// "nothing to say" and one bar as a mild warning. The cuts are the bars' own
+    /// (<see cref="PeerPingView.LitBars"/>); a test holds the two together.</para>
+    /// </summary>
     public static string PingBrushKey(int? ms) => ms switch
     {
         null or < 0 => "RmPingUnknown",
         < 100 => "RmPingGood",
-        > 150 => "RmPingSlow",
-        _ => "RmPingPlain",
+        > 150 => "RmPingBad",
+        _ => "RmPingSlow",
     };
 }

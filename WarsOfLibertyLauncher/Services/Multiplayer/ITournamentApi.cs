@@ -58,6 +58,13 @@ internal interface ITournamentApi
     /// <summary>Delete a draft, cancelled or abandoned tournament with no game played.</summary>
     Task<object> DeleteTournamentAsync(string id, CancellationToken ct = default);
 
+    /// <summary>The OWNER makes it public or private, before the bracket is drawn (2026-11-18).
+    /// Going private mints a new code; going public clears it.</summary>
+    Task<object> SetTournamentVisibilityAsync(string id, string visibility, CancellationToken ct = default);
+
+    /// <summary>The OWNER renews a private tournament's code; the old one opens nothing after it.</summary>
+    Task<object> RenewTournamentCodeAsync(string id, CancellationToken ct = default);
+
     Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default);
 
     Task<object> RejectEntrantAsync(string id, string entrantId, CancellationToken ct = default);
@@ -172,6 +179,12 @@ internal sealed class LiveTournamentApi : ITournamentApi
 
     public Task<object> DeleteTournamentAsync(string id, CancellationToken ct = default)
         => Client.DeleteTournamentAsync(id, ct);
+
+    public Task<object> SetTournamentVisibilityAsync(string id, string visibility, CancellationToken ct = default)
+        => Client.SetTournamentVisibilityAsync(id, visibility, ct);
+
+    public Task<object> RenewTournamentCodeAsync(string id, CancellationToken ct = default)
+        => Client.RenewTournamentCodeAsync(id, ct);
 
     public Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default)
         => Client.AcceptEntrantAsync(id, entrantId, ct);
@@ -318,6 +331,12 @@ internal sealed class PreviewTournamentApi : ITournamentApi
 
     public Task<object> DeleteTournamentAsync(string id, CancellationToken ct = default)
         => Route(s => s.Delete(id));
+
+    public Task<object> SetTournamentVisibilityAsync(string id, string visibility, CancellationToken ct = default)
+        => Route(s => s.SetVisibility(id, visibility));
+
+    public Task<object> RenewTournamentCodeAsync(string id, CancellationToken ct = default)
+        => Route(s => s.RenewCode(id));
 
     public Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default)
         => Route(s => s.Accept(id, entrantId));

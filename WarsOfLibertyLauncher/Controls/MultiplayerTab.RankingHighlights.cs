@@ -426,7 +426,7 @@ public partial class MultiplayerTab
         Grid.SetColumn(figure, 3);
         grid.Children.Add(figure);
 
-        return new Border
+        var plate = new Border
         {
             Tag = LeaderRowTag,
             Child = grid,
@@ -440,6 +440,10 @@ public partial class MultiplayerTab
             BorderBrush = isMe ? Solid("#5955ACEE") : first ? Solid("#33F4D9A0") : Brushes.Transparent,
             BorderThickness = new Thickness(1),
         };
+        // A row about one player opens his profile; a team's row names several and opens none.
+        if (row.UserIds.Count == 1)
+            LinkRankingPlayer(plate, isMe, row.UserIds[0], row.Name, null, row.AvatarUrl);
+        return plate;
     }
 
     /// <summary>

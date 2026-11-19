@@ -113,7 +113,9 @@ public sealed class MultiplayerSession : IAsyncDisposable
     public MultiplayerSession(LauncherConfig config)
     {
         _config = config;
-        Api = new LobbyApiClient(_config.Multiplayer.LobbyBaseUrl, _config.Multiplayer.SessionToken.NullIfEmpty());
+        var lobbyUrl = HarnessMode.LobbyUrl ?? _config.Multiplayer.LobbyBaseUrl;
+        if (HarnessMode.LobbyUrl != null) DiagnosticLog.Write($"HARNESS lobby url: {lobbyUrl}");
+        Api = new LobbyApiClient(lobbyUrl, _config.Multiplayer.SessionToken.NullIfEmpty());
         // Passed on only for the token this session still holds: a request sent before a
         // re-sign-in can come back 401 after it, and must not sign the fresh session out.
         // Deciding what a rejection means (sign out now, or after the match) needs the tab's
