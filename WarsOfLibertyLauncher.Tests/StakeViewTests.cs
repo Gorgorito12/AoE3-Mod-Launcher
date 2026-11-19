@@ -13,7 +13,8 @@ namespace WarsOfLibertyLauncher.Tests;
 /// <summary>
 /// The points at stake before a ranked match (2026-11-18). The server's figures, rounded by the
 /// result card's own rule, never drawn where they would give a hidden rating back, and the chance
-/// of winning drawn ONCE in a 1v1 room. The refusals are the point.
+/// of winning drawn ONCE in a 1v1 room: in the header's card, beside Invite (design 116). The
+/// refusals are the point.
 /// </summary>
 [Collection("wpf-and-language")]
 public class StakeViewTests
@@ -113,13 +114,15 @@ public class StakeViewTests
                 var tab = EloPreviewTests.RoomTab();
                 tab.ShowSampleRoom(RoomDemoData.All().Single(s => s.Name == "87b"));
                 var w = tab.LobbyWindowForTests!;
-                var stake = Texts(w.RoomStakeBlock);
+                var stake = Texts(w.RoomStakeCard);
                 Assert.Contains("+22", stake);
                 Assert.Contains("-5", stake);
-                Assert.Contains("20 % a favor", stake);
+                // Both percentages, mine and the rival's, around the bar.
+                Assert.Contains("20 %", stake);
+                Assert.Contains("80 %", stake);
                 // Nowhere else in the window.
                 Assert.DoesNotContain(Texts(w.RoomMembersPanel), t => t.Contains("20 %"));
-                Assert.Equal(Visibility.Collapsed, w.RoomStakeText.Visibility);
+                Assert.DoesNotContain(Texts(w.LobbyPanels), t => t.Contains("20 %"));
                 w.Close();
             }
             finally { Strings.SetLanguage(previous); }
@@ -143,11 +146,185 @@ public class StakeViewTests
                 var tab = EloPreviewTests.RoomTab();
                 tab.ShowSampleRoom(RoomDemoData.All().Single(s => s.Name == sample));
                 var w = tab.LobbyWindowForTests!;
-                Assert.Contains(Texts(w.RoomStakeBlock), t => t.Contains(expected));
-                if (sample != "87b-farm") Assert.DoesNotContain(Texts(w.RoomStakeBlock), t => t.StartsWith("+"));
+                Assert.Contains(Texts(w.RoomStakeCard), t => t.Contains(expected));
+                if (sample != "87b-farm") Assert.DoesNotContain(Texts(w.RoomStakeCard), t => t.StartsWith("+"));
+                // The warning is a drawn triangle, never the character.
+                Assert.DoesNotContain(Texts(w.RoomStakeCard), t => t.Contains((char)0x26A0));
                 w.Close();
             }
             finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Design 116: the stake is a card in the HEADER; the column's panel is a bracket match's
+    /// alone; and once a result is on screen the header belongs to the ELO card.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheStakeIsInTheHeaderAndNotInTheColumn()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            LobbyWindow Room(string name)
+            {
+                var tab = EloPreviewTests.RoomTab();
+                tab.ShowSampleRoom(RoomDemoData.All().Single(s => s.Name == name));
+                return tab.LobbyWindowForTests!;
+            }
+
+            var normal = Room("87b");
+            Assert.Equal(Visibility.Visible, normal.RoomStakeCard.Visibility);
+            Assert.Equal(Visibility.Collapsed, normal.RoomStakePanel.Visibility);
+            // In the header's right-hand group, before Invite.
+            var group = (Panel)normal.InvitePlayersButton.Parent;
+            Assert.Same(group, normal.RoomStakeCard.Parent);
+            Assert.True(group.Children.IndexOf(normal.RoomStakeCard) < group.Children.IndexOf(normal.InvitePlayersButton));
+            // The abandonment rule moved under "for it to count".
+            Assert.Equal(Visibility.Visible, normal.PreflightAbandonText.Visibility);
+            Assert.True(IsUnder(normal.PreflightAbandonText, normal.RoomCountsPanel));
+            normal.Close();
+
+            var result = Room("87f");
+            Assert.Equal(Visibility.Collapsed, result.RoomStakeCard.Visibility);
+            result.Close();
+
+            // A bracket match keeps its own lines in the column.
+            var bracket = Room("85a");
+            Assert.Equal(Visibility.Visible, bracket.RoomStakePanel.Visibility);
+            bracket.Close();
+        });
+        Assert.Null(error);
+    }
+
+    private static bool IsUnder(DependencyObject child, DependencyObject ancestor)
+    {
+        for (var d = child; d != null; d = LogicalTreeHelper.GetParent(d))
+            if (ReferenceEquals(d, ancestor)) return true;
+        return false;
+    }
+
+    private static T? ById<T>(DependencyObject root, string id) where T : DependencyObject
+    {
+        if (root is T t && System.Windows.Automation.AutomationProperties.GetAutomationId(root) == id) return t;
+        foreach (var c in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            if (ById<T>(c, id) is { } found) return found;
+        return null;
+    }
+
+    /// <summary>The captions trim; a figure never does, even a placement-sized one.</summary>
+    [Fact]
+    public void AFigureIsNeverTrimmed()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var card = MultiplayerTab.BuildStakeCard(
+                new StakeView(StakeState.Shown, 205, -251, 20, null, false), oneVOne: true, bodyWhenNothing: false)!;
+            card.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            card.Arrange(new Rect(card.DesiredSize));
+            foreach (var id in new[] { "RoomStakeGain", "RoomStakeLoss" })
+            {
+                var figure = ById<TextBlock>(card, id)!;
+                Assert.Equal(TextTrimming.None, figure.TextTrimming);
+                var wanted = new TextBlock { Text = figure.Text, FontFamily = figure.FontFamily, FontSize = figure.FontSize, FontWeight = figure.FontWeight };
+                wanted.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                Assert.True(figure.ActualWidth + 0.5 >= wanted.DesiredSize.Width,
+                    $"{id} got {figure.ActualWidth:0.#} of {wanted.DesiredSize.Width:0.#}");
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>A team room's card says the two figures and never a percentage or a bar.</summary>
+    [Fact]
+    public void ATeamRoomShowsNoPercentage()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var view = new StakeView(StakeState.Shown, 12, -11, 55, null, false);
+            var team = MultiplayerTab.BuildStakeCard(view, oneVOne: false, bodyWhenNothing: false)!;
+            Assert.NotNull(ById<TextBlock>(team, "RoomStakeGain"));
+            Assert.Null(ById<TextBlock>(team, "RoomStakePct"));
+            var duel = MultiplayerTab.BuildStakeCard(view, oneVOne: true, bodyWhenNothing: false)!;
+            Assert.Equal(Strings.Format("MpPercentValue", 55), ById<TextBlock>(duel, "RoomStakePct")!.Text);
+            Assert.Equal(Strings.Format("MpPercentValue", 45), ById<TextBlock>(duel, "RoomStakeRivalPct")!.Text);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>Nothing to say: a 1v1 says the match counts; a team room draws no card at all.</summary>
+    [Fact]
+    public void WithNothingToSay_OnlyAOneVOneKeepsItsSentence()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            Assert.Null(MultiplayerTab.BuildStakeCard(StakeView.Nothing, oneVOne: false, bodyWhenNothing: false));
+            var body = MultiplayerTab.BuildStakeCard(StakeView.Nothing, oneVOne: true, bodyWhenNothing: true)!;
+            Assert.Contains(Strings.Get("RoomStakeBody"), Texts(body));
+            Assert.Null(ById<TextBlock>(body, "RoomStakeGain"));
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The header at the window's narrowest, in Spanish, with the tallest card (anti-farm): the card
+    /// and Invite keep their width and the title still has room.
+    /// </summary>
+    [Fact]
+    public void TheHeaderFitsAtTheNarrowestWindow()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var previous = Strings.Language;
+            Strings.SetLanguage(Strings.LangEs);
+            try
+            {
+                var tab = EloPreviewTests.RoomTab();
+                tab.ShowSampleRoom(RoomDemoData.All().Single(s => s.Name == "87b-farm"));
+                var w = tab.LobbyWindowForTests!;
+                var strip = w.RoomHeaderStrip;
+                var width = w.MinWidth - strip.Margin.Left - strip.Margin.Right;
+                strip.Measure(new Size(width, double.PositiveInfinity));
+                strip.Arrange(new Rect(0, 0, width, strip.DesiredSize.Height));
+                var group = (FrameworkElement)w.InvitePlayersButton.Parent;
+                var card = w.RoomStakeCard;
+                Assert.Equal(MultiplayerTab.StakeCardWidth, card.ActualWidth, 1);
+                var cardRight = card.TranslatePoint(new Point(card.ActualWidth, 0), strip).X;
+                var inviteLeft = w.InvitePlayersButton.TranslatePoint(new Point(0, 0), strip).X;
+                var inviteRight = inviteLeft + w.InvitePlayersButton.ActualWidth;
+                Assert.True(inviteLeft - cardRight >= 19.5, $"card ends {cardRight:0.#}, Invite starts {inviteLeft:0.#}");
+                Assert.True(inviteRight <= width + 0.5, $"Invite ends {inviteRight:0.#} of {width:0.#}");
+                // The title keeps a readable share of the header.
+                var groupLeft = group.TranslatePoint(new Point(0, 0), strip).X;
+                Assert.True(groupLeft >= 300, $"the title has only {groupLeft:0.#}");
+                w.Close();
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>The strip says the short sentence; the full one is its tooltip (design 116).</summary>
+    [Fact]
+    public void TheAutomaticEntryStripIsShortAndItsTooltipIsWhole()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var tab = EloPreviewTests.RoomTab();
+            tab.ShowSampleRoom(RoomDemoData.All().Single(s => s.Name == "87b"));
+            var w = tab.LobbyWindowForTests!;
+            Assert.Equal(Visibility.Visible, w.RoomLanCard.Visibility);
+            Assert.Contains(w.RoomLanBody.Text, new[] { Strings.Get("LanCardOnShort"), Strings.Get("LanCardOffShort") });
+            Assert.Equal(Strings.Get("LanCardTitle"), w.RoomLanTitle.Text);
+            Assert.NotNull(w.RoomLanCard.ToolTip);
+            Assert.NotNull(w.RoomLanTint.Background);
+            w.Close();
         });
         Assert.Null(error);
     }

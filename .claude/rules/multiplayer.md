@@ -9001,3 +9001,66 @@ styles and tokens (`MpSecondaryButton`, an `MpAction` pill), there is no design 
   the folder again. The DLL is not changed (the maintainer's call). **Not measured in a real game**
   (step 0 of the plan): the guard holds whatever the game does. `--demo-room=87nocity`. Pinned by
   `HomeCityPresenceTests`.
+
+- **THE STAKE IS A CARD IN THE ROOM'S HEADER, AND AUTOMATIC ENTRY IS A STRIP (design 116,
+  `docs/design_sala_competitiva`, 2026-11-19). This SUPERSEDES where the POINTS AT STAKE bullet
+  above says the figures are drawn** (`RoomStakePanel` -> `RoomStakeBlock`, "20 % a favor", the
+  "⚠ " prefix). `MultiplayerTab.BuildStakeCard(view, oneVOne, bodyWhenNothing)` builds it and
+  `RenderStakeCard` puts it in `LobbyWindow.RoomStakeCard`, the FIRST child of the header's
+  right-hand group, bottom-aligned with Invite (the two buttons there are bottom-aligned now too).
+  300 wide (`StakeCardWidth`; geometry, it does not follow the text size), `GlassMenu` fill, each
+  piece with its own corner radius so nothing needs a clip: two halves (`StakeWinFill` /
+  `StakeLossFill`; a drawn arrow, the caption in capitals, the figure in `RoomStakeFigureSize` 26,
+  never trimmed), then in a 1v1 the win-chance band with BOTH percentages around a split bar
+  (`RoomStakePct`, `RoomStakeRivalPct` = 100 - mine), then the note as a band: amber with a drawn
+  triangle (`CautionTriangle`) for a reduced win, quiet with no icon for a reduced loss. Hidden
+  figures, and a 1v1 with nothing more precise to say, are the label over one sentence; a team
+  room draws no card until both sides are full, and never a percentage. `OddsOnly` (an older
+  server) is the band alone. Collapsed for a spectator, in a casual room and once a result is on
+  screen (`RoomEloCard` has the header then). It is rebuilt only when what it says changes (a key
+  in the host's `Tag`: the room view refreshes on every frame). The shadow is a cached sibling
+  clipped outside the card (`WithStakeShadow`), none with the effects reduced.
+  **`RoomStakePanel` is a bracket match's alone** (its lines; `RefreshRoomTournamentPanels` shows
+  it, and the card is in the header there too), and **`PreflightAbandonText` lives in
+  `RoomCountsPanel`**, under the recording sentence. The match-found dialog draws the same
+  card in its own dress since design 117 (next bullet). **The reference contradicts itself**: its hidden
+  notes describe an earlier card (a title row, 19-px figures, a 3-px bottom bar); the drawn frame
+  116b was followed.
+  **The LAN card** (`RoomLanCard`) is a strip: MinHeight 40, radius 12, the state's colour as an
+  inner layer from 12 % to 4 % over the panel's glass (`RoomLanTint`), a 32 % rim, a 22-px tile,
+  and ONE wrapping line whose Runs are the label (`RoomLanTitle`) and the SHORT sentence
+  (`RoomLanBody`, `RoomLanCard.ShortKey`: `LanCard*Short`); the full sentence (`BodyKey`) is the
+  strip's tooltip. The switch is the shared `SetToggle` under a `LayoutTransform` (34x20), never a
+  second switch style. The five kinds and what the switch does are unchanged. Pinned by
+  `StakeViewTests` (`THE_ONE_THAT_MATTERS_TheStakeIsInTheHeaderAndNotInTheColumn`,
+  `AFigureIsNeverTrimmed`, `ATeamRoomShowsNoPercentage`, `TheHeaderFitsAtTheNarrowestWindow`,
+  `TheAutomaticEntryStripIsShortAndItsTooltipIsWhole`) and
+  `RoomLanEntryViewTests.EveryVisibleKindHasAShortSentenceAndAFullOne`.
+
+- **"RIVAL FOUND" IS DESIGN 117 (`docs/design_sala_competitiva`, 2026-11-19): two players face to
+  face, and who accepted is DEDUCED.** `Controls/MatchFoundDialog.cs` is still a `BaseDialog`, with
+  its own header (`BaseDialog.ReplaceHeader`: the swords of the "rival found" toast in a green
+  tile, the headline, the kind as a gold or grey label) and the strike note under the buttons
+  (`BaseDialog.PutFootNoteBelow`). Its constructor takes two `MatchDuelist`s — the tab builds the
+  faces, because it owns the badge rules (`FoundMe`, `FoundRival`, `FoundFace` in
+  `MultiplayerTab.Matchmaking.cs`): a rated match wears the 1v1 badge, **a casual one the badge
+  each player chose (the maintainer's call; frame 117e draws none)**, and a player being placed
+  shows his progress and no badge. My own tile comes from `_session.CurrentUser` and
+  `_cachedStanding`; with no standing it is the name alone, never an invented number.
+  **The server only sends a count** (`mm_accept_progress`), so `Services/Multiplayer/MatchAcceptView`
+  marks the tiles: mine is what I pressed, the rival's is whatever the count holds beyond my own
+  answer, and a rival once seen accepting stays so (a frame that crossed my click never takes it
+  back). `SetProgress` keeps its signature; "N of 2 accepted" is gone (`MmAcceptedOf` removed).
+  Who hosts is a HOST tag on that tile (`MatchFoundDialog.HostTag`), the old sentence its tooltip;
+  an unknown host draws no tag. The clock is the seconds in large over an 8-px bar, blue until
+  `MatchFoundDialog.LowSeconds` (5) and amber from there (`PaintAt` takes the time, so a test can
+  move it). **The stake is the room's card in another dress**: `BuildStakeCard(..., StakeCardDress.Found)`
+  (the body's width, `MmFoundStakeBg`, no shadow, figures at 25); `StakeCardDress.Room` is the
+  default and **`BuildStakeBlock`, the old compact block, is deleted**. "In placement 3/10" wraps
+  in the rival's tile rather than being cut. `--preview-dialog=matchfound[:guest|placing|challenge|
+  casual|accepted]` (`accepted` = the rival already said yes; the preview uses a sample ladder of
+  forty so both tiles wear a badge). Pinned by `MatchAcceptViewTests` and `MatchmakingTests`
+  (`THE_ONE_THAT_MATTERS_EachTileSaysWhoAccepted`, `TheClockTurnsAmberAtFiveSeconds`,
+  `TheHostTagSitsOnWhoeverHostsAndCarriesTheWholeSentence`, `TheStakeIsTheRoomsCardInThisWindowsDress`,
+  `BothTilesFitWithLongNames`). Never seen with a real queue: the rival's "Accepted" arriving from
+  the server needs two accounts.

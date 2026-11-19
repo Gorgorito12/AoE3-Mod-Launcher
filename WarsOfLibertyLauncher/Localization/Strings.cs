@@ -6656,6 +6656,12 @@ public static partial class Strings
             [LangEs] = "Entrada automática a la sala LAN para {0} (AoE3 Mod Launcher)\r\n\r\nCopia {2} y la carpeta {3} en:\r\n{1}\r\n\r\nVan junto al ejecutable del juego. Si ya hay una carpeta {3} ahí, añade la línea {4} a su engine-ext.cfg en vez de reemplazarla.\r\n\r\nPara quitarlo: borra {2} y la carpeta {3}, o apágalo en el launcher (Configuración > Partidas).",
         },
         ["LanCardTitle"] = new() { [LangEn] = "AUTOMATIC ENTRY", [LangEs] = "ENTRADA AUTOMÁTICA" },
+        // The strip's short sentences (design 116); the full ones below are its tooltip.
+        ["LanCardOnShort"] = new() { [LangEn] = "Your game enters the LAN room by itself.", [LangEs] = "Tu juego entra solo a la sala LAN." },
+        ["LanCardOffShort"] = new() { [LangEn] = "Off: you enter the LAN room by hand.", [LangEs] = "Apagada: entras a la sala LAN a mano." },
+        ["LanCardNotSetUpShort"] = new() { [LangEn] = "Not set up for this game: you enter by hand.", [LangEs] = "Sin preparar para este juego: entras a mano." },
+        ["LanCardCannotShort"] = new() { [LangEn] = "This game can't enter by itself: you enter by hand.", [LangEs] = "Este juego no puede entrar solo: entras a mano." },
+        ["LanCardNoCityShort"] = new() { [LangEn] = "Create your home city first: this time you enter by hand.", [LangEs] = "Crea primero tu metrópoli: esta vez entras a mano." },
         ["LanCardOnBody"] = new() { [LangEn] = "When the match starts, your game opens the LAN room and joins by itself.", [LangEs] = "Al empezar la partida, tu juego abre la sala LAN y entra solo." },
         ["LanCardOffBody"] = new() { [LangEn] = "Off: when the match starts, you enter the LAN room by hand (Multiplayer → LAN).", [LangEs] = "Apagada: al empezar la partida entras a la sala LAN a mano (Multijugador → LAN)." },
         ["TpPerfFigure"] = new() { [LangEn] = "Perf. {0}", [LangEs] = "Rend. {0}" },

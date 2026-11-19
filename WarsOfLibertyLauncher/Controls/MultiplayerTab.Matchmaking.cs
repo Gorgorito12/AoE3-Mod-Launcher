@@ -248,7 +248,7 @@ public partial class MultiplayerTab
                     try { s = System.Text.Json.JsonSerializer.Deserialize<RoomStake>(stakeJson.GetRawText()); } catch { }
                     var view = StakeView.From(s, null, competitive: true, viewerPlays: true, roomComplete: true,
                         otherPlacing: _mmFoundRivalPlacing, otherPrivate: false);
-                    _mmFoundDialog.ShowStake(BuildStakeBlock(view, oneVOne: true, compact: true));
+                    _mmFoundDialog.ShowStake(BuildStakeCard(view, oneVOne: true, bodyWhenNothing: false, StakeCardDress.Found));
                 }
                 break;
             case "mm_accept_progress":
@@ -364,8 +364,8 @@ public partial class MultiplayerTab
         var kindLine = Strings.Format(f.Kind == "casual" ? "MmFoundKindCasual" : "MmFoundKindRanked",
             mod?.DisplayName ?? f.ModId);
         var hostLine = Strings.Format(f.YouAreHost ? "MmFoundYouHost" : "MmFoundTheyHost", _mmFoundRival);
-        var dlg = new MatchFoundDialog(_mmFoundRival, BuildFoundRivalCard(f), kindLine, hostLine,
-            f.AcceptDeadlineMs, iChallenged: f.Challenger, mod);
+        var dlg = new MatchFoundDialog(FoundMe(f, null), FoundRival(f, null), kindLine, rated: f.Kind != "casual",
+            hostLine, iHost: f.YouAreHost, f.AcceptDeadlineMs, iChallenged: f.Challenger, mod);
         var matchId = f.MatchId;
         dlg.Accepted += () => SendQueueFrame(new { type = "mm_accept", match_id = matchId });
         dlg.Declined += () => SendQueueFrame(new { type = "mm_decline", match_id = matchId });
@@ -407,9 +407,10 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// <c>--preview-dialog=matchfound[:host|guest|placing|challenge|casual]</c>: the "rival found"
-    /// window with a sample rival, wired to nothing — its buttons only close it. A real one needs
-    /// two accounts and a server with the queue.
+    /// <c>--preview-dialog=matchfound[:host|guest|placing|challenge|casual|accepted]</c>: the
+    /// "rival found" window with a sample rival, wired to nothing — its buttons only close it. A
+    /// real one needs two accounts and a server with the queue. <c>accepted</c> is the rival
+    /// having said yes already (design 117d).
     /// </summary>
     internal void PreviewMatchFound(string variant)
     {
@@ -421,7 +422,7 @@ public partial class MultiplayerTab
             Challenge = variant == "challenge",
             Challenger = variant == "challenge",
             AcceptDeadlineMs = 20000,
-            YouAreHost = variant != "guest",
+            YouAreHost = variant != "guest" && variant != "accepted",
             Opponent = new MatchFoundOpponent
             {
                 UserId = "preview-rival",
@@ -433,12 +434,16 @@ public partial class MultiplayerTab
             },
         };
         var mod = ModRegistry.Find(f.ModId);
-        var dlg = new MatchFoundDialog(f.Opponent.DisplayName, BuildFoundRivalCard(f),
+        // A sample ladder of forty, so both tiles wear a badge as a real match's would.
+        const int sampleLadder = 40;
+        var dlg = new MatchFoundDialog(FoundMe(f, sampleLadder), FoundRival(f, sampleLadder),
             Strings.Format(f.Kind == "casual" ? "MmFoundKindCasual" : "MmFoundKindRanked", mod?.DisplayName ?? f.ModId),
+            rated: f.Kind != "casual",
             Strings.Format(f.YouAreHost ? "MmFoundYouHost" : "MmFoundTheyHost", f.Opponent.DisplayName),
-            f.AcceptDeadlineMs, iChallenged: f.Challenger, mod);
-        dlg.SetProgress(f.Challenger ? 1 : 0, 2);
-        dlg.Accepted += () => dlg.SetProgress(1, 2);
+            iHost: f.YouAreHost, f.AcceptDeadlineMs, iChallenged: f.Challenger, mod);
+        var rivalSaidYes = variant == "accepted";
+        dlg.SetProgress((f.Challenger ? 1 : 0) + (rivalSaidYes ? 1 : 0), 2);
+        dlg.Accepted += () => dlg.SetProgress(rivalSaidYes ? 2 : 1, 2);
         // The figures a real mm_stake brings, computed with src/elo/stake.ts for 1383 (RD 70) vs 1642 (RD 60), or the
         // hidden sentence while the rival is being placed.
         if (f.Kind == "ranked")
@@ -446,47 +451,78 @@ public partial class MultiplayerTab
             var stake = variant == "placing"
                 ? new RoomStake { HiddenReason = "placement" }
                 : new RoomStake { Before = 1383, WinAfter = 1404.9808, LossAfter = 1377.9187, WinPct = 19 };
-            dlg.ShowStake(BuildStakeBlock(StakeView.From(stake, null, true, true, true, false, false), oneVOne: true, compact: true));
+            dlg.ShowStake(BuildStakeCard(StakeView.From(stake, null, true, true, true, false, false),
+                oneVOne: true, bodyWhenNothing: false, StakeCardDress.Found));
         }
         PlaceFoundDialog(dlg);
         dlg.Show();
     }
 
-    /// <summary>The rival's face, badge and rating, by the same rules every other list uses.</summary>
-    private FrameworkElement BuildFoundRivalCard(MatchFoundFrame f)
+    /// <summary>
+    /// The rival's side of the duel (design 117), by the same rules every other list uses: a rated
+    /// match wears the 1v1 badge, a casual one the badge that player chose (kept over the design,
+    /// whose casual frame draws none), and a player being placed shows his progress, never a
+    /// number or a badge.
+    /// </summary>
+    /// <param name="sampleLadder">The preview's ladder size; null in a real match (the loaded one).</param>
+    private MatchDuelist FoundRival(MatchFoundFrame f, int? sampleLadder)
     {
         var o = f.Opponent;
         var name = string.IsNullOrWhiteSpace(o.DisplayName) ? "—" : o.DisplayName;
-        var row = new Grid();
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.Children.Add(BuildAvatarDisc(name, o.AvatarUrl, 44));
         var format = f.Kind == "casual" ? (RoomFormat?)null : RoomFormat.OneVOne;
-        if (!o.InPlacement && BadgeOf(format, o.BadgeMode, o.LadderRank, null) is { } shown)
-        {
-            var badge = BuildShownBadge(shown, 28, "mm-found-" + o.UserId);
-            badge.Margin = new Thickness(10, 0, 0, 0);
-            badge.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(badge, 1);
-            row.Children.Add(badge);
-        }
-        var text = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var nameText = new TextBlock { Text = name, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
-        nameText.SetResourceReference(TextBlock.ForegroundProperty, "MpTextBody");
-        nameText.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeSubtitle");
-        text.Children.Add(nameText);
-        var rating = new TextBlock { Margin = new Thickness(0, 3, 0, 0) };
-        rating.SetResourceReference(TextBlock.ForegroundProperty, "MpTextMuted");
-        rating.SetResourceReference(TextBlock.FontSizeProperty, "FontSizeCaption");
-        // A player still being placed shows his progress, never a number (placement privacy).
-        rating.Text = o.InPlacement
+        var badge = o.InPlacement ? null : FoundBadge(format, o.BadgeMode, o.LadderRank, sampleLadder);
+        var line = o.InPlacement
             ? Strings.Format("MmFoundPlacing", Math.Min(o.GamesPlayed ?? 0, StatsDemoData.PlacementDefault), StatsDemoData.PlacementDefault)
-            : o.Rating is double r ? $"{PlacementView.RatingText(r)} ELO" : "";
-        if (!string.IsNullOrEmpty(rating.Text)) text.Children.Add(rating);
-        Grid.SetColumn(text, 2);
-        row.Children.Add(text);
-        return row;
+            : o.Rating is double r ? Strings.Format("MpChipElo", PlacementView.RatingText(r)) : null;
+        return new MatchDuelist(name, FoundFace(name, o.AvatarUrl, badge, "mm-found-" + o.UserId, mirrored: true), line);
+    }
+
+    /// <summary>
+    /// My own side: name and photo from the session, the rest from the standing the account chip
+    /// already reads. With no standing yet the tile is the name alone — never an invented number.
+    /// </summary>
+    private MatchDuelist FoundMe(MatchFoundFrame f, int? sampleLadder)
+    {
+        var user = _session?.CurrentUser;
+        var standing = _cachedStanding;
+        var preview = sampleLadder != null && standing == null;
+        var name = !string.IsNullOrWhiteSpace(user?.DisplayName) ? user!.DisplayName
+            : !string.IsNullOrWhiteSpace(user?.DiscordUsername) ? user!.DiscordUsername
+            : preview ? "gorgorito_12" : Strings.Get("TpYou");
+        var solo = standing?.Ladders?.Default;
+        var placing = solo is { PlacementRequired: > 0 } && solo.PlacementPlayed < solo.PlacementRequired;
+        int? rank = preview ? 21 : standing?.LadderRank;
+        if (rank == null && !preview && MyLadderRank() is > 0 and var fromTable) rank = fromTable;
+        var format = f.Kind == "casual" ? (RoomFormat?)null : RoomFormat.OneVOne;
+        var badge = placing ? null : FoundBadge(format, standing?.BadgeMode, rank, sampleLadder);
+        string? line = placing
+            ? Strings.Format("MmFoundPlacing", solo!.PlacementPlayed, solo.PlacementRequired)
+            : preview ? Strings.Format("MpChipElo", "1383")
+            : standing != null ? Strings.Format("MpChipElo", PlacementView.RatingText(standing.Rating)) : null;
+        return new MatchDuelist(name, FoundFace(name, user?.AvatarUrl, badge, "mm-found-me", mirrored: false), line);
+    }
+
+    /// <summary>The badge a duelist wears: the usual rule, on the preview's own ladder when one is given.</summary>
+    private ShownBadge? FoundBadge(RoomFormat? room, string? badgeMode, int? soloRank, int? sampleLadder)
+        => sampleLadder is int size
+            ? RankBadgeChoice.Resolve(room, BadgeModes.Parse(badgeMode), soloRank, size, null, 0)
+            : BadgeOf(room, badgeMode, soloRank, null);
+
+    /// <summary>The 44-px photo with the badge over its lower outer corner (the inner one would
+    /// sit under the name).</summary>
+    private FrameworkElement FoundFace(string name, string? avatarUrl, ShownBadge? shown, string seed, bool mirrored)
+    {
+        var face = new Grid { Width = 44, Height = 44 };
+        face.Children.Add(BuildAvatarDisc(name, avatarUrl, 44));
+        if (shown is { } wears)
+        {
+            var badge = BuildShownBadge(wears, 19, seed);
+            badge.HorizontalAlignment = mirrored ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+            badge.VerticalAlignment = VerticalAlignment.Bottom;
+            badge.Margin = mirrored ? new Thickness(0, 0, -5, -4) : new Thickness(-5, 0, 0, -4);
+            face.Children.Add(badge);
+        }
+        return face;
     }
 
     private void CloseFoundDialog()

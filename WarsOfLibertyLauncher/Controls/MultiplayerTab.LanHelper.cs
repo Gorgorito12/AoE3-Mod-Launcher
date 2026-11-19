@@ -154,13 +154,21 @@ public partial class MultiplayerTab
         var on = card.Kind == RoomLanCardKind.On;
         static System.Windows.Media.SolidColorBrush Alpha(System.Windows.Media.Color c, byte a) =>
             new(System.Windows.Media.Color.FromArgb(a, c.R, c.G, c.B));
-        w.RoomLanCard.Background = Alpha(mark, on ? (byte)0x24 : (byte)0x14);
-        w.RoomLanCard.BorderBrush = Alpha(mark, on ? (byte)0x80 : (byte)0x4D);
-        w.RoomLanIconTile.Background = Alpha(mark, 0x33);
+        // Design 116: a strip. The state's colour washes it from the left (12 % to 4 %) over the
+        // panel's own glass, with a 32 % rim; the tile is 18 %.
+        var tint = new System.Windows.Media.LinearGradientBrush(
+            System.Windows.Media.Color.FromArgb(0x1F, mark.R, mark.G, mark.B),
+            System.Windows.Media.Color.FromArgb(0x0A, mark.R, mark.G, mark.B), 0);
+        tint.Freeze();
+        w.RoomLanTint.Background = tint;
+        w.RoomLanCard.BorderBrush = Alpha(mark, 0x52);
+        w.RoomLanIconTile.Background = Alpha(mark, 0x2E);
         w.RoomLanBolt.Fill = new System.Windows.Media.SolidColorBrush(text);
         w.RoomLanTitle.Text = Strings.Get("LanCardTitle");
         w.RoomLanTitle.Foreground = new System.Windows.Media.SolidColorBrush(text);
-        w.RoomLanBody.Text = card.BodyKey == null ? "" : Strings.Get(card.BodyKey);
+        // The short sentence on the strip; the full one is a hover away.
+        w.RoomLanBody.Text = card.ShortKey == null ? "" : Strings.Get(card.ShortKey);
+        w.RoomLanCard.ToolTip = card.BodyKey == null ? null : TooltipHelper.Wrap(Strings.Get(card.BodyKey));
 
         // The switch's "on" track in the card's own green, not the settings blue.
         w.RoomLanSwitch.Resources["UiToggleOn"] = new System.Windows.Media.SolidColorBrush(StateColors.Mark(StateTone.Open));

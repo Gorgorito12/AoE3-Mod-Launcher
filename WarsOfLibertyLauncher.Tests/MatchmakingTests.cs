@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models.Multiplayer;
@@ -129,8 +130,6 @@ public class MatchmakingTests
                     ("MmFoundTheyHost", new object[] { "Ana" }),
                     ("MmFoundPlacing", new object[] { 3, 10 }),
                     ("MmWaitingFor", new object[] { "Ana" }),
-                    ("MmAcceptedOf", new object[] { 1, 2 }),
-                    ("MmSecondsLeft", new object[] { 12 }),
                     ("MmPenaltyUntil", new object[] { "10:42" }),
                     ("MmRivalDidNotAccept", new object[] { "Ana" }),
                     ("MmRivalDidNotAcceptRequeued", new object[] { "Ana" }),
@@ -172,7 +171,7 @@ public class MatchmakingTests
                     Strings.SetLanguage(lang);
                     var accepts = 0;
                     var declines = 0;
-                    var dlg = new MatchFoundDialog("Ana", new FrameworkElement(), "1v1", "host", 20000, iChallenged: false, mod: null);
+                    var dlg = Found();
                     dlg.Accepted += () => accepts++;
                     dlg.Declined += () => declines++;
                     Assert.Equal(Strings.Get("MmAccept"), dlg.PrimaryAction.Content);
@@ -182,19 +181,182 @@ public class MatchmakingTests
                     Assert.False(dlg.PrimaryAction.IsEnabled);
                     Assert.Equal(0, declines);
 
-                    var esc = new MatchFoundDialog("Ana", new FrameworkElement(), "1v1", null, 20000, false, null);
+                    var esc = Found();
                     esc.Declined += () => declines++;
                     esc.CancelAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                     Assert.Equal(1, declines);
 
-                    var decided = new MatchFoundDialog("Ana", new FrameworkElement(), "1v1", null, 20000, false, null);
+                    var decided = Found();
                     decided.Declined += () => declines++;
                     decided.CloseQuietly();
                     Assert.Equal(1, declines);
 
                     // A challenger has said yes by challenging.
-                    var challenger = new MatchFoundDialog("Ana", new FrameworkElement(), "1v1", null, 20000, iChallenged: true, mod: null);
+                    var challenger = Found(challenged: true);
                     Assert.False(challenger.PrimaryAction.IsEnabled);
+                }
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    private static MatchFoundDialog Found(bool? iHost = true, bool challenged = false, bool rated = true,
+        string me = "Yo", string rival = "Ana", int acceptMs = 20000)
+        => new(new MatchDuelist(me, new FrameworkElement { Width = 44, Height = 44 }, "1383 ELO"),
+            new MatchDuelist(rival, new FrameworkElement { Width = 44, Height = 44 }, "1642 ELO"),
+            "1v1 clasificatoria · WoL", rated, "Ana es el anfitrión: crea la partida.", iHost, acceptMs, challenged, null);
+
+    private static IEnumerable<DependencyObject> Tree(DependencyObject root)
+    {
+        yield return root;
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            foreach (var d in Tree(child)) yield return d;
+    }
+
+    /// <summary>
+    /// Design 117: who accepted is said on each tile, worked out from the server's count; my own
+    /// click marks mine at once, turns the clock's label and never marks the rival.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_EachTileSaysWhoAccepted()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var dlg = Found();
+            Assert.False(dlg.MeMarkedAccepted);
+            Assert.False(dlg.RivalMarkedAccepted);
+            Assert.Equal(Strings.Get("MmFoundAcceptIn"), dlg.ClockLabelText);
+
+            // The rival said yes first: the count is 1 and I have not pressed anything.
+            dlg.SetProgress(1, 2);
+            Assert.True(dlg.RivalMarkedAccepted);
+            Assert.False(dlg.MeMarkedAccepted);
+
+            // I press Accept before the server's next frame: mine is marked, his stays.
+            dlg.PrimaryAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Assert.True(dlg.MeMarkedAccepted);
+            Assert.True(dlg.RivalMarkedAccepted);
+            Assert.Equal(Strings.Get("MmFoundTimeLeft"), dlg.ClockLabelText);
+
+            // Alone: my own yes counted by the server is not the rival's.
+            var alone = Found();
+            alone.PrimaryAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            alone.SetProgress(1, 2);
+            Assert.True(alone.MeMarkedAccepted);
+            Assert.False(alone.RivalMarkedAccepted);
+        });
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TheClockTurnsAmberAtFiveSeconds()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var dlg = Found();
+            var start = DateTime.UtcNow;
+            dlg.PaintAt(start.AddSeconds(6));
+            Assert.Same(Application.Current.FindResource("UiHeadText"), dlg.ClockSeconds.Foreground);
+            Assert.Same(Application.Current.FindResource("MmFoundClockBar"), dlg.ClockFill.Background);
+            Assert.True(int.Parse(dlg.ClockSecondsText) > MatchFoundDialog.LowSeconds);
+
+            dlg.PaintAt(start.AddSeconds(15.5));
+            Assert.Equal(MatchFoundDialog.LowSeconds, int.Parse(dlg.ClockSecondsText));
+            Assert.Same(Application.Current.FindResource("UiErrorText"), dlg.ClockSeconds.Foreground);
+            Assert.Same(Application.Current.FindResource("MmFoundClockLow"), dlg.ClockFill.Background);
+
+            dlg.PaintAt(start.AddSeconds(60));
+            Assert.Equal("0", dlg.ClockSecondsText);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>The HOST tag is on the tile of whoever hosts, and the whole sentence is its tooltip.</summary>
+    [Fact]
+    public void TheHostTagSitsOnWhoeverHostsAndCarriesTheWholeSentence()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            static Border? TagIn(DependencyObject tile)
+                => Tree(tile).OfType<Border>().FirstOrDefault(b => b.Tag as string == MatchFoundDialog.HostTag);
+
+            var mine = Found(iHost: true);
+            Assert.NotNull(TagIn(mine.MyTile));
+            Assert.Null(TagIn(mine.RivalTile));
+            Assert.NotNull(TagIn(mine.MyTile)!.ToolTip);
+
+            var his = Found(iHost: false);
+            Assert.Null(TagIn(his.MyTile));
+            Assert.NotNull(TagIn(his.RivalTile));
+
+            // Not known: no tag on anybody, rather than a guess.
+            var unknown = Found(iHost: null);
+            Assert.Null(TagIn(unknown.MyTile));
+            Assert.Null(TagIn(unknown.RivalTile));
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>Nothing about points until the server's stake arrives, and the card takes the body's width.</summary>
+    [Fact]
+    public void TheStakeIsTheRoomsCardInThisWindowsDress()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var dlg = Found();
+            Assert.False(dlg.StakeShown);
+
+            var card = MultiplayerTab.BuildStakeCard(new StakeView(StakeState.Shown, 22, -5, 19, null, false),
+                oneVOne: true, bodyWhenNothing: false, MultiplayerTab.StakeCardDress.Found)!;
+            // No fixed width: it stretches to the dialog's body (the room's is 300).
+            Assert.True(double.IsNaN(((FrameworkElement)card).Width));
+            dlg.ShowStake(card);
+            Assert.True(dlg.StakeShown);
+            var texts = Tree(card).OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.Contains("+22", texts);
+            Assert.Contains(Strings.Format("MpPercentValue", 81), texts);
+
+            dlg.ShowStake(null);
+            Assert.False(dlg.StakeShown);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The two tiles at the dialog's width, in Spanish, with names far too long: each name trims
+    /// inside its own tile and the tiles never reach each other or the "VS" between them.
+    /// </summary>
+    [Fact]
+    public void BothTilesFitWithLongNames()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var previous = Strings.Language;
+            Strings.SetLanguage(Strings.LangEs);
+            try
+            {
+                var dlg = Found(me: "un_nombre_de_discord_muy_largo_1234", rival: "otro_nombre_todavia_mas_largo_5678");
+                var root = (FrameworkElement)dlg.Content;
+                root.Measure(new Size(dlg.Width, double.PositiveInfinity));
+                root.Arrange(new Rect(0, 0, dlg.Width, root.DesiredSize.Height));
+                var myRight = dlg.MyTile.TranslatePoint(new Point(dlg.MyTile.ActualWidth, 0), root).X;
+                var hisLeft = dlg.RivalTile.TranslatePoint(new Point(0, 0), root).X;
+                var hisRight = hisLeft + dlg.RivalTile.ActualWidth;
+                Assert.True(hisLeft - myRight >= 18, $"mine ends {myRight:0.#}, his starts {hisLeft:0.#}");
+                Assert.True(hisRight <= dlg.Width - 21.5, $"his tile ends {hisRight:0.#} of {dlg.Width}");
+                Assert.Equal(dlg.MyTile.ActualWidth, dlg.RivalTile.ActualWidth, 1);
+                foreach (var tile in new[] { dlg.MyTile, dlg.RivalTile })
+                {
+                    var name = Tree(tile).OfType<TextBlock>().First(t => t.Text.Contains("nombre"));
+                    Assert.Equal(TextTrimming.CharacterEllipsis, name.TextTrimming);
+                    var nameRight = name.TranslatePoint(new Point(name.ActualWidth, 0), tile).X;
+                    Assert.True(nameRight <= tile.ActualWidth - 12, $"the name runs to {nameRight:0.#} of {tile.ActualWidth:0.#}");
                 }
             }
             finally { Strings.SetLanguage(previous); }

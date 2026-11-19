@@ -26,8 +26,11 @@ public static partial class Strings
         ["MmDecline"] = new() { [LangEn] = "Decline", [LangEs] = "Rechazar" },
         ["MmWithdraw"] = new() { [LangEn] = "Withdraw", [LangEs] = "Retirarme" },
         ["MmWaitingFor"] = new() { [LangEn] = "Waiting for {0}…", [LangEs] = "Esperando a {0}…" },
-        ["MmAcceptedOf"] = new() { [LangEn] = "{0} of {1} accepted", [LangEs] = "{0} de {1} aceptaron" },
-        ["MmSecondsLeft"] = new() { [LangEn] = "{0} s", [LangEs] = "{0} s" },
+        ["MmFoundHostTag"] = new() { [LangEn] = "Host", [LangEs] = "Anfitrión" },
+        ["MmFoundAccepted"] = new() { [LangEn] = "Accepted", [LangEs] = "Aceptado" },
+        ["MmFoundPending"] = new() { [LangEn] = "Pending", [LangEs] = "Pendiente" },
+        ["MmFoundAcceptIn"] = new() { [LangEn] = "Time to accept", [LangEs] = "Tiempo para aceptar" },
+        ["MmFoundTimeLeft"] = new() { [LangEn] = "Time left", [LangEs] = "Tiempo restante" },
         ["MmReadyForYou"] = new() { [LangEn] = "You both accepted: you're marked ready.", [LangEs] = "Los dos aceptaron: ya estás marcado como listo." },
 
         // ---- When it does not happen ----

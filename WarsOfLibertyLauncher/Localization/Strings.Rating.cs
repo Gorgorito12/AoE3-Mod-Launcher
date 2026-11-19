@@ -226,6 +226,7 @@ public static partial class Strings
         ["StakeHiddenPlacementTeam"] = new() { [LangEn] = "Shown once every other player finishes placement.", [LangEs] = "Se muestra cuando los demás jugadores terminen el posicionamiento." },
         ["StakeHiddenPrivate"] = new() { [LangEn] = "Not shown: a player in this match keeps their rating private.", [LangEs] = "No se muestra: un jugador de la partida mantiene su ELO en privado." },
         ["StakeTip"] = new() { [LangEn] = "What your rating would move, exactly as the result card will show it. A long match can shift it by a point.", [LangEs] = "Lo que se movería tu ELO, tal como lo mostrará la tarjeta de resultado. Una partida larga puede cambiarlo un punto." },
+        ["StakeChance"] = new() { [LangEn] = "Win chance", [LangEs] = "Probabilidad de ganar" },
         ["StakeTournament"] = new() { [LangEn] = "A tournament match counts at full value.", [LangEs] = "Una partida de torneo cuenta completa." },
         ["MpOddsHiddenPrivate"] = new() { [LangEn] = "The win probability isn't shown: a player in this room keeps their rating private.", [LangEs] = "La probabilidad de victoria no se muestra: un jugador de la sala mantiene su ELO en privado." },
         ["MpResultWhyWinFav"] = new() { [LangEn] = "you were the favourite ({0}).", [LangEs] = "eras el favorito ({0})." },

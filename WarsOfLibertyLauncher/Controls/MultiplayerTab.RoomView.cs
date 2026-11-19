@@ -451,7 +451,6 @@ public partial class MultiplayerTab
         var w = _lobbyWindow!;
         var bracket = _roomTournament;
         w.RoomStakeLines.Visibility = bracket != null ? Visibility.Visible : Visibility.Collapsed;
-        if (bracket != null) w.RoomStakeText.Visibility = Visibility.Collapsed;
         w.RoomCountsPanel.ClearValue(Border.BorderBrushProperty);
         w.RoomCountsPanel.ClearValue(FrameworkElement.ToolTipProperty);
         if (bracket == null)
@@ -473,14 +472,11 @@ public partial class MultiplayerTab
         w.RoomStakeLabel.Text = Strings.Get(decided ? "RoomPanelResult" : "RtPanelStake");
         w.RoomStakePanel.Visibility = Visibility.Visible;
         w.RoomCountsPanel.Visibility = Visibility.Visible;
-        w.RoomStakeNote.Visibility = Visibility.Collapsed;
         w.PreflightAbandonText.Visibility = Visibility.Collapsed;
         if (CurrentRoomStage() == RoomStage.ResultUndecided) w.RoomCountsPanel.BorderBrush = Solid("#99F4900C");
         SetCountsText(w, "RtCountsBody");
 
-        // The points each way under the bracket's own lines, while the match is still to play.
-        w.RoomStakeBlock.Visibility = !decided && result == null && w.RoomStakeBlock.Children.Count > 0
-            ? Visibility.Visible : Visibility.Collapsed;
+        // The points each way are in the header card (design 116); here, the bracket's own lines.
         var lines = decided
             ? bracket.ResultLines(result!.Verdict == MatchVerdict.Win, RoomViewerId)
             : bracket.StakeLines();
@@ -680,21 +676,15 @@ public partial class MultiplayerTab
             ? Visibility.Visible : Visibility.Collapsed;
 
         w.RoomCountsPanel.Visibility = competitive && !hasResult ? Visibility.Visible : Visibility.Collapsed;
-        // WHAT'S AT STAKE (2026-11-18): the points each way and, in a 1v1, the chance of winning —
-        // drawn here and nowhere else. A team room shows it once both sides are full.
-        var oneVOne = CurrentRoomFormat() == RoomFormat.OneVOne;
-        var drew = competitive && !hasResult && RenderStakeBlock(w);
-        if (!drew) w.RoomStakeBlock.Children.Clear();
-        var stake = competitive && !hasResult && (oneVOne || drew);
-        w.RoomStakePanel.Visibility = stake ? Visibility.Visible : Visibility.Collapsed;
-        w.RoomStakeBlock.Visibility = drew ? Visibility.Visible : Visibility.Collapsed;
-        // "This match counts for your ELO" only while there is nothing more precise to say.
-        w.RoomStakeText.Visibility = drew ? Visibility.Collapsed : Visibility.Visible;
-        w.RoomStakeNote.Visibility = Visibility.Collapsed;
+        // WHAT'S AT STAKE (design 116): the points each way and, in a 1v1, the chance of winning,
+        // as a card in the HEADER beside Invite — drawn there and nowhere else. The column's panel
+        // is a bracket match's alone now (RefreshRoomTournamentPanels shows it).
+        RenderStakeCard(w, competitive && !hasResult);
+        w.RoomStakePanel.Visibility = Visibility.Collapsed;
 
-        // The sentence about the abandonment rule stays where it always was: under what the
-        // competitive room promises, only for the format it applies to.
-        w.PreflightAbandonText.Visibility = stake && RoomFormats.AbandonmentApplies(CurrentRoomFormat())
+        // The abandonment rule, under what the competitive room promises ("for it to count"),
+        // only for the format it applies to.
+        w.PreflightAbandonText.Visibility = competitive && !hasResult && RoomFormats.AbandonmentApplies(CurrentRoomFormat())
             ? Visibility.Visible : Visibility.Collapsed;
         w.PreflightReplayText.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1144,7 +1134,6 @@ public partial class MultiplayerTab
         w.PreflightReplayText.Text = Strings.Get("MpPreflightReplay");
         w.PreflightReplayText.ToolTip = TooltipHelper.Wrap(Strings.Get("MpPreflightReplayTip"));
         w.RoomStakeLabel.Text = Strings.Get("RoomStakeTitle");
-        w.RoomStakeText.Text = Strings.Get("RoomStakeBody");
         w.ChatHeaderText.Text = Strings.Get("RoomChatTitle");
         w.ClearChatButton.Content = Strings.Get("RoomChatClear");
     }

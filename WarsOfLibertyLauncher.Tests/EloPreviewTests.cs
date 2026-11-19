@@ -380,7 +380,9 @@ public class EloPreviewTests
 
                 // The chance of winning lives in WHAT'S AT STAKE now (2026-11-18), once: this sample
                 // has the server's odds and no stake (an older server), so the bar and its line.
-                Assert.Contains(AllText(w.RoomStakeBlock), t => t == "62 % a favor");
+                // Since design 116 it is the header card's band: mine and the rival's.
+                Assert.Contains(AllText(w.RoomStakeCard), t => t == "62 %");
+                Assert.Contains(AllText(w.RoomStakeCard), t => t == "38 %");
                 Assert.DoesNotContain(AllText(w.RoomMembersPanel), t => t.Contains("62 %"));
 
                 var lines = AllText(w.RoomMembersPanel);
@@ -716,7 +718,7 @@ public class EloPreviewTests
             tab.ShowSampleRoom(RoomDemoData.OneVOne());
             var w = tab.LobbyWindowForTests;
             Assert.NotNull(w);
-            Assert.Empty(w!.RoomStakeBlock.Children);
+            Assert.DoesNotContain(AllText(w!.RoomStakeCard), t => t.Contains('%') || t.StartsWith("+"));
         });
         Assert.Null(error);
     }

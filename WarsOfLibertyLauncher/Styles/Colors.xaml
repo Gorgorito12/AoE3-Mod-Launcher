@@ -582,6 +582,53 @@
     <!-- The coloured shadow under each row (104a: 0 10 22, spread -12, the group's colour at 40 %)
          and the glow under "Ver sala" (0 4 14, the action blue at 35 %). -->
     <SolidColorBrush x:Key="RmRowShadowOpen" Color="#664FD68A"/>
+
+    <!-- "What's at stake" in the room header (design 116): two halves, the win-chance band and
+         the anti-farm band. State colours, never the mod's. -->
+    <SolidColorBrush x:Key="StakeCardRim" Color="#21FFFFFF"/>
+    <SolidColorBrush x:Key="StakeCardShadow" Color="#42000000"/>
+    <SolidColorBrush x:Key="StakeWinCaption" Color="#9FE6C0"/>
+    <SolidColorBrush x:Key="StakeLossCaption" Color="#F3B6B6"/>
+    <SolidColorBrush x:Key="StakeLossMark" Color="#E0706F"/>
+    <SolidColorBrush x:Key="StakeHalfLine" Color="#1FFFFFFF"/>
+    <LinearGradientBrush x:Key="StakeWinFill" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#2B4FD68A"/>
+        <GradientStop Offset="1" Color="#0F4FD68A"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="StakeLossFill" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#33C84A4A"/>
+        <GradientStop Offset="1" Color="#14C84A4A"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="StakeOddsBand" Color="#57040910"/>
+    <SolidColorBrush x:Key="StakeBandLine" Color="#17FFFFFF"/>
+    <LinearGradientBrush x:Key="StakeBarMine" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Offset="0" Color="#35B871"/>
+        <GradientStop Offset="1" Color="#6FE3A2"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="StakeBarRival" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Offset="0" Color="#80E0706F"/>
+        <GradientStop Offset="1" Color="#C7E0706F"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="StakeNoteBand" Color="#1AF4900C"/>
+    <SolidColorBrush x:Key="StakeNoteLine" Color="#52F4900C"/>
+
+    <!-- The match-found dialog (design 117): the green swords tile, the rival's neutral tile
+         (mine takes the mod's colour, in code), the host tag, the stake card's darker well and
+         the clock, blue until five seconds are left and amber from there. -->
+    <SolidColorBrush x:Key="MmFoundToneFill" Color="#294FD68A"/>
+    <SolidColorBrush x:Key="MmFoundToneRing" Color="#804FD68A"/>
+    <SolidColorBrush x:Key="MmFoundKindRatedText" Color="#F3D995"/>
+    <SolidColorBrush x:Key="MmFoundKindRatedDot" Color="#E6C06A"/>
+    <SolidColorBrush x:Key="MmFoundTileBg" Color="#0BFFFFFF"/>
+    <SolidColorBrush x:Key="MmFoundTileRim" Color="#1AFFFFFF"/>
+    <SolidColorBrush x:Key="MmFoundTagBg" Color="#14FFFFFF"/>
+    <SolidColorBrush x:Key="MmFoundTagRim" Color="#24FFFFFF"/>
+    <SolidColorBrush x:Key="MmFoundPendingRing" Color="#42FFFFFF"/>
+    <SolidColorBrush x:Key="MmFoundStakeBg" Color="#6B060C14"/>
+    <SolidColorBrush x:Key="MmFoundStakeRim" Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="MmFoundClockTrack" Color="#1AFFFFFF"/>
+    <SolidColorBrush x:Key="MmFoundClockBar" Color="#55ACEE"/>
+    <SolidColorBrush x:Key="MmFoundClockLow" Color="#F4900C"/>
     <SolidColorBrush x:Key="RmRowShadowLive" Color="#6655ACEE"/>
     <SolidColorBrush x:Key="RmRowShadowOff" Color="#66F4900C"/>
     <SolidColorBrush x:Key="RmPrimaryGlow" Color="#592F7FE0"/>

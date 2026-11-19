@@ -54,15 +54,39 @@ public class RoomLanEntryViewTests
     }
 
     [Fact]
+    public void EveryVisibleKindHasAShortSentenceAndAFullOne()
+    {
+        var cards = new[]
+        {
+            RoomLanEntryView.For(RoomLanAvailability.Available, true, true),
+            RoomLanEntryView.For(RoomLanAvailability.Available, false, true),
+            RoomLanEntryView.For(RoomLanAvailability.NotSetUp, true, true),
+            RoomLanEntryView.For(RoomLanAvailability.CannotSetUp, true, true),
+            RoomLanEntryView.For(RoomLanAvailability.Available, true, true, HomeCityState.None),
+        };
+        Assert.Equal(5, cards.Select(c => c.Kind).Distinct().Count());
+        foreach (var card in cards)
+        {
+            Assert.NotNull(card.ShortKey);
+            Assert.NotNull(card.BodyKey);
+            // The strip's sentence is the shorter of the two, in both languages.
+            foreach (var lang in new[] { Strings.LangEn, Strings.LangEs })
+                Assert.True(Strings.GetIn(lang, card.ShortKey!).Length < Strings.GetIn(lang, card.BodyKey!).Length, card.ShortKey);
+        }
+        Assert.Null(RoomLanEntryView.For(RoomLanAvailability.Unknown, true, true).ShortKey);
+    }
+
+    [Fact]
     public void EveryKeyTheCardUsesExists()
     {
         foreach (var a in new[] { RoomLanAvailability.Available, RoomLanAvailability.NotSetUp, RoomLanAvailability.CannotSetUp })
         foreach (var on in new[] { true, false })
         {
             var card = RoomLanEntryView.For(a, on, true);
-            foreach (var key in new[] { card.BodyKey, card.ActionKey })
+            foreach (var key in new[] { card.BodyKey, card.ActionKey, card.ShortKey })
                 if (key != null) Assert.NotEqual(key, Strings.Get(key));
         }
+        Assert.NotEqual("LanCardNoCityShort", Strings.Get("LanCardNoCityShort"));
         foreach (var key in new[] { "LanCardTitle", "LanCardSwitchOffTip", "LanCardSwitchOnTip" })
             Assert.NotEqual(key, Strings.Get(key));
     }
