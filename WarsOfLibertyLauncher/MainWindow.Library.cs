@@ -1160,6 +1160,8 @@ public partial class MainWindow
         DashboardDescText.Margin = new Thickness(0, gap, 0, 0);
         LibraryMoreButton.Margin = new Thickness(0, gap - 8, 0, 0);
         LibraryActions.Margin = new Thickness(0, gap, 0, 0);
+        // The same width in every state (Play, Install, Update, Stop): see LibraryMetrics.PlayWidth.
+        DashboardPlayButton.MinWidth = m.PlayWidth;
         DashboardProgressContainer.Margin = new Thickness(0, gap, 0, 0);
         LibraryFacts.Margin = new Thickness(0, Math.Max(0, gap - 10), 0, 0);
         LibraryShots.Margin = new Thickness(0, gap, 0, 0);

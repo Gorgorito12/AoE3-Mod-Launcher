@@ -88,6 +88,10 @@ public static class RoomDemoData
         /// <summary>The server's win probability for the room (rating v3); null = none shown.</summary>
         public RoomOdds? Odds { get; init; }
 
+        /// <summary>The server's stake for the viewer (2026-11-18): figures computed with the real
+        /// formula (src/elo/stake.ts) for these ratings, never invented.</summary>
+        public RoomStake? Stake { get; init; }
+
         /// <summary>Which seat is "me" in the sample (rating v3's rooms). Null: nobody, as before.</summary>
         public string? ViewerId { get; init; }
 
@@ -114,6 +118,9 @@ public static class RoomDemoData
 
         /// <summary>The viewer's Radmin is not ready (87h).</summary>
         public bool VpnMissing { get; init; }
+
+        /// <summary>The viewer never created a home city for the mod (87nocity).</summary>
+        public bool NoHomeCity { get; init; }
 
         /// <summary>The rival a rematch invited (87l).</summary>
         public string? RematchRival { get; init; }
@@ -253,9 +260,24 @@ public static class RoomDemoData
         OneVOne(), TwoVTwo(), Full(), LongName(), QuickSearching("quick", false, "02:14"),
         QuickSearching("quick-radmin", true, "02:14"), QuickSearching("quick-long", false, "25:41"),
         Design87("87a"), Design87("87b"), Design87("87c"), Design87("87d"), Design87("87e"), Design87("87f"),
-        Design87("87g"), Design87("87h"), Design87("87i"), Design87("87j"), Design87("87k"), Design87("87l"), Design87("87live"),
+        Design87("87g"), Design87("87h"), Design87("87i"), Design87("87j"), Design87("87k"), Design87("87l"), Design87("87live"), Design87("87nocity"),
+        Design87("87b-farm"), Design87("87b-hidden"), Design87("87b-private"),
         Design85("85a"), Design85("85b"), Design85("85c"), Design85("85d"), Design85("85e"), Design85("85f"),
         Design85("85g"), Design85("85h"), Design85("85i"),
+    };
+
+    /// <summary>
+    /// Gorgo (1383, RD 70) against Kaiser (1630, RD 60), computed with the server's own
+    /// matchStakes (src/elo/stake.ts) on 2026-11-18: +22 / −5 at 20 %, and +17 when it would be
+    /// Gorgo's fourth win in a row against him (factor 0.8). Not invented figures.
+    /// </summary>
+    private static RoomStake? SampleStake(string id) => id switch
+    {
+        "87b" => new RoomStake { Before = 1383, WinAfter = 1404.6733, LossAfter = 1377.6380, WinPct = 20 },
+        "87b-farm" => new RoomStake { Before = 1383, WinAfter = 1400.3386, LossAfter = 1377.6380, WinPct = 20, WinFactor = 0.8, WinStreak = 4 },
+        "87b-hidden" => new RoomStake { HiddenReason = "placement" },
+        "87b-private" => new RoomStake { HiddenReason = "private" },
+        _ => null,
     };
 
     private static Seat Gorgo(bool host = true, bool ready = false, double? rating = 1383, int? team = null, int? games = 40)
@@ -273,14 +295,14 @@ public static class RoomDemoData
     private static DateTime Today(int hour, int minute) => DateTime.Today.AddHours(hour).AddMinutes(minute);
 
     private static MatchOutcomeView Outcome(MatchVerdict verdict, double before, double after,
-        string? unrated = null, int? placementPlayed = null, int? streak = null, int? rank = null)
+        string? unrated = null, int? placementPlayed = null, int? streak = null, int? rank = null, int? winExpected = null)
         => new(verdict, "wol", "ESOC Baja California", verdict == MatchVerdict.Win ? 24 * 60 : 31 * 60, 2,
             before, after, "Kaiser", unrated != null ? 1630 : verdict == MatchVerdict.Win ? 1611 : 1638, 12, 7, 60, UnratedReason: unrated,
             RecordingPath: "Record Game 12.age3Yrec",
             MyCiv: "Británicos", RivalCiv: "Franceses",
             PlacementPlayed: placementPlayed, PlacementRequired: placementPlayed == null ? null : 10,
             StreakCurrent: streak, EnteredRank: rank, LadderSize: rank == null ? null : 9,
-            FormatLabelKey: "MpFormat1v1");
+            FormatLabelKey: "MpFormat1v1", WinExpected: winExpected);
 
     /// <summary>
     /// The states of design 87. Same people and the same words as the prototype, because each one
@@ -327,11 +349,13 @@ public static class RoomDemoData
                 Name = id, Code = "7KQ2WX", RoomName = night, Seats = 4, Competitive = false, Password = true,
                 Players = new[] { Gorgo() }, ViewerId = "demo-gorgo", Chat = Casual(1),
             },
-            "87b" => new()
+            "87b" or "87nocity" or "87b-farm" or "87b-hidden" or "87b-private" => new()
             {
                 Name = id, Code = "7KQ2WX", RoomName = ranked, Seats = 2, Competitive = true,
                 Players = new[] { Kaiser(host: true, ready: true), Gorgo(host: false) }, ViewerId = "demo-gorgo",
                 Chat = new ChatSample[] { new(null, "Entraste en la sala de Kaiser."), new("Kaiser", "gl hf", Today(20, 51)) },
+                NoHomeCity = id == "87nocity",
+                Stake = SampleStake(id),
             },
             "87c" => new()
             {
@@ -368,7 +392,8 @@ public static class RoomDemoData
                 Stage = RoomStage.InGame,
                 Chat = Casual(3).Concat(new ChatSample[] { new(null, "Partida en marcha.") }).ToArray(),
             },
-            "87f" => Over(id, Outcome(MatchVerdict.Win, 1383, 1402, streak: 3, rank: 5), Gorgo(host: false), "gg, bien jugado"),
+            // 1383 against 1611 is about 22 % by the Glicko expectation: the result card's "why" line.
+            "87f" => Over(id, Outcome(MatchVerdict.Win, 1383, 1402, streak: 3, rank: 5, winExpected: 22), Gorgo(host: false), "gg, bien jugado"),
             "87g" => Over(id, Outcome(MatchVerdict.Loss, 1400, 1388, placementPlayed: 5), Gorgo(host: false, rating: null, games: 5), "gg"),
             "87h" => new()
             {

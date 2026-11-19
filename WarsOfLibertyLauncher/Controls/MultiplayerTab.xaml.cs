@@ -2247,8 +2247,10 @@ public partial class MultiplayerTab : UserControl
         if (socketChanged)
         {
             _roomMembers.Clear();
-            // The odds belong to the room they were sent for.
+            // The odds belong to the room they were sent for, and so does the stake.
             _roomOdds = null;
+            _roomStake = null;
+            _stakeAtStartLogged = null;
             _roomHostUserId = null;
             _isHostInCurrentRoom = false;
             // A room WE just created: we ARE its host, and room_state (which says so) may still
@@ -2543,6 +2545,9 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "room_odds":
                         HandleRoomOdds(e.Json);
+                        break;
+                    case "room_stake":
+                        HandleRoomStake(e.Json);
                         break;
                     case "member_team":
                         HandleMemberTeam(e.Json);
@@ -3253,8 +3258,6 @@ public partial class MultiplayerTab : UserControl
 
         AddObserverGroup(_lobbyWindow!.RoomMembersPanel);
 
-        // Under the players of a competitive 1v1, the server's chance of winning (design 55g).
-        if (BuildOneVOneOdds() is { } odds) _lobbyWindow!.RoomMembersPanel.Children.Add(odds);
         // Why Start is locked is the footer's line now.
         RenderStartButtonGate();
 
@@ -3926,70 +3929,6 @@ public partial class MultiplayerTab : UserControl
         var h2h = (_demoRoomStanding ?? _cachedStanding)?.Ladders?.Default?.HeadToHead;
         var entry = h2h?.FirstOrDefault(e => string.Equals(e.UserId, rivalId, StringComparison.Ordinal));
         return entry is { Games: > 0 } ? Strings.Format("MpRoomRecord", entry.Wins, entry.Losses) : null;
-    }
-
-    /// <summary>
-    /// "You have a 62 % chance to win" and a 5-px bar (design 55g). The SERVER's figure — Glicko,
-    /// both ratings and both uncertainties — never one worked out here. Null until the server sends
-    /// one for this player, which is once both seats are taken.
-    /// </summary>
-    internal FrameworkElement? BuildOneVOneOdds()
-    {
-        if (CurrentRoomFormat() != Services.Multiplayer.RoomFormat.OneVOne) return null;
-        // Withheld while either player is still being placed: with one rating on screen, a
-        // percentage solves for the other. Said in words once both seats are taken — the moment the
-        // odds would otherwise appear — and never as an empty bar, which reads as 0 %.
-        if (RoomPlayerCount() >= 2
-            && Services.Multiplayer.WinOddsView.HiddenByPlacement(_roomOdds, AnyRoomPlayerPlacing(team: false)))
-            return BuildOddsHiddenCard();
-        if (Services.Multiplayer.WinOddsView.ForPlayer(_roomOdds, RoomViewerId) is not int pct) return null;
-
-        var sentence = new TextBlock
-        {
-            FontSize = (double)Application.Current.FindResource("MpProfileH2HSize"),
-            Foreground = (Brush)Application.Current.FindResource("UiTextStrong"),
-            TextWrapping = TextWrapping.Wrap,
-        };
-        AddTemplateRuns(sentence, Strings.Get("MpWinProb1v1"), _ => new System.Windows.Documents.Run(
-            Strings.Format("MpPercentValue", pct))
-        {
-            FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            FontWeight = FontWeights.Bold,
-            Foreground = (Brush)Application.Current.FindResource("UiTextHeadline"),
-        });
-
-        var fill = Math.Clamp(pct / 100.0, 0, 1);
-        var bar = new Grid { Height = 5, Margin = new Thickness(0, 9, 0, 0) };
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(fill, GridUnitType.Star) });
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1 - fill, GridUnitType.Star) });
-        var track = new Border
-        {
-            CornerRadius = new CornerRadius(3),
-            Background = (Brush)Application.Current.FindResource("MpSegPendingProfile"),
-        };
-        Grid.SetColumnSpan(track, 2);
-        bar.Children.Add(track);
-        bar.Children.Add(new Border
-        {
-            CornerRadius = new CornerRadius(3),
-            Background = (Brush)Application.Current.FindResource("MpAction"),
-            Tag = pct,
-        });
-
-        var stack = new StackPanel();
-        stack.Children.Add(sentence);
-        stack.Children.Add(bar);
-        return new Border
-        {
-            Child = stack,
-            Tag = "RoomOdds1v1",
-            Margin = new Thickness(0, 8, 0, 0),
-            Padding = new Thickness(14, 12, 14, 12),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusPanel"),
-            Background = (Brush)Application.Current.FindResource("GlassPanel"),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimMedium"),
-            BorderThickness = new Thickness(1),
-        };
     }
 
     /// <summary>Who the room treats as "me": the signed-in player, or the sample room's own player
@@ -6045,6 +5984,7 @@ public partial class MultiplayerTab : UserControl
         _currentLobbyModId = sample.ModId;
         _demoQuickSearch = sample.QuickSearch ? sample : null;
         _roomOdds = sample.Odds;
+        _roomStake = sample.Stake;
         _demoRoomViewerId = sample.ViewerId;
         _demoRoomStanding = sample.ViewerStanding;
         // The server's max_players holds the observers' seats too.
@@ -6235,6 +6175,20 @@ public partial class MultiplayerTab : UserControl
         _communityStats = _eloPreview
             ? Services.Multiplayer.EloDemoData.Community(mod, mode, _eloPreviewNobodyRanked, _eloPreviewEmptyLadder)
             : Services.Multiplayer.StatsDemoData.Community(mod, mode);
+        // 93g: the viewer is off the table for inactivity, so the server's list would not hold him
+        // and everybody under him would be one place higher.
+        if (_previewOffTable && _communityStats != null)
+        {
+            foreach (var list in new[] { _communityStats.Leaderboard, _communityStats.LeaderboardTeam })
+            {
+                if (list == null) continue;
+                var me = list.FindIndex(r => r.UserId == Services.Multiplayer.StatsDemoData.ViewerId);
+                if (me < 0) continue;
+                list.RemoveAt(me);
+                for (var i = me; i < list.Count; i++) list[i].Rank -= 1;
+            }
+            _communityStats.RankedPlayers = _communityStats.Leaderboard.Count;
+        }
         _statsCommunity = _communityStats;
         _civStats = _demoStatsEmpty
             ? Services.Multiplayer.StatsDemoData.NoCivStats(mod)
@@ -11804,6 +11758,7 @@ public partial class MultiplayerTab : UserControl
                     case "mm_queued":
                     case "mm_searchers_changed":
                     case "mm_found":
+                    case "mm_stake":
                     case "mm_accept_progress":
                     case "mm_cancelled":
                     case "mm_room_ready":
@@ -14513,11 +14468,20 @@ public partial class MultiplayerTab : UserControl
         // A competitive room plays Standard whatever the dropdown last showed, so it is passed
         // explicitly; the room's switch can turn the whole automatic entry off.
         bool autoEntry = _config?.LanAutoEntry ?? true;
+        // Read again at the launch: the player may have created the city since the room opened.
+        // With none, the game would ask for one and the automatic entry does not wait for that
+        // screen, so this launch goes by hand (HomeCityPresence).
+        _roomHomeCity = Services.Multiplayer.HomeCityPresence.For(_roomLanProfile ?? ModRegistry.Find(_currentLobbyModId ?? ""), _config);
+        bool noCity = autoEntry && _roomHomeCity == Services.Multiplayer.HomeCityState.None;
         var lanArg = Services.Multiplayer.LanAutoStartArgs.For(_isHostInCurrentRoom, hostIp, _currentLobbyGameRules,
-            forceStandard: _currentLobbyIsCompetitive, enabled: autoEntry);
+            forceStandard: _currentLobbyIsCompetitive,
+            enabled: Services.Multiplayer.RoomLanEntryView.MayAutoEnter(autoEntry, _roomHomeCity));
         sb.Append(lanArg);
+        if (noCity) AppendChatSystem(Strings.Get("MpChatNoHomeCity"));
         DiagnosticLog.Write(lanArg.Length > 0
             ? $"MultiplayerTab.BuildMultiplayerLaunchArgs: LAN auto-start '{lanArg.Trim()}'"
+            : noCity
+                ? "MultiplayerTab.BuildMultiplayerLaunchArgs: no LAN auto-start - no home city yet"
             : !autoEntry
                 ? "MultiplayerTab.BuildMultiplayerLaunchArgs: no LAN auto-start - switched off in the room"
                 : $"MultiplayerTab.BuildMultiplayerLaunchArgs: no LAN auto-start - the host's Radmin address is unknown (host='{_roomHostUserId}', reported='{hostIp}')");
@@ -16865,6 +16829,7 @@ public partial class MultiplayerTab : UserControl
             {
                 _roomMembers.Clear();
                 _roomOdds = null;
+                _roomStake = null;
                 _previewCountdown = false;
                 _previewResult = false;
                 _countdownTeams = null;
@@ -17667,6 +17632,7 @@ public partial class MultiplayerTab : UserControl
             // his alone (the server withholds it), and the card says how far along he is instead.
             RivalPlacementPlayed = ctx.Participants.Count == 2 ? rival?.PlacementPlayed : null,
             RivalPlacementRequired = ctx.Participants.Count == 2 ? rival?.PlacementRequired : null,
+            WinExpected = report.Rated ? mine?.WinExpected : null,
         };
     }
 
@@ -17845,6 +17811,7 @@ public partial class MultiplayerTab : UserControl
         // ELO, the panel the facts, the footer what comes next.
         host.Children.Clear();
         _roomResult = model;
+        LogStakeAgainstResult(model);
         _lastRivalUserId = _roomMembers.Values.FirstOrDefault(
             m => string.Equals(m.Login, model.RivalLogin, StringComparison.Ordinal))?.UserId;
         ApplyMatchPhaseUi();

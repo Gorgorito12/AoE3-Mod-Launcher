@@ -243,6 +243,14 @@ public static class CommunityStatsView
     /// rather than invent a denominator — the same refusal the rest of this class makes about
     /// a figure the server did not send.</para>
     /// </summary>
+    /// <summary>Placed players the server hides for inactivity, and its days; null when it lists them.</summary>
+    public static (int Hidden, int Days)? InactiveHidden(CommunityStats? stats, bool team)
+    {
+        var n = team ? stats?.InactiveHiddenTeam : stats?.InactiveHidden;
+        var d = team ? stats?.InactiveDaysTeam : stats?.InactiveDays;
+        return n is int hidden && d is int days ? (hidden, days) : null;
+    }
+
     public static int RankedPlayers(CommunityStats? stats, bool team)
     {
         var total = team ? stats?.RankedPlayersTeam : stats?.RankedPlayers;

@@ -30,6 +30,9 @@ public partial class MultiplayerTab
 
     private RoomLanAvailability _roomLanEntry;
 
+    /// <summary>Whether the player has a home city for the room's mod (HomeCityPresence).</summary>
+    private HomeCityState _roomHomeCity;
+
     private bool LanAutoEntryOn => _config?.LanAutoEntry ?? true;
     private ModProfile? _roomLanProfile;
     private string? _roomLanExe;
@@ -78,6 +81,7 @@ public partial class MultiplayerTab
         if (_demoRoomSample != null)
         {
             _roomLanEntry = RoomLanAvailability.Available;
+            _roomHomeCity = _demoRoomSample.NoHomeCity ? HomeCityState.None : HomeCityState.Present;
             RefreshRoomLanCard();
             return;
         }
@@ -85,6 +89,7 @@ public partial class MultiplayerTab
         _roomLanProfile = profile;
         _roomLanExe = exe;
         _roomLanEntry = EntryFor(LanHelperService.Probe(exe), exe);
+        _roomHomeCity = HomeCityPresence.For(profile, _config);
         RefreshRoomLanCard();
         TellRoomLanEntry();
         // Our own row carries the word too.
@@ -93,7 +98,7 @@ public partial class MultiplayerTab
 
     private void TellRoomLanEntry()
     {
-        if (RoomLanEntryView.EntersByItself(_roomLanEntry, LanAutoEntryOn) is not bool auto
+        if (RoomLanEntryView.EntersByItself(_roomLanEntry, LanAutoEntryOn, _roomHomeCity) is not bool auto
             || _session?.RoomSocket == null) return;
         if (_lanAutoSent == auto) return;
         _lanAutoSent = auto;
@@ -130,7 +135,8 @@ public partial class MultiplayerTab
         if (_lobbyWindow is not { } w) return;
         // A sample room shows the card as it reads when everything works.
         if (_demoRoomSample != null && _roomLanEntry == RoomLanAvailability.Unknown) _roomLanEntry = RoomLanAvailability.Available;
-        var card = RoomLanEntryView.For(_roomLanEntry, LanAutoEntryOn, _matchPhase == MatchPhase.Lobby);
+        if (_demoRoomSample != null) _roomHomeCity = _demoRoomSample.NoHomeCity ? HomeCityState.None : HomeCityState.Present;
+        var card = RoomLanEntryView.For(_roomLanEntry, LanAutoEntryOn, _matchPhase == MatchPhase.Lobby, _roomHomeCity);
         if (card.Kind == RoomLanCardKind.Hidden || _roomResult != null)
         {
             w.RoomLanCard.Visibility = Visibility.Collapsed;
@@ -148,13 +154,21 @@ public partial class MultiplayerTab
         var on = card.Kind == RoomLanCardKind.On;
         static System.Windows.Media.SolidColorBrush Alpha(System.Windows.Media.Color c, byte a) =>
             new(System.Windows.Media.Color.FromArgb(a, c.R, c.G, c.B));
-        w.RoomLanCard.Background = Alpha(mark, on ? (byte)0x24 : (byte)0x14);
-        w.RoomLanCard.BorderBrush = Alpha(mark, on ? (byte)0x80 : (byte)0x4D);
-        w.RoomLanIconTile.Background = Alpha(mark, 0x33);
+        // Design 116: a strip. The state's colour washes it from the left (12 % to 4 %) over the
+        // panel's own glass, with a 32 % rim; the tile is 18 %.
+        var tint = new System.Windows.Media.LinearGradientBrush(
+            System.Windows.Media.Color.FromArgb(0x1F, mark.R, mark.G, mark.B),
+            System.Windows.Media.Color.FromArgb(0x0A, mark.R, mark.G, mark.B), 0);
+        tint.Freeze();
+        w.RoomLanTint.Background = tint;
+        w.RoomLanCard.BorderBrush = Alpha(mark, 0x52);
+        w.RoomLanIconTile.Background = Alpha(mark, 0x2E);
         w.RoomLanBolt.Fill = new System.Windows.Media.SolidColorBrush(text);
         w.RoomLanTitle.Text = Strings.Get("LanCardTitle");
         w.RoomLanTitle.Foreground = new System.Windows.Media.SolidColorBrush(text);
-        w.RoomLanBody.Text = card.BodyKey == null ? "" : Strings.Get(card.BodyKey);
+        // The short sentence on the strip; the full one is a hover away.
+        w.RoomLanBody.Text = card.ShortKey == null ? "" : Strings.Get(card.ShortKey);
+        w.RoomLanCard.ToolTip = card.BodyKey == null ? null : TooltipHelper.Wrap(Strings.Get(card.BodyKey));
 
         // The switch's "on" track in the card's own green, not the settings blue.
         w.RoomLanSwitch.Resources["UiToggleOn"] = new System.Windows.Media.SolidColorBrush(StateColors.Mark(StateTone.Open));
@@ -194,7 +208,7 @@ public partial class MultiplayerTab
     /// <summary>A word for the roster row: how this member enters the LAN room; null when unknown.</summary>
     private string? LanMark(RoomMemberEntry m, bool isMe)
     {
-        bool? auto = isMe ? RoomLanEntryView.EntersByItself(_roomLanEntry, LanAutoEntryOn) : m.LanAuto;
+        bool? auto = isMe ? RoomLanEntryView.EntersByItself(_roomLanEntry, LanAutoEntryOn, _roomHomeCity) : m.LanAuto;
         return auto switch { true => Strings.Get("RoomLanAuto"), false => Strings.Get("RoomLanManual"), _ => null };
     }
 

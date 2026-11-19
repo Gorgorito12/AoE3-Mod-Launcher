@@ -594,6 +594,11 @@ rather than the reverse.
   The hero column is a star column capped at 1000, so the progress card reaches its 660.
   (10) **The four type sizes `LibraryMetrics` computes follow the text-size setting**
   (`TextScale.CurrentFactor`); the geometry does not, as with every font token.
+  (11) **The Play button is the same width in every state** (2026-11-18, a rule on top of 68a, which
+  states none): `LibraryMetrics.PlayWidth = clamp(220, 11.5 % of the window, 280)`, applied as
+  `DashboardPlayButton.MinWidth` in `ApplyLibraryLayout` — `MinWidth`, never `Width`, so a caption
+  that outgrows it at 125 % text widens the button instead of being cut. Geometry: it does not follow
+  the text size. Pinned by `LibraryViewTests.ThePlayButtonIsTheSameWidthInEveryState`.
   **MainWindow's XAML is parsed by no unit test**, so a broken value there passes the whole suite and
   dies on launch (a `Margin="11%"` did exactly that): launch it with the testbed before calling a
   change to that file done.

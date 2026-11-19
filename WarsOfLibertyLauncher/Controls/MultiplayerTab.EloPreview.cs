@@ -70,15 +70,17 @@ public partial class MultiplayerTab
         var block = (scene ?? "").Trim().ToLowerInvariant();
         var picked = block switch
         {
-            "93a" or "93b" or "93c" or "93e" => EloPreviewScene.Ranking,
+            "93a" or "93b" or "93c" or "93e" or "93g" => EloPreviewScene.Ranking,
             "93d" => EloPreviewScene.Placement,
             "93f" => EloPreviewScene.RankingHighlights,
             _ => EloDemoData.SceneByName(scene),
         };
         // Only a block names its mode. The plain scenes keep whichever view is open, which is
         // what a redraw of the preview relies on.
-        if (block is "93a" or "93b" or "93c" or "93d" or "93e")
+        if (block is "93a" or "93b" or "93c" or "93d" or "93e" or "93g")
             _rankingMode = block == "93c" ? RankingMode.Team : RankingMode.Solo;
+        // 93g: the viewer off the table for inactivity (2026-11-18).
+        _previewOffTable = block == "93g";
 
         _eloPreview = true;
         _eloPreviewNobodyRanked = picked == EloPreviewScene.Placement;

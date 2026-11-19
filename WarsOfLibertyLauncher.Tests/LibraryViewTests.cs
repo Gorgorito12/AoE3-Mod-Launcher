@@ -200,6 +200,33 @@ public class LibraryViewTests
         Assert.Equal(height, button.Height);
     });
 
+    /// <summary>
+    /// The Play button is the same width whatever it says (2026-11-18): Play, Install, Update and
+    /// Stop, in both languages, at a laptop's width and a big screen's. Measured at INFINITY, since
+    /// a finite measure clamps the desired size and would report an overflowing caption as a fit.
+    /// </summary>
+    [Theory]
+    [InlineData(1366)]
+    [InlineData(2560)]
+    public void ThePlayButtonIsTheSameWidthInEveryState(double window) => Run(() =>
+    {
+        var minWidth = LibraryMetrics.For(window).PlayWidth;
+        var widths = new List<double>();
+        foreach (var lang in new[] { WarsOfLibertyLauncher.Localization.Strings.LangEs, WarsOfLibertyLauncher.Localization.Strings.LangEn })
+            foreach (var key in new[] { "LibPlay", "LibInstall", "LibUpdate", "BtnStop" })
+            {
+                var button = new Button
+                {
+                    Style = (Style)Application.Current.FindResource("LibraryPrimaryButton"),
+                    MinWidth = minWidth,
+                    Content = new TextBlock { Text = WarsOfLibertyLauncher.Localization.Strings.GetIn(lang, key) },
+                };
+                button.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                widths.Add(button.DesiredSize.Width);
+            }
+        Assert.All(widths, w => Assert.Equal(minWidth, w, 1));
+    });
+
     [Theory]
     [InlineData(1920, 1080, 1920, 1080, 0, 0, 1, 1)]          // same shape: all of it
     [InlineData(2000, 1000, 1000, 1000, .25, 0, .5, 1)]       // wider image: centred

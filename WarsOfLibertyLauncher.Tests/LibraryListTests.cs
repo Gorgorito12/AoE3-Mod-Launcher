@@ -104,15 +104,16 @@ public class LibraryListTests
     }
 
     [Theory]
-    [InlineData(1366, 320, 56, 36.882)]
-    [InlineData(1920, 441.6, 59.52, 51.84)]
-    [InlineData(2560, 460, 68, 64)]
-    public void TheMetricsAreThePrototypesClamps(double width, double rail, double row, double title)
+    [InlineData(1366, 320, 56, 36.882, 220)]
+    [InlineData(1920, 441.6, 59.52, 51.84, 220.8)]
+    [InlineData(2560, 460, 68, 64, 280)]
+    public void TheMetricsAreThePrototypesClamps(double width, double rail, double row, double title, double play)
     {
         var metrics = LibraryMetrics.For(width);
         Assert.Equal(rail, metrics.RailWidth, 2);
         Assert.Equal(row, metrics.RowHeight, 2);
         Assert.Equal(title, metrics.TitleSize, 2);
+        Assert.Equal(play, metrics.PlayWidth, 2);
     }
 
     /// <summary>
@@ -132,6 +133,7 @@ public class LibraryListTests
         Assert.Equal(plain.RowHeight, larger.RowHeight);
         Assert.Equal(plain.ShotWidth, larger.ShotWidth);
         Assert.Equal(plain.ColumnGap, larger.ColumnGap);
+        Assert.Equal(plain.PlayWidth, larger.PlayWidth);
         Assert.Equal(plain, LibraryMetrics.For(1920, 0));
     }
 

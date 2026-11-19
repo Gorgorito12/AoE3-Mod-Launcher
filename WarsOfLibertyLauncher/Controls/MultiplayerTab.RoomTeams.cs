@@ -529,7 +529,9 @@ public partial class MultiplayerTab
         // says so, or — against a server that still sends them — this launcher sees it, and then the
         // figures that arrived are not drawn. A dash, an empty bar and the sentence that says why.
         var hiddenForPlacement = WinOddsView.HiddenByPlacement(_roomOdds, odds != null && AnyRoomPlayerPlacing(team: true));
-        if (hiddenForPlacement) odds = null;
+        // A private rating hides the odds too, and it is not "waiting for players" (2026-11-18).
+        var hiddenForPrivate = WinOddsView.HiddenByPrivate(_roomOdds);
+        if (hiddenForPlacement || hiddenForPrivate) odds = null;
         var stack = new StackPanel();
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -577,7 +579,8 @@ public partial class MultiplayerTab
         });
         stack.Children.Add(new TextBlock
         {
-            Text = Strings.Get(hiddenForPlacement ? "MpOddsHiddenPlacement"
+            Text = Strings.Get(hiddenForPrivate ? "MpOddsHiddenPrivate"
+                : hiddenForPlacement ? "MpOddsHiddenPlacement"
                 : odds == null ? "MpWinProbTeamsEmpty" : "MpWinProbTeamsNote"),
             Tag = hiddenForPlacement ? OddsHiddenPlacementTag : null,
             Margin = new Thickness(0, 7, 0, 0),

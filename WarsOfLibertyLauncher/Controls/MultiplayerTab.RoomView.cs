@@ -451,7 +451,6 @@ public partial class MultiplayerTab
         var w = _lobbyWindow!;
         var bracket = _roomTournament;
         w.RoomStakeLines.Visibility = bracket != null ? Visibility.Visible : Visibility.Collapsed;
-        w.RoomStakeText.Visibility = bracket == null ? Visibility.Visible : Visibility.Collapsed;
         w.RoomCountsPanel.ClearValue(Border.BorderBrushProperty);
         w.RoomCountsPanel.ClearValue(FrameworkElement.ToolTipProperty);
         if (bracket == null)
@@ -473,11 +472,11 @@ public partial class MultiplayerTab
         w.RoomStakeLabel.Text = Strings.Get(decided ? "RoomPanelResult" : "RtPanelStake");
         w.RoomStakePanel.Visibility = Visibility.Visible;
         w.RoomCountsPanel.Visibility = Visibility.Visible;
-        w.RoomStakeNote.Visibility = Visibility.Collapsed;
         w.PreflightAbandonText.Visibility = Visibility.Collapsed;
         if (CurrentRoomStage() == RoomStage.ResultUndecided) w.RoomCountsPanel.BorderBrush = Solid("#99F4900C");
         SetCountsText(w, "RtCountsBody");
 
+        // The points each way are in the header card (design 116); here, the bracket's own lines.
         var lines = decided
             ? bracket.ResultLines(result!.Verdict == MatchVerdict.Win, RoomViewerId)
             : bracket.StakeLines();
@@ -600,6 +599,13 @@ public partial class MultiplayerTab
                 : model.RatingBefore is { } before
                     ? Strings.Format("RoomEloBefore", Math.Round(before).ToString(CultureInfo.InvariantCulture))
                     : "";
+            // Why these points (2026-11-18): the server's own odds when it rated the match, short on
+            // the card ("Before: 1383 · 22 % in your favour") and the sentence one hover away.
+            var why = model.LooksUnrated ? null : ResultWhyView.For(model);
+            if (why != null && model.WinExpected is int pct && w.RoomEloNote.Text.Length > 0)
+                w.RoomEloNote.Text += " · " + Strings.Format("StakeOddsFor", Strings.Format("MpPercentValue", pct));
+            w.RoomEloNote.ToolTip = why == null ? null
+                : TooltipHelper.Wrap(why.Prefix == null ? why.Text : why.Prefix + ": " + why.Text);
 
             // The age and the place, only when the server sent them. A place worked out here
             // would disagree with the ladder.
@@ -670,19 +676,15 @@ public partial class MultiplayerTab
             ? Visibility.Visible : Visibility.Collapsed;
 
         w.RoomCountsPanel.Visibility = competitive && !hasResult ? Visibility.Visible : Visibility.Collapsed;
-        var stake = competitive && !hasResult && CurrentRoomFormat() == RoomFormat.OneVOne;
-        w.RoomStakePanel.Visibility = stake ? Visibility.Visible : Visibility.Collapsed;
-        if (stake)
-        {
-            var odds = WinOddsView.ForPlayer(_roomOdds, RoomViewerId);
-            var hidden = WinOddsView.HiddenByPlacement(_roomOdds, AnyRoomPlayerPlacing(team: false));
-            w.RoomStakeNote.Visibility = odds != null && !hidden ? Visibility.Visible : Visibility.Collapsed;
-            if (odds is int pct && !hidden) w.RoomStakeNote.Text = Strings.Format("RoomStakeOdds", pct);
-        }
+        // WHAT'S AT STAKE (design 116): the points each way and, in a 1v1, the chance of winning,
+        // as a card in the HEADER beside Invite — drawn there and nowhere else. The column's panel
+        // is a bracket match's alone now (RefreshRoomTournamentPanels shows it).
+        RenderStakeCard(w, competitive && !hasResult);
+        w.RoomStakePanel.Visibility = Visibility.Collapsed;
 
-        // The sentence about the abandonment rule stays where it always was: under what the
-        // competitive room promises, only for the format it applies to.
-        w.PreflightAbandonText.Visibility = stake && RoomFormats.AbandonmentApplies(CurrentRoomFormat())
+        // The abandonment rule, under what the competitive room promises ("for it to count"),
+        // only for the format it applies to.
+        w.PreflightAbandonText.Visibility = competitive && !hasResult && RoomFormats.AbandonmentApplies(CurrentRoomFormat())
             ? Visibility.Visible : Visibility.Collapsed;
         w.PreflightReplayText.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1132,7 +1134,6 @@ public partial class MultiplayerTab
         w.PreflightReplayText.Text = Strings.Get("MpPreflightReplay");
         w.PreflightReplayText.ToolTip = TooltipHelper.Wrap(Strings.Get("MpPreflightReplayTip"));
         w.RoomStakeLabel.Text = Strings.Get("RoomStakeTitle");
-        w.RoomStakeText.Text = Strings.Get("RoomStakeBody");
         w.ChatHeaderText.Text = Strings.Get("RoomChatTitle");
         w.ClearChatButton.Content = Strings.Get("RoomChatClear");
     }

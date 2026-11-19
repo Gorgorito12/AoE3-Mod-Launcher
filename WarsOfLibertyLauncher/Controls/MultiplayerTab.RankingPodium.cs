@@ -465,6 +465,37 @@ public partial class MultiplayerTab
             return;
         }
         var own = OwnLadder(team);
+        // Off the table for inactivity (2026-11-18): an amber card with his ELO and the way back,
+        // only when the server said so.
+        if (!_eloPreview && own is { OffTableInactive: true } || _eloPreview && _previewOffTable && own != null)
+        {
+            _rankingYouShown = true;
+            RankingYouHost.Visibility = Visibility.Visible;
+            RankingYouHost.Margin = new Thickness(0, 0, 0, PageGap);
+            var days = CommunityStatsView.InactiveHidden(_communityStats, team)?.Days ?? InactiveAfterDays;
+            var text = new TextBlock { TextWrapping = TextWrapping.Wrap, Tag = OffTableTag };
+            text.SetResourceReference(TextBlock.FontSizeProperty, "StatsProseSize");
+            text.Inlines.Add(new Run(Strings.Get("RkYouOffTableTitle") + " ")
+            {
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.FindResource("MpCaution"),
+            });
+            text.Inlines.Add(new Run(Strings.Format("RkYouOffTableBody", days, (int)Math.Round(own!.Rating)))
+            {
+                Foreground = (Brush)Application.Current.FindResource("StatsProse"),
+            });
+            var card = new Border
+            {
+                Child = text,
+                Padding = new Thickness(14, 12, 14, 12),
+                CornerRadius = new CornerRadius(10),
+                BorderThickness = new Thickness(1),
+                BorderBrush = Solid("#80F4900C"),
+            };
+            card.SetResourceReference(Border.BackgroundProperty, "GlassPanel");
+            RankingYouHost.Children.Add(card);
+            return;
+        }
         var you = YourStandingView.For(ranked, placing, RankingViewerId, ladderSize, own);
         _rankingYouShown = you != null;
         RankingYouHost.Visibility = you != null ? Visibility.Visible : Visibility.Collapsed;
@@ -476,6 +507,11 @@ public partial class MultiplayerTab
     }
 
     private bool _rankingYouShown;
+
+    internal const string OffTableTag = "RankingOffTable";
+
+    /// <summary>The 93g preview: the viewer drawn off the table for inactivity.</summary>
+    private bool _previewOffTable;
 
     /// <summary>The viewer's own profile, from his row, his podium card or "Your position". While
     /// the preview owns the page it is the sample profile: the real one would ask for a session.</summary>
@@ -646,8 +682,12 @@ public partial class MultiplayerTab
         {
             var list = new StackPanel { Margin = new Thickness(8, 0, 8, 10) };
             foreach (var n in you.Neighbours) list.Children.Add(BuildNeighbourRow(n));
+            // With the badge line drawn, the sentence names only the place above; it says nothing
+            // when that place IS the next age's, which the badge line already says.
             var next = you.First ? Strings.Get("RkYouFirst")
                 : you.ToNextPlace <= 0 ? null
+                : you.Badge is { Places: 1 } ? null
+                : you.Badge != null ? Strings.Format("RkYouNext", you.ToNextPlace, you.NextPlace)
                 : you.NextAge is { } up
                     ? Strings.Format("RkYouNextAge", you.ToNextPlace, you.NextPlace, Strings.Get(RankAges.NameKey(up)))
                     : Strings.Format("RkYouNext", you.ToNextPlace, you.NextPlace);
@@ -661,6 +701,8 @@ public partial class MultiplayerTab
                     Foreground = Solid("#C3D2E5"),
                     Tag = "RankingYouNext",
                 });
+            if (you.Badge is { } progress)
+                list.Children.Add(BuildBadgeProgress(progress, new Thickness(8, list.Children.Count > 0 ? 10 : 0, 8, 0)));
             if (list.Children.Count > 0) body.Children.Add(list);
         }
         else
@@ -706,6 +748,42 @@ public partial class MultiplayerTab
         card.MouseLeftButtonUp += (_, _) => OpenOwnProfileFromRanking();
         return card;
     }
+
+    /// <summary>
+    /// "23 points to Imperial · 3 places" over a 4-px bar in the NEXT age's colour (2026-11-18):
+    /// the bar is how far up his own age he stands, by places. The age colours are the badges', never
+    /// the mod's.
+    /// </summary>
+    internal static FrameworkElement BuildBadgeProgress(BadgeProgress badge, Thickness margin)
+    {
+        var (main, light) = RankAgeColors.Of(badge.NextAge);
+        var stack = new StackPanel { Margin = margin, Tag = BadgeProgressTag };
+        var line = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+            Foreground = Solid("#C3D2E5"),
+        };
+        line.Inlines.Add(new Run(Strings.Format(badge.Points == 1 ? "RkBadgePointsOne" : "RkBadgePoints", badge.Points)));
+        line.Inlines.Add(new Run(Strings.Get(RankAges.NameKey(badge.NextAge))) { FontWeight = FontWeights.SemiBold, Foreground = Solid(light) });
+        line.Inlines.Add(new Run(" · " + Strings.Format(badge.Places == 1 ? "RkBadgePlacesOne" : "RkBadgePlaces", badge.Places))
+        {
+            Foreground = Solid("#8C9CB1"),
+        });
+        stack.Children.Add(line);
+        var bar = new Grid { Height = 4, Margin = new Thickness(0, 6, 0, 0) };
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(badge.Fill, 0.02), GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(1 - badge.Fill, 0), GridUnitType.Star) });
+        var track = new Border { CornerRadius = new CornerRadius(2), Background = Solid("#1AFFFFFF") };
+        Grid.SetColumnSpan(track, 2);
+        bar.Children.Add(track);
+        bar.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = Solid(main) });
+        stack.Children.Add(bar);
+        stack.ToolTip = TooltipHelper.Wrap(Strings.Get("RkBadgeTip"));
+        return stack;
+    }
+
+    internal const string BadgeProgressTag = "BadgeProgress";
 
     /// <summary>One line of the three around the viewer: place, picture, name, ELO, and the gap.</summary>
     private static FrameworkElement BuildNeighbourRow(StandingNeighbour n)

@@ -36,4 +36,10 @@ public static class WinOddsView
 
     /// <summary>The server's <c>hidden_reason</c> for odds withheld during placement.</summary>
     public const string PlacementReason = "placement";
+
+    /// <summary>The odds were withheld because a player keeps his rating private (migration 0034).</summary>
+    public static bool HiddenByPrivate(RoomOdds? odds)
+        => string.Equals(odds?.HiddenReason, PrivateReason, StringComparison.Ordinal);
+
+    public const string PrivateReason = "private";
 }

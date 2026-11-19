@@ -584,6 +584,13 @@
     <sys:Double x:Key="QcButtonSizeCompact">14</sys:Double>
     <sys:Double x:Key="QcButton2SizeCompact">13.5</sys:Double>
     <sys:Double x:Key="RoomFigureSize">30</sys:Double>
+    <!-- The two figures of the header's "what's at stake" card (design 116). -->
+    <sys:Double x:Key="RoomStakeFigureSize">26</sys:Double>
+    <!-- The match-found dialog (design 117). -->
+    <sys:Double x:Key="MmFoundHeadlineSize">20</sys:Double>
+    <sys:Double x:Key="MmFoundNameSize">14.5</sys:Double>
+    <sys:Double x:Key="MmFoundClockSize">22</sys:Double>
+    <sys:Double x:Key="MmFoundStakeFigureSize">25</sys:Double>
     <sys:Double x:Key="TournamentFigureSize">20</sys:Double>
     <sys:Double x:Key="EnrollTitleSize">22</sys:Double>
     <sys:Double x:Key="DialogCodeSize">30</sys:Double>

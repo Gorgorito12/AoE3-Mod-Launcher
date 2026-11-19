@@ -378,8 +378,12 @@ public class EloPreviewTests
 
                 Assert.Equal("JUGADORES", w!.PlayersListHeader.Text);
 
-                var odds = w.RoomMembersPanel.Children.OfType<Border>().Single(b => Equals(b.Tag, "RoomOdds1v1"));
-                Assert.Contains(AllText(odds), t => t == "Tienes un 62 % de probabilidad de ganar");
+                // The chance of winning lives in WHAT'S AT STAKE now (2026-11-18), once: this sample
+                // has the server's odds and no stake (an older server), so the bar and its line.
+                // Since design 116 it is the header card's band: mine and the rival's.
+                Assert.Contains(AllText(w.RoomStakeCard), t => t == "62 %");
+                Assert.Contains(AllText(w.RoomStakeCard), t => t == "38 %");
+                Assert.DoesNotContain(AllText(w.RoomMembersPanel), t => t.Contains("62 %"));
 
                 var lines = AllText(w.RoomMembersPanel);
                 Assert.Contains(lines, t => t.Contains("tu balance 9\u20132"));
@@ -714,7 +718,7 @@ public class EloPreviewTests
             tab.ShowSampleRoom(RoomDemoData.OneVOne());
             var w = tab.LobbyWindowForTests;
             Assert.NotNull(w);
-            Assert.DoesNotContain(w!.RoomMembersPanel.Children.OfType<Border>(), b => Equals(b.Tag, "RoomOdds1v1"));
+            Assert.DoesNotContain(AllText(w!.RoomStakeCard), t => t.Contains('%') || t.StartsWith("+"));
         });
         Assert.Null(error);
     }

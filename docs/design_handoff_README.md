@@ -66,6 +66,7 @@ language.
 | `design_comunidad_compacta/` | Rooms: the community block compact and ANCHORED AT THE BOTTOM — the facts on the title line, one line each, dropped from the end when short; shorter cards (the matches two lines each, the maintainer's correction); the rooms take everything above, and an empty list centres its notice | 61a, 61b (built) |
 | `design_avisos_flotantes/` | Every floating notice (in the launcher and on the desktop) as ONE card: a tone, a drawn pictogram (never a character), one coloured button, the time bar; replaces 63c, 70b, 83l, 85j, 87m and 96e | 105a, 105b (built, COMPACT — see below) |
 | `design_14nov/` | Five changes sharing one colour rule (the mod's colour only on what is yours; every state in the Rooms colours): the gold launcher-update pill (110), the new-tournament dialog with nothing cut (108), Tournaments by state (106), Ranking in colour (107), Statistics without gaps (109) | 110a-110c, 108a-108d, 106, 107a, 109a-109f (built; 110d is an alternative, not built). Not followed: the pill keeps its place in the TITLE bar and breathes 2.4 s then rests 2.4 s (a clock that never stops redraws every frame); the 1366 x 768 window is not tall enough for the tournaments' steps bar (hidden under 900, as before) |
+| `design_sala_competitiva/` | Two pages. **116**: the competitive 1v1 room, "what's at stake" as a card in the room's header beside Invite (two halves, the win chance with both percentages, the anti-farm band), the automatic-entry card as a one-line strip, the abandonment sentence under "for it to count". **117**: the quick match's "Rival found" dialog, you and the rival face to face with who accepted under each, the same stake card, a large clock that turns amber at five seconds | 116b, 117b-117e (built). 116's hidden notes describe an earlier card; the drawn frame was followed. 117: who accepted is deduced from the server's count; a casual match keeps the badge each player chose (117e draws none); "In placement 3/10" wraps instead of being cut. Not built in either: letter-spacing (WPF has none) |
 | *(none — Claude Design only)* | Rooms: the row's action button in the Discord announcement's colours — green Join, blue In game, amber Full, each with a dot | 66 (built, colours only — see below) |
 
 ## Where design 66 was deliberately not followed
@@ -544,6 +545,9 @@ Screen 68 (Biblioteca unificada):
   so "Renombrar o quitar en Ajustes" reads "Gestionar en Ajustes".
 - **The sort button is a real menu** (recent, name, status); the prototype only draws its caption.
 - **Uninstall keeps its own window** until screen 79 redoes it, not the veil in 68a.
+- **The Play button has a width 68a does not state** (the maintainer's call, 2026-11-18): the same in
+  every state, `clamp(220, 11.5 % of the window, 280)`, as a MinWidth so a longer caption widens it.
+  68a drew it as its caption plus padding, so it changed size between Play, Install, Update and Stop.
 - **Only the tabs, the list and the search sit on real blur.** The chips and pills are small enough
   that their 8-10 px blur cannot be told from their fill, and each would add to the clip.
 - **The chevron of the brand menu and the bell stay in the bar.** Both lead somewhere nothing else

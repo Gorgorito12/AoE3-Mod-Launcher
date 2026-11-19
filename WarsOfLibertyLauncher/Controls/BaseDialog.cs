@@ -46,6 +46,8 @@ public class BaseDialog : Window
     private readonly TextBlock _detailLabel = new();
     private readonly TextBlock _detailValue = new();
     private readonly Grid _root = new();
+    private readonly StackPanel _page = new() { Margin = new Thickness(22, 22, 22, 18) };
+    private Grid? _footer;
     private DialogTone _tone;
     private Color _glowColor = Color.FromRgb(0x2F, 0x7F, 0xE0);
     private double _glowTop = .2;
@@ -87,14 +89,13 @@ public class BaseDialog : Window
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         _root.Children.Add(Chrome);
 
-        var page = new StackPanel { Margin = new Thickness(22, 22, 22, 18) };
-        Grid.SetRow(page, 1);
-        _root.Children.Add(page);
+        Grid.SetRow(_page, 1);
+        _root.Children.Add(_page);
 
-        page.Children.Add(BuildHeader());
-        page.Children.Add(BuildDetailBox());
-        page.Children.Add(_slot);
-        page.Children.Add(BuildFooter());
+        _page.Children.Add(BuildHeader());
+        _page.Children.Add(BuildDetailBox());
+        _page.Children.Add(_slot);
+        _page.Children.Add(BuildFooter());
 
         Content = _root;
         ModDialogChrome.AttachGlobal(this);
@@ -182,6 +183,33 @@ public class BaseDialog : Window
         _detailValue.Text = value ?? "";
         _detailLabel.Text = label ?? "";
         _detailLabel.Visibility = string.IsNullOrEmpty(label) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>
+    /// A header of the dialog's own in place of the tone tile, headline and lead (the match-found
+    /// window: a pictogram tile and a label under the headline). Everything under it stays.
+    /// </summary>
+    internal void ReplaceHeader(UIElement header)
+    {
+        _page.Children.RemoveAt(0);
+        _page.Children.Insert(0, header);
+    }
+
+    /// <summary>
+    /// The foot note UNDER the buttons, at the dialog's full width and right-aligned, instead of
+    /// squeezed into the column beside them. For a note long enough to need the room.
+    /// </summary>
+    internal void PutFootNoteBelow()
+    {
+        if (_footer == null || _footer.RowDefinitions.Count > 0) return;
+        _footer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _footer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(FootNote, 1);
+        Grid.SetColumn(FootNote, 0);
+        Grid.SetColumnSpan(FootNote, 3);
+        FootNote.Margin = new Thickness(0, 10, 0, 0);
+        FootNote.TextAlignment = TextAlignment.Right;
+        FootNote.HorizontalAlignment = HorizontalAlignment.Right;
     }
 
     /// <summary>A third action, to the left of the pair and apart from it.</summary>
@@ -306,6 +334,7 @@ public class BaseDialog : Window
     private UIElement BuildFooter()
     {
         var footer = new Grid { Margin = new Thickness(0, 16, 0, 0) };
+        _footer = footer;
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

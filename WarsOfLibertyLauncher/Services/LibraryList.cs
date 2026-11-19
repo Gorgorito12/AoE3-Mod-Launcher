@@ -140,7 +140,7 @@ public static class LibraryStatus
 public readonly record struct LibraryMetrics(
     double RailWidth, double ColumnGap, double SidePadding, double BottomPadding,
     double RowHeight, double RowNameSize, double TitleSize, double AuthorSize, double DescriptionSize,
-    double ShotWidth, double DetailGap)
+    double ShotWidth, double DetailGap, double PlayWidth)
 {
     /// <summary>The prototype folds the list on the 1366 canvas and opens it above, and
     /// Ajustes › Interfaz says "menos de 1400 px".</summary>
@@ -176,7 +176,13 @@ public readonly record struct LibraryMetrics(
             AuthorSize: Clamp(13.5, .62, 16) * type,
             DescriptionSize: Clamp(14, .62, 16.5) * type,
             ShotWidth: Clamp(120, 7, 176),
-            DetailGap: Clamp(14, 1, 22));
+            DetailGap: Clamp(14, 1, 22),
+            // Not the prototype's: 68a sizes the primary button to its caption, so it changed width
+            // between Play, Install, Update and Stop and read short beside the title (2026-11-18,
+            // the maintainer's call). A MINIMUM, applied as MinWidth: a caption that outgrows it
+            // (a larger text size) widens the button instead of being cut. Geometry, so the text
+            // size does not scale it.
+            PlayWidth: Clamp(220, 11.5, 280));
     }
 
     /// <summary><c>open</c> and <c>closed</c> are the player's; anything else follows the width.</summary>
