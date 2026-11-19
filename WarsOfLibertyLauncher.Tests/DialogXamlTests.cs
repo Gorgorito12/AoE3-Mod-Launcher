@@ -674,6 +674,35 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// The room's "Automatic entry" card sits right above PLAYERS (not a chip in the header any
+    /// more), and its switch reports what the player chose.
+    /// </summary>
+    [Fact]
+    public void TheAutomaticEntryCardSitsAbovePlayersAndItsSwitchReportsTheChoice()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var window = new LobbyWindow(new MultiplayerSession(new LauncherConfig()));
+            var panels = window.LobbyPanels.Children;
+            Assert.Equal(panels.IndexOf(window.RoomPlayersPanel) - 1, panels.IndexOf(window.RoomLanCard));
+            Assert.Null(window.FindName("RoomLanChip"));
+
+            window.RoomLanSwitch.IsChecked = true;
+            bool? reported = null;
+            window.OnLanSwitch = on => reported = on;
+            // Any way the state changes counts, not only a click (a keyboard or an
+            // accessibility tool toggles without one).
+            window.RoomLanSwitch.IsChecked = false;
+            Assert.False(reported);
+            window.RoomLanSwitch.IsChecked = true;
+            Assert.True(reported);
+            window.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// THE ONE THAT MATTERS for the room's players panel: the cards give ground by
     /// SCROLLING, and the actions cannot be scrolled away from.
     ///
@@ -4122,6 +4151,93 @@ public class DialogXamlTests
                     // A warning must not look like a plain question.
                     Assert.NotEqual(questionTone, warning.ToneGlyph.Foreground);
                     warning.Close();
+                }
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The Record Game question's "don't remind me for 7 days": a tick box the alert card builds in
+    /// code, so nothing else checks its style resolves or that its answer comes back with the button's.
+    /// </summary>
+    [Fact]
+    public void TheRecordGameQuestionCarriesItsSnoozeBoxAndReturnsBothAnswers()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var host = new Grid();
+            var task = MpAlertOverlay.ConfirmWithCheckAsync(host, "t", "b", "Yes", "No", Strings.Get("MpStartConfirmSnooze"));
+            var check = host.Children.OfType<FrameworkElement>()
+                .SelectMany(Descendants).OfType<CheckBox>().Single();
+            Assert.Equal("MpAlertCheck", AutomationProperties.GetAutomationId(check));
+            check.IsChecked = true;
+            var primary = host.Children.OfType<FrameworkElement>()
+                .SelectMany(Descendants).OfType<Button>()
+                .Single(b => AutomationProperties.GetAutomationId(b) == "MpAlertPrimary");
+            primary.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Assert.True(task.IsCompleted);
+            Assert.Equal((true, true), task.Result);
+            Assert.Empty(host.Children);
+        });
+
+        Assert.Null(error);
+
+        static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+        {
+            yield return root;
+            foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+                foreach (var d in Descendants(child)) yield return d;
+        }
+    }
+
+    /// <summary>
+    /// The LAN helper's setup window: built only when an automatic copy failed or the room's chip
+    /// is pressed, so nothing else would notice a missing key or brush. Painted from preview states
+    /// so no game folder is read or written.
+    /// </summary>
+    [Fact]
+    public void TheLanSetupWindowLoadsInBothLanguagesAndOffersTheRightWay()
+    {
+        var gameExe = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "no-such-game", "age3y.exe");
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                var mod = ModRegistry.Find("wol") ?? ModRegistry.Default;
+                foreach (var lang in new[] { Strings.LangEn, Strings.LangEs })
+                {
+                    Strings.SetLanguage(lang);
+                    var protectedFolder = new LanHelperSetupDialog(mod, gameExe, null,
+                        Services.Multiplayer.LanHelperState.Missing, previewWritable: false);
+                    Assert.Equal(Visibility.Visible, protectedFolder.PrimaryButton.Visibility);
+                    Assert.Equal(Strings.Get("LanSetupAsAdmin"), protectedFolder.PrimaryButton.Content as string);
+                    Assert.Equal(4, protectedFolder.StepsHost.Children.Count);
+                    Assert.NotEqual(Brushes.Black, protectedFolder.BodyText.Foreground);
+                    protectedFolder.Close();
+
+                    var writable = new LanHelperSetupDialog(mod, gameExe, "Access denied",
+                        Services.Multiplayer.LanHelperState.Missing, previewWritable: true);
+                    Assert.Equal(Strings.Get("LanSetupCopyNow"), writable.PrimaryButton.Content as string);
+                    Assert.Contains("Access denied", writable.BodyText.Text);
+                    writable.Close();
+
+                    // Already in place: nothing to press and no steps.
+                    var active = new LanHelperSetupDialog(mod, gameExe, null,
+                        Services.Multiplayer.LanHelperState.Installed, previewWritable: true);
+                    Assert.NotEqual(Visibility.Visible, active.PrimaryButton.Visibility);
+                    Assert.Equal(Visibility.Collapsed, active.StepsCard.Visibility);
+                    active.Close();
+
+                    // Another program's dinput8.dll: the launcher offers nothing.
+                    var foreign = new LanHelperSetupDialog(mod, gameExe, null,
+                        Services.Multiplayer.LanHelperState.ForeignDll, previewWritable: true);
+                    Assert.NotEqual(Visibility.Visible, foreign.PrimaryButton.Visibility);
+                    Assert.Equal(Visibility.Collapsed, foreign.StepsCard.Visibility);
+                    foreign.Close();
                 }
             }
             finally { Strings.SetLanguage(previous); }

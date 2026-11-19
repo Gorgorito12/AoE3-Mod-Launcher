@@ -15,9 +15,9 @@ namespace WarsOfLibertyLauncher.Tests;
 [Collection("wpf-and-language")]
 public class CreateRoomDialogTests
 {
-    private static CreateLobbyDialog NewDialog(LauncherConfig? config = null, Func<ModProfile, Task<string>>? hash = null, bool observers = false)
+    private static CreateLobbyDialog NewDialog(LauncherConfig? config = null, Func<ModProfile, Task<string>>? hash = null, bool observers = false, bool noTreaty = false)
     {
-        var profile = new ModProfile { Id = "wol", DisplayName = "WoL" };
+        var profile = new ModProfile { Id = "wol", DisplayName = "WoL", NoTreatyRules = noTreaty };
         return new CreateLobbyDialog(
             new MultiplayerSession(new LauncherConfig()),
             new List<ModProfile> { profile },
@@ -131,6 +131,48 @@ public class CreateRoomDialogTests
             dialog.RoomTitleBox.Text = "Vengan noobs";
             dialog.Suggest2.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             Assert.Equal(Strings.Get("MpCreateDialogSuggestNight"), dialog.RoomTitleBox.Text);
+            dialog.Close();
+        });
+    }
+
+    private static int[] OfferedRules(CreateLobbyDialog dialog) =>
+        dialog.GameRulesCombo.Items.OfType<System.Windows.Controls.ComboBoxItem>().Select(i => (int)i.Tag).ToArray();
+
+    [Fact]
+    public void AModWithoutTreatiesNeverOffersThem_AndASavedTreatyFallsBackToStandard()
+    {
+        Run(() =>
+        {
+            var dialog = NewDialog(new LauncherConfig { LastRoomKind = "casual", LastRoomGameRules = LanAutoStartArgs.Treaty20 }, noTreaty: true);
+            Assert.Equal(new[] { LanAutoStartArgs.Standard, LanAutoStartArgs.Classic, LanAutoStartArgs.KingOfTheHill }, OfferedRules(dialog));
+            Assert.Equal(LanAutoStartArgs.Standard, dialog.GameRules);
+            dialog.Close();
+
+            var other = NewDialog(new LauncherConfig { LastRoomKind = "casual", LastRoomGameRules = LanAutoStartArgs.Treaty20 });
+            Assert.Equal(LanAutoStartArgs.OfferedRules, OfferedRules(other));
+            Assert.Equal(LanAutoStartArgs.Treaty20, other.GameRules);
+            other.Close();
+        });
+    }
+
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ACompetitiveRoomShowsStandardFixed_AndCasualGetsItsChoiceBack()
+    {
+        Run(() =>
+        {
+            var dialog = NewDialog(new LauncherConfig { LastRoomKind = "casual" });
+            dialog.SelectGameRules(LanAutoStartArgs.KingOfTheHill);
+            Assert.Equal(LanAutoStartArgs.KingOfTheHill, dialog.GameRules);
+
+            dialog.SelectKind(RoomFormat.OneVOne);
+            Assert.Equal(Visibility.Collapsed, dialog.GameRulesCombo.Visibility);
+            Assert.Equal(Visibility.Visible, dialog.GameRulesFixed.Visibility);
+            Assert.Equal(Strings.Get("MpCreateDialogRulesStandard"), dialog.GameRulesFixedText.Text);
+            Assert.Equal(LanAutoStartArgs.Standard, dialog.GameRules);
+
+            dialog.SelectKind(RoomFormat.Casual);
+            Assert.Equal(Visibility.Visible, dialog.GameRulesCombo.Visibility);
+            Assert.Equal(LanAutoStartArgs.KingOfTheHill, dialog.GameRules);
             dialog.Close();
         });
     }

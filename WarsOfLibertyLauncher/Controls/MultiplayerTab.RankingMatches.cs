@@ -848,8 +848,8 @@ public partial class MultiplayerTab
             : null;
         // The mod is on line 2 of every match row now (BuildRankingMatchRow), so the tile no longer
         // appends it a second time.
-        var row = BuildRankingMatchRow(m, MatchVocabulary(m), look: look,
-            replayCell: BuildReplayCell, ageText: age, tile: true);
+        var row = LinkPlayerNames(BuildRankingMatchRow(m, MatchVocabulary(m), look: look,
+            replayCell: BuildReplayCell, ageText: age, tile: true));
         return new Border
         {
             Child = row,

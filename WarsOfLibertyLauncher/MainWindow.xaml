@@ -295,6 +295,9 @@
                     </LinearGradientBrush>
                 </Rectangle.Fill>
             </Rectangle>
+            <!-- The tournament's mod colour as light from the top right; painted from code, and
+                 left out with solid glass or reduced effects. -->
+            <Rectangle x:Name="TournamentAccentGlow" Visibility="Collapsed"/>
         </Grid>
         <Grid x:Name="LibraryBackdrop" Grid.RowSpan="3" IsHitTestVisible="False" ClipToBounds="True">
             <Border x:Name="DashboardBgFill"

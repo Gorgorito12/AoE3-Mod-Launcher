@@ -78,10 +78,31 @@ public class RoomActionRuleTests
     [InlineData(-1, "RmPingUnknown")]
     [InlineData(42, "RmPingGood")]
     [InlineData(99, "RmPingGood")]
-    [InlineData(100, "RmPingPlain")]
-    [InlineData(150, "RmPingPlain")]
-    [InlineData(151, "RmPingSlow")]
+    [InlineData(100, "RmPingSlow")]
+    [InlineData(150, "RmPingSlow")]
+    [InlineData(151, "RmPingBad")]
     public void PingBands(int? ms, string key) => Assert.Equal(key, RoomActionRule.PingBrushKey(ms));
+
+    /// <summary>
+    /// The colour and the bars are two rules, and they once disagreed: two bars were white and one
+    /// was amber. Whatever the reading, 3-4 bars are green, 2 amber and 1 red.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ThePingsColourSaysWhatItsBarsSay()
+    {
+        for (var ms = 0; ms <= 400; ms++)
+        {
+            var expected = PeerPingView.LitBars(ms) switch
+            {
+                >= 3 => "RmPingGood",
+                2 => "RmPingSlow",
+                _ => "RmPingBad",
+            };
+            Assert.Equal(expected, RoomActionRule.PingBrushKey(ms));
+            Assert.Equal(PeerPingView.LitBars(ms),
+                WarsOfLibertyLauncher.Controls.MultiplayerTab.LitBars(HostPingKind.Answered, ms));
+        }
+    }
 
     [Fact]
     public void EveryCaptionAndHeadingIsTranslated()

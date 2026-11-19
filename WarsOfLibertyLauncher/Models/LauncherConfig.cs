@@ -1509,6 +1509,14 @@ public class LauncherConfig
     public bool RoomRecordNoticeHidden { get; set; } = false;
 
     /// <summary>
+    /// "Don't remind me for 7 days" on the Record Game question before a competitive start
+    /// (<see cref="Services.Multiplayer.RecordGameNotice"/>). Null when never snoozed. Cleared when
+    /// a competitive match ends without a recording, so a silence never outlives a real failure.
+    /// </summary>
+    [JsonPropertyName("recordNoticeSnoozedUntilUtc")]
+    public DateTime? RecordNoticeSnoozedUntilUtc { get; set; }
+
+    /// <summary>
     /// Marks that the first-launch "Install a stable copy on this PC?" offer has
     /// already been shown, so it is offered exactly ONCE (never nagged on every
     /// launch, not even if the install failed or the user declined). It is a
@@ -1714,33 +1722,37 @@ public class LauncherConfig
     /// hash-pinned".</para>
     /// </summary>
     [JsonPropertyName("autoUpdateMods")]
+    /// <remarks>READ since 2026-11-18 (MainWindow.AutoUpdateMods.cs, rule
+    /// <c>Services/ModAutoUpdatePolicy</c>): the ACTIVE mod updates by itself when nothing would
+    /// need an answer. Still off by default.</remarks>
     public bool AutoUpdateMods { get; set; } = false;
 
-    /// <summary>Incremental patches instead of the whole mod. See <see cref="AutoUpdateMods"/>
-    /// for why this is stored and unread. The engine already decides per mod
-    /// (<c>DeltaPatchService.IsEligible</c>); this would be the player's half of it.</summary>
+    /// <summary>"Download only what changed": READ since 2026-11-18 by
+    /// <c>Services/Repair/IncrementalDownloads</c> — granular repair and delta updates when on;
+    /// the whole download when off (a patch-only release still patches). The engine still decides
+    /// per mod (<c>DeltaPatchService.IsEligible</c>); this is the player's half.</summary>
     [JsonPropertyName("deltaDownloadsOnly")]
     public bool DeltaDownloadsOnly { get; set; } = true;
 
-    /// <summary><c>"stable"</c> or <c>"beta"</c>. Stored and unread — see
-    /// <see cref="AutoUpdateMods"/>. A real Beta channel costs the ETag conditional-request
-    /// optimisation on every update check, so it is not a one-line change.</summary>
+    /// <summary><c>"stable"</c> or <c>"beta"</c>. No longer shown (2026-11-18: there is no beta
+    /// channel); kept so an existing config still reads.</summary>
     [JsonPropertyName("updateChannel")]
     public string UpdateChannel { get; set; } = "stable";
 
-    /// <summary>Download ceiling in KB/s; 0 = no limit. Stored and unread — see
-    /// <see cref="AutoUpdateMods"/>.</summary>
+    /// <summary>Download ceiling in KB/s; 0 = no limit. Read on every chunk by
+    /// <c>Services/DownloadThrottle</c> (2026-11-18), one bucket shared by every download.</summary>
     [JsonPropertyName("downloadLimitKbps")]
     public int DownloadLimitKbps { get; set; } = 0;
 
-    /// <summary>Stored and unread, and the one with a trap — see the warning on
-    /// <see cref="AutoUpdateMods"/>.</summary>
+    /// <summary>No longer shown (2026-11-18): GitHub's published digest is ALWAYS verified now
+    /// (<c>Services/GitHubDigest</c>), so a switch could only turn a safety net off. Kept so an
+    /// existing config still reads; nothing reads it.</summary>
     [JsonPropertyName("verifyDownloadSignatures")]
     public bool VerifyDownloadSignatures { get; set; } = true;
 
-    /// <summary>Whether other players see your rating. Stored and unread — hiding it is
-    /// a SERVER decision (it joins and pushes the number to everyone else), so the switch
-    /// exists because the handoff draws it and the backend half is separate work. See the
+    /// <summary>Whether other players see your rating. Mirrors the SERVER's
+    /// <c>users.rating_private</c> (migration 0034), which is what decides: the Settings row
+    /// writes it through <c>POST /me/rating-visibility</c>. See the
     /// block comment on <see cref="AutoUpdateMods"/>.</summary>
     [JsonPropertyName("showMyElo")]
     public bool ShowMyElo { get; set; } = true;
@@ -2155,6 +2167,30 @@ public class LauncherConfig
     /// <summary>The Game Rules entry last chosen when creating a room, which the dialog opens on:
     /// see <see cref="Services.Multiplayer.LanAutoStartArgs.OfferedRules"/>. 0 = Standard.</summary>
     public int LastRoomGameRules { get; set; }
+
+    /// <summary>
+    /// Whether the launcher may put the LAN helper (<c>dinput8.dll</c> + <c>engine-ext\</c>) next
+    /// to a game's executable, so the game enters the room's LAN game by itself:
+    /// <see cref="Services.Multiplayer.LanHelperService"/>. <c>null</c> = never asked (the first
+    /// room asks once), <c>true</c> = yes, <c>false</c> = no and never asked again. Nullable on
+    /// purpose: a "false" nobody chose would silence the question for everyone on the first save.
+    /// </summary>
+    [JsonPropertyName("lanHelperChoice")]
+    public bool? LanHelperChoice { get; set; }
+
+    /// <summary>
+    /// The room's "Automatic entry" switch: whether the launch carries the arguments that take the
+    /// game straight into the room's LAN game (<see cref="Services.Multiplayer.LanAutoStartArgs"/>).
+    /// It copies or removes no file (that is <see cref="LanHelperChoice"/>), so it also turns off a
+    /// mod that ships the feature itself. Remembered across rooms.
+    /// </summary>
+    [JsonPropertyName("lanAutoEntry")]
+    public bool LanAutoEntry { get; set; } = true;
+
+    /// <summary>Every game folder the helper was installed in, so switching it off in Settings can
+    /// take it out of all of them, including a mod that is not the one on screen.</summary>
+    [JsonPropertyName("lanHelperFolders")]
+    public List<string> LanHelperFolders { get; set; } = new();
 
     /// <summary>What the quick match looks for: <c>ranked</c> (the default, what it always did),
     /// <c>casual</c> or <c>either</c>. A mod with no ladder searches casual whatever this says.</summary>

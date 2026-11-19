@@ -804,7 +804,11 @@ public static class SelfInstallService
         IReadOnlyList<string> InstalledMods,
         int LeftoverKeys,
         int PendingUploads,
-        bool HasRepairBackups);
+        bool HasRepairBackups,
+        // The game folders the LAN helper is still in, and whether one of them needs
+        // administrator rights to clean. Trailing and defaulted so older call sites still compile.
+        int LanHelperFolders = 0,
+        bool LanHelperNeedsAdmin = false);
 
     /// <summary>Reads the disk; run it off the UI thread.</summary>
     public static UninstallFacts GatherUninstallFacts(LauncherConfig config, int leftoverKeys)
@@ -833,7 +837,9 @@ public static class SelfInstallService
             InstalledModNames(config, ModRegistry.Find, Directory.Exists),
             leftoverKeys,
             pending,
-            HasRepairBackupsIn(AppPaths.DataDir));
+            HasRepairBackupsIn(AppPaths.DataDir),
+            config.LanHelperFolders.Count(Multiplayer.LanHelperService.HasOurDll),
+            config.LanHelperFolders.Any(f => Multiplayer.LanHelperService.HasOurDll(f) && !ElevationService.CanWriteTo(f)));
     }
 
     /// <summary>

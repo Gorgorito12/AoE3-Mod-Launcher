@@ -1,0 +1,16 @@
+{
+  "_comment": "Asset names -> which asset the launcher installs. Read by test_check_releases.py AND by the launcher's CatalogCheckerParityTests, so the catalog check and the launcher cannot disagree about what a release holds. pick: index of the single payload or null; parts: indices of a split payload in order; unusable: whether a split set is broken (asked only when parts is empty).",
+  "cases": [
+    { "name": "one zip", "assets": ["Mod-1.0.zip"], "pick": 0, "parts": [], "unusable": false },
+    { "name": "patch zip uploaded first is not the payload", "assets": ["patch-1.0-to-1.1.zip", "patch-1.0-to-1.1.json", "Mod-1.1.zip"], "pick": 2, "parts": [], "unusable": false },
+    { "name": "patch-only release has no payload", "assets": ["patch-1.0-to-1.1.zip", "patch-1.0-to-1.1.json"], "pick": null, "parts": [], "unusable": false },
+    { "name": "a lone patch-named zip with no descriptor is the payload", "assets": ["patch-mod.zip"], "pick": 0, "parts": [], "unusable": false },
+    { "name": "the user-data seed is never the payload", "assets": ["userdata.zip", "Mod.zip"], "nonPayload": "userdata.zip", "pick": 1, "parts": [], "unusable": false },
+    { "name": "only the seed", "assets": ["userdata.zip"], "nonPayload": "userdata.zip", "pick": null, "parts": [], "unusable": false },
+    { "name": "split payload in part order whatever the listing", "assets": ["Mod.zip.003", "Mod.zip.001", "Mod.zip.002"], "pick": null, "parts": [1, 2, 0], "unusable": false },
+    { "name": "split payload with a gap", "assets": ["Mod.zip.001", "Mod.zip.003"], "pick": null, "parts": [], "unusable": true },
+    { "name": "a lone part 001", "assets": ["Mod.zip.001"], "pick": null, "parts": [], "unusable": true },
+    { "name": "no zip at all", "assets": ["README.md", "Mod.7z"], "pick": null, "parts": [], "unusable": false },
+    { "name": "empty release", "assets": [], "pick": null, "parts": [], "unusable": false }
+  ]
+}

@@ -404,4 +404,139 @@ public class MatchSlotMapTests
         Assert.True(partial.ContainsKey("u-gorgo"));
         Assert.Contains("matched no slot", note);
     }
+
+    // ---------------------------------------------------------------- elimination (badges only)
+
+    private static readonly string[] TwoIds = { "u-alu", "u-gorgo" };
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: in a 1v1 your own name decides both slots. The rival's name is the one
+    /// most often missing, and it used to cost his civilization in every stored match.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_InA1v1OneNameNamesBothSlots()
+    {
+        var onlyMine = new Dictionary<string, string> { ["u-gorgo"] = "Gorgorito" };
+        var map = MatchSlotMap.ResolveForBadges(OneVsOne(), onlyMine, TwoIds, null, out var note);
+        Assert.Equal(2, map.Count);
+        Assert.Equal("Gorgorito", map["u-gorgo"].Name);
+        Assert.Equal("Alucard", map["u-alu"].Name);
+        Assert.Contains("paired by elimination", note);
+        Assert.True(MatchSlotMap.CoversAll(map, TwoIds));
+    }
+
+    [Fact]
+    public void WithEveryNameItChangesNothing()
+    {
+        var map = MatchSlotMap.ResolveForBadges(OneVsOne(), TwoNames(), TwoIds, null, out var note);
+        Assert.Equal(2, map.Count);
+        Assert.DoesNotContain("elimination", note);
+    }
+
+    [Fact]
+    public void TwoUnnamedPlayersAreNeverGuessed()
+    {
+        var players = new List<ReplayParserService.ReplayPlayer> { Human(1, "A"), Human(2, "B"), Human(3, "C"), Human(4, "D") };
+        var names = new Dictionary<string, string> { ["u-a"] = "A", ["u-b"] = "B" };
+        var map = MatchSlotMap.ResolveForBadges(players, names, new[] { "u-a", "u-b", "u-c", "u-d" }, null, out _);
+        Assert.Equal(2, map.Count);
+        Assert.False(map.ContainsKey("u-c"));
+        Assert.False(map.ContainsKey("u-d"));
+    }
+
+    [Fact]
+    public void HeadCountsThatDisagreeRefuse()
+    {
+        var onlyMine = new Dictionary<string, string> { ["u-gorgo"] = "Gorgorito" };
+        // Three accounts in the room (an observer), two humans in the file.
+        Assert.Single(MatchSlotMap.ResolveForBadges(OneVsOne(), onlyMine, new[] { "u-alu", "u-gorgo", "u-obs" }, null, out _));
+        // The roster unknown: names only.
+        Assert.Single(MatchSlotMap.ResolveForBadges(OneVsOne(), onlyMine, null, null, out _));
+    }
+
+    [Fact]
+    public void AnAiSlotIsNeverTheRemainingSlot()
+    {
+        var withAi = new List<ReplayParserService.ReplayPlayer> { Human(1, "Gorgorito"), Ai(2, "Menelik") };
+        var onlyMine = new Dictionary<string, string> { ["u-gorgo"] = "Gorgorito" };
+        var map = MatchSlotMap.ResolveForBadges(withAi, onlyMine, TwoIds, null, out _);
+        Assert.Single(map);
+    }
+
+    [Fact]
+    public void ANameOutsideTheRosterRefusesTheElimination()
+    {
+        var names = new Dictionary<string, string> { ["u-stranger"] = "Gorgorito" };
+        var map = MatchSlotMap.ResolveForBadges(OneVsOne(), names, TwoIds, null, out _);
+        Assert.DoesNotContain("u-alu", map.Keys);
+        Assert.DoesNotContain("u-gorgo", map.Keys);
+    }
+
+    [Fact]
+    public void DuplicatesStillRefuseEverything()
+    {
+        var twins = new List<ReplayParserService.ReplayPlayer> { Human(1, "Gorgorito"), Human(2, "gorgorito") };
+        Assert.Empty(MatchSlotMap.ResolveForBadges(twins, new Dictionary<string, string> { ["u-gorgo"] = "Gorgorito" }, TwoIds, null, out _));
+    }
+
+    private static List<ReplayParserService.ReplayPlayer> TwoVsTwo() => new()
+    {
+        Human(1, "A", team: 0), Human(2, "B", team: 1), Human(3, "C", team: 0), Human(4, "D", team: 1),
+    };
+
+    private static readonly string[] FourIds = { "u-a", "u-b", "u-c", "u-d" };
+
+    [Fact]
+    public void InATeamGameOneNameMissingOnEachSideIsPairedInsideItsSide()
+    {
+        var names = new Dictionary<string, string> { ["u-a"] = "A", ["u-b"] = "B" };
+        var sides = new Dictionary<string, int> { ["u-a"] = 1, ["u-c"] = 1, ["u-b"] = 2, ["u-d"] = 2 };
+        var map = MatchSlotMap.ResolveForBadges(TwoVsTwo(), names, FourIds, sides, out _);
+        Assert.Equal(4, map.Count);
+        Assert.Equal("C", map["u-c"].Name);
+        Assert.Equal("D", map["u-d"].Name);
+    }
+
+    [Fact]
+    public void TwoMissingOnOneSideAreNotGuessed()
+    {
+        var names = new Dictionary<string, string> { ["u-b"] = "B", ["u-d"] = "D" };
+        var sides = new Dictionary<string, int> { ["u-a"] = 1, ["u-c"] = 1, ["u-b"] = 2, ["u-d"] = 2 };
+        var map = MatchSlotMap.ResolveForBadges(TwoVsTwo(), names, FourIds, sides, out _);
+        Assert.Equal(2, map.Count);
+    }
+
+    [Fact]
+    public void ASideWhoseNamedMembersSitOnTwoTeamsIsNotAnchored()
+    {
+        // The room says A and B were together; the recording put them on opposite teams.
+        var names = new Dictionary<string, string> { ["u-a"] = "A", ["u-b"] = "B" };
+        var sides = new Dictionary<string, int> { ["u-a"] = 1, ["u-b"] = 1, ["u-c"] = 2, ["u-d"] = 2 };
+        var map = MatchSlotMap.ResolveForBadges(TwoVsTwo(), names, FourIds, sides, out _);
+        Assert.Equal(2, map.Count);
+    }
+
+    [Fact]
+    public void AnUnknownTeamInTheRecordingRefusesThePerSidePairing()
+    {
+        var players = TwoVsTwo();
+        players[3] = Human(4, "D", team: -1);
+        var names = new Dictionary<string, string> { ["u-a"] = "A", ["u-b"] = "B" };
+        var sides = new Dictionary<string, int> { ["u-a"] = 1, ["u-c"] = 1, ["u-b"] = 2, ["u-d"] = 2 };
+        Assert.Equal(2, MatchSlotMap.ResolveForBadges(players, names, FourIds, sides, out _).Count);
+    }
+
+    [Fact]
+    public void EliminationAgreesWithTheFullNamesOnEveryOneMissing()
+    {
+        var all = new Dictionary<string, string> { ["u-a"] = "A", ["u-b"] = "B", ["u-c"] = "C", ["u-d"] = "D" };
+        var full = MatchSlotMap.Resolve(TwoVsTwo(), all)!;
+        foreach (var dropped in FourIds)
+        {
+            var some = all.Where(kv => kv.Key != dropped).ToDictionary(kv => kv.Key, kv => kv.Value);
+            var map = MatchSlotMap.ResolveForBadges(TwoVsTwo(), some, FourIds, null, out _);
+            Assert.Equal(4, map.Count);
+            foreach (var id in FourIds) Assert.Equal(full[id].Slot, map[id].Slot);
+        }
+    }
 }

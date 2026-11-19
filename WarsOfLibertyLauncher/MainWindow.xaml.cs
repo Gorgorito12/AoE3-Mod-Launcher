@@ -317,10 +317,14 @@ public partial class MainWindow : Window
         // Settings → Privacy. Apply the saved choice at startup;
         // LauncherSettingsDialog re-applies it on Save.
         Services.Multiplayer.MultiplayerTelemetry.Enabled = _config.MultiplayerTelemetryEnabled;
+        // What an operation the launcher runs by itself would have shown in a window (MainWindow.AutoUpdateMods.cs).
+        Unattended.NoticeSink = ShowUnattendedNotice;
 
         // Feedback sounds (chat / notification / connection). Apply the saved
         // choice at startup; LauncherSettingsDialog re-applies it on Save.
         Services.SoundService.Enabled = _config.EnableSounds;
+        // The download limit in Settings, shared by every download (DownloadThrottle).
+        Services.DownloadThrottle.LimitKbps = _config.DownloadLimitKbps;
         // "Do not disturb" also quiets the ambient sounds; re-applied by Settings the same way.
         Services.SoundService.DoNotDisturb = _config.DoNotDisturb;
 
@@ -653,9 +657,10 @@ public partial class MainWindow : Window
 
         // Check for --update-now flag from elevated relaunch
         var args = Environment.GetCommandLineArgs();
-        bool autoUpdate = args.Any(a => string.Equals(a, "--update-now", StringComparison.OrdinalIgnoreCase));
+        bool autoUpdate = Services.UpdateNowArg.IsPresent(args);
+        var autoUpdateContext = InstallCompletionOf(Services.UpdateNowArg.ContextOf(args));
         if (autoUpdate)
-            DiagnosticLog.Write("Started with --update-now: will auto-apply updates after check.");
+            DiagnosticLog.Write($"Started with --update-now ({autoUpdateContext}): will auto-apply updates after check.");
 
         // Auto-check for updates on startup. Run all four checks IN PARALLEL
         // — launcher self-update (GitHub), mod patch check (aoe3wol.com),
@@ -936,20 +941,33 @@ public partial class MainWindow : Window
 
             if (autoUpdate && _modIsInstalled && _pendingDownloads.Count > 0)
             {
-                await ApplyAsync();
+                // The context survives the elevation, so the bell says "installed" after what the
+                // player experienced as an installation.
+                await ApplyAsync(autoUpdateContext);
             }
 
             // An elevated relaunch that exists to finish a repair the unelevated launcher stopped at
             // the admin prompt (RepairResume). Not combined with --update-now: each carries one job.
             var repairTicket = Services.Repair.RepairResume.TryParse(args);
             if (repairTicket != null && !autoUpdate)
-                await ResumeRepairAfterElevationAsync(repairTicket);
+                await ResumeRepairAfterElevationAsync(repairTicket, InstallCompletionOf(Services.Repair.RepairResume.ContextOf(args)));
 
             // ---- We are the binary a startup auto-update just restarted into ----
             // A launcher that closed and reopened by itself reads as a crash unless something
             // says otherwise, and this one did it before the user had touched anything. One
             // card, no bell entry: the announcements feed already covers every release, so a
             // history row here would be the same news twice.
+            // Harness only: --open-profile=<user id> opens that player's profile once signed in, so
+            // the testbed can show another player's page without a cursor (the links are text).
+            if (Services.HarnessMode.Active
+                && args.FirstOrDefault(a => a.StartsWith("--open-profile=", StringComparison.OrdinalIgnoreCase)) is { } openProfileArg)
+            {
+                var who = openProfileArg["--open-profile=".Length..];
+                for (int i = 0; i < 40 && !MultiplayerView.IsSignedIn; i++) await Task.Delay(250);
+                SwitchTopTab(TopTab.Multiplayer);
+                MultiplayerView.OpenProfileOf(who, who);
+            }
+
             if (WarsOfLibertyLauncher.App.FromUpdate)
             {
                 DiagnosticLog.Write(
@@ -2222,6 +2240,35 @@ public partial class MainWindow : Window
         // "Uninstall from this PC": what would make removing the launcher NOW wrong, and the way
         // out that lets OnClosing still say "not yet" — see DescribeSelfUninstallBlocker.
         dialog.SelfUninstallBlocker = DescribeSelfUninstallBlocker;
+        // "Set it up by hand…": the room's setup window, for the mod open in the Library.
+        dialog.OpenLanHelperSetup = () =>
+        {
+            var profile = _updateService.Profile;
+            var installPath = _config.GetState(profile.Id).InstallPath;
+            if (string.IsNullOrEmpty(installPath) && profile.IsStockGame)
+                installPath = GameLauncher.FindAoe3InstallRoot(_config);
+            var exe = GameLauncher.Find(_config, installPath, profile, trustConfigCache: false);
+            if (exe == null)
+            {
+                ThemedConfirmDialog.Notice(dialog, Strings.Get("DlgSettingsLanHelperManual"),
+                    Strings.Format("DlgSettingsLanHelperNoGame", profile.DisplayName));
+                return;
+            }
+            var active = LanHelperSetupDialog.ShowFor(dialog, profile, exe, null);
+            if (active && Services.Multiplayer.LanHelperService.Probe(exe) == Services.Multiplayer.LanHelperState.Installed)
+            {
+                _config.LanHelperChoice = true;
+                _config.LanAutoEntry = true;
+                var folder = System.IO.Path.GetDirectoryName(exe)!;
+                if (!_config.LanHelperFolders.Any(f => string.Equals(f, folder, StringComparison.OrdinalIgnoreCase)))
+                    _config.LanHelperFolders.Add(folder);
+                _config.Save();
+            }
+        };
+        // "Show my ELO": the server's switch, read from the signed-in player's standing.
+        dialog.CurrentRatingPrivate = () => MultiplayerView.RatingPrivateNow;
+        dialog.SetRatingVisible = show => MultiplayerView.SetRatingVisibleAsync(show);
+        dialog.InitRatingVisibility();
         dialog.ExitLauncher = () =>
         {
             RequestHardExit();
@@ -2938,6 +2985,15 @@ public partial class MainWindow : Window
                 // active mod on purpose.
                 await RefreshTranslationIndexAsync();
                 await SweepInstalledModsForNotificationsAsync();
+                // The launcher's own update, while open (2026-11-18): it used to be noticed only at
+                // the next start. ETag-conditional, so an unchanged release costs nothing.
+                if (Services.LauncherUpdateGate.ShouldCheckPeriodically(_config.CheckUpdatesOnStartup,
+                        ConnectivityState.IsOffline, _pendingLauncherUpdate != null,
+                        _isGameRunning || MultiplayerView.IsGameRunning))
+                {
+                    DiagnosticLog.Write("Periodic launcher update check.");
+                    await CheckForLauncherUpdateAsync();
+                }
             }
         };
         _catalogPollTimer.Start();
@@ -3969,6 +4025,7 @@ public partial class MainWindow : Window
         RefreshTopTabHighlight();
         ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
         ProgressPanelControl.LblOverall.Text = Strings.Get("ProgressOverall");
+        RepaintProgressEndLabels();
         // Sidebar buttons. Each one's Content is a Grid/StackPanel with an
         // icon + a named TextBlock — we update only the TextBlock so the
         // icon survives a language change. Verify/Repair/Uninstall live
@@ -7803,7 +7860,7 @@ public partial class MainWindow : Window
         // AppPaths.InstallTempRoot. Someone with the game on D: and %TEMP% on a small C: got no
         // warning at all, which is precisely the case the warning exists for.
         var tempNeed = Services.DiskSpaceService.RepairTempRequirement(
-            payloadBytes, _updateService.Profile.DirectPayloadInstall);
+            payloadBytes, OperatingService.Profile.DirectPayloadInstall);
         DiagnosticLog.Write(
             $"Repair space: payload {(payloadBytes > 0 ? FormatBytes(payloadBytes) : "size unknown")}, " +
             $"temp needs {FormatBytes(tempNeed)}.");
@@ -7967,7 +8024,15 @@ public partial class MainWindow : Window
     /// private here.
     /// </summary>
     private bool ConfirmLowSpace(Services.DiskSpaceShortfall shortfall, string bodyKey)
-        => DiskSpacePrompt.ConfirmOrCancel(this, shortfall, bodyKey);
+    {
+        // An automatic mod update never opens a window: low on space means "not now".
+        if (_automaticOperation)
+        {
+            DiagnosticLog.Write($"Automatic update: short on disk ({shortfall.Drive}); not asking, not downloading.");
+            return false;
+        }
+        return DiskSpacePrompt.ConfirmOrCancel(this, shortfall, bodyKey);
+    }
 
     private async Task SearchInstallAsync(ModProfile profile)
     {
@@ -8165,7 +8230,7 @@ public partial class MainWindow : Window
             int totalProblems = problems.Count;
             // What a re-lay will actually cost depends on whether Repair may restore single files;
             // the generic text promises a full re-download, which is false when it can.
-            var relayBodyKey = GranularRestoreEnabled ? "VerifyRelayGranularBody" : "DlgVerifyRepairBody";
+            var relayBodyKey = Services.Repair.IncrementalDownloads.VerifyRelayBodyKey(GranularRestoreEnabled);
 
             SetStatus(Strings.Format("StatusVerifyMissing", totalProblems,
                 string.Join(", ", problems.Take(10))));
@@ -8220,7 +8285,7 @@ public partial class MainWindow : Window
         IReadOnlyList<DeltaChainPlanner.PlanStep> patchSteps,
         IProgress<string>? statusProgress, IProgress<InstallPhase>? phaseProgress)
     {
-        var profile = _updateService.Profile;
+        var profile = OperatingService.Profile;
         var covered = profile.Translations?.CoveredFiles;
         var reached = startTag;
 
@@ -8468,7 +8533,7 @@ public partial class MainWindow : Window
         bool asUpdate, string? targetReleaseTag, string laidDownVersion, bool intact,
         InstallCompletion installContext = InstallCompletion.None)
     {
-        var profile = _updateService.Profile;
+        var profile = OperatingService.Profile;
         var version = string.IsNullOrEmpty(laidDownVersion) ? "?" : laidDownVersion;
 
         // Reached as the tail of a fresh install that landed on a baseline and chained up from
@@ -8476,7 +8541,7 @@ public partial class MainWindow : Window
         // they never did. Same rule as the version-pick case below, one step further out.
         if (installContext != InstallCompletion.None)
         {
-            RaiseInstalledBell(_updateService, installContext == InstallCompletion.Copy, version);
+            RaiseInstalledBell(OperatingService, installContext == InstallCompletion.Copy, version);
             return;
         }
 
@@ -8509,19 +8574,40 @@ public partial class MainWindow : Window
 
     private async Task RepairInstallAsync(
         bool asUpdate = false, string? targetReleaseTag = null,
-        InstallCompletion installContext = InstallCompletion.None)
+        InstallCompletion installContext = InstallCompletion.None,
+        UpdateService? target = null)
     {
         if (_isBusy) return;
+        // The mod this repair or update is FOR: the one on screen, or one the automatic update
+        // picked (a mod that is not open). Every read below goes through it, never _updateService.
+        var svc = target ?? _updateService;
+        var previousOperating = _operatingService;
+        _operatingService = svc;
+        try
+        {
+            await RepairInstallCoreAsync(svc, asUpdate, targetReleaseTag, installContext, target);
+        }
+        finally
+        {
+            _operatingService = previousOperating;
+        }
+    }
+
+    private async Task RepairInstallCoreAsync(UpdateService svc, bool asUpdate, string? targetReleaseTag,
+        InstallCompletion installContext, UpdateService? target)
+    {
+        // The mod on screen, or another one — only the screen's own mod refreshes the screen after.
+        bool displayed = string.Equals(svc.Profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
         if (Services.HarnessMode.BlockOutsideSandbox(
-                $"repair {_updateService.Profile.Id} asUpdate={asUpdate}", _updateService.InstallPath)) return;
+                $"repair {svc.Profile.Id} asUpdate={asUpdate}", svc.InstallPath)) return;
         bool updated = false;
 
         // The ONE eligibility gate. The visible entry points (Mod Properties' Repair button, the
         // Verify panel's Retry, the dashboard) all reach this method directly, so the check has
         // to live here rather than on a menu item. See RepairEligibility.
         {
-            var gateProfile = _updateService.Profile;
-            var gatePath = _updateService.InstallPath;
+            var gateProfile = svc.Profile;
+            var gatePath = svc.InstallPath;
             var gateManifestOwner = string.IsNullOrEmpty(gatePath)
                 ? null
                 : Services.Repair.RepairEligibility.ReadManifestModId(gatePath);
@@ -8552,7 +8638,7 @@ public partial class MainWindow : Window
         // The ACTUAL asset is resolved later, immediately before each full download
         // (EnsurePayloadAsync). Resolving it here used to abort the whole run for a release that
         // ships only patches — which is exactly the case the chain below exists to serve.
-        if (!CanResolvePayload()) return;
+        if (!CanResolvePayload(svc)) return;
 
         PayloadResolution? payload = null;
 
@@ -8567,7 +8653,7 @@ public partial class MainWindow : Window
         // installs a user-chosen version; null keeps the default effective-tag behaviour.
         // Returns null when resolution failed — the caller bails, as it did when this was eager.
         async Task<PayloadResolution?> EnsurePayloadAsync()
-            => payload ??= await ResolvePayloadUrlsAsync(overrideTag: targetReleaseTag ?? repairTag);
+            => payload ??= await ResolvePayloadUrlsAsync(svc, overrideTag: targetReleaseTag ?? repairTag);
 
         // What a full re-lay of this payload lays down. A WolPatcher snapshot knows its own version;
         // the fallback is the old guess — the version DETECTED before the repair, which is older than
@@ -8576,18 +8662,18 @@ public partial class MainWindow : Window
         string LaidVersionFor(PayloadResolution p)
             => !string.IsNullOrEmpty(p.Version)
                 ? p.Version!
-                : ResolveInstallVersion(overrideTag: targetReleaseTag ?? repairTag);
+                : ResolveInstallVersion(svc, overrideTag: targetReleaseTag ?? repairTag);
 
         // Decides repairTag. False = the player declined a version change, or the target could
         // not be settled; nothing has been written at that point.
         async Task<bool> ResolvePlainRepairTargetAsync()
         {
-            var profile = _updateService.Profile;
+            var profile = svc.Profile;
             if (profile.UpdateMechanism != ModUpdateMechanism.GitHubReleases || profile.GitHubReleases == null)
                 return true;
 
             var gh = profile.GitHubReleases;
-            var manifestNow = InstallManifest.TryLoad(_updateService.InstallPath!);
+            var manifestNow = InstallManifest.TryLoad(svc.InstallPath!);
             var installed = manifestNow != null && InstallIdentity.BelongsTo(manifestNow, profile)
                             && !string.IsNullOrWhiteSpace(manifestNow.Version)
                 ? manifestNow.Version
@@ -8667,9 +8753,14 @@ public partial class MainWindow : Window
 
         if (!EnsureGameNotRunning()) return;
 
-        var installPath = _updateService.InstallPath!;
+        var installPath = svc.InstallPath!;
 
         SetBusy(true);
+        _operatingModId = svc.Profile.Id;
+        _lastOperationModId = svc.Profile.Id;
+        _operatingInstallPath = svc.InstallPath;
+        // A mod that is not on screen reads nothing of the screen's: switching mods meanwhile is safe.
+        if (target != null) _operationIsBackgroundable = true;
         _operatingCts = new CancellationTokenSource();
         ShowDownloadControls(true);
 
@@ -8677,11 +8768,11 @@ public partial class MainWindow : Window
             ProgressOperation.Repair,
             title: Strings.Format(
                 asUpdate ? "ProgressTitleUpdating" : "ProgressTitleRepairing",
-                _updateService.Profile.DisplayName),
+                svc.Profile.DisplayName),
             subtitle: Strings.Get("ProgressSubVerifying"),
             bar1Label: "ProgressBarVerify",
             bar2Label: "ProgressBarRepair",
-            retry: () => RepairInstallAsync(asUpdate, targetReleaseTag));
+            retry: () => RepairInstallAsync(asUpdate, targetReleaseTag, target: target));
         ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
         ProgressPanelControl.PatchProgress.Value = 0;
         ProgressPanelControl.OverallProgress.Value = 0;
@@ -8696,7 +8787,7 @@ public partial class MainWindow : Window
         string? repairResult = null;
         var journalOperation = asUpdate || targetReleaseTag != null ? "update" : "repair";
         void BeginJournal() =>
-            Services.OperationJournal.Begin(journalOperation, _updateService.Profile.Id, installPath);
+            Services.OperationJournal.Begin(journalOperation, svc.Profile.Id, installPath);
 
         try
         {
@@ -8707,7 +8798,7 @@ public partial class MainWindow : Window
             // scheme InstallAsync uses (DL/Extract/Overlay), summing to 100%.
             // See InstallAsync: a direct-payload mod folds Extract into ModOverlay, so its
             // 20 points move there and the overlay handler's base stays correct.
-            bool directPayload = _updateService.Profile.DirectPayloadInstall;
+            bool directPayload = svc.Profile.DirectPayloadInstall;
             const double weightDownload = 60;
             double weightExtract = directPayload ?  0 : 20;
             double weightOverlay = directPayload ? 40 : 20;
@@ -8734,7 +8825,7 @@ public partial class MainWindow : Window
                     ? Strings.Format("ProgressSpeedDownload", FormatBytes((long)speed.BytesPerSecond))
                     : "";
                 ProgressPanelControl.LblCurrentPatch.Text = Strings.Format(
-                    "StatusDownloadingInstaller", _updateService.Profile.DisplayName);
+                    "StatusDownloadingInstaller", svc.Profile.DisplayName);
             });
 
             var statusProgress = new Progress<string>(s =>
@@ -8844,7 +8935,7 @@ public partial class MainWindow : Window
                     }
                 });
                 SetStatus(Strings.Get("StatusVerifying"));
-                var preProfile = _updateService.Profile;
+                var preProfile = svc.Profile;
                 var preOptions = DiagnoseOptionsFor(preProfile);
                 var preToken = _operatingCts!.Token;
                 preReport = await Task.Run(() => IntegrityService.Diagnose(
@@ -8981,12 +9072,12 @@ public partial class MainWindow : Window
                     if (repairPayload == null) return;
                     if (StopIfKnownOffline()) return;
                     var repairBytes = await MeasurePayloadBytesAsync(repairPayload);
-                    // Always PLANNED and logged (the shadow); allowed to ACT only in developer mode
-                    // until the shadow numbers from ordinary repairs say it can be trusted by default.
-                    var granular = preManifest != null
+                    // Planned (and logged) only while "Download only what changed" is on; off, the
+                    // whole download, with nothing computed.
+                    var granular = preManifest != null && GranularRestoreEnabled
                         ? await PlanGranularAsync(repairPayload,
                             preReport.PathsOf(IntegrityKind.Missing, IntegrityKind.Damaged),
-                            preManifest, _updateService.Profile, installPath,
+                            preManifest, svc.Profile, installPath,
                             preOptions.TranslationActive, repairBytes)
                         : null;
                     bool actGranular = granular != null && GranularRestoreEnabled
@@ -9003,8 +9094,8 @@ public partial class MainWindow : Window
                     }
                     // Placed here (not for the intact branch above) so an intact repair never
                     // prompts. Returns → the finally resets busy.
-                    if (!await EnsureInstallWritableOrElevateAsync(installPath, installPath, _updateService.Profile,
-                            Services.Repair.RepairResume.Build(_updateService.Profile.Id, update: false)))
+                    if (!await EnsureInstallWritableOrElevateAsync(installPath, installPath, svc.Profile,
+                            Services.Repair.RepairResume.Build(svc.Profile.Id, update: false)))
                         return;
                     if (!EnsureGameNotRunning()) return;
 
@@ -9048,7 +9139,7 @@ public partial class MainWindow : Window
                             var p = await EnsurePayloadAsync()
                                     ?? throw new OperationCanceledException("payload could not be resolved");
                             return await nativeInstaller.InstallModOnlyAsync(
-                                _updateService.Profile,
+                                svc.Profile,
                                 LaidVersionFor(p),
                                 p.Urls,
                                 installPath,
@@ -9074,10 +9165,11 @@ public partial class MainWindow : Window
                 // elevation; a picked version is not re-expressible on a command line, so that one
                 // is re-chosen by hand.
                 if (StopIfKnownOffline()) return;
-                if (!await EnsureInstallWritableOrElevateAsync(installPath, installPath, _updateService.Profile,
+                if (!await EnsureInstallWritableOrElevateAsync(installPath, installPath, svc.Profile,
                         targetReleaseTag != null
                             ? null
-                            : Services.Repair.RepairResume.Build(_updateService.Profile.Id, update: asUpdate)))
+                            : Services.Repair.RepairResume.Build(svc.Profile.Id, update: asUpdate,
+                                ContextTokenOf(installContext))))
                     return;
 
                 // Delta patches first (an update, or a version the user picked, when the mod opted
@@ -9099,12 +9191,12 @@ public partial class MainWindow : Window
                 // patch-only rescue unreachable on that path, so picking a release that ships no
                 // full .zip surfaced the raw "No asset matching ''" instead.
                 var targetTag = DeltaPatchService.ResolveDeltaTarget(
-                    _updateService.Profile, asUpdate, targetReleaseTag,
-                    EffectiveGitHubTag(_updateService.Profile));
+                    svc.Profile, asUpdate, targetReleaseTag,
+                    EffectiveGitHubTag(svc.Profile));
                 if (targetTag != null)
                 {
-                    var gh = _updateService.Profile.GitHubReleases!;
-                    var installedTag = _config.GetState(_updateService.Profile.Id).LastKnownVersion;
+                    var gh = svc.Profile.GitHubReleases!;
+                    var installedTag = _config.GetState(svc.Profile.Id).LastKnownVersion;
                     patchTargetTag = targetTag;
 
                     graph = await new GitHubReleaseDownloader()
@@ -9115,7 +9207,18 @@ public partial class MainWindow : Window
                     // download we would do anyway" — never a quiet reinstall from an older release.
                     var plan = DeltaChainPlanner.Build(
                         graph, installedTag, targetTag, DeltaChainPlanner.BaselinePolicy.TargetOnly,
-                        nonPayloadAsset: _updateService.Profile.UserDataPayload);
+                        nonPayloadAsset: svc.Profile.UserDataPayload);
+
+                    // "Download only what changed" off: the whole download — unless the target has
+                    // none, in which case patching is the only way there (IncrementalDownloads).
+                    var targetRel = graph.FirstOrDefault(r => string.Equals(r.Tag, targetTag, StringComparison.OrdinalIgnoreCase));
+                    bool targetFull = targetRel == null
+                        || DeltaChainPlanner.HasFullPayload(targetRel, svc.Profile.UserDataPayload);
+                    if (!Services.Repair.IncrementalDownloads.MayPatch(_config.DeltaDownloadsOnly, targetFull))
+                    {
+                        DiagnosticLog.Write("Update: \"Download only what changed\" is off; taking the full download.");
+                        plan = null;
+                    }
 
                     if (plan != null && plan.StartsFromInstalled && plan.PatchSteps.Count > 0)
                     {
@@ -9150,7 +9253,7 @@ public partial class MainWindow : Window
                         targetHasFullZip = targetRelease != null
                             && GitHubReleaseDownloader.PickAssetIndex(
                                    targetRelease.Assets.Select(a => a.Name).ToList(), null,
-                                   _updateService.Profile.UserDataPayload) != null;
+                                   svc.Profile.UserDataPayload) != null;
                     }
 
                     if (!targetHasFullZip)
@@ -9168,7 +9271,7 @@ public partial class MainWindow : Window
                         var rescue = DeltaChainPlanner.Build(
                             graph, installedTag: null, patchTargetTag,
                             DeltaChainPlanner.BaselinePolicy.Any,
-                            nonPayloadAsset: _updateService.Profile.UserDataPayload);
+                            nonPayloadAsset: svc.Profile.UserDataPayload);
                         var baseStep = rescue?.Steps.FirstOrDefault();
 
                         if (baseStep == null || baseStep.Kind != DeltaChainPlanner.StepKind.FullBaseline)
@@ -9179,7 +9282,7 @@ public partial class MainWindow : Window
                             // fault and arrives as a bug report.
                             DiagnosticLog.Write(
                                 $"No full .zip on '{patchTargetTag}' and no reachable baseline for " +
-                                $"{_updateService.Profile.Id} — cannot update.");
+                                $"{svc.Profile.Id} — cannot update.");
                             SetStatus(Strings.Get("StatusNoBaselineRelease"));
                             return;
                         }
@@ -9195,7 +9298,7 @@ public partial class MainWindow : Window
                             throw new OperationCanceledException();
                         relaidUnknown = true;
                         relayOutcome = await nativeInstaller.InstallModOnlyAsync(
-                            _updateService.Profile,
+                            svc.Profile,
                             baseStep.ToTag,
                             DeltaChainPlanner.BaselineUrlsOf(baseStep).ToArray(),
                             installPath,
@@ -9208,7 +9311,7 @@ public partial class MainWindow : Window
                             ct: _operatingCts!.Token,
                             beforeFirstWrite: BeginJournal);
 
-                        var rescueState = _config.GetState(_updateService.Profile.Id);
+                        var rescueState = _config.GetState(svc.Profile.Id);
                         rescueState.LastKnownVersion = baseStep.ToTag;
                         _config.Save();
                         actuallyLaidDown = baseStep.ToTag;
@@ -9232,7 +9335,7 @@ public partial class MainWindow : Window
                             var p = await EnsurePayloadAsync()
                                     ?? throw new OperationCanceledException("payload could not be resolved");
                             return await nativeInstaller.InstallModOnlyAsync(
-                                _updateService.Profile,
+                                svc.Profile,
                                 LaidVersionFor(p),
                                 p.Urls,
                                 installPath,
@@ -9259,7 +9362,7 @@ public partial class MainWindow : Window
                 DiagnosticLog.Write($"Repair laid payload version '{actuallyLaidDown}'.");
             }
 
-            var recheckProfile = _updateService.Profile;
+            var recheckProfile = svc.Profile;
             IntegrityReport recheck;
             if (intact)
             {
@@ -9318,7 +9421,7 @@ public partial class MainWindow : Window
             await ApplyUserDataPayloadAsync(
                 installPath, recheckProfile,
                 string.IsNullOrEmpty(actuallyLaidDown)
-                    ? ResolveInstallVersion(overrideTag: targetReleaseTag ?? repairTag)
+                    ? ResolveInstallVersion(svc, overrideTag: targetReleaseTag ?? repairTag)
                     : actuallyLaidDown!);
 
             // Shortcuts an older build wrote as NTFS STREAMS (a display name with a colon) are
@@ -9351,7 +9454,7 @@ public partial class MainWindow : Window
                 // and may stop short of the target. Stamping the target there would claim a
                 // version the install does not have — the exact incoherence the per-hop commit
                 // exists to prevent — and every later pre-verify would then refuse.
-                var st = _config.GetState(_updateService.Profile.Id);
+                var st = _config.GetState(svc.Profile.Id);
                 // Only what was ACTUALLY laid may be recorded (RepairPolicy.StampAfterRepair).
                 // An intact repair wrote nothing: it used to stamp the effective tag anyway, which
                 // hid the Update button for a player who was behind and rang a false "updated".
@@ -9360,15 +9463,15 @@ public partial class MainWindow : Window
                 string? laid = intact || granularRestored > 0
                     ? null
                     : string.IsNullOrEmpty(actuallyLaidDown)
-                        ? ResolveInstallVersion(overrideTag: targetReleaseTag ?? repairTag)
+                        ? ResolveInstallVersion(svc, overrideTag: targetReleaseTag ?? repairTag)
                         : actuallyLaidDown;
                 string? ownManifestVersion =
-                    preManifest != null && InstallIdentity.BelongsTo(preManifest, _updateService.Profile)
+                    preManifest != null && InstallIdentity.BelongsTo(preManifest, svc.Profile)
                         ? preManifest.Version
                         : null;
                 var stamp = Services.Repair.RepairPolicy.StampAfterRepair(
-                    _updateService.Profile.UpdateMechanism, laid, ownManifestVersion,
-                    _updateService.CurrentVersion?.Ver);
+                    svc.Profile.UpdateMechanism, laid, ownManifestVersion,
+                    svc.CurrentVersion?.Ver);
                 var laidDownVersion = stamp ?? "";
                 if (stamp != null)
                 {
@@ -9392,7 +9495,7 @@ public partial class MainWindow : Window
                 // without followLatest, effective == approved — zero change.
                 if (targetReleaseTag != null)
                 {
-                    var baseline = EffectiveGitHubTag(_updateService.Profile);
+                    var baseline = EffectiveGitHubTag(svc.Profile);
                     st.PinnedVersion =
                         string.Equals(laidDownVersion, baseline, StringComparison.OrdinalIgnoreCase)
                             ? ""
@@ -9522,32 +9625,43 @@ public partial class MainWindow : Window
             // to English and notify. Safe no-op when no pack is active.
             try
             {
-                var profile = _updateService.Profile;
-                var ts = TranslationService.ForProfile(_updateService.InstallPath!, profile);
+                var profile = svc.Profile;
+                var ts = TranslationService.ForProfile(svc.InstallPath!, profile);
                 // Reconcile translations against the version we actually installed.
                 // For a version SWITCH that's the chosen tag (not LatestVersion,
                 // which would be wrong when switching to an older release).
-                var installedVer = ResolveInstallVersion(overrideTag: targetReleaseTag);
+                var installedVer = ResolveInstallVersion(svc, overrideTag: targetReleaseTag);
                 var notice = ts.ReconcileAfterUpdate(
                     _config, profile.Id,
                     targetReleaseTag != null
                         ? installedVer
-                        : (_updateService.LatestVersion?.Ver ?? installedVer));
+                        : (svc.LatestVersion?.Ver ?? installedVer));
                 ShowTranslationRevertNotice(notice);
             }
             catch (Exception ex)
             {
                 DiagnosticLog.Write($"GH post-update translation reconcile failed: {ex.Message}");
             }
-            InvalidateActiveModCheckCache();
-            await CheckAsync();
-            RestateRepairResult();
+            if (displayed)
+            {
+                InvalidateActiveModCheckCache();
+                await CheckAsync();
+                RestateRepairResult();
+            }
+            else
+            {
+                ForgetCheckResult(svc.Profile.Id);
+            }
         }
         // A plain Repair (asUpdate == false) must also refresh the UI so the
         // CTA reflects the now-recognized install — the asUpdate branch above
         // already did this for updates. With manifest-baseline recognition a
         // successful repair flips CurrentVersion from null to a real value, so
         // the primary action moves off the stale "Install".
+        else if (updated && !displayed)
+        {
+            ForgetCheckResult(svc.Profile.Id);
+        }
         else if (updated)
         {
             InvalidateActiveModCheckCache();
@@ -9795,7 +9909,8 @@ public partial class MainWindow : Window
     /// the mod the ticket names and only when it is the active, installed one — a ticket is a
     /// request to continue, never a way to start an operation on something else.
     /// </summary>
-    private async Task ResumeRepairAfterElevationAsync(Services.Repair.RepairResume.Ticket ticket)
+    private async Task ResumeRepairAfterElevationAsync(Services.Repair.RepairResume.Ticket ticket,
+        InstallCompletion installContext = InstallCompletion.None)
     {
         if (!string.Equals(ticket.ModId, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
         {
@@ -9813,7 +9928,7 @@ public partial class MainWindow : Window
         }
         DiagnosticLog.Write($"Resuming the {(ticket.Update ? "update" : "repair")} of '{ticket.ModId}' after elevation.");
         if (!EnsureGameNotRunning()) return;
-        await RepairInstallAsync(asUpdate: ticket.Update);
+        await RepairInstallAsync(asUpdate: ticket.Update, installContext: installContext);
     }
 
     /// <summary>
@@ -9893,7 +10008,8 @@ public partial class MainWindow : Window
         DiagnosticLog.Write(
             $"Cannot write to install folder '{_updateService.InstallPath}'. " +
             "Prompting user to relaunch elevated.");
-        RelaunchElevatedForFolder(_updateService.InstallPath, _updateService.Profile, "--update-now");
+        RelaunchElevatedForFolder(_updateService.InstallPath, _updateService.Profile,
+            Services.UpdateNowArg.For(ContextTokenOf(installContext)));
     }
 
     // The launcher update found at startup, stashed so the title-bar pill's
@@ -10403,8 +10519,12 @@ public partial class MainWindow : Window
             && string.Equals(pinned, cur, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>The last check result painted, for the automatic mod update's facts.</summary>
+    private UpdateService.CheckResult? _lastCheckResult;
+
     private void ApplyCheckResult(UpdateService.CheckResult result)
     {
+        _lastCheckResult = result;
         // When the mod has more than one registered copy, prefix the active
         // install's path with its label so the user always sees WHICH copy is
         // active (e.g. "[Wars of Liberty (2)]  C:\…"). Single-install shows just
@@ -10518,6 +10638,7 @@ public partial class MainWindow : Window
                 // dashboard is on screen — without this line a GitHubReleases mod
                 // has no reachable way to update at all.
                 SetPrimaryAction(ghUpdate ? PrimaryAction.Update : PrimaryAction.Play);
+                if (ghUpdate) ScheduleAutoUpdate(TimeSpan.FromSeconds(5));
 
                 // Kept in sync for the (hidden) legacy panel + the menus that read it.
                 ActionPanelControl.UpdateButton.Visibility =
@@ -10697,6 +10818,8 @@ public partial class MainWindow : Window
             // already in place.
             SetPrimaryAction(PrimaryAction.Update);
             MaybeResetProgressUI();
+            // "Update mods automatically": applied by itself once nothing stands in the way.
+            ScheduleAutoUpdate(TimeSpan.FromSeconds(5));
         }
 
         // Notification bell: raise an "update available" item for the ACTIVE mod
@@ -10724,6 +10847,8 @@ public partial class MainWindow : Window
             && !string.Equals(currentVer, latestVer, StringComparison.OrdinalIgnoreCase);
         bool canApply = pendingCount > 0;
         if (!hasNewer && !canApply) return;
+        // A mod that is not open: the automatic update looks at it next (MainWindow.AutoUpdateMods.cs).
+        NoteBehindForAutoUpdate(profile);
         var ver = latestVer ?? "";
         _notifications.RaiseUpdateAvailable(
             profile.Id, ver,
@@ -10741,6 +10866,8 @@ public partial class MainWindow : Window
         _isPaused = !_isPaused;
         _installerService.IsPaused = _isPaused;
         _updateService.IsPaused = _isPaused;
+        // An update of a mod that is not on screen runs on its own service.
+        OperatingService.IsPaused = _isPaused;
         if (_cloneService != null) _cloneService.Pause = _isPaused;
         if (_activeNativeInstaller != null) _activeNativeInstaller.Pause = _isPaused;
 
@@ -10783,6 +10910,7 @@ public partial class MainWindow : Window
             _isPaused = false;
             _installerService.IsPaused = false;
             _updateService.IsPaused = false;
+            OperatingService.IsPaused = false;
             if (_activeNativeInstaller != null) _activeNativeInstaller.Pause = false;
             ProgressPanelControl.PauseButton.Content = Strings.Get("BtnPause");
             ProgressPanelControl.CancelButton.Content = Strings.Get("BtnCancel");
@@ -10852,7 +10980,7 @@ public partial class MainWindow : Window
     {
         _progressState = ProgressState.Running;
         _progressRetryAction = retry;
-        _progressRetryTarget = retry == null ? null : (_updateService.Profile.Id, _updateService.InstallPath);
+        _progressRetryTarget = retry == null ? null : (OperatingService.Profile.Id, OperatingService.InstallPath);
 
         // Cancel any pending auto-revert from the previous op so the new
         // op's panel doesn't get yanked back to Idle mid-flight.
@@ -11047,9 +11175,35 @@ public partial class MainWindow : Window
     /// buttons (Play / Open folder are already in the sidebar). The panel
     /// auto-reverts to Idle after a brief hold.
     /// </summary>
+    /// <summary>The headline key of the end state on screen, so a language change can say it
+    /// again (2026-11-18: the strip kept the old language until it reverted to idle).</summary>
+    private string? _progressEndHeadlineKey;
+
+    /// <summary>The fixed words of the strip, in the current language: the idle label, or the
+    /// end state's headline and message. A detail or an error text was formatted when it happened
+    /// and stays as written.</summary>
+    private void RepaintProgressEndLabels()
+    {
+        switch (_progressState)
+        {
+            case ProgressState.Completed when _progressEndHeadlineKey != null:
+                ProgressPanelControl.ProgressTitleText.Text = Strings.Get(_progressEndHeadlineKey);
+                ProgressPanelControl.ProgressMessageText.Text = Strings.Get("ProgressCompletedMessage");
+                break;
+            case ProgressState.Error:
+                ProgressPanelControl.ProgressTitleText.Text = Strings.Get("ProgressTitleError");
+                break;
+            case ProgressState.Idle:
+                RefreshIdleProgressPanel();
+                return;
+        }
+        SyncDashboardProgressFromLegacyPanel();
+    }
+
     private void ShowProgressCompleted(string headlineKey, string? detail = null)
     {
         _progressState = ProgressState.Completed;
+        _progressEndHeadlineKey = headlineKey;
         ProgressPanelControl.ProgressTitleText.Text = Strings.Get(headlineKey);
         ProgressPanelControl.ProgressSubtitleText.Text = detail ?? "";
         ProgressPanelControl.ProgressStepText.Text = "";
@@ -11650,7 +11804,9 @@ public partial class MainWindow : Window
     /// (<see cref="Services.Repair.GranularRestore"/>). One predicate for the repair that acts on
     /// it and for the Verify text that describes what Repair will do, so the two cannot disagree.
     /// </summary>
-    private bool GranularRestoreEnabled => _config.DeveloperMode;
+    /// <para>2026-11-18: the player's "Download only what changed" (on by default), no longer
+    /// developer mode — <see cref="Services.Repair.IncrementalDownloads"/> is the rule.</para>
+    private bool GranularRestoreEnabled => Services.Repair.IncrementalDownloads.MayRestoreFiles(_config.DeltaDownloadsOnly);
 
     /// <summary>A download big enough to ask about first (see <see cref="ConfirmRepairCost"/>).</summary>
     private const long LargeRepairDownloadBytes = 512L * 1024 * 1024;
@@ -11730,9 +11886,9 @@ public partial class MainWindow : Window
                     .ResolveAssetAsync(ghs, tag, default, profile.UserDataPayload);
                 // External-hosting path carries a SHA-256 pin (required by
                 // ResolveAssetAsync itself) and is single-url by construction.
-                // Regular GitHub-asset path carries no SHA — we trust the asset
-                // CDN, like before — and may resolve to several ordered parts
-                // when the payload is too big for one GitHub asset.
+                // A GitHub asset carries GitHub's own digest when the release publishes one
+                // (integrity, 2026-11-18), and may resolve to several ordered parts when the
+                // payload is too big for one GitHub asset.
                 return new PayloadResolution(
                     payload.Urls.ToArray(), payload.ExpectedSha256?.ToArray(), TotalBytes: payload.Size);
             }
@@ -11996,7 +12152,8 @@ public partial class MainWindow : Window
                 {
                     // A split baseline expands to its ordered parts here; a single asset stays one url.
                     payloadUrls = DeltaChainPlanner.BaselineUrlsOf(baseStep).ToArray();
-                    payloadSha256 = null;              // GitHub-hosted asset: same trust as before
+                    // GitHub's own digest per part when the release publishes one (integrity).
+                    payloadSha256 = DeltaChainPlanner.BaselineDigestsOf(baseStep);
                     baselineVersionOverride = baseStep.ToTag;
                     if (plan!.PatchSteps.Count > 0)
                         DiagnosticLog.Write(
@@ -12900,6 +13057,21 @@ public partial class MainWindow : Window
     /// </summary>
     private enum InstallCompletion { None, Fresh, Copy }
 
+    /// <summary>The command-line token for an install context ("fresh", "copy"), or null.</summary>
+    private static string? ContextTokenOf(InstallCompletion context) => context switch
+    {
+        InstallCompletion.Fresh => Services.UpdateNowArg.Fresh,
+        InstallCompletion.Copy => Services.UpdateNowArg.Copy,
+        _ => null,
+    };
+
+    private static InstallCompletion InstallCompletionOf(string? token) => token switch
+    {
+        Services.UpdateNowArg.Fresh => InstallCompletion.Fresh,
+        Services.UpdateNowArg.Copy => InstallCompletion.Copy,
+        _ => InstallCompletion.None,
+    };
+
     /// <summary>Raise the "Installation complete" / "Copy installed" bell, attributed to the
     /// given mod's service (NOT necessarily the displayed one — a background op may finish
     /// after the user switched away).</summary>
@@ -13021,27 +13193,46 @@ public partial class MainWindow : Window
             "and Properties → USER DATA.");
     }
 
-    private async Task ApplyAsync(InstallCompletion installContext = InstallCompletion.None)
+    /// <param name="target">A mod that is not on screen (the automatic update), with
+    /// <paramref name="targetPending"/> its patches; null = the mod on screen.</param>
+    private async Task ApplyAsync(InstallCompletion installContext = InstallCompletion.None,
+        UpdateService? target = null, List<DownloadInfo>? targetPending = null)
     {
         if (_isBusy) return;
-        if (!ConfirmUpdateSpaceOk(_updateService.InstallPath, _pendingDownloads)) return;
-        SetBusy(true);
-        _operationIsBackgroundable = true;   // svc/pending captured below → switch-to-another-mod OK
-        _operatingCts = new CancellationTokenSource();
-        ShowDownloadControls(true);
-
         // Capture the operating service + downloads so a mid-op mod switch (background op)
         // can repoint _updateService/_pendingDownloads without corrupting THIS update or
         // mis-attributing its completion to the mod the user switched to.
-        var svc = _updateService;
-        var pending = _pendingDownloads;
+        var svc = target ?? _updateService;
+        var pending = target != null ? targetPending ?? new List<DownloadInfo>() : _pendingDownloads;
+        if (!ConfirmUpdateSpaceOk(svc.InstallPath, pending)) return;
+        var previousOperating = _operatingService;
+        _operatingService = svc;
+        try
+        {
+            await ApplyCoreAsync(installContext, svc, pending);
+        }
+        finally
+        {
+            _operatingService = previousOperating;
+        }
+    }
+
+    private async Task ApplyCoreAsync(InstallCompletion installContext, UpdateService svc, List<DownloadInfo> pending)
+    {
+        SetBusy(true);
+        _operatingModId = svc.Profile.Id;
+        _lastOperationModId = svc.Profile.Id;
+        _operatingInstallPath = svc.InstallPath;
+        _operationIsBackgroundable = true;   // svc/pending captured above → switch-to-another-mod OK
+        _operatingCts = new CancellationTokenSource();
+        ShowDownloadControls(true);
         var fromVersion = svc.CurrentVersion?.Ver ?? "?";
         var toVersion = svc.LatestVersion?.Ver ?? "?";
         StartProgressPanel(
             ProgressOperation.Update,
             title: Strings.Format("ProgressTitleUpdating", svc.Profile.DisplayName),
             subtitle: Strings.Format("ProgressUpdating", fromVersion, toVersion),
-            retry: () => ApplyAsync());
+            retry: () => ApplyAsync(installContext, svc == _updateService ? null : svc, pending));
 
         bool succeeded = false;
         try
@@ -13657,6 +13848,9 @@ public partial class MainWindow : Window
 
     private void OnGameExited()
     {
+        // A pending automatic mod update waits 90 s after a game, so the player is not met by a
+        // download the moment the match ends.
+        if (_primaryAction == PrimaryAction.Update) ScheduleAutoUpdate(TimeSpan.FromSeconds(90));
         // Decide BEFORE clearing the launch bookkeeping below.
         bool diedOnItsOwn =
             !_stopRequestedByUser &&
@@ -15733,6 +15927,9 @@ public partial class MainWindow : Window
                 DiagnosticLog.Write($"Notif sweep translation-check failed for '{profile.Id}': {ex.Message}");
             }
         }
+
+        // Mods found behind above are updated by themselves when the player asked for that.
+        if (_autoUpdateBehind.Count > 0) ScheduleAutoUpdate(TimeSpan.FromSeconds(30));
 
         // The central feed only knows each mod's OWN translations. The sources the player added
         // are launcher-wide, so each is read ONCE here and its packs handed to every installed

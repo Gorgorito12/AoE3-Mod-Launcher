@@ -808,6 +808,7 @@ public static class ModRegistry
             // Only meaningful for a clone; an InPlaceOverlay install folder IS the player's
             // own game, and RemoveSupersededCompiledXml refuses it there anyway.
             SupersedeCompiledXml = m.Install.SupersedeCompiledXml == true,
+            NoTreatyRules = m.Install.NoTreatyRules == true,
             SetupPathRedirect = m.Install.SetupPathRedirect,
             PrivateSetupPath = privateSetupPath,
             UpdateMechanism = updateMechanism,
@@ -1092,6 +1093,9 @@ public static class ModRegistry
             // rather than inside Program Files. The user can override in the
             // dialog if they want a custom location.
             DefaultInstallFolder = "",
+            // WoL labels the treaties "Not supported" and its players report they do not work,
+            // so a room for it never offers them.
+            NoTreatyRules = true,
             // The base game's compiled tables, which WoL's patches 1.1.0 / 1.1.0a/b / 1.1.1a/b
             // delete (etc\110*_delete.lst, 111*_delete.lst). A payload already at 1.2.0e runs no
             // patch, so without this the clone's copies survive and AoE3 reads THEM over WoL's

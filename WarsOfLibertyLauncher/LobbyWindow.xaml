@@ -70,6 +70,15 @@
                                 <TextBlock x:Name="RoomModeText" Style="{DynamicResource RoomChipText}"/>
                             </StackPanel>
                         </Border>
+                        <!-- The Game Rules, only when not Standard. Its dot wears the room's mod colour
+                             (the window sets ModAccentText): the rules belong to that mod's game. -->
+                        <Border x:Name="RoomRulesChip" Style="{DynamicResource RoomChip}" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="6" Height="6" Margin="0,0,6,0" Fill="{DynamicResource ModAccentText}"
+                                         VerticalAlignment="Center"/>
+                                <TextBlock x:Name="RoomRulesText" Style="{DynamicResource RoomChipText}"/>
+                            </StackPanel>
+                        </Border>
                         <Border x:Name="RoomVersionChip" Style="{DynamicResource RoomChip}">
                             <StackPanel Orientation="Horizontal">
                                 <Path Data="M1,1 H6 L11,6 L6,11 L1,6 Z" Fill="#7EE08B" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -217,15 +226,52 @@
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
+                        <!-- Whether this player's game enters the LAN room by itself, and the switch
+                             that stops it (RoomLanEntryView). Tint and rim are set from code. -->
+                        <Border x:Name="RoomLanCard" Style="{DynamicResource RoomPanel}" Padding="14,12" Visibility="Collapsed"
+                                AutomationProperties.AutomationId="RoomLanCard">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="RoomLanIconTile" Width="30" Height="30" CornerRadius="8" VerticalAlignment="Top">
+                                    <Path x:Name="RoomLanBolt" Data="M9,1 L3,9 H7 L5,15 L12,6 H8 Z" Stretch="Uniform"
+                                          Width="11" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="12,0,10,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="RoomLanTitle" Style="{DynamicResource RoomPanelLabel}"/>
+                                    <TextBlock x:Name="RoomLanBody" Style="{DynamicResource RoomPanelBody}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <ToggleButton x:Name="RoomLanSwitch" Grid.Column="2" Style="{DynamicResource SetToggle}"
+                                              VerticalAlignment="Center" Margin="0"
+                                              Checked="RoomLanSwitch_Changed" Unchecked="RoomLanSwitch_Changed"
+                                              AutomationProperties.AutomationId="RoomLanSwitch"/>
+                                <Button x:Name="RoomLanAction" Grid.Column="2" Style="{DynamicResource RoomSmallButton}"
+                                        VerticalAlignment="Center" Click="RoomLanAction_Click"
+                                        AutomationProperties.AutomationId="RoomLanAction"/>
+                            </Grid>
+                        </Border>
                         <Border x:Name="RoomPlayersPanel" Style="{DynamicResource RoomPanel}">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock x:Name="PlayersListHeader" Style="{DynamicResource RoomPanelLabel}"/>
-                                    <TextBlock x:Name="RoomPlayersCount" Margin="8,0,0,0" FontWeight="SemiBold"
+                                    <TextBlock x:Name="RoomPlayersCount" Grid.Column="1" Margin="8,0,0,0" FontWeight="SemiBold"
                                                FontFamily="Consolas, Courier New, monospace"
                                                FontSize="{DynamicResource SetControlSize}"
                                                Foreground="{DynamicResource WindowMuted}"/>
-                                </StackPanel>
+                                    <!-- The viewer's own connection; each row carries the ping to that player. -->
+                                    <TextBlock x:Name="RoomMyPingText" Grid.Column="2" Margin="10,0,0,0" HorizontalAlignment="Right"
+                                               VerticalAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                               FontSize="{DynamicResource SetControlSize}" Visibility="Collapsed"
+                                               Background="Transparent"/>
+                                </Grid>
                                 <StackPanel x:Name="RoomMembersPanel"/>
                                 <TextBlock x:Name="RoomMoreFreeText" Style="{DynamicResource GlassHint}" Margin="0,10,0,0" Visibility="Collapsed"/>
                             </StackPanel>
@@ -548,6 +594,9 @@
                         </StackPanel>
                         <TextBlock x:Name="RoomFooterSub" Margin="0,5,0,0" TextWrapping="Wrap"
                                    FontSize="{DynamicResource DialogBodySize}" Foreground="{DynamicResource WindowMuted}"/>
+                        <Button x:Name="RoomForceStartLink" Click="RoomForceStartLink_Click" Style="{DynamicResource RoomTextLink}"
+                                HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="Collapsed"
+                                AutomationProperties.AutomationId="RoomForceStart"/>
                     </StackPanel>
                     <StackPanel x:Name="LobbyActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button x:Name="LeaveRoomButton" Click="LeaveRoomButton_Click" Style="{DynamicResource RoomFooterButton}"/>

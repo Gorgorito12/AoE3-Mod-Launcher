@@ -792,13 +792,8 @@ public partial class MultiplayerTab
 
         var plate = RankingPlate(grid, row, isMe,
             Across((Rgba(main, .22), 0), (Rgba(main, .06), 0.42), (Rgba("#FFFFFF", .03), 1)));
-        if (isMe)
-        {
-            // The viewer's own row opens his profile. Nobody else's does: there is no page for
-            // another player, and a row that looks clickable and does nothing is worse.
-            plate.Cursor = System.Windows.Input.Cursors.Hand;
-            plate.MouseLeftButtonUp += (_, _) => OpenOwnProfileFromRanking();
-        }
+        // Every row opens that player's profile (the viewer's own included).
+        LinkRankingPlayer(plate, isMe, row.UserId, row.DisplayName, row.DiscordUsername, row.AvatarUrl);
         return plate;
     }
 
@@ -1003,11 +998,7 @@ public partial class MultiplayerTab
         // A little lighter under the pointer (design 107: 12 %).
         tile.MouseEnter += (_, _) => wash.Opacity = .05;
         tile.MouseLeave += (_, _) => wash.Opacity = 0;
-        if (isMe)
-        {
-            tile.Cursor = System.Windows.Input.Cursors.Hand;
-            tile.MouseLeftButtonUp += (_, _) => OpenOwnProfileFromRanking();
-        }
+        LinkRankingPlayer(tile, isMe, row.UserId, row.DisplayName, row.DiscordUsername, row.AvatarUrl);
         return tile;
     }
 

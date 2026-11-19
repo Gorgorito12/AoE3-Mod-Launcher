@@ -1,3 +1,4 @@
+using System.Linq;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using Xunit;
 
@@ -20,7 +21,7 @@ public class LobbySummaryFromDetailTests
         {
             Id = "abc123", Title = "Copa · Final · Ana · Luis", ModId = "wol",
             MaxPlayers = 6, SpectatorSlots = 2, CurrentPlayers = 3, IsPrivate = true,
-            Competitive = true, TournamentMatchId = "tm1", Status = "open",
+            Competitive = true, TournamentMatchId = "tm1", Status = "open", GameRules = 7,
         };
 
         var s = LobbySummary.FromDetail(detail);
@@ -35,6 +36,40 @@ public class LobbySummaryFromDetailTests
         Assert.True(s.Competitive);
         Assert.Equal("tm1", s.TournamentMatchId);
         Assert.Equal("open", s.Status);
+        Assert.Equal(7, s.GameRules);
+    }
+
+    /// <summary>
+    /// The hand-copy trap, closed for good: every settable property the detail and the summary
+    /// share by name must cross over. A flag added to both and forgotten in FromDetail is how a
+    /// room reached by link looked casual; now it also fails here.
+    /// </summary>
+    [Fact]
+    public void EveryPropertyBothTypesShareCrossesOver()
+    {
+        var detail = new LobbyDetail();
+        var shared = typeof(LobbyDetail).GetProperties()
+            .Where(p => p.CanWrite && typeof(LobbySummary).GetProperty(p.Name) is { CanWrite: true } other
+                        && other.PropertyType == p.PropertyType)
+            .ToList();
+        Assert.NotEmpty(shared);
+        foreach (var p in shared)
+        {
+            object? value = p.PropertyType == typeof(string) ? "x-" + p.Name
+                : p.PropertyType == typeof(int) || p.PropertyType == typeof(int?) ? 7
+                : p.PropertyType == typeof(bool) ? true
+                : p.PropertyType == typeof(bool?) ? true
+                : null;
+            if (value != null) p.SetValue(detail, value);
+        }
+        var s = LobbySummary.FromDetail(detail);
+        foreach (var p in shared)
+        {
+            var expected = p.GetValue(detail);
+            if (expected == null || expected is System.Collections.IEnumerable and not string) continue;
+            Assert.True(Equals(expected, typeof(LobbySummary).GetProperty(p.Name)!.GetValue(s)),
+                $"LobbySummary.FromDetail does not copy {p.Name}");
+        }
     }
 
     [Fact]

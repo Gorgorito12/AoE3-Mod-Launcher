@@ -223,8 +223,9 @@ public static class StartupUpdateGate
             // freezes solid. Measured at 4.6 seconds on this machine, all of it with "Verifying"
             // on screen and nothing repainting. The Progress was built on the UI thread, so its
             // callbacks still marshal home.
+            // Exempt from the download limit: the player is looking at this splash and nothing else.
             await Task.Run(() => LauncherUpdateService.DownloadUpdateAsync(
-                check.DownloadUrl!, check.ExpectedSha256, progress, cts.Token));
+                check.DownloadUrl!, check.ExpectedSha256, progress, cts.Token, throttled: false));
 
             // Only now, with verified bytes on disk: the new binary has to recognise itself or
             // it comes back offering the update it just installed.

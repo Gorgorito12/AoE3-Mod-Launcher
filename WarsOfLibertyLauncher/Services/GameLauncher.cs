@@ -457,7 +457,12 @@ public static class GameLauncher
         bool trustConfigCache = true)
     {
         if (HarnessMode.Block($"launch game {profile.Id} {extraArgs}".TrimEnd()))
+        {
+            // The testbed's two-account rig: no game, but a match that ends and leaves a real
+            // recording, so everything after the exit runs as it does for players.
+            if (HarnessFakeGame.TryStart(config, profile, onExited) is { } fake) return fake;
             throw new GameLaunchCancelledException(profile.GameExecutable);
+        }
 
         var exePath = Find(config, modInstallPath, profile, trustConfigCache);
         if (exePath == null)

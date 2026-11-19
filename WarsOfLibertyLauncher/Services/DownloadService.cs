@@ -32,6 +32,10 @@ public class DownloadService
     /// </summary>
     public bool Pause { get; set; }
 
+    /// <summary>Under the download limit in Settings (<see cref="DownloadThrottle"/>). Off only for
+    /// the startup self-update, where the player is waiting on a splash.</summary>
+    public bool Throttled { get; set; } = true;
+
     public DownloadService(HttpClient? http = null)
     {
         _http = http ?? CreateDefaultClient();
@@ -388,6 +392,7 @@ public class DownloadService
 
                 await destStream.WriteAsync(buffer.AsMemory(0, read), ct);
                 received += read;
+                if (Throttled) await DownloadThrottle.WaitAsync(read, ct);
 
                 // Always report progress, even when total is unknown — the UI
                 // can decide what to display when TotalBytes is 0 (typically:

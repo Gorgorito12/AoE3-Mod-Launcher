@@ -204,7 +204,7 @@ public partial class MultiplayerTab
         stack.Children.Add(TeamRowDetail(m));
 
         var tail = new StackPanel { Orientation = Orientation.Horizontal };
-        tail.Children.Add(MemberState(m, isMe, out var dim));
+        tail.Children.Add(WithPeerPing(MemberState(m, isMe, out var dim), m, isMe));
         if (IsRoomViewerHost() && !isMe && !_roomTeamsLocked && _matchPhase == MatchPhase.Lobby)
         {
             var picker = BuildTeamPicker(m);
@@ -213,7 +213,9 @@ public partial class MultiplayerTab
         }
         if (BuildKickButton(m, isMe, isHost) is { } kick) tail.Children.Add(kick);
 
-        var row = RosterRow(BuildAvatarDisc(name, m.AvatarUrl, 32), null, stack, tail, tag: m.UserId);
+        var avatar = BuildAvatarDisc(name, m.AvatarUrl, 32);
+        AttachProfileLink(avatar, m.UserId, name, m.Login, m.AvatarUrl);
+        var row = RosterRow(avatar, null, stack, tail, tag: m.UserId);
         if (dim) row.Opacity = .6;
         return row;
     }
@@ -252,6 +254,8 @@ public partial class MultiplayerTab
             lead = true;
         }
         if (lead && tb.Tag == null) tb.Inlines.Add(new Run(" ELO"));
+        if (LanMark(m, IsRoomViewer(m.UserId)) is { } lan)
+            tb.Inlines.Add(new Run((tb.Inlines.Count > 0 ? " · " : "") + lan));
         return tb;
     }
 

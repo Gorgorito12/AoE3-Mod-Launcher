@@ -85,6 +85,62 @@ pointing at that exe, alternating the two builds so the machine's noise lands on
 Run the same scenario with `--software` to reproduce a weak PC. Close Visual Studio's XAML tools
 first: they force a frame every refresh.
 
+## Two accounts: a whole multiplayer match on one machine
+
+A local lobby server, two or three launchers each signed in as its own test account, and a
+simulated game that lasts a set time and leaves a REAL recording, so everything after the game
+(reading the recording, the host's report, the guest's confirmation, both civilizations, the
+result card, rematch) runs the production code. Nothing leaves the machine: the server's Discord
+and recording-storage settings are emptied, and it runs on a throwaway database in `out/server`.
+
+```
+python -I testbed.py server start --fresh       # Node 20 through npx (nothing installed), port 8799
+python -I testbed.py --as a token --name "El Taita"
+python -I testbed.py --as b token --name skibidi
+python -I testbed.py --as c token --name Miron   # a third account, to watch the chat's room card
+python -I testbed.py --as a launch --mp --half first --software
+python -I testbed.py --as b launch --mp --half second --software
+python -I testbed.py --as c launch --mp --half third --software
+python -I testbed.py players <recording>         # who is in it, by slot
+python -I testbed.py --as a fakegame <recording> --slot 1
+python -I testbed.py --as b fakegame <recording> --slot 2
+python -I testbed.py --as a uia invoke -Id CreateRoomButton   # then Segment:OneVOne, CreateButton
+python -I testbed.py --as b uia invoke -Id RoomAction:<lobby id>
+python -I testbed.py --as a uia invoke -Id ReadyButton        # and b: the countdown starts by itself
+python -I testbed.py admin match:show <match id>              # the backend's own view
+python -I testbed.py close --all && python -I testbed.py server stop
+```
+
+Every per-run command takes `--as`: `log`, `shot`, `uia`, `windows`, `close`. Without it the
+testbed is exactly what it was. How it stays inert outside: the launcher reads
+`AOE3ML_LOBBY_URL` and `AOE3ML_FAKE_GAME` only in harness mode (plain http to this machine for the
+first, a recording dropped only inside the run's own Documents for the second), and
+`scripts/dev-token.ts` refuses unless the server runs with `DEV_AUTH_BYPASS=true`.
+
+`scenario_watch.py` plays one more ranked 1v1 while c opens "See match" from its Rooms row, and
+leaves `out/watch-playing.png` and `out/watch-result.png`. `launch -- --open-profile=<user id>`
+(harness only) opens another player's profile once signed in, since its links are text that UI
+Automation cannot press.
+
+**The simulated game lasts 190 s**: a match shorter than three minutes is not reported, by the
+launcher or by the server. `fakegame` names the account's AoE3 profile after that slot of the
+recording (read from the header, not from the file name), which is how the launcher finds itself
+in the file. One recording per match: the server flags a recording reported twice.
+
+**What only two real PCs over Radmin prove** (a checklist for the maintainer):
+
+1. Both on the AoE3 Radmin network; each room row shows the other's ping.
+2. The room's automatic-entry card is green on both; the first room asked once about the helper.
+3. The host's log says `+uhcLanHost`, the guest's `uhcLanJoin="<host's 26.x>"` and
+   `LAN auto-start enabled in <cfg>`.
+4. The host lands in the hosted LAN lobby with Record Game ticked (competitive room), and the guest
+   connects by Direct IP unaided, also when the guest's game starts first.
+5. With the card's switch off, no `uhcLan` argument is passed and entering by hand works.
+6. A real match: the result card on both, both civilizations in History, the recording uploaded.
+7. A rematch between two real accounts; the invitation reads as the rematch.
+8. Walking out after five minutes of a competitive 1v1, and separately a host who closes the
+   launcher mid-match.
+
 ## Done means
 
 1. The markup of the prototype was read, not only its README.

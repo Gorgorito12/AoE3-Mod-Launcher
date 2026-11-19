@@ -92,6 +92,10 @@ internal sealed class SegmentRow : Grid
         else button.Height = SegmentHeight;
         button.SetResourceReference(StyleProperty, "SegmentButton");
         var key = option.Key;
+        // A segment whose content is a panel has no name UI Automation can read, so a screen
+        // reader announced nothing and the testbed could not press it.
+        System.Windows.Automation.AutomationProperties.SetAutomationId(button, $"Segment:{key}");
+        System.Windows.Automation.AutomationProperties.SetName(button, option.Text);
         button.Click += (_, _) =>
         {
             Selected = key;

@@ -57,9 +57,21 @@ public partial class ProfileWindow : Window
     /// </summary>
     internal void ApplyStrings()
     {
-        // MpSubtabProfile, freed by the subtab this window replaced.
-        var title = Strings.Get("MpSubtabProfile");
+        // MpSubtabProfile, freed by the subtab this window replaced. "Profile · name" while the
+        // window shows another player.
+        var title = _subjectName == null
+            ? Strings.Get("MpSubtabProfile")
+            : Strings.Format("MpProfileOfTitle", _subjectName);
         Title = title;
         TitleBarControl.Title = title;
+    }
+
+    private string? _subjectName;
+
+    /// <summary>Whose profile the window shows: null for the viewer's own.</summary>
+    internal void SetSubject(string? name)
+    {
+        _subjectName = string.IsNullOrWhiteSpace(name) ? null : name;
+        ApplyStrings();
     }
 }

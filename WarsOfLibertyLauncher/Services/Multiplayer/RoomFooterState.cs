@@ -37,6 +37,9 @@ public enum RoomSecondary { None, Unready, Assistant, FindAnother }
 /// <summary>What the way out says, and whether it is the red one.</summary>
 public enum RoomLeave { Room, Match, Rooms, Abandon, None }
 
+/// <summary>A quiet link under the footer's line, for a choice that is not the usual way on.</summary>
+public enum RoomLink { None, ForceStart }
+
 /// <summary>A string key and its arguments, formatted by the window.</summary>
 public sealed record RoomText(string Key, params object[] Args);
 
@@ -54,7 +57,7 @@ public sealed record RoomFacts
     /// <summary>Seats to play in; 0 when not known.</summary>
     public int Seats { get; init; }
 
-    /// <summary>Players not marked ready, not counting the host of a casual room, who starts it.</summary>
+    /// <summary>Players not marked ready, the host included: he marks ready like everybody else.</summary>
     public int NotReady { get; init; }
 
     public bool IAmReady { get; init; }
@@ -116,7 +119,8 @@ public sealed record RoomFooterView(
     string? PrimaryTipKey,
     RoomSecondary Secondary,
     RoomLeave Leave,
-    RoomClock Clock = RoomClock.None);
+    RoomClock Clock = RoomClock.None,
+    RoomLink Link = RoomLink.None);
 
 /// <summary>
 /// The footer of the room window: one line of state and one primary button (design 87).
@@ -124,11 +128,13 @@ public sealed record RoomFooterView(
 /// <para>Before this the room had four large buttons whose visibility six methods each decided on
 /// their own. The rule lives here now, once, and the window only paints the answer.</para>
 ///
-/// <para><b>A casual host cannot start until everyone else is ready</b>, which is what the design
-/// asks for and a change from before, when Start was always open. In a competitive room the match
-/// starts itself when the room is full and everyone is ready, so the host marks ready like anybody
-/// else; Start only comes back when that did not happen, because the auto-start fires once and a
-/// cancelled confirmation would otherwise leave the room with no way to begin.</para>
+/// <para><b>The host marks ready like everybody else, in every room</b>, and the match starts
+/// itself once everyone has (a 5-second countdown anyone may cancel). Start only comes back when
+/// that did not happen — everyone ready and the room still here, after a cancelled countdown or
+/// a cancelled Record Game question — because otherwise the room would have no way to begin. In a
+/// casual room the host may also start without waiting for the others (<see cref="RoomLink.ForceStart"/>,
+/// asked first); never in a competitive one, where a player who has not said ready may not be at
+/// his PC and the match counts.</para>
 /// </summary>
 public static class RoomFooterState
 {
@@ -284,6 +290,8 @@ public static class RoomFooterState
     {
         var alone = f.Players <= 1;
         var ready = f.NotReady == 0;
+        // The others who have not said ready: the host himself is not "waiting for" himself.
+        var othersNotReady = f.IsHost && !f.IAmReady ? f.NotReady - 1 : f.NotReady;
         RoomDot dot;
         RoomText title;
         RoomText sub;
@@ -293,21 +301,29 @@ public static class RoomFooterState
         }
         else if (ready)
         {
+            // A room that is not full never starts itself (AutoStartRule), so say who starts it.
+            var full = f.Seats > 0 && f.Players >= f.Seats;
             (dot, title) = (RoomDot.Green, new("RoomFtAllReady"));
-            sub = f.IsHost ? new("RoomFtYouHost") : new("RoomFtGuestHost", f.HostName);
+            sub = f.IsHost
+                ? new(full ? "RoomFtYouHost" : "RoomFtNotFullHost")
+                : new(full ? "RoomFtGuestHost" : "RoomFtNotFullGuest", f.HostName);
         }
         else
         {
             (dot, title) = (RoomDot.Neutral, new("RoomFtCount", f.Players - f.NotReady, f.Players));
             sub = !f.IsHost ? new("RoomFtGuestHost", f.HostName)
-                : f.NotReady == 1 ? new("RoomFtOneMissing")
-                : new("RoomFtManyMissing", f.NotReady);
+                : !f.IAmReady ? new("RoomFtHostMarkReady")
+                : othersNotReady == 1 ? new("RoomFtOneMissing")
+                : new("RoomFtManyMissing", othersNotReady);
         }
 
-        if (f.IsHost)
-            return View(dot, title, sub, RoomPrimary.Start, enabled: !alone && ready,
-                tip: alone ? "RoomTipNeedsPlayer" : ready ? null : "RoomTipNeedsReady");
-        return Guest(f, dot, title, sub);
+        // Everyone ready and the room still here: the countdown was cancelled. Start is the way on.
+        if (f.IsHost && !alone && ready)
+            return View(dot, title, sub, RoomPrimary.Start);
+        var view = Guest(f, dot, title, sub);
+        if (f.IsHost && !alone && othersNotReady > 0)
+            view = view with { Link = RoomLink.ForceStart };
+        return view;
     }
 
     private static RoomFooterView Competitive(RoomFacts f)

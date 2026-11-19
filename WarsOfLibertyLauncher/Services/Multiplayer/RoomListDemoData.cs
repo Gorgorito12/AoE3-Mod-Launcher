@@ -85,7 +85,8 @@ internal static class RoomListDemoData
     {
         LobbySummary Room(string id, string title, string mod, bool competitive, int current, int max,
             string host, double? rating, int minutes, string status = "open", bool isPrivate = false,
-            int spectatorSlots = 0, int spectators = 0, int? placementPlayed = null, int startedMinutes = 0)
+            int spectatorSlots = 0, int spectators = 0, int? placementPlayed = null, int startedMinutes = 0,
+            int rules = LanAutoStartArgs.Standard)
         {
             return new LobbySummary
             {
@@ -94,6 +95,7 @@ internal static class RoomListDemoData
                 ModId = mod,
                 ModCombinedHash = id == OtherVersionId ? "DEMO-OTHER-VERSION" : MyHash,
                 Competitive = competitive,
+                GameRules = rules,
                 CurrentPlayers = current,
                 MaxPlayers = max,
                 SpectatorSlots = spectatorSlots,
@@ -127,11 +129,15 @@ internal static class RoomListDemoData
         {
             Room("DEMO86K1", "WoL 1v1 · mapas ESOC", Wol, true, 1, 2, "Kaiser", 1630, 4),
             Room("DEMO86P3", "Práctica 3v3 de la casa", Wol, false, 3, 6, "Rioplatense", 1288, 7, isPrivate: true),
-            Room("DEMO86N2", "Napoleónicas 2v2", HundredDays, false, 2, 4, "Malinche", null, 3, placementPlayed: 3),
+            // Two rooms with rules other than Standard, so the chip can be seen. Never on a Wars of
+            // Liberty room: that mod offers no treaties.
+            Room("DEMO86N2", "Napoleónicas 2v2", HundredDays, false, 2, 4, "Malinche", null, 3, placementPlayed: 3,
+                rules: LanAutoStartArgs.Treaty20),
             Room("DEMO86R1", "Revancha", Wol, true, 2, 2, "Almirante", 1402, 20, status: "in_game", startedMinutes: 14),
             Room(OtherVersionId, "Mapas nuevos 1v1", Wol, true, 1, 2, "Bicorne", 1318, 2),
             Room("DEMO86X2", "Exhibición 2v2", Wol, false, 5, 6, "Aluclown", 1541, 9, spectatorSlots: 2, spectators: 1),
-            Room("DEMO86T8", "Todos contra todos", Improvement, false, 8, 8, "Zanjón", 1190, 12),
+            Room("DEMO86T8", "Todos contra todos", Improvement, false, 8, 8, "Zanjón", 1190, 12,
+                rules: LanAutoStartArgs.KingOfTheHill),
         };
     }
 

@@ -41,6 +41,34 @@ public class RoomsActivityLayoutTests
     /// With no gap given, the plan uses the tab's narrow G (<see cref="PageSpacing"/>); 61's 10 gave
     /// way to the maintainer's one-gap rule.
     /// </summary>
+    /// <summary>
+    /// THE ONE THAT MATTERS for the storm the two-account rig found on its first match (one
+    /// community match, an empty ladder, a 125 % screen): the cards were measured at 75, laid out
+    /// at 75.2, measured again at 74, laid out at 73.6, measured at 75... a thousand times a second
+    /// on every launcher. A measurement that moves only with rounding keeps the value in use.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_RoundingNeverMovesAMeasurementThatIsInUse()
+    {
+        var kept = RoomsActivityLayout.Settle(null, 75);
+        Assert.Equal(75, kept);
+        // The exact cycle measured live: 75 -> 74 -> 75 -> ...
+        for (var i = 0; i < 10; i++)
+        {
+            kept = RoomsActivityLayout.Settle(kept, i % 2 == 0 ? 74 : 75);
+            Assert.Equal(75, kept);
+        }
+        Assert.Equal(75, RoomsActivityLayout.Settle(75, 73.6));
+        Assert.Equal(75, RoomsActivityLayout.Settle(75, 77));
+    }
+
+    [Theory]
+    [InlineData(75, 140)]   // a second match row, a larger text size
+    [InlineData(186, 75)]   // the first real measurement replacing the design's estimate
+    [InlineData(75, 72.9)]
+    public void ARealChangeIsTakenAtOnce(double current, double measured)
+        => Assert.Equal(measured, RoomsActivityLayout.Settle(current, measured));
+
     [Fact]
     public void TheDefaultGapIsTheNarrowPageGap() => Assert.Equal(PageSpacing.Narrow, RoomsActivityLayout.Gap);
 

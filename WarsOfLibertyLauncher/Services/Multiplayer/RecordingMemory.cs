@@ -4,13 +4,12 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// Whether the last competitive match produced a recording — the one fact that turns the
 /// pre-match Record Game reminder from a refrain into a statement.
 ///
-/// <para><b>Why the reminder needs this at all.</b> The launcher cannot tick AoE3's per-match
-/// "Record Game" box and cannot see whether the player did: writing <c>optionrecordgame</c> into
-/// the profile does not move it (measured twice) and <c>+RecordGame</c> as a launch argument does
-/// nothing (tested twice, once by playing a whole LAN game). So the confirmation before a
-/// competitive start is a nudge, never a guarantee — and a nudge that reads identically every
-/// time stops being read. What the launcher CAN do is notice afterwards that no recording
-/// appeared, and say so the next time.</para>
+/// <para><b>Why the reminder needs this at all.</b> The launcher ticks the box the host's lobby
+/// opens with (<c>gamerecordgame</c>, <see cref="GameSettingsStore.EnsureLobbyRecordGame"/>), but
+/// it cannot see whether the box was still ticked when the match started: the host can untick it,
+/// and <c>optionrecordgame</c> or <c>+RecordGame</c> move nothing (measured). What the launcher CAN
+/// do is notice afterwards that no recording appeared, and say so the next time
+/// (<see cref="RecordGameNotice"/>).</para>
 ///
 /// <para>Pure and free of WPF so the rules below can be tested, which matters because the
 /// expensive mistake here is not failing to warn — it is warning the wrong person about the

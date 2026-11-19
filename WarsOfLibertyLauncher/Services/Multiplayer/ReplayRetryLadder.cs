@@ -8,7 +8,7 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// The first pass ran once with no delay, reported whatever it had, and the retries ran behind
 /// it. For most matches that is right: AoE3's per-match Record Game box comes up unticked, so
 /// waiting would slow the majority down for nothing. A COMPETITIVE room inverts every term of
-/// that argument — the launcher makes the host confirm Record Game before the countdown, so
+/// that argument — the launcher ticks the host's lobby Record Game box before the launch, so
 /// there IS a recording — and the report going out without it is what leaves the match with no
 /// fingerprint, no civilizations, and no way for the server's abandonment rule to clear its
 /// own anti-farm brake.</para>

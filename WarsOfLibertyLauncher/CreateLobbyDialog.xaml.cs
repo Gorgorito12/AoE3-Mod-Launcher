@@ -265,32 +265,102 @@ public partial class CreateLobbyDialog : Window
 
         ObserversRow.Picked += key => SelectSpectatorSlots((int)key);
 
-        foreach (var rules in LanAutoStartArgs.OfferedRules)
-            GameRulesCombo.Items.Add(new ComboBoxItem
-            {
-                Content = Strings.Get(LanAutoStartArgs.RulesLabelKey(rules)),
-                Tag = rules,
-                ToolTip = TooltipHelper.Wrap(RulesDescription(rules)),
-            });
+        // Eight entries have to fit the shared popup's 260 px, so none hides behind a scrollbar.
+        var compact = new Style(typeof(ComboBoxItem), GameRulesCombo.ItemContainerStyle);
+        compact.Setters.Add(new Setter(PaddingProperty, new Thickness(12, 5, 12, 5)));
+        GameRulesCombo.ItemContainerStyle = compact;
         var lastRules = _config?.LastRoomGameRules ?? LanAutoStartArgs.Standard;
-        SelectGameRules(LanAutoStartArgs.IsOfferedRules(lastRules) ? lastRules : LanAutoStartArgs.Standard);
+        _casualRules = LanAutoStartArgs.IsOfferedRules(lastRules) ? lastRules : LanAutoStartArgs.Standard;
     }
 
-    internal void SelectGameRules(int rules)
+    /// <summary>The casual choice, kept while a competitive format is picked so going back to
+    /// Casual (or to a mod with treaties) brings it back.</summary>
+    private int _casualRules;
+
+    /// <summary>The rules entries this room may use, from the kind and the mod
+    /// (<see cref="LanAutoStartArgs.RulesOfferedFor"/>): a competitive room shows a fixed
+    /// "Standard" instead of a dropdown, and a mod without treaties offers none.</summary>
+    private void RefreshRules()
+    {
+        bool noTreaty = _selectedProfile?.NoTreatyRules == true;
+        if (Competitive)
+        {
+            GameRulesCombo.Visibility = Visibility.Collapsed;
+            GameRulesFixed.Visibility = Visibility.Visible;
+            GameRulesFixedText.Text = Strings.Get(LanAutoStartArgs.RulesLabelKey(LanAutoStartArgs.Standard));
+            ShowRules(LanAutoStartArgs.Standard, Strings.Get("MpCreateDialogRulesCompetitiveHint"));
+            return;
+        }
+        GameRulesCombo.Visibility = Visibility.Visible;
+        GameRulesFixed.Visibility = Visibility.Collapsed;
+        var offered = LanAutoStartArgs.RulesOfferedFor(false, noTreaty);
+        var shown = GameRulesCombo.Items.OfType<ComboBoxItem>().Select(i => (int)i.Tag);
+        if (!shown.SequenceEqual(offered))
+        {
+            _rebuildingRules = true;
+            GameRulesCombo.Items.Clear();
+            foreach (var rules in offered)
+                GameRulesCombo.Items.Add(new ComboBoxItem
+                {
+                    Content = Strings.Get(LanAutoStartArgs.RulesLabelKey(rules)),
+                    Tag = rules,
+                    ToolTip = TooltipHelper.Wrap(RulesDescription(rules)),
+                });
+            _rebuildingRules = false;
+        }
+        SelectGameRules(LanAutoStartArgs.EffectiveRules(_casualRules, false, noTreaty), rememberChoice: false);
+    }
+
+    private bool _rebuildingRules;
+
+    internal void SelectGameRules(int rules) => SelectGameRules(rules, rememberChoice: true);
+
+    private void SelectGameRules(int rules, bool rememberChoice)
+    {
+        if (rememberChoice) _casualRules = rules;
+        var item = GameRulesCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (int)i.Tag == rules);
+        if (item != null && !ReferenceEquals(GameRulesCombo.SelectedItem, item))
+        {
+            _rebuildingRules = true;
+            GameRulesCombo.SelectedItem = item;
+            _rebuildingRules = false;
+        }
+        ShowRules(rules, Strings.Get("MpCreateDialogRulesHint"));
+    }
+
+    private void ShowRules(int rules, string hint)
     {
         _gameRules = rules;
-        var item = GameRulesCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (int)i.Tag == rules);
-        if (item != null && !ReferenceEquals(GameRulesCombo.SelectedItem, item)) GameRulesCombo.SelectedItem = item;
         GameRulesDescription.Text = RulesDescription(rules);
-        GameHint.Text = Strings.Get("MpCreateDialogRulesHint")
-            + (LanAutoStartArgs.IsTreaty(rules) ? " " + Strings.Get("MpCreateDialogRulesTreatyHint") : "");
+        GameHint.Text = hint;
     }
 
-    private static string RulesDescription(int rules) =>
+    /// <summary>The rules the room will be created with. Read by tests.</summary>
+    internal int GameRules => _gameRules;
+
+    /// <summary>
+    /// The rules dropdown in the picked mod's colour, like the segment rows beside it. The shared
+    /// combo style reads these keys as DynamicResource, so overriding them on the combo itself
+    /// reaches its popup too: the rim on hover and focus, the hovered row and the chosen row.
+    /// </summary>
+    private void PaintRulesCombo()
+    {
+        var navy = Color.FromRgb(0x0F, 0x1C, 0x2E);
+        GameRulesCombo.Resources["MpAction"] = new SolidColorBrush(_accent);
+        GameRulesCombo.Resources["MpActionSoftBg"] = new SolidColorBrush(ModAccent.SelectionFill(_accent));
+        GameRulesCombo.Resources["MpRowHighlight"] = new SolidColorBrush(ModAccent.Mix(_accent, navy, .80));
+        GameRulesCombo.Resources["MpSurfaceAlt"] = new SolidColorBrush(ModAccent.Mix(_accent, navy, .93));
+        GameRulesCombo.Resources["MpRimStrong"] = new SolidColorBrush(ModAccent.Mix(_accent, navy, .55));
+        GameRulesCombo.BorderBrush = new SolidColorBrush(ModAccent.Mix(_accent, navy, .60));
+    }
+
+    /// <summary>One sentence on what the rules do; the room's header and the rooms list use it too.</summary>
+    internal static string RulesDescription(int rules) =>
         Strings.Format(LanAutoStartArgs.RulesDescriptionKey(rules), LanAutoStartArgs.TreatyMinutes(rules));
 
     private void GameRulesCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_rebuildingRules) return;
         if (GameRulesCombo.SelectedItem is ComboBoxItem { Tag: int rules } && rules != _gameRules)
             SelectGameRules(rules);
     }
@@ -330,6 +400,7 @@ public partial class CreateLobbyDialog : Window
     private void Refresh()
     {
         RefreshKindHint();
+        RefreshRules();
         RefreshObservers();
         RefreshSummary();
         ProposeRoomTitle();
@@ -541,6 +612,7 @@ public partial class CreateLobbyDialog : Window
         KindRow.Accent = _accent;
         MaxPlayersRow.Accent = _accent;
         ObserversRow.Accent = _accent;
+        PaintRulesCombo();
         CreateButton.Foreground = new SolidColorBrush(ModAccent.OnAccent(_accent));
         RefreshCopyRow(profile);
         Refresh();
@@ -780,6 +852,10 @@ public partial class CreateLobbyDialog : Window
                 SpectatorSlots = _spectatorSlots,
                 Password = password,
                 Competitive = Competitive,
+                // The casual choice even for a ranked request: the server makes a ranked room
+                // Standard itself, and a ranked request it turns casual keeps the host's choice.
+                GameRules = LanAutoStartArgs.EffectiveRules(
+                    _casualRules, competitive: false, _selectedProfile.NoTreatyRules),
             });
             // The server's answer, not ours. An older backend does not send the field at all,
             // which deserialises to false: a casual room, which is how it will treat the match.
@@ -787,11 +863,16 @@ public partial class CreateLobbyDialog : Window
             CreatedLobbySpectatorSlots = CreatedLobby?.SpectatorSlots ?? 0;
             CreatedLobbyCompetitiveDowngraded = Competitive && !CreatedLobbyIsCompetitive;
             CreatedLobbyFormat = RoomFormats.Resolve(CreatedLobbyIsCompetitive, maxPlayers, CreatedLobbySpectatorSlots);
-            CreatedLobbyGameRules = _gameRules;
+            // What the SERVER stored decides — it is what every member and a promoted host read.
+            // An older server echoes nothing, and then the host's own choice stands, as before.
+            CreatedLobbyGameRules = LanAutoStartArgs.RoomRules(
+                CreatedLobby?.GameRules,
+                CreatedLobbyIsCompetitive ? LanAutoStartArgs.Standard : _casualRules,
+                CreatedLobbyIsCompetitive, _selectedProfile?.NoTreatyRules == true);
             if (_config != null)
             {
                 _config.LastRoomKind = RoomFormats.KindToken(_kind);
-                _config.LastRoomGameRules = _gameRules;
+                _config.LastRoomGameRules = _casualRules;
                 _config.Save();
             }
             DialogResult = true;
@@ -814,9 +895,19 @@ public partial class CreateLobbyDialog : Window
             CreateButton.Content = Strings.Get("MpCreateDialogCreate");
             CancelButton.IsEnabled = true;
             RefreshFooter();
-            ErrorText.Text = ex.Message;
+            ErrorText.Text = ex is LobbyApiException api ? ServerFullText(api) ?? ex.Message : ex.Message;
             ErrorText.Visibility = Visibility.Visible;
         }
+    }
+
+    /// <summary>The server's "no free rooms" refusal (code <c>server_full</c>, 2026-11-18), in words,
+    /// with how many rooms it holds at once when it said so. Null for any other refusal.</summary>
+    internal static string? ServerFullText(LobbyApiException ex)
+    {
+        if (ex.Code != "server_full") return null;
+        var max = ex.Details != null && ex.Details.TryGetValue("max_active_games", out var v)
+                  && int.TryParse(v?.ToString(), out var n) ? n : (int?)null;
+        return max is int m ? Strings.Format("MpServerFullCount", m) : Strings.Get("MpServerFull");
     }
 
     /// <summary>The server's "this launcher is too old" refusal, by its code: the message is

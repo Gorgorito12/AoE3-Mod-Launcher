@@ -77,6 +77,8 @@ public sealed class ThemedConfirmDialog : BaseDialog
         string cancelLabel, ConfirmTone tone = ConfirmTone.Question, bool defaultIsCancel = false,
         string? detailLabel = null, string? detail = null, ModProfile? mod = null, string? barTitle = null)
     {
+        // Nobody to ask while the launcher works by itself: the conservative answer (Services.Unattended).
+        if (Services.Unattended.Skip(owner, "question", title)) return false;
         var dialog = new ThemedConfirmDialog(title, body, confirmLabel, cancelLabel, tone, barTitle);
         dialog.WithDetail(detailLabel, detail);
         dialog.UseMod(mod);
@@ -96,6 +98,7 @@ public sealed class ThemedConfirmDialog : BaseDialog
     public static ConfirmAnswer AskThreeWay(Window? owner, string title, string body, string confirmLabel,
         string cancelLabel, string leftLabel, ConfirmTone tone = ConfirmTone.Question, string? barTitle = null)
     {
+        if (Services.Unattended.Skip(owner, "question", title)) return ConfirmAnswer.Cancel;
         var dialog = new ThemedConfirmDialog(title, body, confirmLabel, cancelLabel, tone, barTitle)
         {
             Width = 520,
@@ -110,6 +113,8 @@ public sealed class ThemedConfirmDialog : BaseDialog
         ConfirmTone tone = ConfirmTone.Info, string? detailLabel = null, string? detail = null,
         string? okLabel = null, string? barTitle = null)
     {
+        if (Services.Unattended.SkipNotice(owner, title, body,
+                tone is ConfirmTone.Caution or ConfirmTone.Destructive)) return;
         var dialog = new ThemedConfirmDialog(title, body, okLabel ?? Strings.Get("DlgUnderstood"), "", tone, barTitle);
         dialog.WithDetail(detailLabel, detail);
         dialog.HideCancel();

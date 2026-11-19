@@ -468,6 +468,15 @@ internal static class TournamentPermissions
     /// which no game was played - one with a game keeps its history. The server's answer is
     /// <c>has_games</c>; a server that does not send it cannot delete, so nothing is offered.
     /// </summary>
+    /// <summary>The visibility changes only by the OWNER (not a co-organiser), before the bracket
+    /// is drawn, on a server that says it can (<c>visibility_editable</c>).</summary>
+    internal static bool CanChangeVisibility(TournamentSummary? t, string? myUserId, bool serverSupports)
+        => serverSupports && IsOwner(t, myUserId) && t!.Status is "draft" or "registration" or "ready";
+
+    /// <summary>Only the owner renews a private tournament's code, in any state.</summary>
+    internal static bool CanRenewCode(TournamentSummary? t, string? myUserId, bool serverSupports)
+        => serverSupports && IsOwner(t, myUserId) && t!.IsPrivate;
+
     internal static bool CanDelete(TournamentSummary? t, string? myUserId)
         => IsOwner(t, myUserId)
            && t!.HasGames == false

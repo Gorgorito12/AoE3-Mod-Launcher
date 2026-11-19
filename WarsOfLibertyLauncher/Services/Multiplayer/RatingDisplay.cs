@@ -129,6 +129,14 @@ public static class RatingDisplay
     /// <para><paramref name="inPlacement"/> is decided by the CALLER from the server's flag, or
     /// from the counts when the flag is absent; null — nothing known — never hides anything.</para>
     /// </summary>
+    /// <summary>
+    /// A rating the server withheld from a PLACED player: he keeps it private (server migration
+    /// 0034). Only a placed player, so it can never be mistaken for placement privacy, and only
+    /// when the count is known, so an older server's missing field hides nothing.
+    /// </summary>
+    public static bool IsPrivateRating(double? rating, int? gamesPlayed, int placementRequired)
+        => rating == null && placementRequired > 0 && gamesPlayed is int g && g >= placementRequired;
+
     public static Look LookFor(bool isViewer, double? rd, int? gamesPlayed, bool? inPlacement)
         => IsUnrated(rd, gamesPlayed) ? Look.Unrated
          : inPlacement == true ? (isViewer ? Look.Provisional : Look.HiddenPlacement)

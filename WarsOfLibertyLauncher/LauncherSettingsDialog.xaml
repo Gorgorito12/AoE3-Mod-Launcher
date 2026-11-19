@@ -715,15 +715,15 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- RANKING. "Show my ELO" is drawn and unread — see the block comment
-                             on LauncherConfig.ShowMyElo: hiding a rating is the SERVER's call
-                             (it joins and pushes the number to everyone else). The second row
-                             IS read: it is the opt-out for uploading competitive recordings
-                             (ReplayUploadService.Decide). -->
+                        <!-- RANKING. "Show my ELO" is the SERVER's switch (migration 0034): the
+                             row is shown only when this player's standing said the server can
+                             store it, and a change is sent at once (CurrentRatingPrivate /
+                             SetRatingVisible). The second row is the opt-out for uploading
+                             competitive recordings (ReplayUploadService.Decide). -->
                         <TextBlock x:Name="GroupRankingLabel" Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
-                                <Border Visibility="Collapsed" Style="{StaticResource SetRow}">
+                                <Border x:Name="ShowEloRow" Visibility="Collapsed" Style="{StaticResource SetRow}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -732,6 +732,7 @@
                                         <StackPanel Grid.Column="0" Margin="0,0,14,0">
                                             <TextBlock x:Name="ShowEloTitle" Style="{StaticResource SetRowTitle}"/>
                                             <TextBlock x:Name="ShowEloHint" Style="{StaticResource SetRowDesc}"/>
+                                            <TextBlock x:Name="ShowEloResult" Style="{StaticResource SetRowDesc}" Visibility="Collapsed"/>
                                         </StackPanel>
                                         <ToggleButton Grid.Column="1" x:Name="ShowEloCheck"
                                                       Style="{StaticResource SetToggle}"/>
@@ -753,6 +754,35 @@
                                     </Grid>
                                 </Border>
                             </StackPanel>
+                        </Border>
+
+                        <!-- LAN ROOM. The optional helper that makes the game enter the room's
+                             LAN game by itself (Services/Multiplayer/LanHelperService). The switch
+                             is the consent: on, the next room installs it next to that game's
+                             executable; off, it is taken out of every folder it went into. -->
+                        <TextBlock x:Name="GroupLanLabel" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <Border Style="{StaticResource SetRowLast}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                        <TextBlock x:Name="LanHelperTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="LanHelperHint" Style="{StaticResource SetRowDesc}"/>
+                                        <TextBlock x:Name="LanHelperStatus" Style="{StaticResource SetRowDesc}"
+                                                   Foreground="{DynamicResource UiTextDim}" Margin="0,4,0,0"/>
+                                        <!-- The same setup window a room offers: the launcher doing it, or
+                                             the two files and the exact folder to do it by hand. -->
+                                        <Button x:Name="LanHelperManualButton" Style="{StaticResource MpLinkButton}"
+                                                HorizontalAlignment="Left" Margin="0,6,0,0"
+                                                Click="LanHelperManualButton_Click"/>
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="1" x:Name="LanHelperCheck"
+                                                  Style="{StaticResource SetToggle}"/>
+                                </Grid>
+                            </Border>
                         </Border>
                     </StackPanel>
 
@@ -1018,31 +1048,7 @@
                                     </Grid>
                                 </Border>
 
-                                <Border Visibility="Collapsed" Style="{StaticResource SetActionRow}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="ChannelTitle" Style="{StaticResource SetRowTitle}"/>
-                                            <TextBlock x:Name="ChannelHint" Style="{StaticResource SetRowDesc}"/>
-                                        </StackPanel>
-                                        <Border Grid.Column="1" Style="{StaticResource SetSegment}">
-                                            <StackPanel Orientation="Horizontal">
-                                                <RadioButton x:Name="ChannelStableRadio"
-                                                             GroupName="UpdateChannel"
-                                                             Style="{StaticResource SetSegmentItem}"/>
-                                                <RadioButton x:Name="ChannelBetaRadio"
-                                                             GroupName="UpdateChannel"
-                                                             Style="{StaticResource SetSegmentItem}"
-                                                             Margin="0"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </Grid>
-                                </Border>
-
-                                <Border Visibility="Collapsed" Style="{StaticResource SetActionRow}">
+                                <Border Style="{StaticResource SetActionRow}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1166,7 +1172,7 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border Style="{StaticResource SetActionRow}">
+                                <Border Style="{StaticResource SetActionRowLast}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1182,32 +1188,6 @@
                                     </Grid>
                                 </Border>
 
-                                <Border Style="{StaticResource SetRowLast}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" x:Name="VerifyDownloadsTitle"
-                                                           Style="{StaticResource SetRowTitle}"/>
-                                                <Border Grid.Column="1" Style="{StaticResource SetBadge}"
-                                                        Tag="ok" Margin="8,0,0,0">
-                                                    <TextBlock x:Name="VerifyDownloadsBadge"/>
-                                                </Border>
-                                            </Grid>
-                                            <TextBlock x:Name="VerifyDownloadsHint" Style="{StaticResource SetRowDesc}"/>
-                                        </StackPanel>
-                                        <ToggleButton Grid.Column="1" x:Name="VerifyDownloadsCheck"
-                                                      Style="{StaticResource SetToggle}"/>
-                                    </Grid>
-                                </Border>
                             </StackPanel>
                         </Border>
 

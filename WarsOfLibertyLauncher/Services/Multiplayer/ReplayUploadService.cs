@@ -92,7 +92,7 @@ public static class ReplayUploadService
     ///
     /// <para>The ordinary limits are tuned for the common case: almost no match is recorded, so
     /// opening files is usually work spent learning nothing. A competitive room inverts that by
-    /// construction — the host confirmed Record Game before the countdown, so a recording SHOULD
+    /// construction — the launcher ticks the lobby's Record Game box for the host, so a recording SHOULD
     /// exist — and there the seconds are worth spending, because what is at stake is somebody's
     /// rating rather than a line in a history nobody reads.</para>
     /// </summary>

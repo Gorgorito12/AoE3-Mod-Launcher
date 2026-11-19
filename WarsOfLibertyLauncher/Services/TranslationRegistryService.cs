@@ -488,6 +488,7 @@ public class TranslationRegistryService
                 throw new InvalidDataException(
                     $"The translation pack is larger than {maxBytes / (1024 * 1024)} MB.");
             hash?.AppendData(buffer, 0, read);
+            await DownloadThrottle.WaitAsync(read, ct);
             await dst.WriteAsync(buffer.AsMemory(0, read), ct);
         }
         return copied;

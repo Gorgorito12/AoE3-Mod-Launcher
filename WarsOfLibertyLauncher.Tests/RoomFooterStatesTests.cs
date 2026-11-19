@@ -17,35 +17,67 @@ public class RoomFooterStatesTests
     };
 
     [Fact]
-    public void ACasualHostAloneCannotStartAndIsToldWhy()
+    public void ACasualHostAloneMarksReadyAndCannotStartYet()
     {
-        var view = RoomFooterState.Evaluate(Casual(1, 0));
+        var view = RoomFooterState.Evaluate(Casual(1, 1));
         Assert.Equal("RoomFtWaiting", view.Title.Key);
-        Assert.Equal(RoomPrimary.Start, view.Primary);
-        Assert.False(view.PrimaryEnabled);
-        Assert.Equal("RoomTipNeedsPlayer", view.PrimaryTipKey);
+        Assert.Equal(RoomPrimary.Ready, view.Primary);
+        Assert.Equal(RoomLink.None, view.Link);
+
+        var ready = RoomFooterState.Evaluate(Casual(1, 0) with { IAmReady = true });
+        Assert.NotEqual(RoomPrimary.Start, ready.Primary);
+        Assert.Equal(RoomLink.None, ready.Link);
     }
 
     [Theory]
     [InlineData(1, "RoomFtOneMissing")]
     [InlineData(2, "RoomFtManyMissing")]
-    public void ACasualHostWaitsForEveryoneElse(int notReady, string sub)
+    public void AReadyCasualHostWaitsForEveryoneElseAndMayStartWithoutWaiting(int notReady, string sub)
     {
-        var view = RoomFooterState.Evaluate(Casual(3, notReady));
+        var view = RoomFooterState.Evaluate(Casual(3, notReady) with { IAmReady = true });
         Assert.Equal("RoomFtCount", view.Title.Key);
         Assert.Equal(sub, view.Sub!.Key);
-        Assert.False(view.PrimaryEnabled);
-        Assert.Equal("RoomTipNeedsReady", view.PrimaryTipKey);
+        Assert.Equal(RoomPrimary.None, view.Primary);
+        Assert.Equal(RoomSecondary.Unready, view.Secondary);
+        Assert.Equal(RoomLink.ForceStart, view.Link);
+    }
+
+    [Fact]
+    public void ACasualHostWhoIsTheOnlyOneNotReadyIsAskedToMarkReady()
+    {
+        // The host counts himself now: the auto-start needs him too, so the footer says so rather
+        // than offering to start "without waiting" for nobody but himself.
+        var view = RoomFooterState.Evaluate(Casual(3, 1));
+        Assert.Equal("RoomFtHostMarkReady", view.Sub!.Key);
+        Assert.Equal(RoomPrimary.Ready, view.Primary);
+        Assert.Equal(RoomLink.None, view.Link);
+
+        var withOthers = RoomFooterState.Evaluate(Casual(3, 2));
+        Assert.Equal(RoomPrimary.Ready, withOthers.Primary);
+        Assert.Equal(RoomLink.ForceStart, withOthers.Link);
     }
 
     [Fact]
     public void ACasualHostStartsWhenAllAreReady()
     {
-        var view = RoomFooterState.Evaluate(Casual(3, 0));
+        // Normally the countdown starts by itself here; Start is the way on after it was cancelled.
+        var view = RoomFooterState.Evaluate(Casual(3, 0) with { IAmReady = true });
         Assert.Equal(RoomDot.Green, view.Dot);
         Assert.Equal(RoomPrimary.Start, view.Primary);
         Assert.True(view.PrimaryEnabled);
         Assert.Null(view.PrimaryTipKey);
+        Assert.Equal(RoomLink.None, view.Link);
+    }
+
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ForcingTheStartIsCasualAndTheHostsOnly()
+    {
+        Assert.Equal(RoomLink.None, RoomFooterState.Evaluate(Casual(3, 2, host: false)).Link);
+        Assert.Equal(RoomLink.None, RoomFooterState.Evaluate(Casual(3, 2) with { Watching = true }).Link);
+        Assert.Equal(RoomLink.None, RoomFooterState.Evaluate(Casual(3, 2) with { Stage = RoomStage.Countdown }).Link);
+        Assert.Equal(RoomLink.None, RoomFooterState.Evaluate(Casual(3, 2) with { Stage = RoomStage.InGame }).Link);
+        Assert.Equal(RoomLink.None, RoomFooterState.Evaluate(OneVOne(host: true) with { IAmReady = true, NotReady = 1 }).Link);
+        Assert.Equal(RoomLink.None, RoomFooterState.Evaluate(Teams(new StartGate.Verdict(StartGate.Reason.Ready)) with { IAmReady = true }).Link);
     }
 
     [Fact]
@@ -153,7 +185,9 @@ public class RoomFooterStatesTests
         var view = RoomFooterState.Evaluate(Casual(3, 2) with { HostLeftName = "Kaiser" });
         Assert.Equal("RoomFtNowHost", view.Title.Key);
         Assert.Equal(new object[] { "Kaiser" }, view.Sub!.Args);
-        Assert.False(view.PrimaryEnabled);
+        // He marks ready like everybody else; the others are not ready yet, so he may also force it.
+        Assert.Equal(RoomPrimary.Ready, view.Primary);
+        Assert.Equal(RoomLink.ForceStart, view.Link);
     }
 
     [Fact]

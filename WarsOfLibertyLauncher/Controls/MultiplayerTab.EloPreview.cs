@@ -175,6 +175,9 @@ public partial class MultiplayerTab
         _mpDeckProfiles.AddRange(EloDemoData.Decks());
         _mpDecksLoaded = true;
         _mpDecksModId = ProfileDeckMod()?.Id;
+        // The sample owns the window: never another player's profile underneath it (and
+        // OpenProfileWindow would otherwise re-point the window and come back here).
+        _profileOther = null;
         _eloPreviewProfile = sample;
         _eloPreviewWantsHistory = history;
         if (history) _profileSection = ProfileSection.History;
@@ -202,6 +205,7 @@ public partial class MultiplayerTab
         _eloPreview = true;
         _demoStats = true;
         ApplyDemoStats();
+        _profileOther = null;
         _eloPreviewProfile = sample;
         _eloPreviewWantsHistory = false;
         _h2hShowsTeam = null;
@@ -331,12 +335,16 @@ public partial class MultiplayerTab
     /// <summary>The player the profile is being drawn for: the sample's while the preview renders
     /// it, otherwise whoever is signed in.</summary>
     private Models.Multiplayer.LobbyUserSummary? PreviewProfileUser()
-        => _renderingPreviewProfile ? _eloPreviewProfile?.User : null;
+        => _renderingPreviewProfile ? _eloPreviewProfile?.User
+         : _renderingOtherProfile ? _profileOther
+         : null;
 
     /// <summary>The id the profile page treats as "me" — whose row is marked, whose ladder place is
     /// looked up, who the usual opponent is the opponent OF.</summary>
     private string? ProfileViewerId
-        => _renderingPreviewProfile ? _eloPreviewProfile?.User.Id : _session?.CurrentUser?.Id;
+        => _renderingPreviewProfile ? _eloPreviewProfile?.User.Id
+         : _renderingOtherProfile ? _profileOther?.Id
+         : _session?.CurrentUser?.Id;
 
     /// <summary>The id the RANKING marks as "you": the sample viewer while the preview owns the
     /// page, otherwise whoever is signed in.</summary>

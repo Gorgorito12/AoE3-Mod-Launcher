@@ -53,6 +53,10 @@ public static class MatchInProgressStore
         /// clock started. Absent from a file an older build wrote, which deserialises to 0 and
         /// leaves the warning exactly where it used to be.</summary>
         public double CountdownSeconds { get; set; }
+
+        /// <summary>The room's sides at Start, for the civilization pairing. Absent from an older
+        /// file: then only names pair, as before.</summary>
+        public Dictionary<string, int>? Sides { get; set; }
         public string ProfileId { get; set; } = "";
         public int GamePid { get; set; } = -1;
         public string? ExePath { get; set; }
@@ -69,7 +73,7 @@ public static class MatchInProgressStore
             IsCompetitive,
             InGameNames,
             Enum.TryParse<RoomFormat>(Format, out var f) ? f : RoomFormat.Casual,
-            CountdownSeconds);
+            CountdownSeconds) { Sides = Sides };
     }
 
     private static readonly JsonSerializerOptions Options = new()
@@ -90,6 +94,7 @@ public static class MatchInProgressStore
         InGameNames = ctx.InGameNames == null ? null : new Dictionary<string, string>(ctx.InGameNames, StringComparer.Ordinal),
         Format = ctx.Format.ToString(),
         CountdownSeconds = ctx.CountdownSeconds,
+        Sides = ctx.Sides == null ? null : new Dictionary<string, int>(ctx.Sides, StringComparer.Ordinal),
         ProfileId = profileId,
         GamePid = gamePid,
         ExePath = exePath,

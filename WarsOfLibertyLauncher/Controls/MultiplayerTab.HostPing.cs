@@ -120,7 +120,8 @@ public partial class MultiplayerTab
 
     /// <summary>How many of the four bars a ping lights: up to 60 ms all four, under 100 three, up
     /// to 150 two, slower one; unmeasured none (the bars stay off beside the dash). The cuts at
-    /// 100 and 150 are the colour's own (<see cref="RoomActionRule.PingBrushKey"/>).</summary>
+    /// 100 and 150 are the colour's own (<see cref="RoomActionRule.PingBrushKey"/>): three and
+    /// four bars are green, two amber, one red.</summary>
     internal static int LitBars(HostPingKind kind, int? ms)
         => kind != HostPingKind.Answered || ms is not int v || v < 0 ? 0 : v <= 60 ? 4 : v < 100 ? 3 : v <= 150 ? 2 : 1;
 

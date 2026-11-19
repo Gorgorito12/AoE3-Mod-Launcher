@@ -462,15 +462,90 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   **Game Rules are chosen in the create-room dialog**, a dropdown (`GameRulesCombo`) with the game's
   eight entries in its order: Standard, Classic, the four treaties, Treaty - No Blockade, King of the
-  Hill (kept in `LauncherConfig.LastRoomGameRules`). Wars of Liberty's string table labels the
-  treaties "Not supported" — its team's word, not the engine's: the stock game hosted 10 min, 40 min
-  and No Blockade (measured), and the dialog says some mods mark them so. They reach only the room's
-  CREATOR as `uhcLanRules=N`
-  (`_currentLobbyGameRules`; a joined or inherited room is Standard and passes nothing). Standard is
-  never passed. The Game Type was dropped on purpose (the maintainer's call): its Deathmatch needs a
+  Hill (kept in `LauncherConfig.LastRoomGameRules`). **Which entries a room may use is one pure rule,
+  `LanAutoStartArgs.RulesOfferedFor(competitive, noTreaty)` (2026-11-18):** a COMPETITIVE room plays
+  Standard only (the dialog shows a fixed "Standard" line instead of the dropdown, like the quick
+  match and tournaments; one ladder, one way to play it), and a mod whose `ModProfile.NoTreatyRules`
+  is set (catalog `install.noTreatyRules`; the WoL built-in sets it — its players report the
+  treaties do not work there) never offers the five treaty entries. Data, never a mod id in the
+  dialog. A saved choice the room may not use falls back to Standard (`EffectiveRules`); the casual
+  choice comes back when the kind goes back to Casual. **The rules are a SERVER fact since
+  2026-11-18 (migration 0033, `lobbies.game_rules`, clamped by `src/lobbies/gameRules.ts`: ranked,
+  tournament and quick-match rooms are 0)**, sent in the create body, echoed in the 201, and read
+  back in `GET /lobbies`, `GET /lobbies/:id`, every `room_state`, the `lobby_created` frame and the
+  Discord embed (a "Rules" field only when not Standard). So every member sees them and a host
+  promoted after the creator left launches with them (a chat line tells him), and a rematch keeps
+  them; quick match stays Standard. `_currentLobbyGameRules` is what this launcher passes as
+  `uhcLanRules=N` when it hosts and `_currentLobbyRulesStated` what the room said, both set only
+  through `SetRoomRules` (pure rule `LanAutoStartArgs.RoomRules`: the server's value, else the
+  creator's own choice against an older server, always through `EffectiveRules`). The chip — room
+  header (dot in the room's mod colour), Rooms row and chat card, second after the mode — shows
+  only when stated and not Standard (`ShowsRulesChip`): an older server's silence is not
+  "Standard". Verified live with the rig. A casual Standard is never passed; **a competitive host passes `uhcLanRules=0`
+  explicitly** (`forceStandard`), because the game's dropdown opens on whatever the host last picked
+  by hand. Known limit: the host can still change it by hand in the game's LAN lobby, and the
+  recording cannot prove which rules were played (`gamestartwithtreaty` reads true in every file). The Game Type was dropped on purpose (the maintainer's call): its Deathmatch needs a
   Deathmatch home city in WoL and in the stock game, and forces its own rules. The joiner's DLL waits
   5 s before its first Connect, then never presses while the game's own 15-s wait runs; the "No game
   was found" message is one dialog that each failure rewrites, never a stack.
+
+  **The first two-PC test did nothing, and the launcher was right both times**: the host's log said
+  `+uhcLanHost` and the guest's `uhcLanJoin="<host's 26.x>"`, but both WoL installs carried WoL's own
+  `uhc.dll`, which ignores them. `LaunchActiveModGame` now logs which cfg of the install enables the
+  key, or that none does (`LanAutoStartArgs.CfgEnablingLanAutoStart`), so the next bundle answers it.
+  To test before WoL ships things-new's DLL, `dinput8.dll` + `engine-ext\engine-ext.cfg` (`lanAutoStart`)
+  go next to WoL's `age3y.exe`; that needed two fixes for WoL's DLL (it hooks the Host button and
+  replaces the LAN dialog's vtable), see things-new `how-it-works.md`.
+
+  **THE LAN HELPER: the launcher can install that pair itself, ONLY with the player's consent —
+  `Services/Multiplayer/LanHelperService`, `Controls/MultiplayerTab.LanHelper.cs`.** The DLL is
+  embedded (`Assets/LanHelper/dinput8.dll`, manifest resource, SHA pinned in `CurrentSha256`; its
+  README says how to replace it) and works with the UHC-loader exes AND the stock `age3y.exe`
+  (hooked at its entry point), so it covers the base game too. `LauncherConfig.LanHelperChoice` is
+  nullable: null asks ONCE on entering a room (never at launch, where a question would sit over a
+  game that is opening), true installs silently for each room's game, false never asks again.
+  Settings → Games → "Enter the LAN room by itself" is the same choice; switching it off removes
+  the helper from every folder in `LanHelperFolders`. **This is the one place the launcher writes
+  into the player's own Age of Empires III, and the refusals are what make that acceptable**
+  (`LanHelperServiceTests`): only a known game build (PE stamp 49EF86ACh, stock or loader entry
+  point), never over another tool's `dinput8.dll`, never when the mod already ships the key
+  (`EnabledByMod` — the future WoL patch), and removal deletes the DLL only when its hash is one the
+  launcher shipped and only its own two cfg lines. **A protected folder or a failed copy opens
+  `LanHelperSetupDialog`** (2026-11-16, replacing a notice that left the player nothing to do): its
+  primary is the launcher doing it, a plain copy or ONE administrator copy through
+  `Services/Multiplayer/LanHelperElevated` (`--install-lan-helper "<exe>"` / `--remove-lan-helper
+  "<folder>"`, dispatched first in `App.OnStartup` beside `PrivateKeyHelper`, path validated as
+  hostile, no restart), and its card is the player doing it: save the two files
+  (`LanHelperService.ExportTo`, `<Desktop>\AoE3 LAN helper\`, cfg with our marker so a hand copy
+  reads as ours), the exact folder with Copy/Open, and Check. Switching it off in Settings removes
+  a protected folder's copy the same way. **The room says it, and can switch it off
+  (2026-11-18)**: a card above PLAYERS (`RoomLanCard`, rule `Services/Multiplayer/RoomLanEntryView`)
+  — green with a switch when the game enters by itself, neutral when switched off, amber with "Set
+  up" (opens the window) or "Why?" when it cannot — replacing the header chip, which was easy to
+  miss and had no way to turn it off. The switch is `LauncherConfig.LanAutoEntry` (remembered across
+  rooms, enabled only in the Lobby phase): off, the launch carries NO `uhcLan*` argument
+  (`LanAutoStartArgs.For(enabled: false)`) and no file is copied or removed, so it also turns off a
+  mod that ships the key itself; entering a room then neither asks about nor installs the helper,
+  and setting it up from the card turns the switch back on. Plus a word on every roster row
+  ("enters by itself / by hand") from `set_lan_auto`, which each launcher sends about ITSELF
+  (by hand while the switch is off); the server stores `lanAuto` on the member, puts it in `room_state` and broadcasts
+  `member_lan_auto` (`src/lobbies/lanAuto.ts`). An older server or launcher leaves it unknown,
+  which shows NO word, never "by hand". **When the mod catches up, the mod wins, every way it can:** a Startup cfg turning
+  the key on while our DLL is there is `SupersededByMod`, and entering a room removes ours
+  whatever the choice says (both would host or join); a `dinput8.dll` the patch put over ours
+  (any other hash, newer or older) is `EnabledByMod` and neither it nor the cfg it runs with is
+  touched, switching off included; an engine-ext cfg without our marker is the patch's even when
+  its DLL is byte-identical to ours. Our own newer builds are recognised through `KnownSha256`
+  (add the old hash there when the embedded DLL changes) and reinstalled as `Outdated`. It adds files and replaces none, so Verify/Repair and the fingerprint are untouched.
+  `--preview-dialog=lanhelper[:tad]` shows the question, `lanhelper:manual|manual-admin|manual-ok`
+  the setup window (painted from a state, touching no folder). **"Uninstall from this PC" removes
+  it too (2026-11-18)**, through the same `LanHelperService.RemoveEverywhereAsync` the Settings
+  switch uses: writable folders directly, every protected one in ONE administrator prompt
+  (`--remove-lan-helper` takes 1-16 folders, refused whole if any fails its check), then the disk
+  is read again (`HasOurDll`) rather than the exit code. It runs after the leftover keys and before
+  the exit, because the folder list lives in the config the uninstall may delete; a folder still
+  holding it is named and the player decides ("Uninstall anyway"). The window lists it as "the LAN
+  helper's two files, from N game folders".
 
   **Record Game is ticked WITHOUT the DLL, for every mod: the lobby's box is the host's game setting
   `gamerecordgame`, which the game restores from the profile's `MultiplayerGameSettings` block** when it
@@ -652,16 +727,29 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Six methods used to set Start, Ready, Rejoin and Leave. `MultiplayerTab.RoomView.cs` builds the
   `RoomFacts`, asks `Evaluate` and paints; `RefreshRoomView` runs at the end of `RenderRoomPanel`,
   `RenderRoomMembers`, `ApplyMatchPhaseUi` and `RenderStartButtonGate`. A button state written
-  anywhere else is overwritten on the next frame. **Two behaviours changed with it, and they are
-  the design's, not a side effect:** a casual host cannot Start until everyone else is ready (Start
-  was always open, and the server still does not require it), and in a competitive room the host
-  marks ready like anybody else: Start only comes back with everyone ready and the gate open,
-  because `MaybeAutoStartOnAllReady` fires once and a cancelled Record Game confirmation would leave
-  nothing to press. **A casual room of 4 or 6 is one list**: `RoomShowsTeams` (competitive) draws
+  anywhere else is overwritten on the next frame. **The host marks ready like anybody else, in
+  every room (2026-11-16; casual hosts used to start by hand only, so the automatic start never
+  fired there).** A full room with everyone ready starts the 5-s countdown by itself
+  (`Services/Multiplayer/AutoStartRule`), which anyone may cancel; it needs a ready change NEWER
+  than the last start (`_readyEpoch` / `_autoStartSpentEpoch`), because the server keeps everyone
+  ready through a cancel and a finished match and the next `room_state` would otherwise start again
+  at once. A room that is not full does not start itself (the 3-of-6 lesson); its footer says the
+  host starts it. Start comes back whenever everyone is ready and the room is still there. **In a
+  casual room the host may also "Start without waiting"** (`RoomFooterView.Link`, the quiet link
+  under the footer's line, asked first naming who is not ready, `ForceStartAsync`); never in a
+  competitive room, where somebody not ready may not be at his PC and the match counts. The server
+  never checked ready on `start_game`, so this is launcher-side only. An older launcher's casual
+  host never marks ready: newer guests see him "not ready" and he still starts by hand. **A casual room of 4 or 6 is one list**: `RoomShowsTeams` (competitive) draws
   the sides, `RoomHasTeams` (the server's rule, for the gate) does not change. Teams stack in one
   column now, so `TeamRoomLeftColumnWidth` is gone and the column is `clamp(300, 34 %, 440)` in
-  `LobbyWindow.ApplyRoomGeometry`. The roster's ping moved to the detail line's tooltip; a lost peer
-  still says so in words, and no Radmin address is the state "Esperando VPN".
+  `LobbyWindow.ApplyRoomGeometry`. **Each row shows the viewer's ping to that player under his state
+  word** (`Controls/MultiplayerTab.PeerPing.cs`, rule `Services/Multiplayer/PeerPingView`): the Rooms
+  page's four bars, cuts and colours, from the 2.5-s `KickPeerPings`; one lost probe keeps the last
+  figure, two show "—" with a tooltip saying Windows or Radmin often block the echo; never on the
+  viewer's own row or without a Radmin address ("Esperando VPN" says that). Under the word, not
+  beside it, so a 300-px column gives the name nothing. The readings survive a `room_state` (kept by
+  address) and the cells repaint in place. The viewer's own internet latency is in the PLAYERS
+  header (`RoomMyPingText`). A lost peer still says so in words.
   **`InGameOverlay` lives in a collapsed holder with the other old fields**, because
   `RefreshInGamePanel` still does the network work every second; the peer rows are built only when
   they can be seen. The result is the window itself (`_roomResult`): header, ELO card, RESULTADO,
@@ -718,8 +806,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   (`TournamentPage.Call`), and three tabs built together and toggled by visibility: Bracket,
   Participants, Organise. Four rules carry weight:
   (1) **The bracket is arithmetic, never a measure** (`TournamentPage.Sheet`): a card sits midway
-  between the two that feed it, so a 64 draw is 63 placements and the zoom (60-100 %) is one
-  `ScaleTransform` — `ZoomingRebuildsNoCard` and the 64-draw tests pin that it rebuilds nothing. The
+  between the two that feed it, so a 64 draw is 63 placements and the zoom is one
+  `ScaleTransform` — `ZoomingRebuildsNoCard` and the 64-draw tests pin that it rebuilds nothing.
+  **The zoom fits itself (2026-11-18, `Services/Multiplayer/BracketZoom`)**: until the player
+  touches it, a tournament opens at the fit of its sheet to the panel, between 100 and 150 % (a big
+  draw still opens at 100 % and scrolls; a 4-player draw no longer sits tiny in a corner), applied
+  from the scroller's `SizeChanged` (a star cell: no loop). By hand it goes 60-200 % (−/+ by 20,
+  Ctrl+wheel by 10 around the pointer, "Fit" = the whole sheet), kept per tournament for the
+  session. A sheet smaller than the panel is centred and the round strip follows it
+  (`AlignBracketHeads`); away from 100 % the sheet's text leaves the pixel grid, as `UiScale` does. The
   column heads follow the zoom but their type does not, so at 60 % the count keeps its number alone
   and trims short of the next head.
   (2) **Going back to the tab rebuilds nothing when nothing changed** (`RenderTournamentsTab(onlyIfChanged)`,
@@ -759,14 +854,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   adds it to the detail and the entry by itself; `TournamentPage.Listed(list, open)` keeps a private
   tournament opened by code on the list until its player is in it. The code card is in Organise.
   Pinned by the server's `privacy.test.ts` (the refusals are the point) and `PrivateTournamentTests`.
-  **Not done:** changing a tournament's visibility after creating it, and renewing a leaked code. `POST /tournaments/:id/delete` is the
+  Changing the visibility after creating it and renewing a leaked code: see the SEE MATCH bullet (2026-11-18). `POST /tournaments/:id/delete` is the
   owner's, refused for a live one and for one with a game (`has_games`, a game decided OR merely
   reported from one of its rooms). `TournamentPermissions.CanDelete` needs `HasGames == false`, so a
   server that does not send it offers no Delete. Delete is the red primary of the ended card, the
   secondary beside "Open registration" on a draft, and a button in Organise's danger zone; it asks
   first and then opens the first tournament left. The list row of a cancelled/abandoned one says so
   (it read "· 1v1"), and requests are counted on a row only while registration is open.
-  (5c) **COLOUR IS STATE, NOT MOD (design 106, `docs/design_14nov`, 2026-11-14).** The mod's colour
+  (5c) **COLOUR IS STATE, NOT MOD (design 106, `docs/design_14nov`, 2026-11-14).** **Amended
+  2026-11-18 (the maintainer's call): the mod's colour also dresses the page's CHROME** —
+  `Services/Multiplayer/TournamentAmbient`, from the tournament's own accent (`AccentOfTournament`,
+  so "use the mod's colour" off gives launcher blue): the active tab and filter (its selection
+  fill and rim), the mod chip, the panels' rims lit from the top (list pane, action card, content
+  card), the bracket's lines and the round strip's rule, a rim on the cards of your way through the
+  draw, the zoom box, a blurred glow sibling under the primary button, and a radial light over the
+  cover (`TournamentAccentGlow`; none with solid glass or reduced effects). A STATE never takes it:
+  what follows still holds for every state piece. The mod's colour
   stays on what is the viewer's: the selected list row, his match (cell, versus card, disc, "YOU",
   his path) and the primary button. Everything else uses `Services/Multiplayer/StateColors` (the
   Rooms page's green/blue/amber/red, the one gold, a neutral grey): a tournament's state is
@@ -809,7 +912,11 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   176, each fixed width carrying its 16-px gap. Cells: host photo 30 and his badge (kept over 104a,
   the maintainer's call of 2026-11-10); "1/2" over a dot per seat, at most `MaxSeatDots` (8), still
   clickable for the peek; FOUR signal bars (`LitBars`: up to 60 ms four, under 100 three, up to 150
-  two, slower one). The "in a match" chip is blue and its dot breathes through `AttachChipPulse`,
+  two, slower one). **The ping's colour is a traffic light that says what the bars say
+  (2026-11-16): 3-4 bars green, 2 amber, 1 red** (`RoomActionRule.PingBrushKey`, `RmPingGood` /
+  `RmPingSlow` / `RmPingBad`). It was green / white / amber, so two bars read as nothing and the
+  worst reading as a mild warning; `THE_ONE_THAT_MATTERS_ThePingsColourSaysWhatItsBarsSay` holds the
+  two rules together, for the Rooms page, "Your connection" and the room window's rows alike. The "in a match" chip is blue and its dot breathes through `AttachChipPulse`,
   whose clocks start on Loaded and are STOPPED through their controller on Unloaded and whenever
   `RankBadge.MayRunOn` says no. Join is `RmJoinBg` green, "Ver sala" the one solid blue, and Full an
   amber plate that is a `Border`, not a button. **The coloured shadow under each row and the glow under
@@ -913,6 +1020,67 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   stays. Verified live against a local server: an answering host, a silent one, a password room and
   a host without Radmin.
 
+- **THE GLOBAL CHAT'S "X OPENED A ROOM" CARD FOLLOWS ITS ROOM (2026-11-18,
+  `Controls/MultiplayerTab.RoomEvents.cs`, rule `Services/Multiplayer/RoomEventCard`).** It used to
+  be drawn once from `lobby_created` and offer Join for ever, full or gone. Now each card is kept
+  by lobby id and repainted (only when its key changes) whenever a rooms list is stored
+  (`RefreshRoomEventCards`, after `_lastBrowserList`): in the list it reads the Rooms page's own
+  `RoomActionRule` and `RoomChipsOf` (Join / Full plate / See match / View room / Install mod /
+  Check my copy); missing from a list ASKED after the announcement (`_roomsListAskedUtc`) it says
+  Closed; before any newer list it is the announcement as a room with its host inside
+  (`FromAnnouncement`). Layout: the mod's icon, "X opened a room" and the time; the room's name
+  and its seats; up to two chips and the action. Join still goes through `JoinByLobbyIdAsync`
+  (fresh lookup). `--demo-rooms=86a` adds two sample cards (open, full). **Seen live with the
+  two-account rig (2026-11-18): Join → Full the moment the guest entered → See match at the
+  countdown → Closed once the match was stored.** A card counts as content for the "no messages
+  yet" line (`UpdateGlobalChatEmptyHint` after adding it; the rig caught the line sitting under one).
+
+- **ANOTHER PLAYER'S PROFILE, AND "SHOW MY ELO" (2026-11-18).** The profile window draws a
+  SUBJECT: `Controls/MultiplayerTab.OtherProfile.cs` swaps his standing and history (from
+  `Services/Multiplayer/ProfileCache`, 12 players, 60 s, 10 s after a failure, made stale by a
+  `matches_changed` naming him) into the fields the page reads for ONE synchronous render and puts
+  them back in a `finally` — the sample profile's seam. **The viewer's own cached standing is never
+  touched** (`OtherProfileTests.THE_ONE_THAT_MATTERS_…`); the account chip and the roster read it.
+  His page has no Decks (local files), no badge selector and no refund notice, speaks in the third
+  person (`*Them` / `*Other` keys), adds "You vs him" (`VersusView`: "never played" only when his
+  50-match history page was not full) and has "‹ My profile". Entry points through ONE helper,
+  `AttachProfileLink` (rule `ProfileLinkRule`; never on a Button, never signed out or on sample
+  data): ranking rows, podium, placement tiles, the players panel's photo and name, the Rooms row's
+  host, the room roster's photos, a History card's players (never the page's own subject), and a
+  Highlights row about ONE player. **Every name of a match row** (Latest matches, Matches, the
+  Rooms community card) opens his profile too: the row is built static, so each name's `Run`
+  carries its `MatchParticipantLine` in `Tag` and `LinkPlayerNames` wires them (an underline under
+  the pointer, no tooltip — a Run's tooltip would cover the cut line's reveal). A tournament
+  entrant's `⋯` menu starts with "View profile" (each member's, for a team), real tournaments only.
+  Pinned in `OtherProfileTests`. The window is re-pointed, never a second one; closing it forgets
+  the subject; the account block always opens the viewer's own.
+  **A rating can be PRIVATE (server migration 0034, `users.rating_private`, read through the
+  in-memory set `src/elo/ratingPrivacy.ts`).** Off, the player LEAVES the public table
+  (`LADDER_WHERE` excludes him, `ladderRanks` omits him — absent, never 0, which would be the lowest
+  badge), every redactor in `placementPrivacy.ts` hides his number from everybody else
+  (`ratingHiddenFrom` answers for him first), his standing loses peak, low and place for others,
+  odds say `hidden_reason: 'private'`, the matchmaker sends no number, and the highlights leave out
+  his climbs and any upset he is in. His record, streaks and history stay public; he still sees his
+  own; matchmaking and seeding still use it. `POST /me/rating-visibility { show_rating }` (3/min,
+  20/day: it re-ranks everybody) writes the column, updates the set and drops the stats memos. The
+  launcher shows the Settings row only when his standing carried `rating_private` (an older server
+  could not store it), "Hidden" with a tooltip wherever another player's number would be
+  (`RatingDisplay.IsPrivateRating`: a PLACED player with no number; never confused with placement),
+  and a card on Ranking saying why he is not on the table.
+
+- **THE TWO-ACCOUNT RIG (2026-11-18, `tools/testbed`, README "Two accounts").** A local server on a
+  portable Node 20, two or three harness launchers each signed in as its own test account
+  (`scripts/dev-token.ts`, refused unless `DEV_AUTH_BYPASS=true`), and a simulated game
+  (`Services/HarnessFakeGame`, reachable only after `HarnessMode` blocked the launch) that lasts
+  190 s and leaves a REAL recording, so everything after the game runs the production code.
+  `HarnessMode.LobbyUrl` (`AOE3ML_LOBBY_URL`: loopback http only, never stored) points the launcher
+  at it. `scenario_two_accounts.py` plays two matches and checks each step from the logs, UI
+  Automation and `admin match:show`. Its first run found two real bugs: the community block's
+  layout loop on every launcher (see `RoomsActivityLayout.Settle` in CLAUDE.md) and the room's
+  result screen printing the server's raw `unrated_reason` code (`UnratedSentence` now goes
+  through `MatchOutcomeView.UnratedNoteKey`). What it cannot prove — the LAN entry between two
+  machines — is the README's manual checklist.
+
 - **THE STATISTICS PAGE IS DESIGN 109 (`docs/design_14nov`, 2026-11-14): the same content, no
   holes.** One column (`StatsLeftColumn`; the fixed right column and `StatsRightColumn` are gone):
   ACTIVITY as a full-width strip (`BuildActivityStrip`: the total and its 30 days, three figures in
@@ -976,9 +1144,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   of padding): `RankingTableLayout.SidePadding` is that sum, and `SyncRankingScrollGutter` takes the
   bar's width off the headings. `THE_ONE_THAT_MATTERS_TheHeadingsUseTheRowsColumns` checks every
   column of every row while the list scrolls.
-  (5) **Only the viewer's own row, podium card and "Your position" open a profile** (`OpenOwnProfileFromRanking`,
-  the sample profile while the preview owns the page). There is no page for another player, so their
-  rows are not clickable; a hand cursor there would promise something that does not happen.
+  (5) **⚠ SUPERSEDED 2026-11-18: every row, podium card and placement tile opens THAT player's
+  profile** (`LinkRankingPlayer`; see the ANOTHER PLAYER'S PROFILE bullet). The viewer's own still
+  goes through `OpenOwnProfileFromRanking` (the sample profile while the preview owns the page);
+  under the preview another player's opens nothing.
   (6) **Going back to the subtab draws nothing when nothing moved** (`RenderRankingIfChanged`, used by
   the session pass only). The key holds the payload by CONTENT (`ActivityPaintKey.Content`: its JSON
   without `generated_at` and `rd`, cached per payload object), the standing and the month's highlights
@@ -1107,6 +1276,28 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `ShowSubtabViewIsTheOnlyWriterOfTheGate` counts the assignments, because the defect was
   three of them all sitting on the Rooms render path.
 
+- **"SEE MATCH" IS A REAL READ-ONLY WINDOW NOW (2026-11-18) — this SUPERSEDES the preview-only
+  paragraph below where they disagree.** The server answers `GET /lobbies/:id/live`
+  (`src/lobbies/live.ts`: room facts, members from the database with ratings through
+  `publicRatingsFor`, the stored result for 24 h; never chat, password, address or in-game name; a
+  private tournament's room is a 404 to a stranger, decided before the 3-s memo) and says
+  `live_view: true` in both lists. The launcher's `MatchWatchWindow` has a LIVE mode
+  (`MatchWatchWindow.Live.cs`, model `Services/Multiplayer/MatchWatchView`): Loading / Waiting /
+  Playing / Result / Gone, asked every 10 s only while visible and not minimised, never again once
+  a result or a gone room is on screen; the state chip uses `StateColors`. Doors: the Rooms row's
+  "See match" (`_roomsLiveView`, else the players peek as before) and a real tournament's
+  Supervise for its owner and co-organisers, which also reads `GET /lobbies/:id/live/chat` (404 to
+  anybody else; room chat stays members-only otherwise), and offers **"Decide this match"** to
+  whoever `TournamentPermissions.CanAwardMatch` allows, behind the bracket's own confirmation
+  (`ConfirmAwardAsync`), until a result or a gone room is on screen (`MatchWatchWindow.DecideOffered`). None of the four doors below opens:
+  watching is a read, never a join. Pinned by the backend's `live.test.ts` and `MatchWatchViewTests`.
+  **Tournament visibility and code after creation** (owner only; the visibility before the draw):
+  `POST /tournaments/:id/visibility`, `POST /tournaments/:id/invite-code`, flag
+  `visibility_editable`; Organise gains a Visibility tile and "Renew code", both asking first
+  (`TournamentPermissions.CanChangeVisibility/CanRenewCode`). **Places offered follow
+  `MAX_ACTIVE_GAMES`** (`offeredCapacity`), and a full server answers `server_full`, worded by the
+  launcher (`CreateLobbyDialog.ServerFullText`). **The bracket can be dragged** (`BracketPan`: 5 px
+  before a press becomes a drag, so a short press still picks the card).
 - **`MatchCardState.SuperviseRoom` is a PREVIEW and is offered only under the fabricated
   tournaments.** It is what a tournament's owner or co-organiser sees on a match being played by
   other people: the "being played" line they already got, plus a way to look inside. It exists
@@ -2021,6 +2212,12 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   multiplayer. **Second thing that test settled, in the other direction: the game PRESERVES
   our written value** across a launch/exit cycle, so the launcher's write is stable and is not
   fought.
+
+  **⚠ SUPERSEDED IN PART (2026-11-16): the confirmation is no longer asked every match.** The
+  launcher ticks the lobby's box (`gamerecordgame`, see the LAN bullet), so `RecordGameNotice`
+  asks only when that write failed or the last competitive match of the mod left no recording, with
+  "don't remind me for 7 days" (`LauncherConfig.RecordNoticeSnoozedUntilUtc`, cleared by the next
+  unrecorded match). The rest of this paragraph is the history.
 
   **The competitive confirmation is a NUDGE, not a guarantee — and it now escalates on
   evidence.** `ConfirmRecordGameAsync` is a dialog in the LAUNCHER: it ticks nothing inside AoE3
@@ -5627,12 +5824,17 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `renderKey` (the value cannot change while the room lives) but it **is** read back in
   `rehydrate`, or the first edit after a restart drops it.
   **Three protections ride on the flag, and each is shaped the way it is for a reason.**
-  (a) **Record Game is confirmed before EVERY competitive start**, from `BeginHostStart` — the
-  choke point both the button and `MaybeAutoStartOnAllReady` pass through, because gating only
-  the button would let the commoner path skip it. Every match, not once per room: AoE3's box
-  comes up unticked every time and the launcher cannot tick it, so "they were told once" is
-  worth nothing by the third game.
-  (b) **`RoomMatchState.HoldLeave` shuts the Leave button** — for BOTH players in a competitive
+  (a) **Record Game is ticked for the host, and asked about only when needed**, from
+  `BeginHostStart` — the choke point both the button and `MaybeAutoStartOnAllReady` pass through.
+  It used to be asked every match ("the launcher cannot tick it"); since `EnsureLobbyRecordGame`
+  it can, so `RecordGameNotice` asks only when the write failed or the last match was unrecorded.
+  (b) **⚠ The hold no longer keeps the WINDOW (2026-11-16):** Leave and ✕ hide the room window at
+  once and the launcher stays a member behind it until `RoomMatchState.FinishDetachedLeave` says
+  it may go — the host when his chain is done, the guest when his result arrives, both at the
+  30-s ceiling (`Controls/MultiplayerTab.DetachedLeave.cs`, `DetachedLeaveTests`). The result then
+  arrives as the no-window card; "View room" brings the window back and cancels the leave; a join
+  is still refused for those seconds. What follows is why the membership must be kept.
+  **`RoomMatchState.HoldLeave` shuts the Leave button** — for BOTH players in a competitive
   room now, from the moment the game closes until the result is settled, capped at
   `ResultGraceSeconds` (30). It used to be host-only, on the reasoning written into its own
   comment: *"a guest leaving costs nothing"*. That is true about CORRECTNESS and is exactly where
@@ -7939,6 +8141,24 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   Pinned by the partial cases in `MatchSlotMapTests` and by `InGameNamePublishingTests`, which
   asserts the ORDERING and the tick in source because both are facts about where a call sits
   inside a method that needs a live session, a socket and a window to run at all.
+  **Fault 3 (2026-11-18) — a stored 1v1 showed the loser's civilization and not the winner's**
+  ("ILLIT beat [flag] Jane"). The rival's name is the one most often missing, so the guest's
+  reading (the only one that usually carries civs) named its own slot only. Four fixes, none of
+  which touches a result: (a) **`MatchSlotMap.ResolveForBadges`** pairs the ONE unmatched roster
+  account with the ONE unmatched human slot when the roster equals the recording's humans in
+  count (one name decides a 1v1), and inside each SIDE of a team game when the room's frozen sides
+  (`MatchContext.Sides`, from `_countdownTeams`, persisted in `MatchInProgressStore`) anchor to the
+  recording's teams without doubt; two unknowns in one side are never guessed, duplicates refuse
+  everything. All three sites go through one helper, `ResolveBadgeSlots`, which also fills gaps from
+  names the room learned after the freeze. (b) **The host sends its civilizations alone**
+  (`TrySendCivsOnlyAsync` → backend `POST /matches/civs`: no result, no seed, no reading stored,
+  gaps only; 404 from an older server changes nothing) — it may still not CONFIRM its own report.
+  (c) `_civSlotsOnWire` counts slots, so a map naming only us no longer counts as "sent".
+  (d) Backend: a founded match takes every stored reading's civs (`civsFromReadings`, founder
+  first), a late report on a founded match fills gaps, a re-sent reading without civs keeps the
+  earlier map (`COALESCE`), and `admin.ts match:backfill-civs` fills old matches from readings
+  that were stored but never applied. A match no launcher ever sent the civ for cannot be
+  recovered. Reverse engineering adds nothing here: every slot's civ is already read.
 
 - **The civilization travels in the CONFIRMATION too, and the server fills gaps with it.**
   It used to travel only in the host's first-pass report (`TryReportMatchAsync`, from the

@@ -646,6 +646,17 @@ public class ModProfile
     public bool SupersedeCompiledXml { get; set; }
 
     /// <summary>
+    /// The mod does not support the game's treaty rules, so the create-room dialog leaves them
+    /// out. Default false: the stock engine hosts every treaty entry (measured), and most mods
+    /// keep that.
+    ///
+    /// <para>It is data rather than a mod id in the dialog because adding a mod is never a code
+    /// change. Wars of Liberty's own string table labels the treaties "Not supported", and its
+    /// players report they do not work there.</para>
+    /// </summary>
+    public bool NoTreatyRules { get; set; }
+
+    /// <summary>
     /// Install-relative files of the AoE3 CLONE that the mod's own patch chain deletes. A payload
     /// built AFTER those patches never runs them, so without this the clone's copies survive —
     /// for Wars of Liberty that is the base game's compiled <c>proto/techtree/stringtable*.xml.XMB</c>,

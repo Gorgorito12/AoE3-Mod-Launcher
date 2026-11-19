@@ -117,6 +117,15 @@ public partial class App : System.Windows.Application
             Shutdown(helperExitCode);
             return;
         }
+        // The same, for the LAN helper's copy into a game folder this account cannot write.
+        if (Services.Multiplayer.LanHelperElevated.IsInvocation(e.Args))
+        {
+            Services.DiagnosticLog.DisableForHelperProcess();
+            var helperExitCode = Services.Multiplayer.LanHelperElevated.Run(e.Args);
+            Environment.ExitCode = helperExitCode;
+            Shutdown(helperExitCode);
+            return;
+        }
 
         base.OnStartup(e);
 
@@ -190,8 +199,9 @@ public partial class App : System.Windows.Application
         FromUpdate = fromUpdate;
         // An elevated relaunch that exists to apply a MOD update. It carries one job and the
         // argument IS the job, so the startup auto-update must not restart out from under it.
-        bool updateNow = Array.Exists(e.Args, a =>
-            string.Equals(a, "--update-now", StringComparison.OrdinalIgnoreCase));
+        // Any form: with an install context attached (--update-now=fresh|copy) an exact match
+        // would miss it, and the startup self-update would restart out from under the job.
+        bool updateNow = Services.UpdateNowArg.IsPresent(e.Args);
         bool primary;
         try { _instanceMutex = new Mutex(initiallyOwned: true, MutexName, out primary); }
         catch (Exception ex)

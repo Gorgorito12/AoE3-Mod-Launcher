@@ -738,6 +738,7 @@ public static class RadminVpnService
                 {
                     await fs.WriteAsync(buf.AsMemory(0, read), ct);
                     downloaded += read;
+                    await DownloadThrottle.WaitAsync(read, ct);
                     if (total > 0 && progress != null)
                     {
                         // Reserve the last 10% for the installer phase

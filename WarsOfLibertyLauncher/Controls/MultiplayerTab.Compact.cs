@@ -333,22 +333,24 @@ public partial class MultiplayerTab
         if (ActivityBlock == null || ActivityHost.Visibility != Visibility.Visible) return;
         var block = ActivityBlock.ActualHeight;
         if (!(block > 0)) return;
+        // Each through Settle: these are measured from the layout they decide, so a value that
+        // moved only with rounding would answer itself pass after pass (see Settle).
         if (ActivityMode is RoomsActivityMode.Folded or RoomsActivityMode.Overlay)
         {
-            _activityFoldedHeight = block;
+            _activityFoldedHeight = RoomsActivityLayout.Settle(_activityFoldedHeight, block);
         }
         else if (ActivityMode == RoomsActivityMode.Fixed
                  && ReferenceEquals(ActivityStrip.Parent, ActivityBlockGrid)
                  && ActivityStrip.ActualHeight > 0)
         {
-            _activityExpandedChrome = block - ActivityStrip.ActualHeight;
+            _activityExpandedChrome = RoomsActivityLayout.Settle(_activityExpandedChrome, block - ActivityStrip.ActualHeight);
         }
         // The cards' minimum wherever they are drawn — in the block or laid over the list.
         if (ActivityMode is RoomsActivityMode.Fixed or RoomsActivityMode.Overlay
             && ActivityStrip.Visibility == Visibility.Visible
             && MeasureMinCards() is double min)
         {
-            _activityMinCards = min;
+            _activityMinCards = RoomsActivityLayout.Settle(_activityMinCards, min);
         }
     }
 
@@ -388,7 +390,39 @@ public partial class MultiplayerTab
             var rows = first.Sum(c => c.DesiredSize.Height);
             if (rows > 0) Need(strip - ActivityRecentList.ActualHeight + rows);
         }
+
+        // And the empty ladder's sentence whole: it says what it takes to enter, and the cards
+        // used to be sized for one match row and cut it at its third line.
+        if (Shown(ActivityMiddleCard) && Shown(ActivityRankingCard) && Shown(ActivityRankingEmpty)
+            && ActivityRankingEmpty.Parent is FrameworkElement { ActualHeight: > 0 } emptyRow
+            && NaturalTextHeight(ActivityRankingEmpty) is double sentence)
+        {
+            Need(strip - emptyRow.ActualHeight + sentence);
+        }
         return min;
+    }
+
+    /// <summary>
+    /// A wrapping block's whole height at its current width, measured on a detached copy: measuring
+    /// the block itself with another constraint would change its DesiredSize, invalidate its parent
+    /// and cost a layout pass every time this runs.
+    /// </summary>
+    private static double? NaturalTextHeight(TextBlock text)
+    {
+        if (!(text.ActualWidth > 0) || string.IsNullOrEmpty(text.Text)) return null;
+        var copy = new TextBlock
+        {
+            Text = text.Text,
+            FontFamily = text.FontFamily,
+            FontSize = text.FontSize,
+            FontWeight = text.FontWeight,
+            TextWrapping = text.TextWrapping,
+            LineHeight = text.LineHeight,
+            LineStackingStrategy = text.LineStackingStrategy,
+        };
+        TextOptions.SetTextFormattingMode(copy, TextOptions.GetTextFormattingMode(text));
+        copy.Measure(new Size(text.ActualWidth, double.PositiveInfinity));
+        return copy.DesiredSize.Height + text.Margin.Top + text.Margin.Bottom;
     }
 
     /// <summary>The block's three sizes: measured where they have been, the design's until then.</summary>

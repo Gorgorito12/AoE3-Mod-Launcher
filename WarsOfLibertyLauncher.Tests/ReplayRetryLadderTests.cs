@@ -108,7 +108,7 @@ public class ReplayRetryLadderTests
             "the report may wait a moment for the recording, not a coffee break");
 
     /// <summary>
-    /// Competitive waits longer overall, and must. The host has just confirmed Record Game, so
+    /// Competitive waits longer overall, and must. The launcher ticked Record Game for the host, so
     /// a recording almost certainly exists — the ratio the casual ladder is tuned against is
     /// inverted by construction in that room.
     /// </summary>

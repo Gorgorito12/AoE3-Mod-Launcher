@@ -206,6 +206,96 @@ public static class MatchSlotMap
         return bySlot;
     }
 
+    /// <summary>
+    /// <see cref="ResolvePartial"/>, plus the one pairing the names leave FORCED: the last player
+    /// of the roster and the last human slot of the recording.
+    ///
+    /// <para><b>Why.</b> A civilization reaches an account only through that player's published
+    /// in-game name, and the rival's name is the one most often missing (it arrives over the room
+    /// socket, late or never). So the loser's launcher used to send its own civilization and not
+    /// the winner's, and a stored 1v1 read "ILLIT beat [flag] Jane". In a 1v1 one name — your own,
+    /// which is always known — decides both slots.</para>
+    ///
+    /// <para><b>Only where nothing else is possible.</b> The roster must be the recording's humans
+    /// exactly (same count), every name-matched account must be in the roster and on its own slot,
+    /// and exactly ONE account and ONE slot may be left. In a team game the same rule runs inside
+    /// each SIDE (<paramref name="sides"/>, the room's frozen teams against the recording's) when
+    /// the sides can be anchored without doubt. Two unknowns in one side are never guessed.
+    /// Duplicate names still refuse everything.</para>
+    ///
+    /// <para>For civilizations and home cities ONLY, like <see cref="ResolvePartial"/>: results and
+    /// team sides keep the strict <see cref="Resolve(IReadOnlyList{ReplayParserService.ReplayPlayer}, IReadOnlyDictionary{string, string})"/>.</para>
+    /// </summary>
+    /// <param name="participants">The accounts that played (the room frozen at Start).</param>
+    /// <param name="sides">Account to the room's side (1 or 2), or null when the room had none.</param>
+    public static IReadOnlyDictionary<string, ReplayParserService.ReplayPlayer> ResolveForBadges(
+        IReadOnlyList<ReplayParserService.ReplayPlayer>? players,
+        IReadOnlyDictionary<string, string>? inGameNames,
+        IReadOnlyList<string>? participants,
+        IReadOnlyDictionary<string, int>? sides,
+        out string note)
+    {
+        var named = ResolvePartial(players, inGameNames ?? new Dictionary<string, string>(), out note);
+        var map = new Dictionary<string, ReplayParserService.ReplayPlayer>(named, StringComparer.Ordinal);
+        if (players == null || participants == null) return map;
+
+        var roster = participants.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.Ordinal).ToList();
+        var humans = players.Where(p => p.IsHuman).ToList();
+        if (roster.Count < 2 || humans.Count != roster.Count) return map;
+        if (HasDuplicateNames(humans.Select(p => p.Name))) return map;
+        if (inGameNames != null && HasDuplicateNames(inGameNames.Values.Where(v => !string.IsNullOrWhiteSpace(v)))) return map;
+        if (map.Keys.Any(id => !roster.Contains(id, StringComparer.Ordinal))) return map;
+        if (map.Values.Select(p => p.Slot).Distinct().Count() != map.Count) return map;
+
+        var paired = 0;
+        void Pair(IEnumerable<string> users, IEnumerable<ReplayParserService.ReplayPlayer> slots)
+        {
+            var u = users.Where(id => !map.ContainsKey(id)).ToList();
+            var s = slots.Where(p => map.Values.All(m => m.Slot != p.Slot)).ToList();
+            if (u.Count != 1 || s.Count != 1) return;
+            map[u[0]] = s[0];
+            paired++;
+        }
+
+        Pair(roster, humans);
+        if (paired == 0 && sides != null && SidesAnchor(roster, humans, map, sides) is { } anchors)
+            foreach (var (side, team) in anchors)
+                Pair(roster.Where(id => sides.TryGetValue(id, out var x) && x == side), humans.Where(p => p.Team == team));
+
+        if (paired > 0)
+            note = (note.Length > 0 ? note + "; " : "") + $"{paired} slot(s) paired by elimination";
+        return map;
+    }
+
+    /// <summary>The room's side to the recording's team, when every side is anchored to exactly
+    /// one team by its name-matched members, the anchors differ, and the sizes agree. Null when
+    /// any of that is in doubt.</summary>
+    private static List<(int Side, int Team)>? SidesAnchor(
+        IReadOnlyList<string> roster,
+        IReadOnlyList<ReplayParserService.ReplayPlayer> humans,
+        IReadOnlyDictionary<string, ReplayParserService.ReplayPlayer> map,
+        IReadOnlyDictionary<string, int> sides)
+    {
+        if (humans.Any(p => p.Team < 0)) return null;
+        if (roster.Any(id => !sides.ContainsKey(id))) return null;
+        var anchors = new List<(int Side, int Team)>();
+        foreach (var side in roster.Select(id => sides[id]).Distinct())
+        {
+            var members = roster.Where(id => sides[id] == side).ToList();
+            var teams = members.Where(map.ContainsKey).Select(id => map[id].Team).Distinct().ToList();
+            if (teams.Count != 1) return null;
+            if (anchors.Any(a => a.Team == teams[0])) return null;
+            if (humans.Count(p => p.Team == teams[0]) != members.Count) return null;
+            anchors.Add((side, teams[0]));
+        }
+        return anchors;
+    }
+
+    /// <summary>Every participant has a slot.</summary>
+    public static bool CoversAll(
+        IReadOnlyDictionary<string, ReplayParserService.ReplayPlayer> slots, IReadOnlyList<string>? participants) =>
+        participants is { Count: > 0 } && participants.All(slots.ContainsKey);
+
     internal static bool HasDuplicateNames(IEnumerable<string> names)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

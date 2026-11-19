@@ -563,6 +563,7 @@ public partial class MultiplayerTab
             {
                 if (me.Ready) return;
                 me.Ready = true;
+                _readyEpoch++;
                 RenderRoomMembers();
                 MaybeAutoStartOnAllReady();
                 try { await _session.RoomSocket.SendReadyAsync(true); }
