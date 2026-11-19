@@ -488,17 +488,24 @@ public partial class MultiplayerTab
         // server's page. 0 means an older backend: say how many are shown instead.
         var ranked = CommunityStatsView.RankedPlayers(_communityStats, team);
         var placing = CommunityStatsView.PlacementCount(_communityStats, team);
-        SetRankingSummary(ranked > 0 ? ranked : rankedShown, Math.Max(placing, placingShown));
+        var hidden = CommunityStatsView.InactiveHidden(_communityStats, team);
+        SetRankingSummary(ranked > 0 ? ranked : rankedShown, Math.Max(placing, placingShown), hidden?.Hidden ?? 0);
 
-        // Design 59's sentence: what counts, what the flame means, what INACTIVE means.
-        RankingFootnoteText.Text = Strings.Format("MpRankFootRule", InactiveAfterDays);
+        // Design 59's sentence: what counts, what the flame means, what INACTIVE means — or, since
+        // the server hides inactive players (2026-11-18), that they leave the table.
+        // When the server hides later than the tag appears, both are said.
+        RankingFootnoteText.Text = hidden is { } h
+            ? h.Days > InactiveAfterDays
+                ? Strings.Format("MpRankFootRuleBoth", InactiveAfterDays, h.Days)
+                : Strings.Format("MpRankFootRuleHidden", h.Days)
+            : Strings.Format("MpRankFootRule", InactiveAfterDays);
 
         ApplyPreviewChip();
     }
 
     /// <summary>"9 ranked · 4 in placement", the two figures apart from the words; empty when
     /// there is nobody at all (the table says that itself).</summary>
-    private void SetRankingSummary(int ranked, int placing)
+    private void SetRankingSummary(int ranked, int placing, int inactiveHidden = 0)
     {
         RankingSubtitleText.Inlines.Clear();
         if (ranked + placing == 0) return;
@@ -512,6 +519,13 @@ public partial class MultiplayerTab
         RankingSubtitleText.Inlines.Add(new System.Windows.Documents.Run(Strings.Get("RkCountRanked")));
         RankingSubtitleText.Inlines.Add(Figure(placing));
         RankingSubtitleText.Inlines.Add(new System.Windows.Documents.Run(Strings.Get("RkCountPlacing")));
+        if (inactiveHidden > 0)
+        {
+            RankingSubtitleText.Inlines.Add(new System.Windows.Documents.Run(" · "));
+            RankingSubtitleText.Inlines.Add(Figure(inactiveHidden));
+            RankingSubtitleText.Inlines.Add(new System.Windows.Documents.Run(Strings.Get(
+                inactiveHidden == 1 ? "RkCountInactiveOne" : "RkCountInactive")));
+        }
     }
 
     /// <summary>

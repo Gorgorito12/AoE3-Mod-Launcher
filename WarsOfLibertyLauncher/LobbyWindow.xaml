@@ -310,6 +310,7 @@
                         <Border x:Name="RoomStakePanel" Style="{DynamicResource RoomPanel}" Visibility="Collapsed">
                             <StackPanel>
                                 <TextBlock x:Name="RoomStakeLabel" Style="{DynamicResource RoomPanelLabel}"/>
+                                <StackPanel x:Name="RoomStakeBlock" Margin="0,12,0,0"/>
                                 <TextBlock x:Name="RoomStakeText" Style="{DynamicResource RoomPanelBody}" Margin="0,10,0,0"/>
                                 <StackPanel x:Name="RoomStakeLines" Visibility="Collapsed"/>
                                 <TextBlock x:Name="RoomStakeNote" Style="{DynamicResource GlassHint}" Margin="0,8,0,0" Visibility="Collapsed"/>

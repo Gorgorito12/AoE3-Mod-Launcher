@@ -13,6 +13,11 @@ public static partial class Strings
     {
         // The summary at the top right: the figures are drawn apart, in the mono face.
         ["RkCountRanked"] = new() { [LangEn] = " ranked · ", [LangEs] = " clasificados · " },
+        ["RkCountInactive"] = new() { [LangEn] = " inactive, not shown", [LangEs] = " inactivos, no se muestran" },
+        ["RkCountInactiveOne"] = new() { [LangEn] = " inactive, not shown", [LangEs] = " inactivo, no se muestra" },
+        ["RkYouOffTableTitle"] = new() { [LangEn] = "You are off the table.", [LangEs] = "Estás fuera de la tabla." },
+        ["RkYouOffTableBody"] = new() { [LangEn] = "You haven't played a rated match in {0} days. Play one to come back. You keep your ELO ({1}).", [LangEs] = "Llevas {0} días sin jugar una partida puntuada. Juega una para volver. Conservas tu ELO ({1})." },
+        ["MpProfileOffTable"] = new() { [LangEn] = "off the table", [LangEs] = "fuera de la tabla" },
         ["RkCountPlacing"] = new() { [LangEn] = " in placement", [LangEs] = " en posicionamiento" },
 
         // The table's groups.
@@ -48,6 +53,11 @@ public static partial class Strings
         ["RkYouFirst"] = new() { [LangEn] = "You're first on the table.", [LangEs] = "Vas primero en la tabla." },
         ["RkYouPrivate"] = new() { [LangEn] = "You are not on the public table: your rating is hidden. Turn on \"Show my ELO\" in Settings → Games to appear again.", [LangEs] = "No estás en la tabla pública: tu ELO está oculto. Activa «Mostrar mi ELO» en Configuración → Partidas para volver a aparecer." },
         ["RkYouNext"] = new() { [LangEn] = "You need {0} ELO to reach place {1}.", [LangEs] = "Te faltan {0} ELO para el {1}.º puesto." },
+        ["RkBadgePoints"] = new() { [LangEn] = "{0} points to ", [LangEs] = "Te faltan {0} puntos para " },
+        ["RkBadgePointsOne"] = new() { [LangEn] = "1 point to ", [LangEs] = "Te falta 1 punto para " },
+        ["RkBadgePlaces"] = new() { [LangEn] = "{0} places", [LangEs] = "{0} puestos" },
+        ["RkBadgePlacesOne"] = new() { [LangEn] = "1 place", [LangEs] = "1 puesto" },
+        ["RkBadgeTip"] = new() { [LangEn] = "The badges are a share of the table, so the rating that earns the next one moves with everybody else's. The bar is how far up your own age you stand.", [LangEs] = "Las insignias son una parte de la tabla, así que el ELO que da la siguiente se mueve con el de los demás. La barra es lo alto que estás dentro de tu propia era." },
         ["RkYouNextAge"] = new() { [LangEn] = "You need {0} ELO to reach place {1} and rise to {2}.", [LangEs] = "Te faltan {0} ELO para el {1}.º puesto y subir a {2}." },
         ["RkYouLeftOne"] = new() { [LangEn] = "1 rated match left to enter the table.", [LangEs] = "Te queda 1 partida puntuada para entrar en la tabla." },
         ["RkYouLeft"] = new() { [LangEn] = "{0} rated matches left to enter the table.", [LangEs] = "Te quedan {0} partidas puntuadas para entrar en la tabla." },

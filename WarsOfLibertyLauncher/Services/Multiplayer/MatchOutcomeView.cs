@@ -224,7 +224,10 @@ public sealed record MatchOutcomeView(
     /// <summary>The rival's placement progress AFTER this match, when the server sent it. While he
     /// is still being placed his number is his alone (<see cref="RivalInPlacement"/>).</summary>
     int? RivalPlacementPlayed = null,
-    int? RivalPlacementRequired = null)
+    int? RivalPlacementRequired = null,
+    /// <summary>His side's chance of winning, 1-99, before the match (the server's, never worked
+    /// out here). What the "why these points" line reads; null = no line.</summary>
+    int? WinExpected = null)
 {
     /// <summary>A win streak from this length on gets the pill on the card (as on the ladder).</summary>
     public const int StreakPillFrom = StreakView.FlameFrom;

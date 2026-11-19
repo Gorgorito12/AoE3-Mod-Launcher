@@ -108,6 +108,22 @@ internal static class EloDemoData
     /// <summary>The name <c>--demo-elo=&lt;name&gt;</c> and the Settings list use for a scene.</summary>
     internal static string NameOf(EloPreviewScene scene) => scene.ToString().ToLowerInvariant();
 
+    /// <summary>What the server's next_badge would say for this sample table: the same rule
+    /// (src/elo/ages.ts) over the sample's own ratings, so the figures are the table's.</summary>
+    internal static NextBadge? SampleNextBadge(IReadOnlyList<LeaderboardRow> table, int rank)
+    {
+        if (RankAges.PlacesToNextAge(rank, table.Count) is not { } up) return null;
+        var holder = table.FirstOrDefault(r => r.Rank == rank - up.Places);
+        if (holder == null) return null;
+        return new NextBadge
+        {
+            Age = up.Age.ToString().ToLowerInvariant(),
+            AtRank = holder.Rank,
+            Places = up.Places,
+            FloorRating = holder.Rating,
+        };
+    }
+
     /// <summary>The scene for a name; missing or unknown is the ranking.</summary>
     internal static EloPreviewScene SceneByName(string? name)
     {
@@ -397,6 +413,7 @@ internal static class EloDemoData
                     GamesPlayed = solo.GamesPlayed,
                     LadderRank = solo.Rank,
                     LadderSize = live.Leaderboard.Count,
+                    NextBadge = SampleNextBadge(live.Leaderboard, solo.Rank),
                     PlacementPlayed = StatsDemoData.PlacementDefault,
                     PlacementRequired = StatsDemoData.PlacementDefault,
                     Inactive = false,

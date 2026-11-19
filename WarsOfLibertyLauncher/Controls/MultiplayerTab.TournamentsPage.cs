@@ -2601,6 +2601,8 @@ public partial class MultiplayerTab
         }
     }
 
+    internal const string PerformanceTag = "TournamentPerformance";
+
     private FrameworkElement BuildEntrantTile(TournamentDetail t, TournamentEntrant e, string? me)
     {
         bool team = TournamentPage.IsTeam(t);
@@ -2688,6 +2690,21 @@ public partial class MultiplayerTab
         label.TextTrimming = TextTrimming.CharacterEllipsis;
         Grid.SetColumn(label, 1);
         status.Children.Add(label);
+        // The level he played at, at the right end of the line (2026-11-18): mono and neutral —
+        // gold stays the champion's. The status trims first; the figure never does.
+        if (TournamentPerformanceView.For(e.Performance, isMine) is { } perf)
+        {
+            status.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var figure = Say(perf.Figure != null ? Strings.Format("TpPerfFigure", perf.Figure) : Strings.Get("TpPerfNone"),
+                "SetDescSize", perf.HiddenWhy != null ? "#8C9CB1" : "#DCE7F5", FontWeights.SemiBold,
+                new Thickness(10, 0, 0, 0), mono: true);
+            figure.Tag = PerformanceTag;
+            var tip = perf.HiddenWhy
+                ?? (perf.BestWin != null ? Strings.Format("TpPerfBestWin", perf.BestWin) + "\n" : "") + Strings.Get("TpPerfTip");
+            figure.ToolTip = TooltipHelper.Wrap(tip);
+            Grid.SetColumn(figure, 2);
+            status.Children.Add(figure);
+        }
         words.Children.Add(status);
         Grid.SetColumn(words, 2);
 

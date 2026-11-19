@@ -108,6 +108,16 @@ def play_match(recording, title):
     check(f"{title}: the guest sent its own reading", confirmed)
     check(f"{title}: c's chat card says Closed", wait_for("closed", lambda: card_state(lobby).startswith("Closed"), 60),
           card_state(lobby))
+    # The points at stake (2026-11-18): each launcher logs the figures it showed at Start, and the
+    # result card must show exactly the one that applied. Two new accounts have no rated game yet,
+    # so nobody is being placed and the figures are shown.
+    for who, since in (("a", before_a), ("b", before_b)):
+        promised = re.search(r"Room stake: final (gain=\S+ loss=\S+|\w+)", log(who)[since:])
+        check(f"{title}: {who} was shown the points at stake", bool(promised) and "gain=" in promised[1],
+              promised[1] if promised else "no line")
+        result = wait_for("result card", lambda: re.search(r"Result card: (.*)", log(who)[since:]), 30)
+        check(f"{title}: {who}'s result card shows the figure it promised",
+              bool(result) and "STAKE MISMATCH" not in result[1], result[1] if result else "no line")
     match = re.search(r"match_reported: match=([0-9a-f-]+)", log("a")[before_a:])
     return match[1] if match else None
 

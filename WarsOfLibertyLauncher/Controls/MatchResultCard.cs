@@ -228,8 +228,68 @@ public static class MatchResultCard
         return stack;
     }
 
-    /// <summary>What the case says under the headline, or null when it has nothing to say.</summary>
+    /// <summary>
+    /// What the card says under the headline: the case's own content and, above it, why the figure
+    /// is that figure (<see cref="ResultWhyView"/>, 2026-11-18). Placement replaces its old line
+    /// with the explained one; the anti-farm sentence stays and gains the odds under it; a match
+    /// that did not count, or the one that finished placement, keeps what it said.
+    /// </summary>
     private static FrameworkElement? BuildCaseSection(MatchOutcomeView model)
+    {
+        var why = model.Case is ResultCase.Unrated or ResultCase.KeptNoMove or ResultCase.NoResult
+            or ResultCase.PlacementDone ? null : ResultWhyView.For(model);
+        if (why == null) return BuildCaseContent(model);
+
+        var line = WhyLine(why);
+        if (model.Case == ResultCase.Placing) return line;
+        var content = BuildCaseContent(model);
+        if (content == null) return line;
+        var stack = new StackPanel();
+        if (model.Case == ResultCase.AntiFarm)
+        {
+            stack.Children.Add(content);
+            line.Margin = new Thickness(0, 6, 0, 0);
+            stack.Children.Add(line);
+        }
+        else
+        {
+            stack.Children.Add(line);
+            content.Margin = new Thickness(0, 8, 0, 0);
+            stack.Children.Add(content);
+        }
+        return stack;
+    }
+
+    /// <summary>"+6:" bold and mono, then the reason — the shape of the anti-farm line.</summary>
+    private static TextBlock WhyLine(ResultWhy why)
+    {
+        var tb = new TextBlock
+        {
+            Tag = WhyTag,
+            FontSize = Size("MpMetaSize"),
+            LineHeight = 18,
+            Foreground = Brush("MpTextSecondary"),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        if (why.Prefix != null)
+        {
+            tb.Inlines.Add(new System.Windows.Documents.Run(why.Prefix + ":")
+            {
+                FontFamily = Mono(),
+                FontWeight = FontWeights.Bold,
+                Foreground = Brush("UiTextStrong"),
+            });
+            tb.Inlines.Add(new System.Windows.Documents.Run(" "));
+        }
+        tb.Inlines.Add(new System.Windows.Documents.Run(why.Text));
+        return tb;
+    }
+
+    /// <summary>Marks the "why these points" line, for tests.</summary>
+    internal const string WhyTag = "ResultWhy";
+
+    /// <summary>What the case itself says under the headline, or null when it has nothing to say.</summary>
+    private static FrameworkElement? BuildCaseContent(MatchOutcomeView model)
     {
         switch (model.Case)
         {

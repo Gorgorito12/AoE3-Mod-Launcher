@@ -133,6 +133,9 @@ public sealed record YourStanding
     public int PlacementPlayed { get; init; }
     public int PlacementRequired { get; init; }
     public int PlacementLeft => Math.Max(0, PlacementRequired - PlacementPlayed);
+
+    /// <summary>Points and places to the next badge (2026-11-18); null when not drawn.</summary>
+    public BadgeProgress? Badge { get; init; }
 }
 
 /// <summary>
@@ -175,6 +178,7 @@ public static class YourStandingView
             var nextAge = above != null ? RankAges.For(above.Rank, size) : age;
             return new YourStanding
             {
+                Badge = BadgeProgressView.For(own?.NextBadge, me.Rank, size, myElo, ranked: true, privateRating: false),
                 Ranked = true, Place = me.Rank, Of = size, Age = age, Elo = myElo, Streak = me.Streak,
                 Neighbours = neighbours,
                 // One more than the gap: level on ELO is not ahead.
@@ -205,6 +209,8 @@ public static class YourStandingView
             {
                 Ranked = true, Place = place, Of = Math.Max(total, place), Age = RankAges.For(place, total),
                 Elo = Whole(own.Rating), Streak = own.StreakCurrent,
+                Badge = BadgeProgressView.For(own.NextBadge, place, Math.Max(total, place), Whole(own.Rating),
+                    ranked: true, privateRating: false),
             };
         }
         if (own != null && PlacementView.InPlacement(own.PlacementPlayed, own.PlacementRequired))

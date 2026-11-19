@@ -8639,6 +8639,8 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   match. 100 % for the 1st-2nd win in a row over the same opponent (in Teams: the exact same
   line-up), then 90…30 %, 20 % from the 10th; back to 100 % when the other side wins one; +10 %
   per full day apart; BOTH players scaled; applies during placement; never in tournaments.
+  ⚠ SUPERSEDED 2026-11-18: the room now SAYS it, in the points at stake (see POINTS AT STAKE at
+  the end of this file). What follows was the rule before.
   **Not announced in the room** (the maintainer's call) — only after: the result card's sentence
   (`AntiFarmView.WinText` / `LossText`) and History's "· 40 %" (`MatchHistoryView.FarmFactorShown`,
   which is never true for a bracket game).
@@ -8887,3 +8889,115 @@ styles and tokens (`MpSecondaryButton`, an `MpAction` pill), there is no design 
   the sequencing the disabled "Rematch" never had.
 - **Offline**: the button is the fourth one `SetOfflineMode(false, …)` must give back
   (`RefreshQuickMatchUi`); a running search can still be STOPPED offline.
+
+## POINTS AT STAKE, THE RESULT EXPLAINED, BADGES, THE ACTIVE TABLE, TOURNAMENT PERFORMANCE (2026-11-18)
+
+- **POINTS AT STAKE: before a ranked match the room says what this player gains if he wins and
+  loses if he loses, the REAL figures, anti-farm included** (the maintainer's call, reversing the
+  anti-farm rule above). Server: `src/elo/outcome.ts` (`rateOutcome`, the core of
+  `rateStoredMatch` moved verbatim — matchup key, `antifarmStep`, `rateSides`, `applyLimits`, the
+  side's `winProbability`) and `src/elo/stake.ts` (`matchStakes` = `rateOutcome` twice;
+  `stakeHiddenFrom`; `roomStakeFor`). **The stake and the result come from ONE function, never two
+  parallel ones** — that is the whole guarantee. `ladder.ts` `previewOutcomes` reads fresh
+  `effectiveRatings` (the room's join snapshot has no volatility and a stale RD) and the anti-farm
+  chain with the engine's own WHERE (`MATCHUP_CHAIN_WHERE`, one constant). Unrounded on the wire;
+  the launcher rounds with the result card's `MatchOutcomeView.Delta` + `RatingDisplay.FormatDelta`,
+  so −16.5 is −17 in both places.
+  **Delivery**: a per-recipient `room_stake` frame (with `seq`; an older one never replaces a newer,
+  `StakeView.IsNewer`) on join, leave, team change, cancel, game end, and **at Start before
+  `game_countdown`** (`final: true`, frozen for the match so a reconnect shows the same). Only to
+  sockets whose hello announced `room_stake` (`LobbyWebSocket.HelloFeatures`); never to spectators;
+  nothing in casual rooms; a bare `{mode:'default'}` frame when it cannot be computed (not
+  computable is not hidden). Quick match: `mm_stake` after `mm_found`, ranked only
+  (`Matchmaker.sendStakes`, `MmStore.stakes`), drawn under the rival in `MatchFoundDialog.ShowStake`.
+  **Hidden** when ANOTHER player of the match is being placed or keeps his rating private
+  (`hidden_reason` 'placement' / 'private', private first) — the figures would solve for his number.
+  The launcher adds a second layer (`StakeView.From`: `otherPlacing` / `otherPrivate`) and never draws
+  figures that arrived anyway. The viewer's own placement or privacy does not hide his own figures.
+  **Launcher**: pure `Services/Multiplayer/StakeView.cs` (None / Shown / OddsOnly — an older server:
+  bar and percentage, no figures — / HiddenPlacement / HiddenPrivate) and
+  `Controls/MultiplayerTab.Stake.cs` (`BuildStakeBlock`, `HandleRoomStake`, `CurrentStakeView`).
+  The panel is `RoomStakePanel` → `RoomStakeBlock` (LobbyWindow.xaml), filled by
+  `RefreshRoomPanels`: "Si ganas +22 · Si pierdes −5" (green / red, mono, `MpRatingSize`; the
+  captions trim, the figures never), in a 1v1 the bar and "20 % a favor", and the amber note
+  ("Victoria reducida al 80 %: sería tu victoria número 4 seguida contra este rival"; a reduced LOSS
+  is the quiet grey note). **In a 1v1 the percentage is drawn ONCE, here**: the roster's
+  `BuildOneVOneOdds` card was removed (`THE_ONE_THAT_MATTERS_ThePercentageIsDrawnOnceInAOneVOneRoom`).
+  In a team room the split bar stays in the roster (`BuildTeamOddsCard`, which now also says the
+  private reason, `MpOddsHiddenPrivate`) and the panel shows only MY figures, once both sides are full.
+  A tournament room keeps its lines and the figures sit under them. "This match counts for your ELO"
+  shows only while there is nothing more precise to say. Drift accepted and said in the tooltip
+  (`StakeTip`): RD grows between Start and the report, an anti-farm recovery step can fall during
+  the match, a late refund can move `before`. Samples `--demo-room=87b | 87b-farm | 87b-hidden |
+  87b-private`, figures from the real formula (`RoomDemoData.SampleStake`); `--preview-dialog=
+  matchfound[:placing]`.
+  **The rig asserts the promise**: each launcher logs `Room stake: final gain=… loss=…` at Start and
+  `Result card: delta=… promised=…` (or `STAKE MISMATCH`, or `not rated, so no figure to compare`)
+  when the result lands (`LogStakeAgainstResult`). The testbed's server runs with
+  `NEW_ACCOUNT_SHORT_MATCH_SECONDS=60`, or its 190-s simulated game is "short with a new account"
+  and nothing is ever rated. Pinned by the backend's `stake.test.ts` (each branch IS `rateOutcome`;
+  a hidden rival never gets his number back) and the launcher's `StakeViewTests`.
+
+- **THE RESULT EXPLAINED** (`Services/Multiplayer/ResultWhyView.cs`): one line from the server's own
+  percentage stored when it rated the match (`match_participants.win_expected`, migration 0035, sent
+  to its OWNER only and never when another participant is hidden — `ratingExtras` +
+  `resultParticipantsFor`). "+6: eras el favorito (72 %)", "+21: ganaste sin ser el favorito (31 %)",
+  "partida pareja", "perdiste siendo el favorito"; favourite from 60 %, not favourite up to 40 %;
+  during placement "posicionamiento 4/10: tus primeras partidas mueven más". On `MatchResultCard` it
+  is a bold mono prefix like the anti-farm line (`WhyTag`), under the anti-farm sentence when that
+  applies; on the room window's TU ELO card it is "Antes: 1383 · 22 % a favor" with the sentence in
+  the tooltip. A match stored before 0035 simply has no line. History is not changed.
+
+- **PROGRESS TO THE NEXT BADGE**: the standing (`GET /matches/elo/:id`) carries `next_badge {age,
+  at_rank, places, floor_rating}` per ladder (`src/stats/standing.ts`, `ladderRatingAt`). The age
+  cuts are ported to `src/elo/ages.ts` and **the same literal table is pinned in both suites**
+  (`ages.test.ts`, `BadgeProgressViewTests.THE_ONE_THAT_MATTERS_TheAgeCutsMatchTheServers`).
+  `BadgeProgressView.For` draws nothing while placing, private, off the table, at the top age, or
+  when the server's answer and the page disagree (a place that moved, an age the badge does not
+  wear). Points are `round(floor) + 1 − printed ELO`, never below 1. The 4-px bar is in the NEXT
+  age's colour (`RankAgeColors`) and fills by PLACES inside the player's own age — never a guess at
+  ratings. Shown in "Your position" (Ranking) and on the player's OWN profile ladder card; with it
+  drawn, "Te faltan N ELO para el puesto X" names only the place above. `--demo-elo=93a`.
+
+- **THE PUBLIC TABLE LISTS ACTIVE PLAYERS ONLY** — SUPERSEDES "inactive players keep their place
+  and carry INACTIVE". `src/stats/ladderActivity.ts`: a placed player with no rated match on that
+  ladder in `LADDER_INACTIVE_DAYS` (30; `LADDER_INACTIVE_DAYS_TEAM` for teams) leaves the table —
+  no place, NO badge (absent, never 0, exactly like a private rating) — until his next rated match.
+  `LADDER_HIDE_INACTIVE=false` restores the old behaviour at once. `LADDER_WHERE` carries the
+  `ACTIVITY_CLAUSE` and **`ladderBinds` now returns FOUR values** (mode, requirement, switch,
+  days) — every ranked query spreads it, `hasTeamPlace` included (it used to bind by hand).
+  `ladderRanks` returns ABSENT (not 0) for a placed player who is off the table; 0 stays "below the
+  entry bar". The placement tiles list active players only too. The standing says `off_table:
+  'inactive'`; the community payload carries `inactive_hidden(_team)` and `inactive_days(_team)`
+  only while hiding is on. Launcher: an amber "Estás fuera de la tabla…" card in place of "Your
+  position" (`OffTableTag`), "· 3 inactivos, no se muestran" in the summary, "fuera de la tabla" on
+  the profile, and a footnote that says the rule (`MpRankFootRuleHidden`, or `MpRankFootRuleBoth`
+  when the server hides later than the INACTIVE tag's 30 days). `OffTable` is only what the server
+  said. `--demo-elo=93g`. The day it goes live every place and badge shifts. Pinned by
+  `ladderActivity.test.ts`.
+
+- **TOURNAMENT PERFORMANCE**: once an entrant's run is over (knocked out, disqualified, withdrawn,
+  or the tournament finished), the detail carries `performance {rating, capped, games, best_win}`
+  (`src/tournaments/performance.ts` + `performanceDetail.ts`): the rating at which the Glicko
+  expectation over his counted games equals his score, by bisection, with each rival's
+  `rating_before` and `rd_before` (migration 0035; older games use RD 0). A perfect or zero score is
+  capped at the rivals' mean ± 400 ('above' / 'below', printed "1986+" / "1120−"). Only games
+  PLAYED and RATED on the tournament's ladder count, read from `tournament_matches.match_id`; no
+  walkovers, DQs, byes or organiser decisions. 2 games for a figure; one counted win still names the
+  best win. **Privacy**: no figure and no best win when ANY rival he counted is placing or private
+  now — for the entrant himself too; the entry then says `hidden`, and only the viewer's own tile
+  explains why. Launcher: `TournamentPerformanceView`, the figure at the right end of the
+  Participants tile's status line (mono, neutral; `PerformanceTag`), best win in its tooltip.
+  `--demo-tournaments=finished`. Not done: the eliminated viewer's own "TU TORNEO" card.
+
+- **A PLAYER WITH NO HOME CITY IS NEVER DRIVEN INTO THE LAN SCREEN.** things-new's `lanAutoStart`
+  does not wait on the home-city screen (it switches to the LAN screen 1.5 s after `doMPSetup(false)`
+  and can retry it), so a player who has never created a city could be pulled out of the dialog that
+  creates one. `Services/Multiplayer/HomeCityPresence.cs`: `None` only for a READABLE `Savegame` with
+  no `sp_*_homecity.xml` (never `LastHomeCity*.xml`) — no folder, or no `Users3`, is `Unknown` and
+  changes nothing. With `None` the room shows the amber card `NeedsHomeCity` (`LanCardNoCityBody`),
+  the roster word says "by hand", the launch carries NO `uhcLan*` argument
+  (`RoomLanEntryView.MayAutoEnter`) and the chat says it (`MpChatNoHomeCity`); the next launch reads
+  the folder again. The DLL is not changed (the maintainer's call). **Not measured in a real game**
+  (step 0 of the plan): the guard holds whatever the game does. `--demo-room=87nocity`. Pinned by
+  `HomeCityPresenceTests`.

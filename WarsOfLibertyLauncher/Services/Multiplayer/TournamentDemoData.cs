@@ -492,6 +492,14 @@ internal static class TournamentDemoData
         // state where the loser's dimmed styling has to still be readable.
         entrants[1].MemberIds = new List<string> { MeUserId };
         entrants[1].CaptainUserId = MeUserId;
+        // What src/tournaments/performance.ts gives the champion: two games won against rivals at
+        // 1560 and 1612 is a perfect score, capped at their mean + 400 (1586 + 400). The others
+        // played one counted game at most (the semi-final f2-f3 was a walkover): no figure.
+        entrants[0].Performance = new EntrantPerformance
+        {
+            Rating = 1986, Capped = "above", Games = 2,
+            BestWin = new EntrantBestWin { Name = SoloNames[1], Rating = 1612 },
+        };
 
         return Linked(new TournamentDetail
         {

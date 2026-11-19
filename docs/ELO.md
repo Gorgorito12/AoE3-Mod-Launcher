@@ -119,8 +119,21 @@ Your first **10 rated matches in 1v1** (or **5 in Teams**) are placement matches
   number that decides the order.
 - **Rank badges** (the shield beside a name) depend on your place: the top of the table wears the
   highest age, the rest follow by share of the table. See [Your rank badges](#your-rank-badges).
-- **Thirty days without a rated match** marks you **INACTIVE** in the table. You keep your rating
-  and your place; one rated match removes the tag.
+- **Thirty days without a rated match** take you **off the public table**: no place and no
+  badge until your next rated match, which puts you straight back. You keep your rating and you
+  still see it; the Ranking tab tells you so, and the table says how many players are hidden.
+  (The server can set the days, or turn this off and go back to the old **INACTIVE** tag.)
+- **Before a ranked match the room says what is at stake**: "If you win +22 · If you lose −5",
+  computed by the same function that rates the match, so the result card shows the same figure
+  (a long match can move it by a point). When the win would be reduced by anti-farm, an amber line
+  says so. While another player is being placed or keeps his rating private, the figures are not
+  shown — they would give his number away.
+- **After the match the result card says why**: "+6: you were the favourite (72 %)", "you won
+  without being the favourite", "an even match". The percentage is the server's, from when it
+  rated the match.
+- **"23 points to Imperial · 3 places"**: once you are on the table, Your position and your
+  profile say how far you are from the next badge, with a bar of how high you stand in your
+  current one.
 - Beside each rating the table shows that player's **peak**: the highest rating they have reached
   on that ladder since finishing placement. Your own record — wins, losses and win percentage — is
   on your **Profile**, not in the table.
@@ -281,6 +294,13 @@ once a player of the losing team has confirmed the result from their own launche
 launcher open when the game ends. In a tournament room each team is seated on its own side and
 the sides cannot be changed; pick the same sides in the game. A game played with other sides, or
 by anybody other than the two registered line-ups, neither counts nor moves the bracket.
+
+**Performance.** Once your run is over, your entry shows the level you played at ("Perf. 1712"):
+the rating at which your results are exactly what was expected against your rivals' ratings at the
+time. Only games played and rated count — never a walkover, a disqualification or an organiser's
+decision — and it needs two of them. A perfect run is capped at your rivals' average + 400 and
+shown as "1986+". The tooltip names your best win. While a rival you played is still being placed,
+or keeps his rating private, it is not shown: it would give his number away.
 
 Everything else about tournaments — entering, seeds, the bracket, playing your match, organising
 one — is in [TOURNAMENTS.md](TOURNAMENTS.md).
@@ -728,8 +748,21 @@ Tus primeras **10 partidas puntuadas en 1v1** (o **5 en Equipos**) son de posici
 - **Las insignias de rango** (el escudo junto al nombre) dependen de tu puesto: lo más alto de la
   tabla lleva la edad más alta y el resto sigue según su parte de la tabla. Mira
   [Tus insignias de rango](#tus-insignias-de-rango).
-- **Treinta días sin una partida puntuada** te marcan como **INACTIVO** en la tabla. Conservas tu
-  puntuación y tu puesto; una partida puntuada quita la etiqueta.
+- **Treinta días sin una partida puntuada** te sacan **de la tabla pública**: sin puesto y sin
+  insignia hasta tu próxima partida puntuada, que te devuelve al instante. Conservas tu ELO y lo
+  sigues viendo; la pestaña Clasificación te lo dice, y la tabla dice cuántos jugadores no se
+  muestran. (El servidor puede cambiar los días, o apagarlo y volver a la etiqueta **INACTIVO**.)
+- **Antes de una partida clasificatoria la sala dice qué te juegas**: «Si ganas +22 · Si pierdes
+  −5», calculado con la misma función que puntúa la partida, así que la tarjeta de resultado
+  muestra la misma cifra (una partida larga puede moverla un punto). Si el antifarmeo reduciría la
+  victoria, una línea ámbar lo dice. Mientras otro jugador esté en posicionamiento o tenga su ELO en
+  privado, las cifras no se muestran: revelarían su número.
+- **Después de la partida la tarjeta de resultado dice por qué**: «+6: eras el favorito (72 %)»,
+  «ganaste sin ser el favorito», «partida pareja». El porcentaje es el del servidor, de cuando
+  puntuó la partida.
+- **«Te faltan 23 puntos para Imperial · 3 puestos»**: estando en la tabla, Tu posición y tu perfil
+  dicen cuánto te falta para la siguiente insignia, con una barra de lo alto que estás en la
+  actual.
 - Junto a cada puntuación la tabla muestra el **máximo** de ese jugador: la puntuación más alta que
   alcanzó en esa tabla desde que terminó el posicionamiento. Tu récord — victorias, derrotas y
   porcentaje — está en tu **Perfil**, no en la tabla.
@@ -895,6 +928,14 @@ resultado desde su launcher, así que deja el launcher abierto al terminar. En u
 cada equipo ya está en su bando y los bandos no se pueden cambiar; elijan los mismos bandos en el
 juego. Una partida jugada con otros bandos, o por alguien que no sea de las dos alineaciones
 inscritas, ni cuenta ni hace avanzar el cuadro.
+
+**Rendimiento.** Cuando termina tu recorrido, tu ficha muestra el nivel al que jugaste («Rend.
+1712»): el ELO con el que tus resultados son exactamente los esperados contra el ELO que tenían tus
+rivales en ese momento. Solo cuentan las partidas jugadas y puntuadas —nunca una incomparecencia, una
+descalificación ni una decisión del organizador— y hacen falta dos. Un recorrido perfecto se limita
+al promedio de tus rivales + 400 y se muestra como «1986+». El texto emergente dice tu mejor
+victoria. Mientras un rival con el que jugaste siga en posicionamiento, o tenga su ELO en privado,
+no se muestra: revelaría su número.
 
 Todo lo demás sobre los torneos —inscribirse, las semillas, el cuadro, jugar tu partida,
 organizar uno— está en [TOURNAMENTS.md](TOURNAMENTS.md).

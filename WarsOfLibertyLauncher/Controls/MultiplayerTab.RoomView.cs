@@ -451,7 +451,7 @@ public partial class MultiplayerTab
         var w = _lobbyWindow!;
         var bracket = _roomTournament;
         w.RoomStakeLines.Visibility = bracket != null ? Visibility.Visible : Visibility.Collapsed;
-        w.RoomStakeText.Visibility = bracket == null ? Visibility.Visible : Visibility.Collapsed;
+        if (bracket != null) w.RoomStakeText.Visibility = Visibility.Collapsed;
         w.RoomCountsPanel.ClearValue(Border.BorderBrushProperty);
         w.RoomCountsPanel.ClearValue(FrameworkElement.ToolTipProperty);
         if (bracket == null)
@@ -478,6 +478,9 @@ public partial class MultiplayerTab
         if (CurrentRoomStage() == RoomStage.ResultUndecided) w.RoomCountsPanel.BorderBrush = Solid("#99F4900C");
         SetCountsText(w, "RtCountsBody");
 
+        // The points each way under the bracket's own lines, while the match is still to play.
+        w.RoomStakeBlock.Visibility = !decided && result == null && w.RoomStakeBlock.Children.Count > 0
+            ? Visibility.Visible : Visibility.Collapsed;
         var lines = decided
             ? bracket.ResultLines(result!.Verdict == MatchVerdict.Win, RoomViewerId)
             : bracket.StakeLines();
@@ -600,6 +603,13 @@ public partial class MultiplayerTab
                 : model.RatingBefore is { } before
                     ? Strings.Format("RoomEloBefore", Math.Round(before).ToString(CultureInfo.InvariantCulture))
                     : "";
+            // Why these points (2026-11-18): the server's own odds when it rated the match, short on
+            // the card ("Before: 1383 · 22 % in your favour") and the sentence one hover away.
+            var why = model.LooksUnrated ? null : ResultWhyView.For(model);
+            if (why != null && model.WinExpected is int pct && w.RoomEloNote.Text.Length > 0)
+                w.RoomEloNote.Text += " · " + Strings.Format("StakeOddsFor", Strings.Format("MpPercentValue", pct));
+            w.RoomEloNote.ToolTip = why == null ? null
+                : TooltipHelper.Wrap(why.Prefix == null ? why.Text : why.Prefix + ": " + why.Text);
 
             // The age and the place, only when the server sent them. A place worked out here
             // would disagree with the ladder.
@@ -670,15 +680,17 @@ public partial class MultiplayerTab
             ? Visibility.Visible : Visibility.Collapsed;
 
         w.RoomCountsPanel.Visibility = competitive && !hasResult ? Visibility.Visible : Visibility.Collapsed;
-        var stake = competitive && !hasResult && CurrentRoomFormat() == RoomFormat.OneVOne;
+        // WHAT'S AT STAKE (2026-11-18): the points each way and, in a 1v1, the chance of winning —
+        // drawn here and nowhere else. A team room shows it once both sides are full.
+        var oneVOne = CurrentRoomFormat() == RoomFormat.OneVOne;
+        var drew = competitive && !hasResult && RenderStakeBlock(w);
+        if (!drew) w.RoomStakeBlock.Children.Clear();
+        var stake = competitive && !hasResult && (oneVOne || drew);
         w.RoomStakePanel.Visibility = stake ? Visibility.Visible : Visibility.Collapsed;
-        if (stake)
-        {
-            var odds = WinOddsView.ForPlayer(_roomOdds, RoomViewerId);
-            var hidden = WinOddsView.HiddenByPlacement(_roomOdds, AnyRoomPlayerPlacing(team: false));
-            w.RoomStakeNote.Visibility = odds != null && !hidden ? Visibility.Visible : Visibility.Collapsed;
-            if (odds is int pct && !hidden) w.RoomStakeNote.Text = Strings.Format("RoomStakeOdds", pct);
-        }
+        w.RoomStakeBlock.Visibility = drew ? Visibility.Visible : Visibility.Collapsed;
+        // "This match counts for your ELO" only while there is nothing more precise to say.
+        w.RoomStakeText.Visibility = drew ? Visibility.Collapsed : Visibility.Visible;
+        w.RoomStakeNote.Visibility = Visibility.Collapsed;
 
         // The sentence about the abandonment rule stays where it always was: under what the
         // competitive room promises, only for the format it applies to.

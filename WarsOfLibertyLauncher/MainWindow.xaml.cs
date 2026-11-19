@@ -14204,8 +14204,8 @@ public partial class MainWindow : Window
         }
 
         // Mirror the primary action into the visible cinema dashboard
-        // PLAY button. The Dashboard button has its own gold-gradient
-        // style (SidebarPrimaryButton) so we don't repaint Background;
+        // PLAY button. The Dashboard button has its own style
+        // (LibraryPrimaryButton, the mod's colour) so we don't repaint Background;
         // only the label text + IsEnabled need to follow the legacy
         // ActionPanel button's state. Visibility is locked Visible
         // because the cinema layout treats PLAY as the permanent

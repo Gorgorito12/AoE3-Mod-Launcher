@@ -67,6 +67,16 @@ public static partial class Strings
             [LangEn] = "Only competitive matches with a result count. 🔥 marks 3 or more wins in a row. Inactive: no decided match in {0} days.",
             [LangEs] = "Solo cuentan partidas competitivas con resultado. 🔥 marca 3 o más victorias seguidas. Inactivo: sin partidas decididas en {0} días.",
         },
+        ["MpRankFootRuleBoth"] = new()
+        {
+            [LangEn] = "Only competitive matches with a result count. 🔥 marks 3 or more wins in a row. Inactive: no decided match in {0} days; after {1} the player leaves the table until the next one.",
+            [LangEs] = "Solo cuentan partidas competitivas con resultado. 🔥 marca 3 o más victorias seguidas. Inactivo: sin partidas decididas en {0} días; a los {1} sale de la tabla hasta la siguiente.",
+        },
+        ["MpRankFootRuleHidden"] = new()
+        {
+            [LangEn] = "Only competitive matches with a result count. 🔥 marks 3 or more wins in a row. A player with no rated match in {0} days leaves the table until the next one.",
+            [LangEs] = "Solo cuentan partidas competitivas con resultado. 🔥 marca 3 o más victorias seguidas. Quien pasa {0} días sin una partida puntuada sale de la tabla hasta la siguiente.",
+        },
         ["MpRankHowElo"] = new() { [LangEn] = "How ELO works", [LangEs] = "Cómo funciona el ELO" },
         ["MpStreakTipTitle"] = new() { [LangEn] = "{0} wins in a row", [LangEs] = "{0} victorias seguidas" },
         ["MpStreakTipBody"] = new()
@@ -204,6 +214,29 @@ public static partial class Strings
         // {0} is MpPercentValue, so the figure AND its sign are drawn bold (55g).
         ["MpWinProb1v1"] = new() { [LangEn] = "You have a {0} chance to win", [LangEs] = "Tienes un {0} de probabilidad de ganar" },
         ["MpPercentValue"] = new() { [LangEn] = "{0}%", [LangEs] = "{0} %" },
+
+        // ---- The points at stake before a ranked match, and why after it (2026-11-18) ----
+        ["StakeIfWin"] = new() { [LangEn] = "If you win", [LangEs] = "Si ganas" },
+        ["StakeIfLose"] = new() { [LangEn] = "If you lose", [LangEs] = "Si pierdes" },
+        ["StakeOddsFor"] = new() { [LangEn] = "{0} in your favour", [LangEs] = "{0} a favor" },
+        ["StakeWinReduced"] = new() { [LangEn] = "Win reduced to {0}: it would be your win number {1} in a row against this opponent.", [LangEs] = "Victoria reducida al {0}: sería tu victoria número {1} seguida contra este rival." },
+        ["StakeWinReducedTeam"] = new() { [LangEn] = "Win reduced to {0}: it would be your win number {1} in a row against this same line-up.", [LangEs] = "Victoria reducida al {0}: sería tu victoria número {1} seguida contra esta misma alineación." },
+        ["StakeLossReduced"] = new() { [LangEn] = "Loss reduced to {0}: they have beaten you {1} times in a row.", [LangEs] = "Derrota reducida al {0}: te han ganado {1} veces seguidas." },
+        ["StakeHiddenPlacement"] = new() { [LangEn] = "Shown once your opponent finishes placement: the figures would give their rating away.", [LangEs] = "Se muestra cuando tu rival termine el posicionamiento: las cifras revelarían su ELO." },
+        ["StakeHiddenPlacementTeam"] = new() { [LangEn] = "Shown once every other player finishes placement.", [LangEs] = "Se muestra cuando los demás jugadores terminen el posicionamiento." },
+        ["StakeHiddenPrivate"] = new() { [LangEn] = "Not shown: a player in this match keeps their rating private.", [LangEs] = "No se muestra: un jugador de la partida mantiene su ELO en privado." },
+        ["StakeTip"] = new() { [LangEn] = "What your rating would move, exactly as the result card will show it. A long match can shift it by a point.", [LangEs] = "Lo que se movería tu ELO, tal como lo mostrará la tarjeta de resultado. Una partida larga puede cambiarlo un punto." },
+        ["StakeTournament"] = new() { [LangEn] = "A tournament match counts at full value.", [LangEs] = "Una partida de torneo cuenta completa." },
+        ["MpOddsHiddenPrivate"] = new() { [LangEn] = "The win probability isn't shown: a player in this room keeps their rating private.", [LangEs] = "La probabilidad de victoria no se muestra: un jugador de la sala mantiene su ELO en privado." },
+        ["MpResultWhyWinFav"] = new() { [LangEn] = "you were the favourite ({0}).", [LangEs] = "eras el favorito ({0})." },
+        ["MpResultWhyWinDog"] = new() { [LangEn] = "you won without being the favourite ({0}).", [LangEs] = "ganaste sin ser el favorito ({0})." },
+        ["MpResultWhyEven"] = new() { [LangEn] = "an even match ({0}).", [LangEs] = "partida pareja ({0})." },
+        ["MpResultWhyLossFav"] = new() { [LangEn] = "you lost as the favourite ({0}).", [LangEs] = "perdiste siendo el favorito ({0})." },
+        ["MpResultWhyLossDog"] = new() { [LangEn] = "you were not the favourite ({0}).", [LangEs] = "no eras el favorito ({0})." },
+        ["MpResultWhyPlacement"] = new() { [LangEn] = "placement {0}/{1}. Your first matches move more.", [LangEs] = "posicionamiento {0}/{1}. Tus primeras partidas mueven más." },
+        ["MpResultWhyFarmFav"] = new() { [LangEn] = "You went in as the favourite ({0}).", [LangEs] = "Partías como favorito ({0})." },
+        ["MpResultWhyFarmDog"] = new() { [LangEn] = "You went in without being the favourite ({0}).", [LangEs] = "Partías sin ser el favorito ({0})." },
+        ["MpResultWhyFarmEven"] = new() { [LangEn] = "It was an even match ({0}).", [LangEs] = "Era una partida pareja ({0})." },
         ["MpWinProbTeams"] = new() { [LangEn] = "Team 1: {0}% · Team 2: {1}%", [LangEs] = "Equipo 1: {0} % · Equipo 2: {1} %" },
         ["MpWinProbTeamsNote"] = new()
         {

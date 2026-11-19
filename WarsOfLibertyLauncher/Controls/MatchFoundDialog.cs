@@ -31,6 +31,8 @@ internal sealed class MatchFoundDialog : BaseDialog
     private readonly TextBlock _clock = new() { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _progress = new() { Margin = new Thickness(0, 6, 0, 0) };
     private readonly string _rival;
+    /// <summary>Where the points at stake go when the server's <c>mm_stake</c> arrives.</summary>
+    private readonly ContentControl _stakeHost = new() { Margin = new Thickness(0, 12, 0, 0), Visibility = Visibility.Collapsed };
     private bool _answered;
     private bool _closingQuietly;
 
@@ -59,6 +61,7 @@ internal sealed class MatchFoundDialog : BaseDialog
         var body = new StackPanel();
         rivalCard.Margin = new Thickness(0, 0, 0, 0);
         body.Children.Add(rivalCard);
+        body.Children.Add(_stakeHost);
         if (!string.IsNullOrEmpty(hostLine))
         {
             var host = new TextBlock { Text = hostLine, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
@@ -102,6 +105,13 @@ internal sealed class MatchFoundDialog : BaseDialog
             // The ✕ and Alt+F4 are a decline, unless the server already decided.
             if (!_closingQuietly && !_answered) { _answered = true; Declined?.Invoke(); }
         };
+    }
+
+    /// <summary>"If you win +8 · If you lose −17" under the rival (2026-11-18); null hides it.</summary>
+    public void ShowStake(FrameworkElement? block)
+    {
+        _stakeHost.Content = block;
+        _stakeHost.Visibility = block == null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void AutomationProperties_SetIds()

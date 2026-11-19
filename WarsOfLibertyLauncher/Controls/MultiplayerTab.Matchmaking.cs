@@ -48,6 +48,9 @@ public partial class MultiplayerTab
     private DispatcherTimer? _mmPingTimer;
     private DispatcherTimer? _mmConfirmTimer;
     private MatchFoundDialog? _mmFoundDialog;
+
+    /// <summary>The rival of the proposal on screen is being placed: no stake is drawn (second layer).</summary>
+    private bool _mmFoundRivalPlacing;
     private string? _mmFoundMatchId;
     private string? _mmFoundRival;
     private bool _mmFoundHosting;
@@ -237,6 +240,17 @@ public partial class MultiplayerTab
             case "mm_found":
                 OnMatchFound(JsonSerializer.Deserialize<MatchFoundFrame>(json.GetRawText()) ?? new MatchFoundFrame());
                 break;
+            case "mm_stake":
+                if (_mmFoundDialog != null && Str(json, "match_id") == _mmFoundMatchId
+                    && json.TryGetProperty("stake", out var stakeJson))
+                {
+                    RoomStake? s = null;
+                    try { s = System.Text.Json.JsonSerializer.Deserialize<RoomStake>(stakeJson.GetRawText()); } catch { }
+                    var view = StakeView.From(s, null, competitive: true, viewerPlays: true, roomComplete: true,
+                        otherPlacing: _mmFoundRivalPlacing, otherPrivate: false);
+                    _mmFoundDialog.ShowStake(BuildStakeBlock(view, oneVOne: true, compact: true));
+                }
+                break;
             case "mm_accept_progress":
                 if (_mmFoundDialog != null && Str(json, "match_id") == _mmFoundMatchId)
                     _mmFoundDialog.SetProgress(Int(json, "accepted"), Math.Max(2, Int(json, "total")));
@@ -343,6 +357,7 @@ public partial class MultiplayerTab
         _mmFoundMatchId = f.MatchId;
         _mmFoundRival = string.IsNullOrWhiteSpace(f.Opponent.DisplayName) ? "—" : f.Opponent.DisplayName;
         _mmFoundHosting = f.YouAreHost;
+        _mmFoundRivalPlacing = f.Opponent.InPlacement;
         DiagnosticLog.Write($"QuickMatch: match found {f.MatchId} against {f.Opponent.UserId} ({f.Kind}{(f.Challenge ? ", challenge" : "")}).");
 
         var mod = ModRegistry.Find(f.ModId);
@@ -424,6 +439,15 @@ public partial class MultiplayerTab
             f.AcceptDeadlineMs, iChallenged: f.Challenger, mod);
         dlg.SetProgress(f.Challenger ? 1 : 0, 2);
         dlg.Accepted += () => dlg.SetProgress(1, 2);
+        // The figures a real mm_stake brings, computed with src/elo/stake.ts for 1383 (RD 70) vs 1642 (RD 60), or the
+        // hidden sentence while the rival is being placed.
+        if (f.Kind == "ranked")
+        {
+            var stake = variant == "placing"
+                ? new RoomStake { HiddenReason = "placement" }
+                : new RoomStake { Before = 1383, WinAfter = 1404.9808, LossAfter = 1377.9187, WinPct = 19 };
+            dlg.ShowStake(BuildStakeBlock(StakeView.From(stake, null, true, true, true, false, false), oneVOne: true, compact: true));
+        }
         PlaceFoundDialog(dlg);
         dlg.Show();
     }

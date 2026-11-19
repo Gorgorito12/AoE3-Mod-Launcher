@@ -30,6 +30,9 @@ public partial class MultiplayerTab
 
     private RoomLanAvailability _roomLanEntry;
 
+    /// <summary>Whether the player has a home city for the room's mod (HomeCityPresence).</summary>
+    private HomeCityState _roomHomeCity;
+
     private bool LanAutoEntryOn => _config?.LanAutoEntry ?? true;
     private ModProfile? _roomLanProfile;
     private string? _roomLanExe;
@@ -78,6 +81,7 @@ public partial class MultiplayerTab
         if (_demoRoomSample != null)
         {
             _roomLanEntry = RoomLanAvailability.Available;
+            _roomHomeCity = _demoRoomSample.NoHomeCity ? HomeCityState.None : HomeCityState.Present;
             RefreshRoomLanCard();
             return;
         }
@@ -85,6 +89,7 @@ public partial class MultiplayerTab
         _roomLanProfile = profile;
         _roomLanExe = exe;
         _roomLanEntry = EntryFor(LanHelperService.Probe(exe), exe);
+        _roomHomeCity = HomeCityPresence.For(profile, _config);
         RefreshRoomLanCard();
         TellRoomLanEntry();
         // Our own row carries the word too.
@@ -93,7 +98,7 @@ public partial class MultiplayerTab
 
     private void TellRoomLanEntry()
     {
-        if (RoomLanEntryView.EntersByItself(_roomLanEntry, LanAutoEntryOn) is not bool auto
+        if (RoomLanEntryView.EntersByItself(_roomLanEntry, LanAutoEntryOn, _roomHomeCity) is not bool auto
             || _session?.RoomSocket == null) return;
         if (_lanAutoSent == auto) return;
         _lanAutoSent = auto;
@@ -130,7 +135,8 @@ public partial class MultiplayerTab
         if (_lobbyWindow is not { } w) return;
         // A sample room shows the card as it reads when everything works.
         if (_demoRoomSample != null && _roomLanEntry == RoomLanAvailability.Unknown) _roomLanEntry = RoomLanAvailability.Available;
-        var card = RoomLanEntryView.For(_roomLanEntry, LanAutoEntryOn, _matchPhase == MatchPhase.Lobby);
+        if (_demoRoomSample != null) _roomHomeCity = _demoRoomSample.NoHomeCity ? HomeCityState.None : HomeCityState.Present;
+        var card = RoomLanEntryView.For(_roomLanEntry, LanAutoEntryOn, _matchPhase == MatchPhase.Lobby, _roomHomeCity);
         if (card.Kind == RoomLanCardKind.Hidden || _roomResult != null)
         {
             w.RoomLanCard.Visibility = Visibility.Collapsed;
@@ -194,7 +200,7 @@ public partial class MultiplayerTab
     /// <summary>A word for the roster row: how this member enters the LAN room; null when unknown.</summary>
     private string? LanMark(RoomMemberEntry m, bool isMe)
     {
-        bool? auto = isMe ? RoomLanEntryView.EntersByItself(_roomLanEntry, LanAutoEntryOn) : m.LanAuto;
+        bool? auto = isMe ? RoomLanEntryView.EntersByItself(_roomLanEntry, LanAutoEntryOn, _roomHomeCity) : m.LanAuto;
         return auto switch { true => Strings.Get("RoomLanAuto"), false => Strings.Get("RoomLanManual"), _ => null };
     }
 

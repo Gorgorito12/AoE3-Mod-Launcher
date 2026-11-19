@@ -183,7 +183,28 @@ public class LadderStanding
     [JsonPropertyName("head_to_head_total")]
     public int HeadToHeadTotal { get; set; }
 
+    /// <summary>How far the player is from the next badge (2026-11-18); null from an older server,
+    /// at the top age, or off the table.</summary>
+    [JsonPropertyName("next_badge")]
+    public NextBadge? NextBadge { get; set; }
+
+    /// <summary>"inactive": placed, but off the public table for want of a rated match
+    /// (2026-11-18). Only what the server said, never inferred here.</summary>
+    [JsonPropertyName("off_table")]
+    public string? OffTable { get; set; }
+
+    public bool OffTableInactive => string.Equals(OffTable, "inactive", System.StringComparison.Ordinal);
+
     public bool InPlacement => GamesPlayed > 0 && PlacementRequired > 0 && GamesPlayed < PlacementRequired;
+}
+
+/// <summary>The next age up, the last place of it, the places between, and the rating that place holds.</summary>
+public class NextBadge
+{
+    [JsonPropertyName("age")] public string Age { get; set; } = "";
+    [JsonPropertyName("at_rank")] public int AtRank { get; set; }
+    [JsonPropertyName("places")] public int Places { get; set; }
+    [JsonPropertyName("floor_rating")] public double FloorRating { get; set; }
 }
 
 public class LadderStandings
@@ -465,6 +486,61 @@ public class RoomOdds
     /// not computable yet (an empty seat or team), and from an older server.
     /// See <see cref="Services.Multiplayer.WinOddsView.HiddenByPlacement"/>.
     /// </summary>
+    [JsonPropertyName("hidden_reason")]
+    public string? HiddenReason { get; set; }
+}
+
+/// <summary>
+/// What a ranked match is worth to THIS viewer before it is played (2026-11-18, the server's
+/// <c>room_stake</c> frame and <c>mm_stake</c>): the rating he would end on if he wins and if he
+/// loses, computed by the same function that rates the match (src/elo/stake.ts), unrounded — the
+/// launcher rounds with the result card's rule. Hidden = only <see cref="HiddenReason"/>; a bare
+/// frame (no figures, no reason) means nothing to show. Every member optional: an older server
+/// sends none of this.
+/// </summary>
+public class RoomStake
+{
+    [JsonPropertyName("mode")]
+    public string Mode { get; set; } = "default";
+
+    /// <summary>Recompute counter; an older frame never replaces a newer one.</summary>
+    [JsonPropertyName("seq")]
+    public int? Seq { get; set; }
+
+    [JsonPropertyName("before")]
+    public double? Before { get; set; }
+
+    [JsonPropertyName("win_after")]
+    public double? WinAfter { get; set; }
+
+    [JsonPropertyName("loss_after")]
+    public double? LossAfter { get; set; }
+
+    /// <summary>His side's chance of winning, 1-99.</summary>
+    [JsonPropertyName("win_pct")]
+    public int? WinPct { get; set; }
+
+    /// <summary>Anti-farm on a win: present only below 1 (his Nth win in a row against them).</summary>
+    [JsonPropertyName("win_factor")]
+    public double? WinFactor { get; set; }
+
+    [JsonPropertyName("loss_factor")]
+    public double? LossFactor { get; set; }
+
+    [JsonPropertyName("win_streak")]
+    public int? WinStreak { get; set; }
+
+    [JsonPropertyName("loss_streak")]
+    public int? LossStreak { get; set; }
+
+    [JsonPropertyName("tournament")]
+    public bool? Tournament { get; set; }
+
+    /// <summary>Sent at Start: the figures he goes into the match with.</summary>
+    [JsonPropertyName("final")]
+    public bool? Final { get; set; }
+
+    /// <summary><c>placement</c> or <c>private</c>: another player's rating is hidden from him.</summary>
     [JsonPropertyName("hidden_reason")]
     public string? HiddenReason { get; set; }
 }

@@ -166,6 +166,8 @@ public partial class MultiplayerTab
         string? where = shape switch
         {
             ProfileModeShape.Placement => Strings.Get("MpProfileNoRankYet"),
+            // Placed, but the server keeps him off the table for inactivity (2026-11-18).
+            _ when ladder is { OffTableInactive: true } => Strings.Get("MpProfileOffTable"),
             ProfileModeShape.Ranked or ProfileModeShape.Inactive
                 when ladder!.LadderRank is > 0 and var rank && ladderSize is > 0 and var size
                 => Strings.Format("MpProfileRankOf", rank, size),
@@ -255,6 +257,12 @@ public partial class MultiplayerTab
         if (!inactive && ladder.RatingLow is double low)
             extremes.Children.Add(Extreme("MpProfileLow", low, ladder.RatingLowAt));
         if (extremes.Children.Count > 0) rating.Children.Add(extremes);
+
+        // Progress to the next badge (2026-11-18): on the player's OWN page only.
+        if (!_renderingOtherProfile && ladder is { LadderRank: int place } && place > 0
+            && BadgeProgressView.For(ladder.NextBadge, place, ladder.LadderSize ?? 0,
+                (int)Math.Round(ladder.Rating), ranked: true, privateRating: false) is { } badge)
+            rating.Children.Add(BuildBadgeProgress(badge, new Thickness(0, 10, 0, 0)));
 
         // The rated record on this ladder — it moved here from the ranking table (2026-10-28).
         // Before the inactive and legacy returns below, so every ranked card carries it. Nothing

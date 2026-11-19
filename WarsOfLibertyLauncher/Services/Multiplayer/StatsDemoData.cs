@@ -275,6 +275,9 @@ internal static class StatsDemoData
             PlacementPlayers = DemoPlacement().Count,
             LeaderboardTeam = DemoLadder(team: true),
             RankedPlayersTeam = DemoLadder(team: true).Count,
+            // The server hides placed players with no rated match in N days (2026-11-18). 60 here,
+            // past the 30 of the INACTIVE tag, so the sample's tagged rows can still be listed.
+            InactiveHidden = 3, InactiveHiddenTeam = 1, InactiveDays = 60, InactiveDaysTeam = 60,
             LeaderboardTeamPlacement = DemoPlacement(team: true),
             PlacementPlayersTeam = DemoPlacement(team: true).Count,
             RecentMatches = new List<CommunityMatch>(),

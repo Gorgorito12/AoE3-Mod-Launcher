@@ -551,7 +551,11 @@ def server_env():
     """Dev mode on a throwaway database, and every outward connection switched off: no Discord
     post and no recording storage, whatever a .env in the backend says (process variables win)."""
     env = dict(os.environ, HOST="127.0.0.1", PORT=str(SERVER_PORT), DB_PATH=str(SERVER / "lobby.db"),
-               DEV_AUTH_BYPASS="true", JWT_SIGNING_KEY="testbed-local", PUBLIC_BASE_URL=SERVER_URL)
+               DEV_AUTH_BYPASS="true", JWT_SIGNING_KEY="testbed-local", PUBLIC_BASE_URL=SERVER_URL,
+               # The test accounts are minutes old, and a 190-s simulated game is "short" for a new
+               # account (10 min in production): without this nothing the rig plays is ever rated,
+               # and the stake-equals-result check has nothing to compare.
+               NEW_ACCOUNT_SHORT_MATCH_SECONDS="60")
     for name in ("DISCORD_WEBHOOK_URL", "DISCORD_ADMIN_WEBHOOK_URL", "DISCORD_HIGHLIGHTS_WEBHOOK_URL",
                  "REPLAY_S3_ENDPOINT", "REPLAY_S3_BUCKET", "REPLAY_S3_ACCESS_KEY", "REPLAY_S3_SECRET_KEY",
                  "REPLAY_S3_REGION", "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"):

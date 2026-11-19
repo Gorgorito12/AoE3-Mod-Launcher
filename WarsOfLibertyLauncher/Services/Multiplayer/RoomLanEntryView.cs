@@ -13,7 +13,7 @@ public enum RoomLanAvailability
     CannotSetUp,
 }
 
-public enum RoomLanCardKind { Hidden, On, Off, NotSetUp, CannotSetUp }
+public enum RoomLanCardKind { Hidden, On, Off, NotSetUp, CannotSetUp, NeedsHomeCity }
 
 /// <summary>What the room's "Automatic entry" card shows.</summary>
 public readonly record struct RoomLanCard(
@@ -28,8 +28,15 @@ public readonly record struct RoomLanCard(
 /// </summary>
 public static class RoomLanEntryView
 {
-    public static RoomLanCard For(RoomLanAvailability availability, bool switchOn, bool inLobbyPhase) => availability switch
+    /// <param name="city">Whether the player has a home city for this mod (2026-11-18). With none,
+    /// the game would ask for one the first time it enters LAN, and the automatic entry does not
+    /// wait for that screen — so that launch goes by hand and the card says why. Unknown changes
+    /// nothing.</param>
+    public static RoomLanCard For(RoomLanAvailability availability, bool switchOn, bool inLobbyPhase,
+        HomeCityState city = HomeCityState.Unknown) => availability switch
     {
+        RoomLanAvailability.Available when switchOn && city == HomeCityState.None =>
+            new RoomLanCard(RoomLanCardKind.NeedsHomeCity, "LanCardNoCityBody", false, false, null),
         RoomLanAvailability.Available => switchOn
             ? new RoomLanCard(RoomLanCardKind.On, "LanCardOnBody", true, inLobbyPhase, null)
             : new RoomLanCard(RoomLanCardKind.Off, "LanCardOffBody", true, inLobbyPhase, null),
@@ -42,10 +49,15 @@ public static class RoomLanEntryView
 
     /// <summary>What this player tells the room about himself: he enters by himself only when he
     /// can AND the switch is on. Null while unknown, so no row claims anything.</summary>
-    public static bool? EntersByItself(RoomLanAvailability availability, bool switchOn) => availability switch
+    public static bool? EntersByItself(RoomLanAvailability availability, bool switchOn,
+        HomeCityState city = HomeCityState.Unknown) => availability switch
     {
         RoomLanAvailability.Unknown => null,
-        RoomLanAvailability.Available => switchOn,
+        RoomLanAvailability.Available => switchOn && city != HomeCityState.None,
         _ => false,
     };
+
+    /// <summary>Whether this launch may carry the automatic-entry arguments: the room's switch on,
+    /// and not a player who has no home city yet (Unknown still enters, as before).</summary>
+    public static bool MayAutoEnter(bool switchOn, HomeCityState city) => switchOn && city != HomeCityState.None;
 }

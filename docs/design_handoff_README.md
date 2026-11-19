@@ -544,6 +544,9 @@ Screen 68 (Biblioteca unificada):
   so "Renombrar o quitar en Ajustes" reads "Gestionar en Ajustes".
 - **The sort button is a real menu** (recent, name, status); the prototype only draws its caption.
 - **Uninstall keeps its own window** until screen 79 redoes it, not the veil in 68a.
+- **The Play button has a width 68a does not state** (the maintainer's call, 2026-11-18): the same in
+  every state, `clamp(220, 11.5 % of the window, 280)`, as a MinWidth so a longer caption widens it.
+  68a drew it as its caption plus padding, so it changed size between Play, Install, Update and Stop.
 - **Only the tabs, the list and the search sit on real blur.** The chips and pills are small enough
   that their 8-10 px blur cannot be told from their fill, and each would add to the clip.
 - **The chevron of the brand menu and the bell stay in the bar.** Both lead somewhere nothing else

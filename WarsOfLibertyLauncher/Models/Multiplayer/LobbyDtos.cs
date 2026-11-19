@@ -1321,6 +1321,12 @@ public class RatingChange
     /// <summary>The rank he enters the table at, when placement just finished.</summary>
     [JsonPropertyName("entered_rank")]
     public int? EnteredRank { get; set; }
+
+    /// <summary>His side's chance of winning, 1-99, from the ratings before the match (migration
+    /// 0035) — what the result card explains the points with. Sent to its owner only, and never
+    /// while another participant's rating is hidden; null from an older server or match.</summary>
+    [JsonPropertyName("win_expected")]
+    public int? WinExpected { get; set; }
 }
 
 /// <summary>
@@ -1604,6 +1610,13 @@ public class CommunityStats
 
     [JsonPropertyName("ranked_players_team")]
     public int RankedPlayersTeam { get; set; }
+
+    /// <summary>Placed players hidden from the table for inactivity (2026-11-18), and after how
+    /// many days. Null from a server that still lists them with the INACTIVE tag.</summary>
+    [JsonPropertyName("inactive_hidden")] public int? InactiveHidden { get; set; }
+    [JsonPropertyName("inactive_hidden_team")] public int? InactiveHiddenTeam { get; set; }
+    [JsonPropertyName("inactive_days")] public int? InactiveDays { get; set; }
+    [JsonPropertyName("inactive_days_team")] public int? InactiveDaysTeam { get; set; }
 
     [JsonPropertyName("activity")]
     public ActivityBuckets? Activity { get; set; }
@@ -2493,6 +2506,28 @@ public class TournamentEntrant
     /// </summary>
     [JsonPropertyName("members")]
     public List<TournamentEntrantMember>? Members { get; set; }
+
+    /// <summary>The level he played at, once his run is over (2026-11-18); null from an older server.</summary>
+    [JsonPropertyName("performance")]
+    public EntrantPerformance? Performance { get; set; }
+}
+
+/// <summary>An entrant's tournament performance, or why it is hidden.</summary>
+public class EntrantPerformance
+{
+    [JsonPropertyName("rating")] public int? Rating { get; set; }
+    /// <summary>"above" / "below" when the score was perfect or zero (capped at the rivals' mean ± 400).</summary>
+    [JsonPropertyName("capped")] public string? Capped { get; set; }
+    [JsonPropertyName("games")] public int Games { get; set; }
+    [JsonPropertyName("best_win")] public EntrantBestWin? BestWin { get; set; }
+    /// <summary>"placement" / "private": a rival's hidden rating would come back through the figure.</summary>
+    [JsonPropertyName("hidden")] public string? Hidden { get; set; }
+}
+
+public class EntrantBestWin
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("rating")] public int Rating { get; set; }
 }
 
 /// <summary>One player of a frozen line-up, with the name to draw for them.</summary>
