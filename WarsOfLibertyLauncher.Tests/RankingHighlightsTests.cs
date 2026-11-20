@@ -157,6 +157,105 @@ public class RankingHighlightsTests
     }
 
     /// <summary>
+    /// Design 119: the cards are a mosaic. Laid out at a wide page they take four columns and the
+    /// civilization's card two of them; at a laptop's width two columns, the civilization's card
+    /// the whole row; and no card is stretched to its neighbour's height.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheCardsAreAMosaic()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("rankinghighlights");
+            var mosaic = tab.RankingLeadersMosaic!;
+            var cards = CardsOf(tab);
+            Assert.Equal(7, mosaic.Children.Count);
+            var civ = cards[6];
+            Assert.Equal(2, BentoPanel.GetSpan(civ));
+            Assert.All(cards.Take(6), c => Assert.Equal(1, BentoPanel.GetSpan(c)));
+
+            void Lay(double width)
+            {
+                mosaic.Measure(new Size(width, double.PositiveInfinity));
+                mosaic.Arrange(new Rect(0, 0, width, mosaic.DesiredSize.Height));
+            }
+            Rect Slot(Border card) => LayoutInformation.GetLayoutSlot(card);
+
+            Lay(1880);
+            Assert.Equal(4, mosaic.Columns);
+            var column = (1880 - 3 * 14) / 4.0;
+            Assert.Equal(column, Slot(cards[0]).Width, 1);
+            Assert.Equal(2 * column + 14, Slot(civ).Width, 1);
+            // The first four share a row and the next three the one under it.
+            Assert.All(cards.Take(4), c => Assert.Equal(0, Slot(c).Top, 1));
+            Assert.All(cards.Skip(4), c => Assert.Equal(Slot(cards[4]).Top, Slot(c).Top, 1));
+            Assert.True(Slot(cards[4]).Top >= cards.Take(4).Max(c => Slot(c).Bottom) + 14 - 1);
+            // Each card is as tall as its own content, not as its row.
+            Assert.All(cards, c => Assert.Equal(c.DesiredSize.Height, Slot(c).Height, 1));
+            Assert.True(cards.Take(4).Select(c => Math.Round(Slot(c).Height)).Distinct().Count() > 1);
+
+            Lay(1340);
+            Assert.Equal(2, mosaic.Columns);
+            Assert.Equal(1340, Slot(civ).Width, 1);
+            Assert.Equal(0, Slot(civ).Left, 1);
+            Assert.Equal(Slot(cards[0]).Top, Slot(cards[1]).Top, 1);
+            Assert.True(Slot(cards[2]).Top > Slot(cards[0]).Top);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Every place about one player keeps the room for his rank badge, filled or not, so the
+    /// photos of a card line up; and nobody off the sample ladder is given a badge.
+    /// </summary>
+    [Fact]
+    public void APlaceWithNoBadgeKeepsItsRoom()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("rankinghighlights");
+            var wins = CardsOf(tab)[1];
+            var slots = Walk(wins).OfType<Grid>().Where(g => Equals(g.Tag, MultiplayerTab.LeaderBadgeSlotTag)).ToList();
+            Assert.Equal(RowsOf(wins).Count, slots.Count);
+            Assert.Single(slots.Select(s => s.Width).Distinct());
+            Assert.Contains(slots, s => s.Children.Count == 1);
+            // The long-named sample player is on nobody's ladder: his slot is there and empty.
+            Assert.Contains(slots, s => s.Children.Count == 0);
+            // A switch is still the only thing in a card that is a button.
+            Assert.Empty(Walk(wins).OfType<Button>());
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>The seven pictograms and the flame are drawings WPF can read.</summary>
+    [Fact]
+    public void EveryPictogramParses()
+    {
+        Assert.Equal(7, MultiplayerTab.LeaderIcons.Count);
+        foreach (var kind in Enum.GetValues<HighlightCellKind>())
+            Assert.False(Geometry.Parse(MultiplayerTab.LeaderIcons[kind]).Bounds.IsEmpty, kind.ToString());
+        Assert.False(Geometry.Parse(MultiplayerTab.LeaderFlame).Bounds.IsEmpty);
+    }
+
+    /// <summary>Design 118e: the month selector is the mode capsule's twin, button for button.</summary>
+    [Fact]
+    public void TheMonthSelectorIsBuiltLikeTheModeCapsule()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            Assert.Same(tab.RankingModeHighlights.Style, tab.RankingMonthCurrent.Style);
+            Assert.Same(tab.RankingModeHighlights.Style, tab.RankingMonthPrevious.Style);
+            var mode = (Border)((FrameworkElement)tab.RankingModeSolo.Parent).Parent;
+            Assert.Equal(mode.CornerRadius, tab.RankingMonthCapsule.CornerRadius);
+            Assert.Equal(mode.Padding, tab.RankingMonthCapsule.Padding);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// An older server answers 404 to <c>/stats/highlights</c>: the view SAYS so, and draws no
     /// cards — an empty page would read as a community with nothing to highlight.
     /// </summary>

@@ -1169,8 +1169,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   drawn again without glow or sheen. Measured, the sheen adds no redraws: the animated badges alone
   give the same figure.
   The page gap (12 or 16) is applied in `ApplyRankingSplit`/`ApplyPodiumGap`, not only when drawing,
-  so a window crossing 1600 px gets it at once. Highlights (93f): a card per ~300 px
-  (`LeaderColumns`), the first row of each in soft gold, the viewer's own blue with a rim.
+  so a window crossing 1600 px gets it at once. Highlights are design 119 now (the mosaic; see
+  its own bullet), no longer 93f's equal cards.
   `--demo-elo=93a..93f` opens each block; 93e is the empty ladder.
 
 - **RANKING IN COLOUR (design 107, `docs/design_14nov`, 2026-11-14), on top of design 93.** The
@@ -8732,6 +8732,43 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   failure, and while loading — never an empty page. `RankingHighlightsTests` pins the swap, the
   order, the marked rows, the switch and the three notices.
 
+- **RANKING › HIGHLIGHTS IS A MOSAIC (designs 118/119, `docs/design_destacados`, 2026-11-19), which
+  SUPERSEDES what the bullet above says about how the cards LOOK** (one equal card per ~300-380 px,
+  `LeaderColumns`, `MpRankOwnRow`, "no design covers this view"). What the page says is unchanged:
+  the seven highlights, their rules, five places at most, the switch, the notices, the route.
+  `Controls/BentoPanel` lays the cards out: equal columns 14 apart, row by row, **each card as tall
+  as its own content and top-aligned** (a short card stretched to its row was the half-empty card
+  the redesign removes), and a card may lie over two columns (`BentoPanel.Span`; the
+  civilization's). The panel decides its own columns from the width it is given
+  (`HighlightsMosaic.Columns`: 4 from 1440, else 2, 1 under 700), so a resize reflows the cards
+  already there and nothing listens to the page's size. Each card opens with a drawn pictogram
+  (`LeaderIcons`, a path per highlight, never a character) and is drawn the way its figure asks:
+  the climb as a block with both ratings and rows under it, most wins and most matches with a bar
+  per place, the streak with one mark per win and an amber pill with a drawn flame, the win rate as
+  a ring, the upset as a duel (winner, "+gap" over a BEAT pill, loser at 82 %), the civilization of
+  the month in two halves. **The numbers come from the highlight itself** (`LeaderRow.Facts`:
+  `BarShare` = the place against the first, a win rate against 100, never under `BarFloor`; both
+  ratings of a climb; the losing side of an upset) — no new server data. The first place is on
+  soft gold; **the viewer's own row is blue with "YOU" and that wins over the gold**
+  (`HlFirstDress`; the test pins the exact blue). **Each player wears his rank badge, taken from
+  the ladder the page already has** (`HighlightsMosaic.RankOf` over `CommunityStatsView.Rows` /
+  `TeamRows`; the card's own ladder: the switch's on climb and streak, the upset's mode): still, 20
+  wide on the corner of a block's photo and 16 before the photo in a row, with no click of its own
+  so the row still opens the profile. **Nobody off that ladder gets one** — being placed, a private
+  rating, past the page the server sent, a team upset naming several players — **and the room for
+  it stays** (`LeaderBadgeSlotTag`), so a card's photos line up. A detail that follows a long name
+  on one line is not drawn when only a sliver is left (`HideWhenCramped`, by `Opacity`, from the
+  text's own `SizeChanged`: it must not move the size it reacts to). The month selector is the mode
+  capsule's twin (`RkModeButton`, the same box): with `SubTab` the chosen month's fill did not
+  follow its pill (118e). Sizes are the `Hl*` tokens, all in `TextScale.ScaledKeys`. Not built: the
+  cards' live blur (the glass is the page's `GlassPanel`), letter-spacing. In the preview the
+  civilization flags are empty frames, because the harness has no mod installed to read them from.
+  Pinned by `BentoPanelTests` (`THE_ONE_THAT_MATTERS_ACardIsAsTallAsItsContentAndNoTaller`),
+  `RankingHighlightsTests` (`THE_ONE_THAT_MATTERS_TheCardsAreAMosaic`, `APlaceWithNoBadgeKeepsItsRoom`,
+  `TheMonthSelectorIsBuiltLikeTheModeCapsule`), `RankingViewTests`
+  (`THE_ONE_THAT_MATTERS_APlayerOffTheLadderHasNoPlace`) and `HighlightLeadersViewTests`
+  (`EachRowCarriesTheNumbersItIsDrawnFrom`).
+
 - **Refunds are 55n.** A ban with `--refund` gives every player who lost rated matches to the
   banned one their points back, summed per ladder (`ban_refunds` / `rating_refunds`).
   `refunds[]` comes only in the player's OWN `/matches/elo` and never names the banned player.
@@ -9059,7 +9096,7 @@ styles and tokens (`MpSecondaryButton`, an `MpAction` pill), there is no design 
   an unknown host draws no tag. The clock is the seconds in large over an 8-px bar, blue until
   `MatchFoundDialog.LowSeconds` (5) and amber from there (`PaintAt` takes the time, so a test can
   move it). **The stake is the room's card in another dress**: `BuildStakeCard(..., StakeCardDress.Found)`
-  (the body's width, `MmFoundStakeBg`, no shadow, figures at 25); `StakeCardDress.Room` is the
+  (the body's width, the floating glass `GlassMenu`, no shadow, figures at 25); `StakeCardDress.Room` is the
   default and **`BuildStakeBlock`, the old compact block, is deleted**. "In placement 3/10" wraps
   in the rival's tile rather than being cut. `--preview-dialog=matchfound[:guest|placing|challenge|
   casual|accepted]` (`accepted` = the rival already said yes; the preview uses a sample ladder of
@@ -9068,3 +9105,25 @@ styles and tokens (`MpSecondaryButton`, an `MpAction` pill), there is no design 
   `TheHostTagSitsOnWhoeverHostsAndCarriesTheWholeSentence`, `TheStakeIsTheRoomsCardInThisWindowsDress`,
   `BothTilesFitWithLongNames`). Never seen with a real queue: the rival's "Accepted" arriving from
   the server needs two accounts.
+  **The mod's picture is behind it (117 as revised 2026-11-19).** `BaseDialog.UseModPicture(mod)` →
+  `ModDialogChrome.AttachFound`: a 250-px strip from the window's top edge (`HeroCover.Viewbox`, .3),
+  the room window's veil (`RoomVeils`, shared with `AttachRoom`), the colour's glow from y 200, and a
+  1-px rim over the window. The layers go in AFTER the two glows `BaseDialog` paints, which it finds
+  by position (`Children[0]`/`[1]`) and now leaves empty; none carries a height it does not need,
+  because the window sizes to its content. The two tiles are `GlassPanel` by resource reference,
+  the swords tile sits on
+  `MmFoundToneWell` (a `GlassTheme` follower), and the once-blurred copy shows only under the tiles
+  and the stake card (`FrostUnder` on `Loaded`, `SizeChanged` and `ShowStake`; none at the solid
+  level). No picture to show — the mod has none, "mod image" is off, no settings — adds nothing and
+  the window stays navy with its glow. Not built: the bar's live blur, the text shadows (an `Effect`
+  on text costs ClearType; the left veil keeps the headline readable) and the cards' drop shadows.
+  Pinned by `THE_ONE_THAT_MATTERS_ThePictureGoesUpWithoutMovingAnything`,
+  `WithNoPictureTheWindowStaysAsItWas` and `TheTilesAndTheStakeCardAreGlass`.
+  **The colour of a tile is the acceptance (117f-h, the page's recommended form; 117i, me blue and
+  the rival red, was not built).** Both tiles are the same neutral glass; a tile turns green
+  (`MmFoundAcceptedWash`, rim 1.5) when ITS player accepts, set by the same `AcceptMark` that writes
+  "Accepted"; mine is told apart by "YOU" beside the name (`MatchFoundDialog.YouTag`), which still
+  trims. A tile in the mod's colour ran into the red of "If you lose" with a red mod. The wash and
+  the rim are layers over the glass, so the rim goes from 1 to 1.5 without moving what is inside.
+  With both accepted the button reads "Opening the room…" (`MmOpeningRoom`) until `mm_room_ready`
+  closes the window. Pinned by `THE_ONE_THAT_MATTERS_ATileIsColouredByItsOwnAcceptance`.

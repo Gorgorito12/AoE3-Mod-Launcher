@@ -615,17 +615,24 @@
     <!-- The match-found dialog (design 117): the green swords tile, the rival's neutral tile
          (mine takes the mod's colour, in code), the host tag, the stake card's darker well and
          the clock, blue until five seconds are left and amber from there. -->
-    <SolidColorBrush x:Key="MmFoundToneFill" Color="#294FD68A"/>
-    <SolidColorBrush x:Key="MmFoundToneRing" Color="#804FD68A"/>
+    <SolidColorBrush x:Key="MmFoundToneWell" Color="#8008101C"/>
+    <SolidColorBrush x:Key="MmFoundToneFill" Color="#334FD68A"/>
+    <SolidColorBrush x:Key="MmFoundToneRing" Color="#8C4FD68A"/>
+    <SolidColorBrush x:Key="MmFoundHeadline" Color="#F6F9FD"/>
+    <SolidColorBrush x:Key="MmFoundWindowRim" Color="#1AFFFFFF"/>
     <SolidColorBrush x:Key="MmFoundKindRatedText" Color="#F3D995"/>
     <SolidColorBrush x:Key="MmFoundKindRatedDot" Color="#E6C06A"/>
-    <SolidColorBrush x:Key="MmFoundTileBg" Color="#0BFFFFFF"/>
-    <SolidColorBrush x:Key="MmFoundTileRim" Color="#1AFFFFFF"/>
+    <SolidColorBrush x:Key="MmFoundTileRim" Color="#21FFFFFF"/>
+    <LinearGradientBrush x:Key="MmFoundAcceptedWash" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#424FD68A" Offset="0"/>
+        <GradientStop Color="#174FD68A" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="MmFoundAcceptedRim" Color="#B84FD68A"/>
+    <SolidColorBrush x:Key="MmFoundYouTag" Color="#9FD0F5"/>
     <SolidColorBrush x:Key="MmFoundTagBg" Color="#14FFFFFF"/>
     <SolidColorBrush x:Key="MmFoundTagRim" Color="#24FFFFFF"/>
     <SolidColorBrush x:Key="MmFoundPendingRing" Color="#42FFFFFF"/>
-    <SolidColorBrush x:Key="MmFoundStakeBg" Color="#6B060C14"/>
-    <SolidColorBrush x:Key="MmFoundStakeRim" Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="MmFoundStakeRim" Color="#21FFFFFF"/>
     <SolidColorBrush x:Key="MmFoundClockTrack" Color="#1AFFFFFF"/>
     <SolidColorBrush x:Key="MmFoundClockBar" Color="#55ACEE"/>
     <SolidColorBrush x:Key="MmFoundClockLow" Color="#F4900C"/>

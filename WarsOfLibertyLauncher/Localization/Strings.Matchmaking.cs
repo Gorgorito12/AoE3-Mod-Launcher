@@ -26,6 +26,7 @@ public static partial class Strings
         ["MmDecline"] = new() { [LangEn] = "Decline", [LangEs] = "Rechazar" },
         ["MmWithdraw"] = new() { [LangEn] = "Withdraw", [LangEs] = "Retirarme" },
         ["MmWaitingFor"] = new() { [LangEn] = "Waiting for {0}…", [LangEs] = "Esperando a {0}…" },
+        ["MmOpeningRoom"] = new() { [LangEn] = "Opening the room…", [LangEs] = "Abriendo la sala…" },
         ["MmFoundHostTag"] = new() { [LangEn] = "Host", [LangEs] = "Anfitrión" },
         ["MmFoundAccepted"] = new() { [LangEn] = "Accepted", [LangEs] = "Aceptado" },
         ["MmFoundPending"] = new() { [LangEn] = "Pending", [LangEs] = "Pendiente" },

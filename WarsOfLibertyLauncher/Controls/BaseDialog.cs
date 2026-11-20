@@ -51,6 +51,7 @@ public class BaseDialog : Window
     private DialogTone _tone;
     private Color _glowColor = Color.FromRgb(0x2F, 0x7F, 0xE0);
     private double _glowTop = .2;
+    private bool _pictureUp;
 
     internal TitleBar Chrome { get; } = new() { ShowMinimize = false, ShowMaximize = false, ShowClose = true };
     internal TextBlock ToneGlyph { get; } = new()
@@ -241,11 +242,54 @@ public class BaseDialog : Window
         PrimaryAction.Foreground = new SolidColorBrush(ModAccent.OnAccent(color));
     }
 
+    /// <summary>
+    /// The mod's picture behind the bar, with its veil and the colour's glow under it (117). It
+    /// goes in AFTER the two glows this class paints, which stay children 0 and 1 and are left
+    /// empty: the design draws one glow, below the picture. False, and nothing changes, when
+    /// there is no picture to show.
+    /// </summary>
+    internal bool UseModPicture(ModProfile? mod)
+    {
+        if (mod == null || _pictureUp) return false;
+        if (!ModDialogChrome.AttachFound(_root, 2, mod, Width)) return false;
+        _pictureUp = true;
+        PaintGlow();
+        // The window's own edge, over everything: the picture reaches the border.
+        var rim = new Border
+        {
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            IsHitTestVisible = false,
+        };
+        rim.SetResourceReference(Border.BorderBrushProperty, "MmFoundWindowRim");
+        Grid.SetRowSpan(rim, Math.Max(1, _root.RowDefinitions.Count));
+        _root.Children.Add(rim);
+        return true;
+    }
+
+    /// <summary>Whether <see cref="UseModPicture"/> put a picture up.</summary>
+    internal bool HasModPicture => _pictureUp;
+
+    /// <summary>The blurred copy of the picture under these cards, and nowhere else.</summary>
+    internal void FrostUnder(params FrameworkElement[] cards)
+    {
+        if (_pictureUp) ModDialogChrome.FrostCards(_root, cards);
+    }
+
+    /// <summary>The window's root, for a test that counts what was put in it.</summary>
+    internal Grid RootForTests => _root;
+
     /// <summary>In pixels, as the design states them: a brush relative to the window would reach
     /// less far in a small one, which is every window here.</summary>
     private void PaintGlow()
     {
         if (_root.Children.Count < 2 || _root.Children[0] is not Shape top || _root.Children[1] is not Shape bottom) return;
+        if (_pictureUp)
+        {
+            top.Fill = Brushes.Transparent;
+            bottom.Fill = Brushes.Transparent;
+            return;
+        }
         top.Fill = Glow(new Point(ActualWidth * .88, 0), 520, 340, _glowTop);
         bottom.Fill = Glow(new Point(0, ActualHeight), 420, 300, .08);
     }

@@ -134,6 +134,54 @@ public class HighlightLeadersViewTests
         Assert.Equal(("Siux", "+238", "beat Geaf_Argento · 1402 vs 1640"), (upset.Name, upset.Figure, upset.Detail));
     }
 
+    /// <summary>
+    /// Design 119: what the mosaic draws comes from the same highlight, as numbers. A bar is the
+    /// place against the first (a win rate, against 100), a climb carries both ratings, a streak
+    /// its wins, and an upset the side that lost with both sides' ratings.
+    /// </summary>
+    [Fact]
+    public void EachRowCarriesTheNumbersItIsDrawnFrom()
+    {
+        var cards = InEnglish(() => Cards(EloDemoData.Highlights().Current)).ToDictionary(c => c.Kind);
+
+        var climb = cards[HighlightCellKind.TopClimb].Rows;
+        Assert.Equal((1402, 1460, 14), (climb[0].Facts.RatingFrom, climb[0].Facts.RatingTo, climb[0].Facts.Matches));
+        Assert.Equal(1, climb[0].Facts.BarShare);
+        Assert.False(climb[0].Facts.Team);
+
+        var wins = cards[HighlightCellKind.MostWins].Rows;
+        Assert.Equal(1, wins[0].Facts.BarShare);
+        Assert.Equal(20.0 / 23, wins[1].Facts.BarShare, 3);
+        Assert.All(wins, r => Assert.InRange(r.Facts.BarShare, HighlightsMosaic.BarFloor, 1));
+
+        // 82 % is drawn as 82 % of the ring, although it is the first place.
+        var rate = cards[HighlightCellKind.BestWinRate].Rows[0];
+        Assert.Equal((82, .82), (rate.Facts.Percent, rate.Facts.BarShare));
+
+        var streak = cards[HighlightCellKind.BestStreak].Rows[0];
+        Assert.Equal(streak.Streak, streak.Facts.Wins);
+
+        var upset = cards[HighlightCellKind.BiggestUpset].Rows[0];
+        Assert.NotNull(upset.Facts.Rival);
+        Assert.Equal(("Geaf_Argento", 1402, 1640), (upset.Facts.Rival!.Name, upset.Facts.Rival.WinnersRating, upset.Facts.Rival.LosersRating));
+        Assert.Single(upset.Facts.Rival.UserIds);
+
+        var civ = cards[HighlightCellKind.TopCiv].Rows;
+        Assert.Equal(1, civ[0].Facts.BarShare);
+        Assert.Equal(22.0 / 27, civ[1].Facts.BarShare, 3);
+        Assert.Null(civ[0].Facts.Rival);
+    }
+
+    /// <summary>The team ladder's climb says so, so its badges come from the team ladder.</summary>
+    [Fact]
+    public void ATeamClimbIsMarkedAsTheTeamLadders()
+    {
+        var cards = InEnglish(() => Cards(EloDemoData.Highlights().Current, climbTeam: true));
+        var climb = cards.Single(c => c.Kind == HighlightCellKind.TopClimb);
+        Assert.True(climb.Team);
+        Assert.All(climb.Rows, r => Assert.True(r.Facts.Team));
+    }
+
     /// <summary>A side that won an upset is one row naming everybody on it, and marks all of them.</summary>
     [Fact]
     public void ATeamUpsetIsOneRowNamingTheWholeSide()
