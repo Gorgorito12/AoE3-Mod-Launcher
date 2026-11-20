@@ -352,6 +352,22 @@ internal static class TournamentPage
 
     /// <summary>Every card and connector, in unscaled pixels: a card at round r and position p sits
     /// midway between the two that feed it, so a 64 draw is arithmetic and never a measure.</summary>
+    /// <summary>
+    /// Where to scroll VERTICALLY when a round's chip is pressed: the horizontal jump alone left
+    /// a short viewport (a laptop, or a zoom above 100 %) on empty space, the round's first card
+    /// sitting below the fold. Null when that card is already in view, so a press never moves
+    /// the bracket for nothing.
+    /// </summary>
+    internal static double? VerticalOffsetForRound(IReadOnlyList<MatchBox> cards, int round, double zoom,
+                                                   double offset, double viewport)
+    {
+        var first = cards.Where(c => c.Match.Round == round).OrderBy(c => c.Y).FirstOrDefault();
+        if (first == null || viewport <= 0) return null;
+        double top = first.Y * zoom, bottom = (first.Y + first.Height) * zoom;
+        if (top >= offset && bottom <= offset + viewport) return null;
+        return System.Math.Max(0, top - 40);
+    }
+
     internal static BracketSheet Sheet(TournamentDetail t)
     {
         var matches = t.Matches ?? new List<TournamentMatch>();

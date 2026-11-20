@@ -684,14 +684,17 @@ public partial class MultiplayerTab
 
     /// <summary>A 22-px chip: a 6-px dot and a short label, on a faint fill with a rim. A chip
     /// with a state of its own (in a match, another version, mine) names its fill and rim.</summary>
-    private static Border RoomChip(string text, string dotKey, string textKey, string? tip = null,
+    internal static Border RoomChip(string text, string dotKey, string textKey, string? tip = null,
         string fillKey = "RmChipBg", string? rimKey = "RmChipRim", bool pulse = false)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        // A DockPanel, not a horizontal StackPanel: the label is measured with what is left, so a
+        // chip wider than its line (the chat's room card at 125 % text) trims instead of being cut.
+        var row = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center };
         var dot = new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, Fill = Rm(dotKey), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         if (pulse) AttachChipPulse(dot);
+        DockPanel.SetDock(dot, Dock.Left);
         row.Children.Add(dot);
-        var label = new TextBlock { Text = text, Foreground = Rm(textKey), FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = text, Foreground = Rm(textKey), FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         label.SetResourceReference(TextBlock.FontSizeProperty, "RmChipSize");
         row.Children.Add(label);
         var chip = new Border

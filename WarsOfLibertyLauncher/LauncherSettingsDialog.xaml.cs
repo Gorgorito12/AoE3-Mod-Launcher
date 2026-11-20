@@ -2653,7 +2653,9 @@ public partial class LauncherSettingsDialog : Window
     {
         try
         {
-            var tempDir = Path.Combine(Path.GetTempPath(), "WarsOfLibertyLauncher");
+            // The one definition of this folder (CLAUDE.md: never rebuild it inline; a copy that
+            // drifts would clean a folder the install no longer uses).
+            var tempDir = AppPaths.InstallTempRoot;
             if (!Directory.Exists(tempDir))
             {
                 SetHint(ClearTempHint, Strings.Get("DlgLauncherSettingsNothingToClean"), success: true);

@@ -322,6 +322,47 @@ public class EloPreviewTests
     }
 
     /// <summary>
+    /// The streak cell's note ("Se cortó el 4 nov: 14 días sin jugar") is wider than the cell
+    /// once the window is narrow or the text is large (it was cut at the default 1040 with the
+    /// text at 110 %, what Automatic picks on a 32" monitor), and it was cut mid-word. Found by
+    /// the layout probe; measured here at the window's MinWidth.
+    /// </summary>
+    [Fact]
+    public void TheModeCardsCutNoTextWithoutAnEllipsis()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            Strings.SetLanguage(Strings.LangEs);
+            try
+            {
+                // The profile window's MinWidth, 780, less its 20-px margins, at 100 %; and its
+                // default 1040 at the largest text size ("RACHA MÁS LARGA" was cut there).
+                foreach (var (width, scale) in new[] { (740.0, 1.0), (1000.0, 1.25) })
+                {
+                    WarsOfLibertyLauncher.Services.TextScale.Apply(scale);
+                    var tab = new MultiplayerTab();
+                    var body = new StackPanel();
+                    tab.ProfileBodyOverride = body;
+                    tab.ShowDemoEloProfile(EloDemoData.ProfileLimits());
+                    body.Measure(new Size(width, double.PositiveInfinity));
+                    body.Arrange(new Rect(0, 0, width, body.DesiredSize.Height));
+                    body.UpdateLayout();
+                    var cuts = ModeCards(body).SelectMany(c => WarsOfLibertyLauncher.Services.LayoutAudit.Audit(c, "mode card"))
+                        .Where(f => f.Kind == "CUT").ToList();
+                    Assert.True(cuts.Count == 0, $"{width} at {scale:P0}: " + string.Join("; ", cuts.Select(f => f.Text + " " + f.Detail)));
+                }
+            }
+            finally
+            {
+                WarsOfLibertyLauncher.Services.TextScale.Apply(1.0);
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// An older backend sends no per-ladder standing: the 1v1 card is put together from the
     /// top-level fields, which carry the record \u2014 so the line is there, and nothing the old
     /// payload did not carry (no streak cells).

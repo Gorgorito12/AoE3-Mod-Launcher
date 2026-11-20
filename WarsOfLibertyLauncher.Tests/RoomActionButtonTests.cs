@@ -215,11 +215,11 @@ public class RoomActionButtonTests
             var card = Card(tab, room);
             var label = Descendants(card).OfType<TextBlock>()
                 .Single(t => t.Text == Localization.Strings.Get("RmChipPassword"));
-            var chip = (Border)((StackPanel)label.Parent).Parent;
+            var chip = (Border)((Panel)label.Parent).Parent;
             Assert.Same(Res("MpPrivateText"), label.Foreground);
             Assert.Same(Res("MpPrivateBg"), chip.Background);
             Assert.Same(Res("MpPrivateRim"), chip.BorderBrush);
-            var dot = ((StackPanel)label.Parent).Children.OfType<System.Windows.Shapes.Ellipse>().Single();
+            var dot = ((Panel)label.Parent).Children.OfType<System.Windows.Shapes.Ellipse>().Single();
             Assert.Same(Res("MpPrivate"), dot.Fill);
         });
         Assert.Null(error);

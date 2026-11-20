@@ -55,6 +55,32 @@ python -I tools/testbed/testbed.py sidebyside out.png tools/testbed/out/shot.png
 - **Edge and WPF never match pixel for pixel.** WPF has no letter-spacing and the blur is emulated,
   so `sidebyside`'s percentage is a guide. Geometry is asserted in xUnit; the picture is for looking.
 
+## Text that cannot be read, and buttons that do nothing
+
+- **`audit [FILE] [--all]`** asks the running launcher for its layout probe
+  (`Services/LayoutAudit.cs`, harness only): in every open window, a one-line text narrower than
+  its text with no ellipsis (`CUT`), text drawn past the edge of a panel that clips it
+  (`OUTSIDE`), two texts on a line over each other or under 8 px apart (`OVERLAP`, `TOUCH`), and,
+  with `--all`, every text that ends in an ellipsis right now (`TRIM`). Leads, not verdicts: look
+  at each in a capture.
+- **`launch --text 125 --effects low --max`** set the text size, "Effects and animations" and a
+  maximized window for one run; the sweeps take the same three.
+- **`sweep_screens.py OUTDIR [--size] [--lang] [--glass] [--text] [--effects] [--max] [--only NAME…]`** opens every screen and
+  dialog the launcher paints on its own (every `--demo-*`, `--preview-*`, `--open-*`) and keeps,
+  for each, a capture of every window and the probe's report.
+- **`sweep_controls.py NAME [--size] [--lang] -- LAUNCH ARGS`** presses every button, link, toggle
+  and menu item UI Automation lists on that screen, one at a time, and records what each did (a
+  window, a log line, the controls changing). `NOEFFECT` is a lead; an exception or a launcher that
+  closes is a failure.
+
+## Leaks
+
+- **`memory`** asks the running launcher (harness only) for its managed heap after a full
+  collection, private memory, handles, GDI and USER objects, threads and open windows, as JSON.
+- **`leak_loop.py NAME --open ID… [--rounds 30] -- LAUNCH ARGS`** opens a window by pressing those
+  controls, closes it, and reads `memory` every few rounds. One warm-up round is left out: the first
+  open loads what is kept for good. A window that is never freed shows as the same step every round.
+
 ## Performance
 
 `perf <scenario> --label baseline` measures one scenario in a new process each run, because

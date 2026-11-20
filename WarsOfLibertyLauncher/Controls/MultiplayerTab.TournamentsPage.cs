@@ -78,6 +78,8 @@ public partial class MultiplayerTab
         return rim;
     }
     private readonly Dictionary<string, Border> _bracketCards = new(StringComparer.Ordinal);
+    /// <summary>The sheet the bracket was last drawn from: where each card sits, for the round chips.</summary>
+    private IReadOnlyList<MatchBox> _bracketBoxes = Array.Empty<MatchBox>();
     private ScrollViewer? _bracketScroll;
 
     /// <summary>
@@ -635,6 +637,7 @@ public partial class MultiplayerTab
         if (panel == null) return;
         panel.Children.Clear();
         _bracketCards.Clear();
+        _bracketBoxes = Array.Empty<MatchBox>();
         _mineBox = null;
 
         var t = _tournamentDetail;
@@ -895,7 +898,7 @@ public partial class MultiplayerTab
         };
     }
 
-    private FrameworkElement? BuildCallCard(TournamentDetail t, string? me)
+    internal FrameworkElement? BuildCallCard(TournamentDetail t, string? me)
     {
         var call = TournamentPage.Call(t, me);
         _tournamentCallSub = null;
@@ -907,8 +910,13 @@ public partial class MultiplayerTab
         {
             if (string.IsNullOrEmpty(call.Kicker) && string.IsNullOrEmpty(call.Title)) return null;
             if (!string.IsNullOrEmpty(call.Kicker))
-                words.Children.Add(Say(call.Kicker, "SetCaptionSize",
-                    t.Status == "registration" ? ToHex(StateColors.GreenText) : ToHex(ModAccent.TextOn(_pageAccent)), FontWeights.Bold));
+            {
+                var kicker = Say(call.Kicker, "SetCaptionSize",
+                    t.Status == "registration" ? ToHex(StateColors.GreenText) : ToHex(ModAccent.TextOn(_pageAccent)), FontWeights.Bold);
+                // "TU RIVAL ABRIÓ LA SALA · SEMIFINAL" was cut mid-word in a narrow window.
+                kicker.TextWrapping = TextWrapping.Wrap;
+                words.Children.Add(kicker);
+            }
             if (call.Match != null) words.Children.Add(BuildVersus(t, me, call.Match));
             else if (!string.IsNullOrEmpty(call.Title))
             {
@@ -1083,7 +1091,7 @@ public partial class MultiplayerTab
         }
     }
 
-    private UIElement BuildVersus(TournamentDetail t, string? me, TournamentMatch m)
+    internal UIElement BuildVersus(TournamentDetail t, string? me, TournamentMatch m)
     {
         var mine = TournamentPermissions.MyEntrant(t, me);
         bool team = TournamentPage.IsTeam(t);
@@ -1096,6 +1104,8 @@ public partial class MultiplayerTab
             var name = Say(e?.DisplayName ?? "", "SetSubTitleSize", "#FFFFFF", FontWeights.SemiBold);
             name.TextTrimming = TextTrimming.CharacterEllipsis;
             var seed = Say(Strings.Format("TpSeedLine", role, e?.Seed?.ToString() ?? "—"), "SetCaptionSize", "#C3D2E5", margin: new Thickness(0, 3, 0, 0));
+            // "Tu equipo · semilla 1" is wider than the side on a laptop: it ended mid-word.
+            seed.TextTrimming = TextTrimming.CharacterEllipsis;
             var words = new StackPanel { Margin = new Thickness(right ? 0 : 9, 0, right ? 9 : 0, 0), VerticalAlignment = VerticalAlignment.Center };
             if (right) { name.TextAlignment = TextAlignment.Right; seed.TextAlignment = TextAlignment.Right; name.HorizontalAlignment = HorizontalAlignment.Right; seed.HorizontalAlignment = HorizontalAlignment.Right; }
             words.Children.Add(name);
@@ -1604,6 +1614,7 @@ public partial class MultiplayerTab
         foreach (var l in path) canvas.Children.Add(Bar(l, bright));
 
         _bracketCards.Clear();
+        _bracketBoxes = sheet.Cards;
         foreach (var box in sheet.Cards)
         {
             if (!RankBadge.ReducedEffects)
@@ -2451,6 +2462,9 @@ public partial class MultiplayerTab
         double column = TournamentPage.IsTeam(t) ? TournamentPage.ColumnWidthTeam : TournamentPage.ColumnWidthSolo;
         double x = TournamentPage.Pad + (round - first) * (column + TournamentPage.Gutter);
         _bracketScroll.ScrollToHorizontalOffset(Math.Max(0, x * _bracketZoom / 100 - 12));
+        if (TournamentPage.VerticalOffsetForRound(_bracketBoxes, round, _bracketZoom / 100,
+                _bracketScroll.VerticalOffset, _bracketScroll.ViewportHeight) is { } y)
+            _bracketScroll.ScrollToVerticalOffset(y);
     }
 
     private void GoToMyMatch()

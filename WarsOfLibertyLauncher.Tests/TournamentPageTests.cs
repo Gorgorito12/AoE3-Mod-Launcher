@@ -9,6 +9,7 @@ using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Services.Multiplayer;
+using WarsOfLibertyLauncher.Services;
 using Xunit;
 
 namespace WarsOfLibertyLauncher.Tests;
@@ -368,6 +369,72 @@ public class TournamentPageTests
         var captions = buttons.Select(b => b.Content as string ?? "").ToList();
         Assert.Contains(Strings.Get("TpAcceptShort"), captions);
         Assert.Contains(Strings.Get("MpTournamentReject"), captions);
+    });
+
+    /// <summary>
+    /// A round's chip jumped sideways only: in a short viewport (a laptop, or zoomed in) the
+    /// round's first card sat below the fold and the press showed empty space. Found pressing
+    /// "Quarter-finals" on the 32-place sample at 140 % during the 2026-11-19 audit.
+    /// </summary>
+    [Fact]
+    public void ARoundChipBringsItsFirstCardIntoView()
+    {
+        TournamentMatch M(int round) => new() { Id = "m" + round, Round = round };
+        var cards = new List<MatchBox>
+        {
+            new(M(1), 0, 0, 200, 60),
+            new(M(3), 400, 300, 200, 60),
+            new(M(3), 400, 700, 200, 60),
+        };
+        // Below the fold at 140 %: scrolled to 40 px above the first card.
+        Assert.Equal(300 * 1.4 - 40, TournamentPage.VerticalOffsetForRound(cards, 3, 1.4, 0, 200)!.Value, 3);
+        // Already in view: the bracket does not move.
+        Assert.Null(TournamentPage.VerticalOffsetForRound(cards, 3, 1.0, 250, 400));
+        // A round with no card, or nothing measured yet: nothing to do.
+        Assert.Null(TournamentPage.VerticalOffsetForRound(cards, 5, 1.0, 0, 200));
+        Assert.Null(TournamentPage.VerticalOffsetForRound(cards, 3, 1.0, 0, 0));
+    }
+
+    /// <summary>The "your match" card at a laptop's width (about 316 at 1366x768): the seed line was cut mid-word, with
+    /// no ellipsis ("Tu equipo · sem"). Found by the layout probe (Services/LayoutAudit.cs).</summary>
+    [Fact]
+    public void TheVersusCardCutsNothingWithoutAnEllipsis() => OnSta(() =>
+    {
+        var tab = new MultiplayerTab();
+        tab.ShowDemoTournaments("teams");
+        var t = tab.TournamentPreview.Detail(TournamentDemoData.TeamsId)!;
+        var mine = TournamentPermissions.MyEntrant(t, TournamentDemoData.MeUserId)!;
+        var match = t.Matches!.First(m => m.Entrant1Id == mine.Id || m.Entrant2Id == mine.Id);
+        var card = new Grid { Width = 300 };
+        card.Children.Add(tab.BuildVersus(t, TournamentDemoData.MeUserId, match));
+        card.Measure(new Size(300, double.PositiveInfinity));
+        card.Arrange(new Rect(0, 0, 300, card.DesiredSize.Height));
+        card.UpdateLayout();
+        var cuts = LayoutAudit.Audit(card, "versus").Where(f => f.Kind == "CUT").ToList();
+        Assert.True(cuts.Count == 0, string.Join("; ", cuts.Select(f => f.Text + " " + f.Detail)));
+    });
+
+    /// <summary>The whole "your turn" card at the window's minimum size: its heading ("TU RIVAL
+    /// ABRIÓ LA SALA · SEMIFINAL") was cut mid-word.</summary>
+    [Fact]
+    public void TheCallCardCutsNothingInANarrowWindow() => OnSta(() =>
+    {
+        var previous = Strings.Language;
+        Strings.SetLanguage(Strings.LangEs);
+        try
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoTournaments("teams");
+            var t = tab.TournamentPreview.Detail(TournamentDemoData.TeamsId)!;
+            var card = new Grid { Width = 380 };
+            card.Children.Add(tab.BuildCallCard(t, TournamentDemoData.MeUserId)!);
+            card.Measure(new Size(380, double.PositiveInfinity));
+            card.Arrange(new Rect(0, 0, 380, card.DesiredSize.Height));
+            card.UpdateLayout();
+            var cuts = LayoutAudit.Audit(card, "call").Where(f => f.Kind == "CUT").ToList();
+            Assert.True(cuts.Count == 0, string.Join("; ", cuts.Select(f => f.Text + " " + f.Detail)));
+        }
+        finally { Strings.SetLanguage(previous); }
     });
 
     [Fact]
