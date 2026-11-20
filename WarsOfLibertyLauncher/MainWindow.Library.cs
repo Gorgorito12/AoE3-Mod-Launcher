@@ -94,6 +94,9 @@ public partial class MainWindow
             case "matchfound":
                 MultiplayerView?.PreviewMatchFound(variant);
                 break;
+            case "bell":
+                PreviewBell(variant);
+                break;
             case "matchwatch":
                 PreviewMatchWatch(variant);
                 break;

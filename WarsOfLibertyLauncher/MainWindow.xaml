@@ -1668,14 +1668,27 @@
              cards in the bottom-right that float over ANY tab. Spans all rows;
              Background is null so it only intercepts clicks on the cards themselves
              (empty areas stay click-through to the content below). -->
-        <!-- The bell's panel (design 70a). In the window, not a Popup: a transparent Popup loses
-             ClearType. The veil only closes it. It starts under the caption so the bell can
-             still be pressed to toggle it. -->
+        <!-- The bell's panel (designs 70a and 120). In the window, not a Popup: a transparent
+             Popup loses ClearType. The veil only closes it. It starts under the caption so the
+             bell can still be pressed to toggle it. The panel hangs from the bell and is as tall
+             as its notices: PlaceNotificationPanel sets its margin and MaxHeight from where the
+             bell really is, and the tip's. -->
         <Grid x:Name="NotificationHost" Grid.RowSpan="3" Margin="0,40,0,0" Visibility="Collapsed">
             <Border Background="Transparent" MouseLeftButtonDown="NotificationVeil_MouseLeftButtonDown"/>
             <controls:NotificationPanel x:Name="NotificationPanelView"
                                         HorizontalAlignment="Right"
-                                        Margin="0,4,12,12"/>
+                                        VerticalAlignment="Top"
+                                        Margin="0,6,12,0"/>
+            <!-- The tip: the sheet's 12-px square turned 45 degrees. Its fill covers the panel's
+                 top rim under it, and only its two upper sides carry the rim. -->
+            <Grid x:Name="NotificationCaret"
+                  Width="17" Height="9.5"
+                  HorizontalAlignment="Right" VerticalAlignment="Top"
+                  Margin="0,-2.5,0,0"
+                  IsHitTestVisible="False">
+                <Path Data="M0,8.5 L8.5,0 L17,8.5 L17,9.5 L0,9.5 Z" Fill="{DynamicResource LibraryMenuBg}"/>
+                <Path Data="M0,8.5 L8.5,0 L17,8.5" Stroke="#24FFFFFF" StrokeThickness="1"/>
+            </Grid>
         </Grid>
 
         <!-- A screenshot of the selected mod, over everything (design 68a). -->

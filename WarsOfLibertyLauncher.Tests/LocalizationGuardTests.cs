@@ -117,6 +117,48 @@ public class LocalizationGuardTests
     private static bool IsPrivateUse(char c) => c >= (char)0xE000 && c <= (char)0xF8FF;
 
     /// <summary>
+    /// A text shown for EVERY mod may not name one of them. "Game is running — Wars of Liberty is
+    /// active" was under Play with Improvement Mod open (reported), and three more strings had the
+    /// same name written into them. The two left name it on purpose: a sample row of the demo
+    /// tournaments, and the publishing note that uses it as its example.
+    /// </summary>
+    [Fact]
+    public void NoTextShownForEveryModNamesWarsOfLiberty()
+    {
+        var allowed = new[] { "PublishUpdateDeletionNote", "MpTournamentDemoWatchMod" };
+        var offenders = new List<string>();
+        var examined = 0;
+        foreach (var file in Directory.EnumerateFiles(RepoFile("Localization"), "Strings*.cs"))
+        {
+            string key = "";
+            foreach (var line in File.ReadLines(file))
+            {
+                var trimmed = line.TrimStart();
+                if (trimmed.StartsWith("//", StringComparison.Ordinal)) continue;
+                if (trimmed.StartsWith("[\"", StringComparison.Ordinal))
+                    key = trimmed[2..trimmed.IndexOf('"', 2)];
+                if (!trimmed.Contains("\"", StringComparison.Ordinal)) continue;
+                examined++;
+                if (trimmed.Contains("Wars of Liberty", StringComparison.Ordinal) && !allowed.Contains(key))
+                    offenders.Add(Path.GetFileName(file) + ": " + key);
+            }
+        }
+        Assert.True(examined > 5000, "the string table was not read: " + examined);
+        Assert.True(offenders.Count == 0, "these name Wars of Liberty for every mod: " + string.Join(", ", offenders.Distinct()));
+    }
+
+    /// <summary>The line under Stop names the mod that was launched, in both languages.</summary>
+    [Theory]
+    [InlineData("en", "Improvement Mod")]
+    [InlineData("es", "Napoleonic Era")]
+    public void TheRunningGameLineNamesTheModItWasGiven(string language, string mod)
+    {
+        var line = string.Format(WarsOfLibertyLauncher.Localization.Strings.GetIn(language, "StatusPlaying"), mod);
+        Assert.Contains(mod, line);
+        Assert.DoesNotContain("{0}", line);
+    }
+
+    /// <summary>
     /// Walks up to the launcher project by looking for a file that has to be there, so a
     /// layout change fails loudly instead of quietly skipping the checks.
     /// </summary>

@@ -3087,7 +3087,7 @@ public partial class MainWindow : Window
         var unread = NotificationView.Unread(_notifications.Items);
         NotificationDot.Visibility = unread > 0 ? Visibility.Visible : Visibility.Collapsed;
         NotificationCount.Text = unread.ToString();
-        if (NotificationHost.Visibility == Visibility.Visible) NotificationPanelView.Show(_notifications.Items);
+        if (NotificationHost.Visibility == Visibility.Visible) NotificationPanelView.Show(BellPanelItems);
         RefreshBellColor();
     }
 
@@ -14256,7 +14256,9 @@ public partial class MainWindow : Window
         if (_isGameRunning)
         {
             SetPrimaryAction(PrimaryAction.Stop);
-            SetStatus(Strings.Get("StatusPlaying"));
+            // The mod that was LAUNCHED, not the one on screen: the player may have switched
+            // mods in the launcher since. Unknown only for a game this launcher did not start.
+            SetStatus(Strings.Format("StatusPlaying", (_settingsSyncProfile ?? _updateService.Profile).DisplayName));
         }
         else
         {

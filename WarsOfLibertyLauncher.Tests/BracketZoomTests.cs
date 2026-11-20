@@ -39,6 +39,21 @@ public class BracketZoomTests
         Assert.Equal(77, BracketZoom.Fit(1000, 400, 800, 600));
     }
 
+    /// <summary>− and + go by ten, and land on round figures from wherever the fit left it.</summary>
+    [Theory]
+    [InlineData(100, 1, 110)]
+    [InlineData(110, 1, 120)]
+    [InlineData(100, -1, 90)]
+    [InlineData(129, 1, 130)]
+    [InlineData(129, -1, 120)]
+    [InlineData(121, 1, 130)]
+    [InlineData(200, 1, 200)]
+    [InlineData(60, -1, 60)]
+    [InlineData(195, 1, 200)]
+    [InlineData(64, -1, 60)]
+    public void THE_ONE_THAT_MATTERS_AStepIsTheNextMultipleOfTen(double from, int direction, double expected) =>
+        Assert.Equal(expected, BracketZoom.Step(from, direction));
+
     [Theory]
     [InlineData(40, 60)]
     [InlineData(60, 60)]

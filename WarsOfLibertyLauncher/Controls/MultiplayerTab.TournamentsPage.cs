@@ -49,8 +49,6 @@ public partial class MultiplayerTab
     /// <summary>The sheet's size at 100 %, for the fit.</summary>
     private Size _bracketSheetSize;
 
-    /// <summary>How far right the centred sheet starts, so the round titles stay over their columns.</summary>
-    private double _bracketHeadOffset;
     private readonly Dictionary<string, TournamentTab> _tournamentTabs = new(StringComparer.Ordinal);
 
     private TournamentDetail? _pageTournament;
@@ -1410,21 +1408,21 @@ public partial class MultiplayerTab
         if (_mineBox != null) tools.Children.Add(Secondary(Strings.Get("TpGoMine"), GoToMyMatch));
 
         var zoom = new StackPanel { Orientation = Orientation.Horizontal };
-        Button Step(string glyph, string tip, double delta)
+        Button Step(string glyph, string tip, int direction)
         {
             var button = new Button { Content = glyph, Width = 32, Height = 32, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = Ink("#DCE7F5"), Background = Brushes.Transparent, BorderBrush = Brushes.Transparent, ToolTip = TooltipHelper.Wrap(Strings.Get(tip)), Tag = 7d };
             button.SetResourceReference(StyleProperty, "TournamentChip");
-            Spoken(button, delta > 0 ? "TournamentZoomIn" : "TournamentZoomOut", Strings.Get(tip));
-            button.Click += (_, _) => ChooseBracketZoom(_bracketZoom + delta);
+            Spoken(button, direction > 0 ? "TournamentZoomIn" : "TournamentZoomOut", Strings.Get(tip));
+            button.Click += (_, _) => ChooseBracketZoom(BracketZoom.Step(_bracketZoom, direction));
             return button;
         }
         _zoomText = Say(_bracketZoom + " %", "SetDescSize", "#C3D2E5", FontWeights.SemiBold, mono: true);
         _zoomText.Width = 46;
         _zoomText.TextAlignment = TextAlignment.Center;
         _zoomText.VerticalAlignment = VerticalAlignment.Center;
-        zoom.Children.Add(Step("−", "TpZoomOut", -BracketZoom.ButtonStep));
+        zoom.Children.Add(Step("−", "TpZoomOut", -1));
         zoom.Children.Add(_zoomText);
-        zoom.Children.Add(Step("+", "TpZoomIn", BracketZoom.ButtonStep));
+        zoom.Children.Add(Step("+", "TpZoomIn", 1));
         var fit = new Button
         {
             Content = Say(Strings.Get("TpZoomFit"), "SetDescSize", "#DCE7F5", FontWeights.SemiBold),
@@ -1663,9 +1661,10 @@ public partial class MultiplayerTab
         _bracketSheetSize = new Size(canvas.Width, canvas.Height);
         _bracketScale = new ScaleTransform(_bracketZoom / 100, _bracketZoom / 100);
         SetBracketTextMode(canvas, _bracketZoom);
-        // Centred while it is smaller than the panel; a bigger sheet fills its slot, so the
-        // alignment does nothing and it scrolls from the top-left as before.
-        var scaled = new Border { Child = canvas, LayoutTransform = _bracketScale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        // Always against the left edge, whatever the zoom: centred, a sheet smaller than the
+        // panel moved sideways with every step of the zoom. It is centred from top to bottom
+        // only; a bigger sheet fills its slot and scrolls from the top-left.
+        var scaled = new Border { Child = canvas, LayoutTransform = _bracketScale, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         _bracketSheetHost = scaled;
 
         var scroll = new ScrollViewer
@@ -1698,7 +1697,7 @@ public partial class MultiplayerTab
             e.Handled = true;
             var onSheet = e.GetPosition(canvas);
             var onScreen = e.GetPosition(scroll);
-            ChooseBracketZoom(_bracketZoom + Math.Sign(e.Delta) * BracketZoom.WheelStep);
+            ChooseBracketZoom(BracketZoom.Step(_bracketZoom, Math.Sign(e.Delta)));
             scroll.UpdateLayout();
             double z = _bracketZoom / 100;
             scroll.ScrollToHorizontalOffset(Math.Max(0, onSheet.X * z - onScreen.X));
@@ -2504,14 +2503,12 @@ public partial class MultiplayerTab
         TextOptions.SetTextHintingMode(sheet, scaled ? TextHintingMode.Animated : TextHintingMode.Fixed);
     }
 
-    /// <summary>The round titles over their columns: shifted by where the centred sheet starts and
-    /// by the horizontal scroll.</summary>
+    /// <summary>The round titles over their columns: the sheet starts at the left edge, so they
+    /// only follow the horizontal scroll.</summary>
     private void AlignBracketHeads()
     {
         if (_bracketScroll is not { } scroll || _bracketHeadShift == null) return;
-        double sheetWidth = _bracketSheetSize.Width * _bracketZoom / 100;
-        _bracketHeadOffset = Math.Max(0, (scroll.ViewportWidth - sheetWidth) / 2);
-        _bracketHeadShift.X = _bracketHeadOffset - scroll.HorizontalOffset;
+        _bracketHeadShift.X = -scroll.HorizontalOffset;
     }
 
     /// <summary>The zoom is one transform: the cards stay where they are and nothing is rebuilt but

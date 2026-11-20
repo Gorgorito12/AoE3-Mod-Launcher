@@ -42,6 +42,18 @@ public class NotificationViewTests
         Assert.True(NotificationView.Passes(NotificationFilter.Launcher, NotificationKind.MonthlyHighlights));
     }
 
+    /// <summary>Design 120: only the launcher's version and the project's news wear the launcher's
+    /// icon. Being offline and the month's highlights sit under Launcher but are about something
+    /// else, and no mod notice is the launcher's.</summary>
+    [Fact]
+    public void OnlyTheVersionAndTheNewsAreTheLaunchersOwn()
+    {
+        var own = Enum.GetValues<NotificationKind>().Where(NotificationView.IsAboutTheLauncher).ToList();
+        Assert.Equal(new[] { NotificationKind.LauncherUpdate, NotificationKind.Announcement }, own);
+        Assert.All(own, k => Assert.False(NotificationView.IsAboutAMod(k)));
+        Assert.All(own, k => Assert.True(NotificationView.Passes(NotificationFilter.Launcher, k)));
+    }
+
     [Fact]
     public void EveryBellKindFallsInExactlyOneFilter()
     {
