@@ -811,10 +811,12 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **The zoom fits itself (2026-11-18, `Services/Multiplayer/BracketZoom`)**: until the player
   touches it, a tournament opens at the fit of its sheet to the panel, between 100 and 150 % (a big
   draw still opens at 100 % and scrolls; a 4-player draw no longer sits tiny in a corner), applied
-  from the scroller's `SizeChanged` (a star cell: no loop). By hand it goes 60-200 % (−/+ by 20,
-  Ctrl+wheel by 10 around the pointer, "Fit" = the whole sheet), kept per tournament for the
-  session. A sheet smaller than the panel is centred and the round strip follows it
-  (`AlignBracketHeads`); away from 100 % the sheet's text leaves the pixel grid, as `UiScale` does. The
+  from the scroller's `SizeChanged` (a star cell: no loop). By hand it goes 60-200 % (−/+ and
+  Ctrl+wheel to the next multiple of 10, `BracketZoom.Step`, the wheel around the pointer; "Fit" =
+  the whole sheet), kept per tournament for the session. **The sheet is always against the LEFT
+  edge** (the maintainer's call, 2026-11-20: centred, a sheet smaller than the panel moved sideways
+  at every zoom step; it is still centred top to bottom), so the round strip only follows the
+  horizontal scroll (`AlignBracketHeads`); away from 100 % the sheet's text leaves the pixel grid, as `UiScale` does. The
   column heads follow the zoom but their type does not, so at 60 % the count keeps its number alone
   and trims short of the next head.
   (2) **Going back to the tab rebuilds nothing when nothing changed** (`RenderTournamentsTab(onlyIfChanged)`,

@@ -476,7 +476,35 @@ public class TournamentPageTests
         plus.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, plus));
         var after = Logical(tab.TournamentDetailPanel).OfType<Canvas>().Single();
         Assert.Same(before, after);
-        Assert.Contains("80 %", Logical(tab.TournamentDetailPanel).OfType<TextBlock>().Select(t => t.Text));
+        Assert.Contains("90 %", Logical(tab.TournamentDetailPanel).OfType<TextBlock>().Select(t => t.Text));
+    });
+
+    /// <summary>
+    /// The sheet is against the left edge at every zoom. Centred, a draw smaller than the panel
+    /// sat in the middle and moved sideways with each step (reported with a four-player draw at
+    /// 100 % in a maximised window).
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheBracketStaysOnTheLeftAtEveryZoom() => OnSta(() =>
+    {
+        var tab = new MultiplayerTab();
+        tab.ShowDemoTournaments("finished");
+        tab.Measure(new Size(2400, 1100));
+        tab.Arrange(new Rect(0, 0, 2400, 1100));
+        tab.UpdateLayout();
+
+        var minus = Logical(tab.TournamentDetailPanel).OfType<Button>().First(b => (b.Content as string) == "−");
+        for (int press = 0; press < 4; press++)
+        {
+            var sheet = Logical(tab.TournamentDetailPanel).OfType<Canvas>().Single();
+            var host = Assert.IsType<Border>(sheet.Parent);
+            var scroll = Assert.IsType<ScrollViewer>(host.Parent);
+            Assert.Equal(HorizontalAlignment.Left, host.HorizontalAlignment);
+            Assert.True(host.ActualWidth < scroll.ViewportWidth, "the sample must be narrower than the panel for this to mean anything");
+            Assert.Equal(0, host.TranslatePoint(new Point(0, 0), scroll).X, 1);
+            minus.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, minus));
+            tab.UpdateLayout();
+        }
     });
 
     [Fact]

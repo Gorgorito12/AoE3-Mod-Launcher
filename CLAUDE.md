@@ -745,6 +745,23 @@ rather than the reverse.
   catalog mod declares its colour, so none of this shows until one does not. `ChromePopups.Track` also gives a shadowed popup room for its shadow: Placement already
   leaves a child's Margin out, so nothing moves and no offset compensates it.
 
+- **Design 120 (`docs/design_campana`) SUPERSEDES what this file says about where the bell's panel
+  opens and how its rows are marked** (a `Popup` at the bell, the per-kind glyph, `ModIconConverter`
+  in a `NotificationList` template: the panel is `Controls/NotificationPanel`, in the window). It
+  hangs from the bell: `MainWindow.PlaceNotificationPanel` measures the bell in the host
+  (`TransformToVisual`, never a fixed margin — the update pill and the caption buttons change width)
+  and sets the panel's margin, its `MaxHeight` and the tip's place, on open and from the host's
+  `LayoutUpdated` only while it is open, writing only what changed. The rule is the pure
+  `Services/NotificationPlacement` (right edge = the bell's, never under 12 from the left, 6 under
+  the bar, up to 12 from the bottom, the tip hidden when the bell is no longer over the panel). The
+  panel is top-aligned with no height of its own: the list is the star row, so it is as tall as its
+  notices and scrolls only at the cap. `NotificationView.IsAboutTheLauncher` (new version, news)
+  gets the launcher's icon through `IconFor`; marks, gear and the empty bell are PATHS in a
+  `Viewbox` (`NotificationPanel.Drawn`), never characters. `--preview-dialog=bell:b|c|d` shows the
+  sheet's three panels with sample notices that never reach the history. Pinned by
+  `NotificationPlacementTests` and `NotificationPanelTests`
+  (`THE_ONE_THAT_MATTERS_ThePanelIsAsTallAsItsNotices`).
+
 - **Tab lag is measured: every click that changes the page writes `SWITCH  a -> b  N ms (first
   time|repeat)`** (`ScreenTrace.Clicked` + a one-frame `CompositionTarget.Rendering`, click to the
   frame handed over). **And `SETTLE  <page>  N ms after the click, K builds (M ms, worst W ms)`**

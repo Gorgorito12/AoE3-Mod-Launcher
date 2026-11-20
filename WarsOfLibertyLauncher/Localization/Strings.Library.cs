@@ -146,6 +146,7 @@ public static partial class Strings
         ["NotifChoose"] = new() { [LangEn] = "Choose which notices I get", [LangEs] = "Elegir qué avisos recibo" },
         ["NotifClearRead"] = new() { [LangEn] = "Clear the read ones", [LangEs] = "Borrar las leídas" },
         ["NotifDismiss"] = new() { [LangEn] = "Delete", [LangEs] = "Borrar" },
+        ["NotifSettingsTip"] = new() { [LangEn] = "Notification settings", [LangEs] = "Configuración de notificaciones" },
         ["NotifTimeAgo"] = new() { [LangEn] = "{0} ago", [LangEs] = "hace {0}" },
         ["NotifTimeYesterday"] = new() { [LangEn] = "yesterday, {0}", [LangEs] = "ayer, {0}" },
 

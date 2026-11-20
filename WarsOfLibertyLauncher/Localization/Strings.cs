@@ -9622,8 +9622,8 @@ public static partial class Strings
         },
         ["StatusNotInstalled"] = new()
         {
-            [LangEn] = "Wars of Liberty is not installed. Choose a folder and click INSTALL MOD.",
-            [LangEs] = "Wars of Liberty no está instalado. Elige una carpeta y haz clic en INSTALAR MOD.",
+            [LangEn] = "This mod is not installed yet.",
+            [LangEs] = "Este mod todavía no está instalado.",
         },
 
         // -------- Integrated install panel --------
@@ -10924,10 +10924,12 @@ public static partial class Strings
         },
 
         // -------- Game state --------
+        // {0} = the display name of the mod that was launched. It said "Wars of Liberty" for
+        // every mod.
         ["StatusPlaying"] = new()
         {
-            [LangEn] = "🎮 Game is running — Wars of Liberty is active.",
-            [LangEs] = "🎮 El juego está en ejecución — Wars of Liberty está activo.",
+            [LangEn] = "🎮 Game is running — {0} is active.",
+            [LangEs] = "🎮 El juego está en ejecución — {0} está activo.",
         },
         ["StatusGameClosed"] = new()
         {
@@ -10937,10 +10939,10 @@ public static partial class Strings
         ["DlgInstallNoUrlBody"] = new()
         {
             [LangEn] = "No installer URL is configured.\n\n" +
-                       "Click OK to open the official Wars of Liberty website where you can " +
+                       "Click OK to open the mod's official website where you can " +
                        "download the installer manually.",
             [LangEs] = "No hay una URL de instalador configurada.\n\n" +
-                       "Haz clic en Aceptar para abrir el sitio oficial de Wars of Liberty " +
+                       "Haz clic en Aceptar para abrir el sitio oficial del mod " +
                        "y descargar el instalador manualmente.",
         },
 
@@ -11638,8 +11640,8 @@ public static partial class Strings
         },
         ["TooltipMenuUninstall"] = new()
         {
-            [LangEn] = "Remove Wars of Liberty from this computer. Age of Empires III is not affected",
-            [LangEs] = "Eliminar Wars of Liberty de tu PC. No afecta a Age of Empires III",
+            [LangEn] = "Remove this mod from this computer. Age of Empires III is not affected",
+            [LangEs] = "Eliminar este mod de tu PC. No afecta a Age of Empires III",
         },
         ["DlgOpenFolderNotFoundTitle"] = new()
         {

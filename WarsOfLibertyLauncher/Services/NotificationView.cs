@@ -35,6 +35,15 @@ public static class NotificationView
         NotificationKind.UpdateAvailable or NotificationKind.UpdateFinished or NotificationKind.Installed
         or NotificationKind.NewTranslation or NotificationKind.NewMod or NotificationKind.ModPatchPublished;
 
+    /// <summary>
+    /// The launcher's own notices (design 120): its new version and the project's news. They wear
+    /// the launcher's icon as a mod's wear the mod's. "You are offline" and the month's highlights
+    /// are filed under Launcher too, but they are about the network and the ladder, so they keep
+    /// the disc.
+    /// </summary>
+    public static bool IsAboutTheLauncher(NotificationKind kind) => kind is
+        NotificationKind.LauncherUpdate or NotificationKind.Announcement;
+
     public static bool Passes(NotificationFilter filter, NotificationKind kind) => filter switch
     {
         NotificationFilter.Mods => IsAboutAMod(kind),
