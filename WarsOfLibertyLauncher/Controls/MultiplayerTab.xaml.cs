@@ -1702,8 +1702,9 @@ public partial class MultiplayerTab : UserControl
         // The players tab's caption is normally rewritten with a live count by
         // RenderPlayersPanel; seed it here so it isn't blank before the first
         // presence frame, and so a language switch reaches it in the meantime.
-        if (_globalOnlineUsers.Count == 0)
-            PlayersPanelTitle.Text = Strings.Format("MpPlayersPanelTitle", 0);
+        // Always, not only at 0: with players online a language switch left "Jugadores · 5"
+        // in the old language until the next presence frame.
+        PlayersPanelTitle.Text = Strings.Format("MpPlayersPanelTitle", _globalOnlineUsers.Count);
         // The chat HISTORY is deliberately left alone. A system line is a record of something
         // that happened, stamped with the time it happened at; rewriting it in another language
         // would be rewriting the past. Only the furniture around it follows the switch.
@@ -1758,6 +1759,9 @@ public partial class MultiplayerTab : UserControl
         // The lobby has always solved this by re-running its own render (below); these three
         // had no equivalent.
         RefreshActiveSubtabStrings();
+        // The chat's "X opened a room" cards are live (their key carries the language), not
+        // history, so they follow the switch; without this they waited for the next rooms list.
+        RefreshRoomEventCards();
     }
 
     /// <summary>

@@ -1207,6 +1207,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `Enum.GetValues<Subtab>()` so the next page cannot be forgotten the same way, and
   `ALanguageChangeCostsNoRequest` pins the promise `RefreshActiveSubtabStrings` already made in
   prose and nothing checked.
+  **Three live pieces outside the subtabs follow it too (2026-11-19, found switching the language on
+  the running launcher):** the players tab title (always rewritten with the count, not only at 0), the
+  chat's room cards (`RefreshRoomEventCards`; their key already carried the language) and the nav's
+  "Sign in" (`MainWindow.ApplyLanguage`). Pinned by `TheChatsLiveCardsAndThePlayersTabFollowTheLanguage`.
   **What deliberately does NOT follow the language:** the global chat history. A system line is
   a record of something that happened, stamped with when; translating it later would be
   rewriting the past.

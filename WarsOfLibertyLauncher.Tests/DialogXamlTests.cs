@@ -4925,6 +4925,37 @@ public class DialogXamlTests
     /// <para>It breaks nothing, throws nothing and builds clean: text simply appears that should
     /// not be there. Hence a test rather than care.</para>
     /// </summary>
+    /// <summary>
+    /// Both settings windows are blue, and a focused field there lit up GOLD: the shared TextBox
+    /// template reads TextBoxFocusBrush, which is gold app-wide. Found pressing "Add" on an empty
+    /// translation source during the 2026-11-19 audit.
+    /// </summary>
+    [Fact]
+    public void TheSettingsWindowsRingAFocusedFieldInBlue()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var config = new LauncherConfig();
+            var profile = Services.ModRegistry.Default;
+            var settings = new LauncherSettingsDialog(config);
+            var mod = new ModPropertiesDialog(
+                profile, new Services.UpdateService(config, profile), config,
+                translationIndex: null, applyTranslation: _ => { }, revertToEnglish: () => { },
+                openVerify: () => { }, openRepair: () => { },
+                checkForUpdates: () => Task.FromResult<Services.UpdateService.CheckResult?>(null),
+                openAoE3Folder: () => { }, changeAoE3Folder: () => { }, openUserDataFolder: () => { },
+                createBackup: () => null, restoreBackup: () => null, viewLogs: () => { },
+                shareDiagnostics: () => { }, uninstall: () => { });
+            foreach (var (name, field) in new (string, FrameworkElement)[] { ("settings", settings.TxAddBox), ("mod", mod.TxAddInput) })
+            {
+                var brush = Assert.IsType<SolidColorBrush>(field.FindResource("TextBoxFocusBrush"));
+                Assert.True(brush.Color == Color.FromRgb(0x2F, 0x7F, 0xE0), $"{name}: {brush.Color}");
+            }
+        });
+        Assert.Null(error);
+    }
+
     [Fact]
     public void SearchingTheModWindowAndClearingLeavesTheHiddenThingsHidden()
     {

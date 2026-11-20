@@ -618,10 +618,12 @@ public partial class MainWindow : Window
             },
             // The quick match's search, in the title bar while it runs (MainWindow.QuickMatch.cs).
             setQuickMatchPill: SetQuickMatchPill);
+        DiagnosticLog.Milestone("multiplayer tab attached");
         UpdateAccentResources(activeProfile);
         Controls.RankBadge.SetUserReducedEffects(_config.EffectsMode == "low");
 
         ApplyLanguage();
+        DiagnosticLog.Milestone("labels and the mod's cover applied");  // ~100 ms: the cover and icon are decoded here
 
         // Apply the user's saved tab order to the nav bar and open the
         // first tab in that order (their "opens on launch" choice). Runs
@@ -3861,6 +3863,9 @@ public partial class MainWindow : Window
         RefreshActiveModUi();
         // Sidebar text (status box, actions, game footer, tabs)
         ModsBarLabel.Text = Strings.Get("ModsBarLabel");
+        // SetAccountChip writes it only when the session changes, so a language switch
+        // while signed out left "Iniciar sesión" beside an English nav bar.
+        SignInChip.Content = Strings.Get("NavSignIn");
         ActionPanelControl.ActionsLabel.Text = Strings.Get("ActionsLabel");
         if (DashboardCopyChip != null)
             DashboardCopyChip.ToolTip = Strings.Get("DashboardActiveCopyTooltip");
@@ -6129,6 +6134,14 @@ public partial class MainWindow : Window
             button.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, underline);
         UpdateTournamentBackdrop();
         PlayView.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
+        // Coming back to the Library at the SAME size it had before it was hidden raises no
+        // SizeChanged, so a list that was never drawn (the launcher opened on another tab and every
+        // refresh since found the page hidden) stayed EMPTY until a resize. Here, on the user's own
+        // switch and never at startup (the Loaded handler lays it out): an IsVisibleChanged hook
+        // also ran for the instant the Library shows while a launcher opens elsewhere, ~0.7 s of
+        // CPU for a page nobody saw (measured, A/B).
+        if (tab == TopTab.Play && IsLoaded && !_libraryRailEverDrawn)
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(ApplyLibraryLayout));
         ModsBrowserView.Visibility = tab == TopTab.Mods ? Visibility.Visible : Visibility.Collapsed;
         MultiplayerView.Visibility = tab == TopTab.Multiplayer ? Visibility.Visible : Visibility.Collapsed;
         SettingsView.Visibility = tab == TopTab.Settings ? Visibility.Visible : Visibility.Collapsed;

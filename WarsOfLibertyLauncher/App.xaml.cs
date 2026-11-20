@@ -290,6 +290,10 @@ public partial class App : System.Windows.Application
         // too quick to register as a stall but never stop coming. See LayoutStormDetector.
         Services.DiagnosticLog.StartLayoutStormWatch(Dispatcher);
 
+        // The testbed's layout probe: answers a request file with the text a player could not read
+        // in full. Harness only — a player's launcher starts no timer for it.
+        Services.LayoutAudit.StartIfHarness(Dispatcher);
+
         // Rank badges animate only while the launcher is the foreground application. Behind
         // another program — the game, above all — their light would still cost a frame per
         // frame, measured at up to half a CPU core on the Rooms page.
@@ -594,8 +598,10 @@ public partial class App : System.Windows.Application
         // non-converging layout at startup would sit, with nothing else naming it.
         Services.DiagnosticLog.Time("startup: MainWindow.Show", () =>
         {
-            // A test launch must not take the keyboard from whoever is working on this PC.
-            if (Services.HarnessMode.Active) main.ShowActivated = false;
+            // A test launch must not take the keyboard from whoever is working on this PC — except
+            // a maximized one: WPF refuses to show a Maximized window that is not activated, and the
+            // throw ended every maximized test launch before its first frame.
+            if (Services.HarnessMode.Active && main.WindowState != WindowState.Maximized) main.ShowActivated = false;
             using (Services.TrayStartParking.EnterWpfShow(main)) main.Show();
         });
         // The lights run only while the launcher is in front, and that is learned from
@@ -1190,7 +1196,7 @@ public partial class App : System.Windows.Application
         if (sender is not Window w) return;
 
         // Loaded runs before WPF's own ShowWindow, so this still decides how the window appears.
-        if (Services.HarnessMode.Active) w.ShowActivated = false;
+        if (Services.HarnessMode.Active && w.WindowState != WindowState.Maximized) w.ShowActivated = false;
 
         // -- HiDPI crispness (always on) -- a no-op for a window that already called
         // PrepareBeforeShow, since the values are the same.

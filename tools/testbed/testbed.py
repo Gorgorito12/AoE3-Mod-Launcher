@@ -382,6 +382,10 @@ def seed(args):
     }
     if args.glass:
         config["glassLevel"] = args.glass
+    if getattr(args, "text", None):
+        config["textScale"] = str(args.text)
+    if getattr(args, "effects", None):
+        config["effectsMode"] = args.effects
     if getattr(args, "mp", False):
         config.update(multiplayer_seed())
     (RUN / "launcher-config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
@@ -939,6 +943,28 @@ def check(args):
 
 # --- performance -----------------------------------------------------------------------------------
 
+def audit(args):
+    """Asks the running launcher (harness mode) for its layout probe: Services/LayoutAudit.cs
+    answers a request file in the data folder within a second. Every line is a lead to look at in
+    a capture, not a verdict."""
+    target = pathlib.Path(args.out).resolve() if args.out else RUN / "layout-audit.txt"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        target.unlink()
+    (RUN / "layout-audit.request").write_text(str(target), encoding="utf-8")
+    for _ in range(100):
+        if target.exists() and target.stat().st_size > 0:
+            break
+        time.sleep(0.1)
+    else:
+        sys.exit("testbed: the launcher did not answer the layout probe (is it running in harness mode?)")
+    time.sleep(0.2)
+    text = target.read_text(encoding="utf-8-sig", errors="replace")
+    if not args.all:
+        text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith(("TRIM", "NEAR")))
+    print(text)
+
+
 def parse_log(path=LOG):
     text = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
     timing = {}
@@ -1205,6 +1231,8 @@ def main():
     p.add_argument("--max", action="store_true")
     p.add_argument("--lang", default="es")
     p.add_argument("--glass")
+    p.add_argument("--text", help="text size in percent (100, 105, 110, 115, 125)")
+    p.add_argument("--effects", choices=("auto", "full", "low"), help="Effects and animations")
     p.add_argument("--software", action="store_true")
     p.add_argument("--checks", action="store_true", help="update checks on at start, as a player has them")
     p.add_argument("--keep", action="store_true", help="keep the data folder of the last run")
@@ -1272,6 +1300,10 @@ def main():
     p = sub.add_parser("log")
     p.add_argument("--grep")
     p.add_argument("--tail", type=int)
+    p = sub.add_parser("memory", help="the running launcher's memory after a full collection, as JSON (harness only)")
+    p = sub.add_parser("audit", help="the layout probe: text cut or outside its panel, in every open window")
+    p.add_argument("out", nargs="?", help="where to write the report (printed as well)")
+    p.add_argument("--all", action="store_true", help="list trimmed texts too, not only problems")
     p = sub.add_parser("perf")
     p.add_argument("scenario", choices=sorted(perf_scenarios()))
     p.add_argument("--software", action="store_true")
@@ -1333,6 +1365,21 @@ def main():
         if args.grep:
             lines = [line for line in lines if re.search(args.grep, line)]
         print("\n".join(lines[-args.tail:] if args.tail else lines))
+    elif args.command == "audit":
+        audit(args)
+    elif args.command == "memory":
+        target = RUN / "memory-reading.json"
+        if target.exists():
+            target.unlink()
+        (RUN / "layout-audit.request").write_text("memory|" + str(target), encoding="utf-8")
+        for _ in range(100):
+            if target.exists() and target.stat().st_size > 0:
+                break
+            time.sleep(0.1)
+        else:
+            sys.exit("testbed: the launcher did not answer (is it running in harness mode?)")
+        time.sleep(0.1)
+        print(target.read_text(encoding="utf-8-sig"))
     elif args.command == "perf":
         perf(args)
     elif args.command == "compare":

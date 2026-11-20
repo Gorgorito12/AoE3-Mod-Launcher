@@ -446,7 +446,7 @@ public static class RevealText
     /// it are SemiBold and a different colour, and measuring them in the block's own weight
     /// would under-read the width and decline to reveal exactly the text that needed it.</para>
     /// </summary>
-    private static double MeasureContentWidth(TextBlock tb)
+    internal static double MeasureContentWidth(TextBlock tb)
     {
         var dpi = VisualTreeHelper.GetDpi(tb).PixelsPerDip;
         var mode = TextOptions.GetTextFormattingMode(tb);

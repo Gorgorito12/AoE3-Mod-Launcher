@@ -38,6 +38,8 @@ public partial class MainWindow
     private int _libraryShotIndex;
     private readonly List<ImageBrush> _libraryCoverBrushes = new();
     private string _libraryRailKey = "";
+    /// <summary>Whether the rail has been drawn at all; see SwitchTopTab.</summary>
+    private bool _libraryRailEverDrawn;
     private string _libraryCoverKey = "";
     /// <summary>How the list was last DRAWN: open (names) or folded (icons). Null before the first
     /// drawing, and again whenever a refresh ran with the page hidden.</summary>
@@ -698,6 +700,7 @@ public partial class MainWindow
         {
             _libraryRailKey = railKey;
             _libraryRailDrawnOpen = open;
+            _libraryRailEverDrawn = true;
             LibraryRail.Show(groups, StateOf, _config.IsFavoriteMod, profile.Id, CurrentRailOperation(),
                 open, metrics, LibraryEmptyTitle(), LibraryEmptyBody(), SubtitleFor);
         }
@@ -1001,18 +1004,26 @@ public partial class MainWindow
         return string.Join(" · ", parts);
     }
 
-    private static IReadOnlyList<string> RoutineStatusTemplates() => new[]
+    /// <summary>In BOTH languages: the status line holds the text it was set with, so after a
+    /// language switch an old "Juego cerrado." no longer matched the English template and appeared
+    /// under the buttons (found switching the language on the running launcher).</summary>
+    private static IReadOnlyList<string> RoutineStatusTemplates() => RoutineStatusKeys
+        .SelectMany(k => new[] { Strings.GetIn(Strings.LangEn, k), Strings.GetIn(Strings.LangEs, k) })
+        .Distinct()
+        .ToList();
+
+    private static readonly string[] RoutineStatusKeys =
     {
-        Strings.Get("StatusUpToDate"),
-        Strings.Get("StatusGameClosed"),
-        Strings.Get("StatusCancelledCheck"),
-        Strings.Get("StatusNotInstalled"),
-        Strings.Get("StatusStockReady"),
-        Strings.Get("StatusInstalledVersionUnknown"),
-        Strings.Get("StatusUpdatesAvailable"),
-        Strings.Get("StatusUpdatePausedPinned"),
-        Strings.Get("StatusGhVersionUnknownCanUpdate"),
-        Strings.Get("ProgressIdleTitle"),
+        "StatusUpToDate",
+        "StatusGameClosed",
+        "StatusCancelledCheck",
+        "StatusNotInstalled",
+        "StatusStockReady",
+        "StatusInstalledVersionUnknown",
+        "StatusUpdatesAvailable",
+        "StatusUpdatePausedPinned",
+        "StatusGhVersionUnknownCanUpdate",
+        "ProgressIdleTitle",
     };
 
     private void RefreshLibraryDownloadPill(RailOperation? operation, int percent)
@@ -1541,14 +1552,16 @@ public partial class MainWindow
             name.SetResourceReference(TextBlock.ForegroundProperty, "UiHeadText");
             var path = new TextBlock
             {
-                Text = PathDisplay.CompactPathMiddle(row.Path, 48),
                 FontSize = 11,
                 Margin = new Thickness(0, 5, 0, 0),
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                ToolTip = TooltipHelper.Wrap(row.Path),
             };
             path.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
             path.SetResourceReference(TextBlock.ForegroundProperty, "UiDimText");
+            // Shortened in the middle to the width it really has: a fixed 48 characters was then
+            // cut AGAIN at its end, which removed the copy's own folder ("…sandbox\Wars of…") — the
+            // one part that tells two copies apart. The popup is a fixed 386 wide, so refitting the
+            // text from the block's SizeChanged cannot move its width.
+            Controls.MiddlePathText.Bind(path, row.Path);
             words.Children.Add(name);
             words.Children.Add(path);
 

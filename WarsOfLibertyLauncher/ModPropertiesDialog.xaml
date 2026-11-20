@@ -44,6 +44,10 @@
          the shared controls:TitleBar below. -->
 
     <Window.Resources>
+        <!-- The settings windows are blue (design 4a-4d); the shared TextBox template paints its
+             focus ring from TextBoxFocusBrush, gold globally and targeted by name, so a field here
+             lit up gold. Same override as PatchGeneratorDialog and PublishModDialog. -->
+        <SolidColorBrush x:Key="TextBoxFocusBrush" Color="#2F7FE0"/>
         <!-- The rail of a window of ONE mod: the selection takes its colour (design 71). -->
         <Style x:Key="ModNavButton" TargetType="Button" BasedOn="{StaticResource SetNavButton}">
             <Style.Triggers>

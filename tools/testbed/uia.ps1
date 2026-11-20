@@ -23,6 +23,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Names carry accents and middle dots: print them as UTF-8, not in the console's code page,
+# or every control found by its name comes back mangled and cannot be pressed again.
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 

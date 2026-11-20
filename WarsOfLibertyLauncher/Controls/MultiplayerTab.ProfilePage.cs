@@ -743,8 +743,9 @@ public partial class MultiplayerTab
         int streak = Math.Max(0, ladder.StreakCurrent);
 
         var stack = new StackPanel();
-        stack.Children.Add(StatsText(Strings.Get("MpProfileStreakNow"), "StatsHeaderSize", "StatsNote",
-                                     FontWeights.Bold));
+        var nowHeader = StatsText(Strings.Get("MpProfileStreakNow"), "StatsHeaderSize", "StatsNote", FontWeights.Bold);
+        nowHeader.TextWrapping = TextWrapping.Wrap;
+        stack.Children.Add(nowHeader);
 
         var figure = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 7, 0, 0) };
         figure.Children.Add(StatsMono(streak > 0 ? streak.ToString() : Strings.Get("MpDash"),
@@ -805,6 +806,9 @@ public partial class MultiplayerTab
         {
             var line = StatsText(note, "StatsDeckCountSize", "StatsProse", FontWeights.Normal);
             line.Margin = new Thickness(0, 7, 0, 0);
+            // "Se cortó el 4 nov: 14 días sin jugar" is wider than the cell at 1366x768 and was cut
+            // mid-word: a note may take a second line.
+            line.TextWrapping = TextWrapping.Wrap;
             stack.Children.Add(line);
         }
 
@@ -828,8 +832,11 @@ public partial class MultiplayerTab
     private static FrameworkElement BuildLongestStreakBox(LadderStanding ladder)
     {
         var stack = new StackPanel();
-        stack.Children.Add(StatsText(Strings.Get("MpProfileStreakLong"), "StatsHeaderSize", "StatsNote",
-                                     FontWeights.Bold));
+        // Wraps: "RACHA MÁS LARGA" is wider than the cell at 125 % text and was cut mid-word.
+        var longHeader = StatsText(Strings.Get("MpProfileStreakLong"), "StatsHeaderSize", "StatsNote",
+                                   FontWeights.Bold);
+        longHeader.TextWrapping = TextWrapping.Wrap;
+        stack.Children.Add(longHeader);
 
         void Row(string key, int value, string ink)
         {

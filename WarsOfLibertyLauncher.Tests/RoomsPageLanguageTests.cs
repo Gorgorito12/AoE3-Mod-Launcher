@@ -101,6 +101,48 @@ public class RoomsPageLanguageTests
         Assert.Null(error);
     }
 
+    /// <summary>Found by switching the language on the running launcher: with players online the
+    /// players tab kept "Jugadores · 5", and the chat's live room cards kept "abrió una sala" and
+    /// "Unirse", until the next presence frame or rooms list.</summary>
+    [Fact]
+    public void TheChatsLiveCardsAndThePlayersTabFollowTheLanguage()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var tab = new MultiplayerTab();
+                tab.ShowDemoRooms("86a");
+                Assert.Contains("abrió una sala", AllText(tab.GlobalChatPanel), StringComparison.Ordinal);
+                Strings.SetLanguage("en");
+                Apply(tab);
+                var chat = AllText(tab.GlobalChatPanel);
+                Assert.DoesNotContain("abrió una sala", chat, StringComparison.Ordinal);
+                Assert.Contains("opened a room", chat, StringComparison.Ordinal);
+                Assert.StartsWith("Players", tab.PlayersPanelTitle.Text, StringComparison.Ordinal);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    private static string AllText(System.Windows.DependencyObject root)
+    {
+        var sb = new System.Text.StringBuilder();
+        void Walk(object node)
+        {
+            if (node is TextBlock tb)
+                sb.Append(string.Concat(tb.Inlines.OfType<Run>().Select(r => r.Text))).Append(tb.Text).Append(" | ");
+            if (node is ContentControl { Content: string c }) sb.Append(c).Append(" | ");
+            if (node is System.Windows.DependencyObject d)
+                foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(d)) Walk(child);
+        }
+        Walk(root);
+        return sb.ToString();
+    }
+
     /// <summary>
     /// EVERY subtab is covered, which is the guard that stops the fifth from repeating this.
     ///

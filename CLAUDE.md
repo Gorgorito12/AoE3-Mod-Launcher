@@ -167,6 +167,14 @@ published launcher ignores the variable. In that mode every process goes through
 `HarnessMode.Start` and becomes a `HARNESS BLOCKED` log line, which is how a button is proved
 without anything opening. **A new `Process.Start` must use that funnel**;
 `HarnessModeTests.THE_ONE_THAT_MATTERS_EveryProcessGoesThroughTheFunnel` fails otherwise.
+**Text a player cannot read is found by `testbed.py audit`** (`Services/LayoutAudit.cs`, harness
+only, answered through a request file): a one-line text cut with no ellipsis, text past the edge of
+a panel that clips it, two texts on a line over each other or closer than 8 px. `memory` reads the
+managed heap after a full collection, handles and windows. `sweep_screens.py` opens every
+`--demo-*`/`--preview-*`/`--open-*` screen and keeps a capture plus the probe's report for each,
+`sweep_controls.py` presses every control UI Automation lists and records what it did, and
+`leak_loop.py` opens and closes one window many times reading `memory` (first used in the
+2026-11-19 audit).
 
 ### Tests & verification
 
@@ -554,6 +562,13 @@ rather than the reverse.
   (5) **A refresh is coalesced and keyed** (`ScheduleLibraryRefresh`, `_libraryRailKey`,
   `_libraryCoverKey`): a mod switch asks for several, and rebuilding the list each time was a
   three-second LAYOUT STORM. `ModRail.UpdateOperation` is what a progress tick calls; it never rebuilds.
+  **A list never drawn is drawn when the player SWITCHES to the Library, not only on a resize**
+  (`SwitchTopTab` → `ApplyLibraryLayout` while `!_libraryRailEverDrawn`, 2026-11-19): a launcher
+  opened on another tab refreshes the rail only while the page is hidden (width 0, so nothing is
+  drawn), and the page comes back at the size it had before, which raises no `SizeChanged` — the list
+  stayed EMPTY until a resize. Not an `IsVisibleChanged` hook: that also fired for the instant the
+  Library shows while a launcher opens elsewhere, laying out a page nobody saw. Routine status lines are recognised in BOTH languages (`RoutineStatusTemplates`), or a
+  language switch shows an old "Juego cerrado." under Play. Pinned by `LibraryLiveSwitchTests`.
   **The selected mod is NOT in the rail key**: a switch calls `ModRail.Select`, which moves the highlight
   on the rows already built; the filter pills are keyed too (`_libraryFiltersKey`) and `ModTheme.Apply`
   returns at once for the colour already applied. Together they took a repeated switch from 53-81 ms

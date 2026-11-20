@@ -1673,7 +1673,11 @@
                                         Margin="2,0,0,0"
                                         Click="PanelTab_Click"
                                         Style="{StaticResource SubTab}">
+                                    <!-- Trims like the chat tab's caption: centred and wider than
+                                         its half at 125 % text, it was cut at both ends
+                                         ("ugadores · !"). -->
                                     <TextBlock x:Name="PlayersPanelTitle"
+                                               TextTrimming="CharacterEllipsis"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"/>
                                 </Button>
