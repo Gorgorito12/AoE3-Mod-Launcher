@@ -86,6 +86,8 @@ public static class TextScale
     /// </summary>
     public static readonly IReadOnlyList<string> ScaledKeys = new[]
     {
+        "HlTitleSize", "HlRuleSize", "HlNameSize", "HlNameFirstSize", "HlDetailSize", "HlMonoSize", "HlFigureSize", "HlFigureFirstSize",
+        "HlHeroFigureSize", "HlUpsetFigureSize", "HlCivFigureSize", "HlCivNameSize", "HlCivDetailSize", "HlPillSize", "HlRingSize", "HlRingFirstSize",
         "ProfileTitleSize", "ProfileRatingSize", "ProfileNameSize", "ProfileNameSizeCompact", "ProfileNameSizeWide", "ProfileCurveFigureSize", "ProfileStreakFigureSize", "ProfileStreakBestSize", "ProfileRefundFigureSize", "ProfileDeckTitleSize",
         "StatsTitleSize", "StatsTitleSizeCompact", "StatsFigureSize", "StatsFigureSizeCompact",
         "StatsSubtitleSize", "StatsBandSize", "StatsRowNameSize", "StatsRowNameSizeCompact",

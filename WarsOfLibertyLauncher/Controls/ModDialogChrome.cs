@@ -205,18 +205,7 @@ internal static class ModDialogChrome
             RoomResize.Add(root, resize);
         }
 
-        var navy = Color.FromRgb(0x0F, 0x1C, 0x2E);
-        Color Navy(double a) => Color.FromArgb((byte)(a * 255), navy.R, navy.G, navy.B);
-        var down = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-        down.GradientStops.Add(new GradientStop(Navy(.2), 0));
-        down.GradientStops.Add(new GradientStop(Navy(.55), .55));
-        down.GradientStops.Add(new GradientStop(navy, 1));
-        Add(new Rectangle { Height = RoomStripHeight + 2, VerticalAlignment = VerticalAlignment.Top, Fill = down });
-        var across = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-        across.GradientStops.Add(new GradientStop(Navy(.72), 0));
-        across.GradientStops.Add(new GradientStop(Navy(.25), .55));
-        across.GradientStops.Add(new GradientStop(Navy(0), 1));
-        Add(new Rectangle { Height = RoomStripHeight + 2, VerticalAlignment = VerticalAlignment.Top, Fill = across });
+        foreach (var veil in RoomVeils(RoomStripHeight + 2)) Add(veil);
 
         var glow = new RadialGradientBrush { Center = new Point(.28, 0), GradientOrigin = new Point(.28, 0), RadiusX = .7, RadiusY = .55 };
         glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x33, accent.R, accent.G, accent.B), 0));
@@ -228,6 +217,89 @@ internal static class ModDialogChrome
         TintPrimary(window, accent);
         window.Resources["ModAccentText"] = new SolidColorBrush(ModAccent.TextOn(accent));
         return accent;
+    }
+
+    /// <summary>
+    /// The veil that sinks a mod's picture into the navy (87, 85, 117): top to bottom 20 % → 55 %
+    /// → solid, and left to right 72 % → 25 % → none, so the text on the left stays readable.
+    /// </summary>
+    private static Rectangle[] RoomVeils(double height)
+    {
+        var navy = Color.FromRgb(0x0F, 0x1C, 0x2E);
+        Color Navy(double a) => Color.FromArgb((byte)(a * 255), navy.R, navy.G, navy.B);
+        var down = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        down.GradientStops.Add(new GradientStop(Navy(.2), 0));
+        down.GradientStops.Add(new GradientStop(Navy(.55), .55));
+        down.GradientStops.Add(new GradientStop(navy, 1));
+        var across = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        across.GradientStops.Add(new GradientStop(Navy(.72), 0));
+        across.GradientStops.Add(new GradientStop(Navy(.25), .55));
+        across.GradientStops.Add(new GradientStop(Navy(0), 1));
+        return new[]
+        {
+            new Rectangle { Height = height, VerticalAlignment = VerticalAlignment.Top, Fill = down },
+            new Rectangle { Height = height, VerticalAlignment = VerticalAlignment.Top, Fill = across },
+        };
+    }
+
+    internal const double FoundStripHeight = 250;
+
+    /// <summary>The layers <see cref="AttachFound"/> put up carry this, so a test can count them.</summary>
+    internal const string FoundPictureName = "FoundPicture";
+
+    /// <summary>
+    /// The picture of the "rival found" window (117): the mod's image in a strip behind the bar,
+    /// the room window's veil, and the colour's glow under it. Inserted at <paramref name="insertAt"/>
+    /// because a <see cref="BaseDialog"/> keeps two glows of its own first. With no picture to show
+    /// (the mod has none, the setting is off, no settings) it adds nothing and answers false: the
+    /// window stays navy with its glow.
+    /// </summary>
+    internal static bool AttachFound(Grid root, int insertAt, ModProfile mod, double width)
+    {
+        if (Config is not { ShowModImage: true } config) return false;
+        var image = MainWindow.TryLoadTileImage(mod.ResolveHeroSources().FirstOrDefault(), MainWindow.StripDecodeWidth);
+        // A picture still downloading belongs to the thread that asked for it first (AttachRoom).
+        if (image == null || !image.CheckAccess()) return false;
+
+        var accent = ModTheme.AccentOf(mod.AccentColor, config.UseModColor);
+        var rows = System.Math.Max(1, root.RowDefinitions.Count);
+        var at = insertAt;
+        void Add(FrameworkElement layer)
+        {
+            layer.Tag = PickedLayer;
+            root.Children.Insert(at++, Layer(layer, rows));
+        }
+
+        var strip = image.Clone();
+        strip.Stretch = Stretch.Fill;
+        if (strip.ImageSource is System.Windows.Media.Imaging.BitmapSource { PixelWidth: > 0 } source)
+            strip.Viewbox = HeroCover.Viewbox(source.PixelWidth, source.PixelHeight, width, FoundStripHeight, .3);
+        Add(new Border { Name = FoundPictureName, Height = FoundStripHeight, VerticalAlignment = VerticalAlignment.Top, Background = strip });
+        if (GlassTheme.Normalize(config.GlassLevel) != GlassTheme.Solid
+            && MainWindow.BuildBlurredCover(image.ImageSource) is { } blurred)
+        {
+            blurred.Viewbox = strip.Viewbox;
+            Add(new Border { Name = FrostName, Height = FoundStripHeight, VerticalAlignment = VerticalAlignment.Top, Background = blurred, Clip = Geometry.Empty });
+        }
+        foreach (var veil in RoomVeils(FoundStripHeight + 2)) Add(veil);
+
+        // radial 70% 55% at 28% 0% of a 320-px band that starts at 200. In pixels and with no
+        // height of its own: this layer spans a window that sizes to its content, where a Height
+        // would be a floor under it.
+        var centre = new Point(.28 * width, 0);
+        var glow = new RadialGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            Center = centre,
+            GradientOrigin = centre,
+            RadiusX = .7 * width,
+            RadiusY = .55 * 320,
+        };
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x33, accent.R, accent.G, accent.B), 0));
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0, accent.R, accent.G, accent.B), .7));
+        glow.Freeze();
+        Add(new Rectangle { Margin = new Thickness(0, 200, 0, 0), Fill = glow });
+        return true;
     }
 
     /// <summary>The frost under these rectangles, which are already in the root's coordinates.</summary>

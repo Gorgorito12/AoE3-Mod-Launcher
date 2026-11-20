@@ -111,8 +111,9 @@ public partial class MultiplayerTab
         public static readonly StakeCardDress Room = new(StakeCardWidth, 16, "GlassMenu", "StakeCardRim",
             "RoomStakeFigureSize", new Thickness(16, 11, 16, 12), 7, new Thickness(16, 9, 16, 10), true);
 
-        /// <summary>The match-found dialog (design 117): the body's width, a darker well, no shadow.</summary>
-        public static readonly StakeCardDress Found = new(null, 12, "MmFoundStakeBg", "MmFoundStakeRim",
+        /// <summary>The match-found dialog (design 117): the body's width, the floating glass over
+        /// the mod's picture, no shadow.</summary>
+        public static readonly StakeCardDress Found = new(null, 12, "GlassMenu", "MmFoundStakeRim",
             "MmFoundStakeFigureSize", new Thickness(16, 10, 16, 11), 6, new Thickness(16, 8, 16, 9), false);
     }
 

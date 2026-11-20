@@ -6,6 +6,7 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
+using WarsOfLibertyLauncher.Services;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 
 namespace WarsOfLibertyLauncher.Controls;
@@ -24,7 +25,13 @@ internal sealed record MatchDuelist(string Name, FrameworkElement Face, string? 
 /// two players face to face with who accepted under each, the room's stake card, the seconds in
 /// large over a thick bar that turns amber at <see cref="LowSeconds"/>, the buttons at the right
 /// and the strike note under them. Who hosts is a tag on that player's tile; the whole sentence
-/// is its tooltip.</para>
+/// is its tooltip. The mod's picture is a strip behind the bar, sunk into the navy by the room
+/// window's veil, and the two tiles and the stake card are glass over it, at the launcher's
+/// transparency level. A mod with no picture leaves the window navy with its glow.</para>
+///
+/// <para><b>The colour of a tile is the acceptance (117f-h).</b> Both tiles are the same neutral
+/// glass; whoever accepts turns green, and mine is told apart by a "YOU" tag beside the name. A
+/// tile in the mod's colour ran into the red of "If you lose" with a red mod.</para>
 ///
 /// <para><b>Non-modal on purpose.</b> It must open with the launcher in the tray, and a modal
 /// needs an owner that is on screen. Escape and the ✕ DECLINE, which costs a strike on the
@@ -94,11 +101,10 @@ internal sealed class MatchFoundDialog : BaseDialog
         var headline = iChallenged ? Strings.Format("MmChallengeSentHeadline", rival.Name) : Strings.Get("MmFoundHeadline");
         ReplaceHeader(BuildHeader(headline, kindLine, rated));
 
-        var accent = (mod != null ? ModDialogChrome.AccentOf(mod) : null) ?? ((SolidColorBrush)B("MpAction")).Color;
         _meMark = new AcceptMark(mirrored: false);
         _rivalMark = new AcceptMark(mirrored: true);
-        MyTile = BuildTile(me, _meMark, mine: true, mirrored: false, host: iHost == true, hostLine, accent);
-        RivalTile = BuildTile(rival, _rivalMark, mine: false, mirrored: true, host: iHost == false, hostLine, accent);
+        MyTile = BuildTile(me, _meMark, mine: true, mirrored: false, host: iHost == true, hostLine);
+        RivalTile = BuildTile(rival, _rivalMark, mine: false, mirrored: true, host: iHost == false, hostLine);
 
         var duel = new Grid();
         duel.ColumnDefinitions.Add(new ColumnDefinition());
@@ -111,7 +117,7 @@ internal sealed class MatchFoundDialog : BaseDialog
             Margin = new Thickness(9, 0, 9, 0),
             FontWeight = FontWeights.Bold,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = B("UiDimText"),
+            Foreground = B("UiBodyText"),
         };
         versus.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
         versus.SetResourceReference(TextBlock.FontSizeProperty, "SetControlSize");
@@ -140,6 +146,12 @@ internal sealed class MatchFoundDialog : BaseDialog
         CancelAction.Height = 36;
         AutomationProperties_SetIds();
         UseMod(mod);
+        if (UseModPicture(mod))
+        {
+            // The blurred copy shows only under the glass, so it follows the cards as they move.
+            Loaded += (_, _) => Frost();
+            SizeChanged += (_, _) => Frost();
+        }
 
         // A challenger has already said yes by challenging; he can still withdraw.
         if (iChallenged) MarkAccepted();
@@ -185,16 +197,18 @@ internal sealed class MatchFoundDialog : BaseDialog
             CornerRadius = new CornerRadius(10),
             Margin = new Thickness(0, 0, 13, 0),
             VerticalAlignment = VerticalAlignment.Center,
-            Background = B("MmFoundToneFill"),
+            // Green over a dark well, so the tile reads the same over the picture and over navy.
+            Background = B("MmFoundToneWell"),
             BorderBrush = B("MmFoundToneRing"),
             BorderThickness = new Thickness(1),
-            Child = swords,
+            Child = new Border { CornerRadius = new CornerRadius(9), Background = B("MmFoundToneFill"), Child = swords },
         });
 
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var title = new TextBlock { Text = headline, TextWrapping = TextWrapping.Wrap };
         title.SetResourceReference(StyleProperty, "DialogHeadline");
         title.SetResourceReference(TextBlock.FontSizeProperty, "MmFoundHeadlineSize");
+        title.SetResourceReference(TextBlock.ForegroundProperty, "MmFoundHeadline");
         // The design's 20/1.2, from the size the text-size setting already applied.
         title.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         title.LineHeight = Math.Ceiling((double)Application.Current.FindResource("MmFoundHeadlineSize") * 1.2);
@@ -236,7 +250,7 @@ internal sealed class MatchFoundDialog : BaseDialog
     /// hosts, the HOST tag. The rival's is the mirror image. Mine wears the mod's colour.
     /// </summary>
     private static Border BuildTile(MatchDuelist who, AcceptMark mark, bool mine, bool mirrored, bool host,
-        string? hostLine, Color accent)
+        string? hostLine)
     {
         var top = new Grid();
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = mirrored ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
@@ -261,7 +275,33 @@ internal sealed class MatchFoundDialog : BaseDialog
         };
         name.SetResourceReference(TextBlock.FontSizeProperty, "MmFoundNameSize");
         System.Windows.Automation.AutomationProperties.SetAutomationId(name, mine ? "MatchFoundMyName" : "MatchFoundRivalName");
-        words.Children.Add(name);
+        if (mine)
+        {
+            // "YOU" right after the name. A star column in a grid that hugs its content: the
+            // name takes what it needs, and what is left once the tag has its room.
+            var line = new Grid { HorizontalAlignment = side };
+            line.ColumnDefinitions.Add(new ColumnDefinition());
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            name.HorizontalAlignment = HorizontalAlignment.Left;
+            line.Children.Add(name);
+            var you = new TextBlock
+            {
+                Text = Strings.Get("MpRankYouTag"),
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(7, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = B("MmFoundYouTag"),
+                Tag = YouTag,
+            };
+            you.SetResourceReference(TextBlock.FontSizeProperty, "SetGroupLabelSize");
+            Grid.SetColumn(you, 1);
+            line.Children.Add(you);
+            words.Children.Add(line);
+        }
+        else
+        {
+            words.Children.Add(name);
+        }
         if (!string.IsNullOrEmpty(who.Line))
         {
             // Wraps rather than trims: "In placement 3/10" is longer than the tile's text
@@ -312,36 +352,33 @@ internal sealed class MatchFoundDialog : BaseDialog
             bottom.Children.Add(tag);
         }
 
-        var stack = new StackPanel();
+        var stack = new StackPanel { Margin = new Thickness(14, 13, 14, 13) };
         stack.Children.Add(top);
         stack.Children.Add(bottom);
 
-        Brush fill, rim;
-        if (mine)
-        {
-            var wash = new LinearGradientBrush(
-                Color.FromArgb(0x42, accent.R, accent.G, accent.B),
-                Color.FromArgb(0x1A, accent.R, accent.G, accent.B), 90);
-            wash.Freeze();
-            fill = wash;
-            var edge = new SolidColorBrush(Color.FromArgb(0x99, accent.R, accent.G, accent.B));
-            edge.Freeze();
-            rim = edge;
-        }
-        else
-        {
-            fill = B("MmFoundTileBg");
-            rim = B("MmFoundTileRim");
-        }
-        return new Border
-        {
-            Padding = new Thickness(13, 12, 13, 12),
-            CornerRadius = new CornerRadius(12),
-            Background = fill,
-            BorderBrush = rim,
-            BorderThickness = new Thickness(1),
-            Child = stack,
-        };
+        // Glass, as a panel of the Library is: the fill is a resource reference, so the tile
+        // follows the transparency level. The green of an acceptance is a layer OVER that glass,
+        // and the rim is a layer too: it goes from 1 to 1.5 without moving what is inside.
+        var layers = new Grid();
+        layers.Children.Add(mark.Wash);
+        layers.Children.Add(stack);
+        layers.Children.Add(mark.Rim);
+        var tile = new Border { CornerRadius = new CornerRadius(12), Child = layers };
+        tile.SetResourceReference(Border.BackgroundProperty, GlassTheme.PanelKey);
+        return tile;
+    }
+
+    internal const string AcceptedWashTag = "MatchFoundAcceptedWash";
+    internal const string YouTag = "MatchFoundYou";
+
+    /// <summary>What the primary button says now (a test reads it).</summary>
+    internal string PrimaryText => PrimaryAction.Content as string ?? "";
+
+    /// <summary>The blurred picture under the two tiles and the stake card, where they lie now.</summary>
+    private void Frost()
+    {
+        if (_stakeHost.Content is FrameworkElement stake && StakeShown) FrostUnder(MyTile, RivalTile, stake);
+        else FrostUnder(MyTile, RivalTile);
     }
 
     /// <summary>"Time to accept" and the seconds in large over the bar.</summary>
@@ -388,6 +425,8 @@ internal sealed class MatchFoundDialog : BaseDialog
     {
         _stakeHost.Content = card;
         _stakeHost.Visibility = card == null ? Visibility.Collapsed : Visibility.Visible;
+        // After the layout the card causes: its rectangle does not exist until then.
+        if (HasModPicture) Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(Frost));
     }
 
     private void AutomationProperties_SetIds()
@@ -413,6 +452,9 @@ internal sealed class MatchFoundDialog : BaseDialog
         _meMark.Set(me);
         _rivalMark.Set(rival);
         _clockLabel.Text = Strings.Get(me ? "MmFoundTimeLeft" : "MmFoundAcceptIn");
+        // Both said yes: the server is making the room, and its next frame closes this window.
+        if (me && rival) PrimaryAction.Content = Strings.Get("MmOpeningRoom");
+        else if (me) PrimaryAction.Content = Strings.Format("MmWaitingFor", _rival);
     }
 
     /// <summary>The server decided: close without answering again.</summary>
@@ -475,6 +517,19 @@ internal sealed class MatchFoundDialog : BaseDialog
         public StackPanel Root { get; }
         public bool On { get; private set; }
 
+        /// <summary>The green over the tile's glass, shown once this player accepted.</summary>
+        public Border Wash { get; } = new()
+        {
+            CornerRadius = new CornerRadius(12),
+            Background = B("MmFoundAcceptedWash"),
+            Tag = AcceptedWashTag,
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false,
+        };
+
+        /// <summary>The tile's rim: white and 1 px, green and 1.5 once this player accepted.</summary>
+        public Border Rim { get; } = new() { CornerRadius = new CornerRadius(12), IsHitTestVisible = false };
+
         public AcceptMark(bool mirrored)
         {
             _tick = new Path
@@ -517,6 +572,9 @@ internal sealed class MatchFoundDialog : BaseDialog
             _disc.BorderThickness = new Thickness(accepted ? 0 : 1.5);
             _text.Text = Strings.Get(accepted ? "MmFoundAccepted" : "MmFoundPending");
             _text.Foreground = B(accepted ? "RmTextGreen" : "UiDimText");
+            Wash.Visibility = accepted ? Visibility.Visible : Visibility.Collapsed;
+            Rim.BorderBrush = B(accepted ? "MmFoundAcceptedRim" : "MmFoundTileRim");
+            Rim.BorderThickness = new Thickness(accepted ? 1.5 : 1);
         }
     }
 }

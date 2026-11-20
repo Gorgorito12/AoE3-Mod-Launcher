@@ -8235,7 +8235,6 @@ public partial class MultiplayerTab : UserControl
     private void RankingPage_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         if (e.WidthChanged) ApplyRankingSplit();
-        if (e.WidthChanged) UpdateRankingHighlightsColumns();
         if (e.WidthChanged) UpdateMatchesColumns();
         // After the layout: the table's own width decides whether it is the 55b variant, and
         // the page's width moves design 59's sizes.

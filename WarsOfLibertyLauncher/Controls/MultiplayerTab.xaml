@@ -2232,20 +2232,23 @@
                                     Grid.Column="2"
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center">
+                            <!-- Design 118e: built exactly like the mode capsule on the left
+                                 (same box, same button style), so the chosen month fills its
+                                 whole pill. It used SubTab, whose fill did not follow the pill. -->
                             <Border x:Name="RankingMonthCapsule"
                                     Margin="12,0,0,0"
-                                    Padding="3"
+                                    Padding="4"
                                     VerticalAlignment="Center"
                                     Visibility="Collapsed"
-                                    CornerRadius="16"
+                                    CornerRadius="19"
                                     Background="{DynamicResource GlassPanel}"
                                     BorderBrush="#12FFFFFF"
                                     BorderThickness="1">
                                 <StackPanel Orientation="Horizontal">
                                     <Button x:Name="RankingMonthCurrent" Click="RankingMonthCurrent_Click"
-                                            Style="{StaticResource SubTab}"/>
+                                            Style="{StaticResource RkModeButton}"/>
                                     <Button x:Name="RankingMonthPrevious" Click="RankingMonthPrevious_Click"
-                                            Style="{StaticResource SubTab}"/>
+                                            Style="{StaticResource RkModeButton}" Margin="4,0,0,0"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

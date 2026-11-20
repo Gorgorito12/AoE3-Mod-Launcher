@@ -78,6 +78,7 @@ public static class GlassTheme
         ("RmSearchBg", Color.FromRgb(5, 10, 18), .4, true),
         ("ProfilePillFill", Color.FromRgb(5, 10, 18), .4, true),
         ("ProfileTabsFill", Color.FromRgb(5, 10, 18), .4, true),
+        ("MmFoundToneWell", Color.FromRgb(8, 16, 28), .5, true),
         ("WindowFooter", Color.FromRgb(8, 15, 27), .72, false),
     };
 

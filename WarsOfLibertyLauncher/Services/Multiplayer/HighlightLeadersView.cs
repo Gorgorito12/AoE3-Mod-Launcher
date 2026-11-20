@@ -30,7 +30,44 @@ public sealed record LeaderRow(
     bool Positive,
     string? Detail,
     string? CivModId,
-    string? Civ);
+    string? Civ)
+{
+    /// <summary>The same facts as numbers, for what the mosaic DRAWS (design 119): a bar, a ring,
+    /// a row of marks, the two sides of an upset. The words above stay what the row says.</summary>
+    public LeaderFacts Facts { get; init; } = LeaderFacts.None;
+}
+
+/// <summary>
+/// A place's figures as numbers. All of them come in the highlight itself; nothing is asked for.
+/// </summary>
+/// <param name="BarShare">How much of its track the bar fills (<see cref="HighlightsMosaic.BarShare"/>).</param>
+/// <param name="RatingFrom">A climb: the rating it started from.</param>
+/// <param name="RatingTo">A climb: the rating it reached.</param>
+/// <param name="Matches">Rated matches behind the figure.</param>
+/// <param name="Wins">Wins among them.</param>
+/// <param name="Percent">A win rate, 0 to 100.</param>
+/// <param name="Rival">An upset: the side that lost.</param>
+/// <param name="Team">The place is on the team ladder (the badge follows it).</param>
+public sealed record LeaderFacts(
+    double BarShare = HighlightsMosaic.BarFloor,
+    int? RatingFrom = null,
+    int? RatingTo = null,
+    int? Matches = null,
+    int? Wins = null,
+    int? Percent = null,
+    LeaderRival? Rival = null,
+    bool Team = false)
+{
+    public static readonly LeaderFacts None = new();
+}
+
+/// <summary>The losing side of an upset, and both sides' average rating before the match.</summary>
+public sealed record LeaderRival(
+    string Name,
+    IReadOnlyList<string> UserIds,
+    string? AvatarUrl,
+    int WinnersRating,
+    int LosersRating);
 
 /// <summary>
 /// One card of Ranking › Highlights: a highlight's top five.
@@ -81,12 +118,14 @@ public static class HighlightLeadersView
         // Biggest climb, per ladder.
         {
             var (rows, team, both) = PerLadder(leaders.BiggestClimb, climbTeam);
+            var top = rows.Count > 0 ? rows[0].Points ?? 0 : 0;
             var built = rows.Select((p, i) => Player(i, p,
                     figure: "+" + N(p.Points ?? 0),
                     positive: true,
                     detail: p.RatingFrom is int from && p.RatingTo is int to
                         ? T("MpHlDetailClimb", R(from), R(to), N(p.Matches ?? 0))
-                        : p.Matches is int m ? T("MpHlDetailMatches", N(m)) : null))
+                        : p.Matches is int m ? T("MpHlDetailMatches", N(m)) : null)
+                    with { Facts = new(HighlightsMosaic.BarShare(p.Points ?? 0, top), p.RatingFrom, p.RatingTo, p.Matches, Team: team) })
                 .ToList();
             if (built.Count > 0)
                 cards.Add(new(HighlightCellKind.TopClimb, "MpHlStripTopGain",
@@ -95,24 +134,30 @@ public static class HighlightLeadersView
 
         // Most wins.
         {
-            var built = (leaders.MostWins ?? new()).Where(p => p.Wins is > 0).Take(5)
+            var list = (leaders.MostWins ?? new()).Where(p => p.Wins is > 0).Take(5).ToList();
+            var top = list.Count > 0 ? list[0].Wins ?? 0 : 0;
+            var built = list
                 .Select((p, i) => Player(i, p,
                     figure: N(p.Wins ?? 0),
                     positive: false,
                     detail: p.Matches is int m && m > 0
                         ? T("MpHlDetailWins", N(m), N((int)Math.Round(100.0 * (p.Wins ?? 0) / m)))
-                        : null))
+                        : null)
+                    with { Facts = new(HighlightsMosaic.BarShare(p.Wins ?? 0, top), Matches: p.Matches, Wins: p.Wins) })
                 .ToList();
             if (built.Count > 0) cards.Add(new(HighlightCellKind.MostWins, "MpHlStripMostWins", T("MpHlRuleWins"), built, false, false));
         }
 
         // Most matches.
         {
-            var built = (leaders.MostMatches ?? new()).Where(p => p.Matches is int).Take(5)
+            var list = (leaders.MostMatches ?? new()).Where(p => p.Matches is int).Take(5).ToList();
+            var top = list.Count > 0 ? list[0].Matches ?? 0 : 0;
+            var built = list
                 .Select((p, i) => Player(i, p,
                     figure: N(p.Matches ?? 0),
                     positive: false,
-                    detail: p.Wins is int w ? T("MpHlDetailWon", N(w)) : null))
+                    detail: p.Wins is int w ? T("MpHlDetailWon", N(w)) : null)
+                    with { Facts = new(HighlightsMosaic.BarShare(p.Matches ?? 0, top), Matches: p.Matches, Wins: p.Wins) })
                 .ToList();
             if (built.Count > 0) cards.Add(new(HighlightCellKind.MostMatches, "MpHlStripMostGames", T("MpHlRuleMatches"), built, false, false));
         }
@@ -122,7 +167,8 @@ public static class HighlightLeadersView
             var (rows, team, both) = PerLadder(leaders.BestStreak, streakTeam);
             var built = rows.Where(p => p.Wins is > 0)
                 .Select((p, i) => new LeaderRow(i + 1, NameOf(p), new[] { p.UserId }, p.AvatarUrl,
-                    null, p.Wins, false, null, null, null))
+                    null, p.Wins, false, null, null, null)
+                    { Facts = new(Wins: p.Wins, Team: team) })
                 .ToList();
             if (built.Count > 0)
                 cards.Add(new(HighlightCellKind.BestStreak, "MpHlStripBestStreak", T("MpHlRuleStreak"), built, team, both));
@@ -134,7 +180,9 @@ public static class HighlightLeadersView
                 .Select((p, i) => Player(i, p,
                     figure: N(p.Percent ?? 0) + " %",
                     positive: false,
-                    detail: T("MpHlDetailRate", N(p.Wins ?? 0), N(p.Matches ?? 0))))
+                    detail: T("MpHlDetailRate", N(p.Wins ?? 0), N(p.Matches ?? 0)))
+                    // A win rate is drawn against 100, not against the first place.
+                    with { Facts = new(HighlightsMosaic.BarShare(p.Percent ?? 0, 100), Matches: p.Matches, Wins: p.Wins, Percent: p.Percent) })
                 .ToList();
             if (built.Count > 0)
                 cards.Add(new(HighlightCellKind.BestWinRate, "MpHlStripBestRate",
@@ -157,7 +205,13 @@ public static class HighlightLeadersView
                         true,
                         T(winners.Count > 1 ? "MpHlDetailUpsetTeam" : "MpHlDetailUpset",
                             NameList.Join(losers.Select(NameOf)), R(u.WinnersRating), R(u.LosersRating)),
-                        null, null);
+                        null, null)
+                    {
+                        Facts = new(
+                            Rival: new(NameList.Join(losers.Select(NameOf)), losers.Select(l => l.UserId).ToList(),
+                                losers.Count > 0 ? losers[0].AvatarUrl : null, u.WinnersRating, u.LosersRating),
+                            Team: string.Equals(u.Mode, "team", StringComparison.OrdinalIgnoreCase)),
+                    };
                 })
                 .ToList();
             if (built.Count > 0) cards.Add(new(HighlightCellKind.BiggestUpset, "MpHlStripUpset", T("MpHlRuleUpset"), built, false, false));
@@ -165,11 +219,14 @@ public static class HighlightLeadersView
 
         // Civilization of the month.
         {
-            var built = (leaders.TopCiv ?? new()).Where(c => c.Picks > 0 && !string.IsNullOrWhiteSpace(c.Civ)).Take(5)
+            var list = (leaders.TopCiv ?? new()).Where(c => c.Picks > 0 && !string.IsNullOrWhiteSpace(c.Civ)).Take(5).ToList();
+            var top = list.Count > 0 ? list[0].Picks : 0;
+            var built = list
                 .Select((c, i) => new LeaderRow(i + 1, c.Civ, Array.Empty<string>(), null,
                     N(c.Picks), null, false,
                     T("MpHlDetailCiv", N(c.Wins), N((int)Math.Round(100.0 * c.Wins / c.Picks))),
-                    c.ModId, c.Civ))
+                    c.ModId, c.Civ)
+                    { Facts = new(HighlightsMosaic.BarShare(c.Picks, top), Matches: c.Picks, Wins: c.Wins) })
                 .ToList();
             if (built.Count > 0)
                 cards.Add(new(HighlightCellKind.TopCiv, "MpHlStripTopCiv",

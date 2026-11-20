@@ -416,6 +416,11 @@ public static partial class Strings
         ["MpHlDetailUpset"] = new() { [LangEn] = "beat {0} · {1} vs {2}", [LangEs] = "le ganó a {0} · {1} contra {2}" },
         ["MpHlDetailUpsetTeam"] = new() { [LangEn] = "beat {0} · {1} vs {2}", [LangEs] = "les ganaron a {0} · {1} contra {2}" },
         ["MpHlDetailCiv"] = new() { [LangEn] = "{0} won · {1} %", [LangEs] = "{0} ganadas · {1} %" },
+        // The mosaic (design 119): the pill between the two sides of the biggest upset, the unit
+        // beside the civilization's figure, and the matches after a climb's two ratings.
+        ["MpHlBeat"] = new() { [LangEn] = "beat", [LangEs] = "venció a" },
+        ["MpHlPicks"] = new() { [LangEn] = "picks", [LangEs] = "veces elegida" },
+        ["MpHlAfterMatches"] = new() { [LangEn] = "· {0} matches", [LangEs] = "· {0} partidas" },
 
         // Design 60's data strip: each label goes in capitals over its value. {0} is the month's
         // abbreviation ("oct") or the window in days, both from the payload.

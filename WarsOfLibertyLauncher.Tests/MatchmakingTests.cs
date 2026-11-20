@@ -207,6 +207,196 @@ public class MatchmakingTests
             new MatchDuelist(rival, new FrameworkElement { Width = 44, Height = 44 }, "1642 ELO"),
             "1v1 clasificatoria · WoL", rated, "Ana es el anfitrión: crea la partida.", iHost, acceptMs, challenged, null);
 
+    /// <summary>A mod whose picture is a real file on disk, so nothing is downloaded.</summary>
+    private static (WarsOfLibertyLauncher.Models.ModProfile Mod, string File) ModWithPicture()
+    {
+        var file = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "aoe3ml-found-" + Guid.NewGuid().ToString("N") + ".png");
+        var pixels = new byte[64 * 36 * 4];
+        for (var i = 0; i < pixels.Length; i += 4) { pixels[i] = 40; pixels[i + 1] = 90; pixels[i + 2] = 160; pixels[i + 3] = 255; }
+        var bitmap = System.Windows.Media.Imaging.BitmapSource.Create(64, 36, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, pixels, 64 * 4);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using (var stream = System.IO.File.Create(file)) encoder.Save(stream);
+        return (new WarsOfLibertyLauncher.Models.ModProfile { Id = "found-test", DisplayName = "Found test", LocalHeroImagePath = file }, file);
+    }
+
+    private static MatchFoundDialog FoundFor(WarsOfLibertyLauncher.Models.ModProfile? mod)
+        => new(new MatchDuelist("Yo", new FrameworkElement { Width = 44, Height = 44 }, "1383 ELO"),
+            new MatchDuelist("Ana", new FrameworkElement { Width = 44, Height = 44 }, "1642 ELO"),
+            "1v1 clasificatoria · WoL", true, "Ana es el anfitrión: crea la partida.", false, 20000, false, mod);
+
+    private static double HeightOf(Window window)
+    {
+        var content = (FrameworkElement)window.Content;
+        content.Measure(new Size(window.Width, double.PositiveInfinity));
+        return content.DesiredSize.Height;
+    }
+
+    /// <summary>
+    /// Design 117: the picture of the mod goes up behind the bar with its veil and the glow under
+    /// it. The two glows the chassis paints stay its first two children (it finds them by
+    /// position) and are left empty, and no layer acts as a floor under a window that sizes to
+    /// its content.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ThePictureGoesUpWithoutMovingAnything()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var previous = ModDialogChrome.Config;
+            var (mod, file) = ModWithPicture();
+            try
+            {
+                ModDialogChrome.Config = new WarsOfLibertyLauncher.Models.LauncherConfig();
+                var plain = FoundFor(null);
+                Assert.False(plain.HasModPicture);
+
+                var dlg = FoundFor(mod);
+                Assert.True(dlg.HasModPicture);
+                var root = dlg.RootForTests;
+                Assert.IsAssignableFrom<System.Windows.Shapes.Shape>(root.Children[0]);
+                Assert.IsAssignableFrom<System.Windows.Shapes.Shape>(root.Children[1]);
+                Assert.Same(System.Windows.Media.Brushes.Transparent, ((System.Windows.Shapes.Shape)root.Children[0]).Fill);
+                Assert.Same(System.Windows.Media.Brushes.Transparent, ((System.Windows.Shapes.Shape)root.Children[1]).Fill);
+
+                var strip = Assert.Single(root.Children.OfType<Border>(), b => b.Name == ModDialogChrome.FoundPictureName);
+                Assert.Equal(ModDialogChrome.FoundStripHeight, strip.Height);
+                Assert.Equal(VerticalAlignment.Top, strip.VerticalAlignment);
+                // The picture is under the bar and the page, never over them.
+                Assert.True(root.Children.IndexOf(strip) < root.Children.IndexOf(dlg.Chrome));
+                // Every layer lets the click through to what is above the picture.
+                Assert.All(root.Children.OfType<FrameworkElement>().Where(c => !ReferenceEquals(c, dlg.Chrome) && c is not StackPanel),
+                    layer => Assert.False(layer.IsHitTestVisible));
+
+                Assert.Equal(HeightOf(plain), HeightOf(dlg), 3);
+            }
+            finally
+            {
+                ModDialogChrome.Config = previous;
+                try { System.IO.File.Delete(file); } catch (System.IO.IOException) { }
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>No picture to show: nothing is added and the chassis keeps its own glows.</summary>
+    [Fact]
+    public void WithNoPictureTheWindowStaysAsItWas()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var previous = ModDialogChrome.Config;
+            var (mod, file) = ModWithPicture();
+            try
+            {
+                // The setting is off.
+                ModDialogChrome.Config = new WarsOfLibertyLauncher.Models.LauncherConfig { ShowModImage = false };
+                var off = FoundFor(mod);
+                Assert.False(off.HasModPicture);
+                Assert.DoesNotContain(off.RootForTests.Children.OfType<Border>(), b => b.Name == ModDialogChrome.FoundPictureName);
+                Assert.NotSame(System.Windows.Media.Brushes.Transparent, ((System.Windows.Shapes.Shape)off.RootForTests.Children[0]).Fill);
+
+                // The mod has none.
+                ModDialogChrome.Config = new WarsOfLibertyLauncher.Models.LauncherConfig();
+                var none = FoundFor(new WarsOfLibertyLauncher.Models.ModProfile { Id = "found-none", DisplayName = "None" });
+                Assert.False(none.HasModPicture);
+
+                // No settings at all, which is what most tests run with.
+                ModDialogChrome.Config = null;
+                Assert.False(FoundFor(mod).HasModPicture);
+            }
+            finally
+            {
+                ModDialogChrome.Config = previous;
+                try { System.IO.File.Delete(file); } catch (System.IO.IOException) { }
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The tiles and the stake card are glass that follows the transparency level: a resource
+    /// reference, never a fill of their own. At the solid level there is no blurred copy to show
+    /// under them.
+    /// </summary>
+    [Fact]
+    public void TheTilesAndTheStakeCardAreGlass()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var previous = ModDialogChrome.Config;
+            var (mod, file) = ModWithPicture();
+            try
+            {
+                ModDialogChrome.Config = new WarsOfLibertyLauncher.Models.LauncherConfig();
+                var dlg = FoundFor(mod);
+                var panel = Application.Current.FindResource(WarsOfLibertyLauncher.Services.GlassTheme.PanelKey);
+                Assert.Same(panel, dlg.MyTile.Background);
+                Assert.Same(panel, dlg.RivalTile.Background);
+                Assert.Equal("GlassMenu", MultiplayerTab.StakeCardDress.Found.FillKey);
+                Assert.Contains(dlg.RootForTests.Children.OfType<Border>(), b => b.Name == "CardFrost");
+
+                ModDialogChrome.Config = new WarsOfLibertyLauncher.Models.LauncherConfig { GlassLevel = WarsOfLibertyLauncher.Services.GlassTheme.Solid };
+                var solid = FoundFor(mod);
+                Assert.True(solid.HasModPicture);
+                Assert.DoesNotContain(solid.RootForTests.Children.OfType<Border>(), b => b.Name == "CardFrost");
+            }
+            finally
+            {
+                ModDialogChrome.Config = previous;
+                try { System.IO.File.Delete(file); } catch (System.IO.IOException) { }
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Design 117f-h: no tile is coloured until its player accepts, each turns green with its own
+    /// acceptance and with nobody else's, "YOU" is on my tile only, and the button says the room
+    /// is opening only once both said yes.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ATileIsColouredByItsOwnAcceptance()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            static bool Green(Border tile)
+                => Tree(tile).OfType<Border>().Single(b => b.Tag as string == MatchFoundDialog.AcceptedWashTag).Visibility == Visibility.Visible;
+            static int YouTags(Border tile)
+                => Tree(tile).OfType<TextBlock>().Count(t => t.Tag as string == MatchFoundDialog.YouTag);
+
+            var dlg = Found();
+            Assert.False(Green(dlg.MyTile));
+            Assert.False(Green(dlg.RivalTile));
+            Assert.Equal(1, YouTags(dlg.MyTile));
+            Assert.Equal(0, YouTags(dlg.RivalTile));
+            Assert.Equal(Strings.Get("MmAccept"), dlg.PrimaryText);
+
+            // The rival said yes: his tile, not mine.
+            dlg.SetProgress(1, 2);
+            Assert.True(Green(dlg.RivalTile));
+            Assert.False(Green(dlg.MyTile));
+            Assert.Equal(Strings.Get("MmAccept"), dlg.PrimaryText);
+
+            // Now me: both green, and the room is being opened.
+            dlg.PrimaryAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Assert.True(Green(dlg.MyTile));
+            Assert.Equal(Strings.Get("MmOpeningRoom"), dlg.PrimaryText);
+
+            // Me alone: mine green, his not, and the button waits for him by name.
+            var alone = Found();
+            alone.PrimaryAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Assert.True(Green(alone.MyTile));
+            Assert.False(Green(alone.RivalTile));
+            Assert.Equal(Strings.Format("MmWaitingFor", "Ana"), alone.PrimaryText);
+        });
+        Assert.Null(error);
+    }
+
     private static IEnumerable<DependencyObject> Tree(DependencyObject root)
     {
         yield return root;

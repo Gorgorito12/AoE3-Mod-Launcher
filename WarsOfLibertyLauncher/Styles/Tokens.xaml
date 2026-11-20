@@ -388,6 +388,27 @@
     <sys:Double x:Key="MpHlMetaSize">11</sys:Double>
     <sys:Double x:Key="MpHlNameSize">13</sys:Double>
     <sys:Double x:Key="MpHlFigureSize">14</sys:Double>
+    <!-- Ranking › Highlights as a mosaic (design 119): the card's title (14) and rule (11.5),
+         a place's name (13, 15 for the first), its detail (11.5), the figures in monospace (12.5
+         inline, 13.5 at the row's end, 22 for the first, 28 in the climb's block, 24 in the
+         upset's, 30 for the civilization's picks), the civilization's name (16) and line (12),
+         the "beat" pill (10) and the percentage inside a ring (10.5, 15 for the first). -->
+    <sys:Double x:Key="HlTitleSize">14</sys:Double>
+    <sys:Double x:Key="HlRuleSize">11.5</sys:Double>
+    <sys:Double x:Key="HlNameSize">13</sys:Double>
+    <sys:Double x:Key="HlNameFirstSize">15</sys:Double>
+    <sys:Double x:Key="HlDetailSize">11.5</sys:Double>
+    <sys:Double x:Key="HlMonoSize">12.5</sys:Double>
+    <sys:Double x:Key="HlFigureSize">13.5</sys:Double>
+    <sys:Double x:Key="HlFigureFirstSize">22</sys:Double>
+    <sys:Double x:Key="HlHeroFigureSize">28</sys:Double>
+    <sys:Double x:Key="HlUpsetFigureSize">24</sys:Double>
+    <sys:Double x:Key="HlCivFigureSize">30</sys:Double>
+    <sys:Double x:Key="HlCivNameSize">16</sys:Double>
+    <sys:Double x:Key="HlCivDetailSize">12</sys:Double>
+    <sys:Double x:Key="HlPillSize">10</sys:Double>
+    <sys:Double x:Key="HlRingSize">10.5</sys:Double>
+    <sys:Double x:Key="HlRingFirstSize">15</sys:Double>
     <!-- The "↺" of a refund banner (design 55n), 15/700. -->
     <sys:Double x:Key="MpRefundGlyphSize">15</sys:Double>
 

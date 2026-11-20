@@ -253,17 +253,53 @@ public class RankingViewTests
 
     // ---------------------------------------------------------------- highlights
 
-    /// <summary>93f: all the cards in one row when each gets 300 px, else two rows, three, two
-    /// columns, one.</summary>
+    /// <summary>Design 119: four columns on a wide page, two on a laptop, one when two do not fit.</summary>
     [Theory]
-    [InlineData(7, 1888, 16, 4)]   // 1920: seven do not fit in a row, four do
-    [InlineData(7, 1342, 12, 4)]   // 1366
-    [InlineData(7, 2528, 16, 7)]   // 2560: all seven
-    [InlineData(7, 1000, 12, 3)]
-    [InlineData(7, 700, 12, 2)]
-    [InlineData(7, 400, 12, 1)]
-    [InlineData(3, 1888, 16, 3)]
-    [InlineData(1, 1888, 16, 1)]
-    public void TheHighlightCardsFillTheRowTheyFitIn(int cards, double pageWidth, double gap, int expected)
-        => Assert.Equal(expected, MultiplayerTab.LeaderColumns(cards, pageWidth, gap));
+    [InlineData(2528, 4)]   // 2560
+    [InlineData(1888, 4)]   // 1920
+    [InlineData(1440, 4)]   // the line itself
+    [InlineData(1439, 2)]
+    [InlineData(1342, 2)]   // 1366
+    [InlineData(700, 2)]
+    [InlineData(699, 1)]
+    [InlineData(0, 1)]
+    public void TheMosaicHasFourColumnsOrTwo(double width, int expected)
+        => Assert.Equal(expected, HighlightsMosaic.Columns(width));
+
+    /// <summary>A bar is the place's figure against the first's, never shorter than the floor
+    /// and never longer than its track; with nothing to compare it is the floor.</summary>
+    [Theory]
+    [InlineData(40, 40, 1)]
+    [InlineData(10, 40, .25)]
+    [InlineData(1, 400, HighlightsMosaic.BarFloor)]
+    [InlineData(50, 40, 1)]
+    [InlineData(0, 40, HighlightsMosaic.BarFloor)]
+    [InlineData(10, 0, HighlightsMosaic.BarFloor)]
+    public void ABarIsThePlaceAgainstTheFirst(double value, double top, double expected)
+        => Assert.Equal(expected, HighlightsMosaic.BarShare(value, top), 3);
+
+    /// <summary>
+    /// A badge needs a place on the ladder the page has. Somebody who is not on it — being
+    /// placed, a private rating, past the page the server sent — has none, and that is never
+    /// read as a place.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_APlayerOffTheLadderHasNoPlace()
+    {
+        var ladder = new[]
+        {
+            new WarsOfLibertyLauncher.Models.Multiplayer.LeaderboardRow { UserId = "a", Rank = 1 },
+            new WarsOfLibertyLauncher.Models.Multiplayer.LeaderboardRow { UserId = "b", Rank = 2 },
+            // A row the server sent without a place is not a place.
+            new WarsOfLibertyLauncher.Models.Multiplayer.LeaderboardRow { UserId = "c", Rank = 0 },
+        };
+        Assert.Equal(2, HighlightsMosaic.RankOf("b", ladder));
+        Assert.Null(HighlightsMosaic.RankOf("c", ladder));
+        Assert.Null(HighlightsMosaic.RankOf("z", ladder));
+        Assert.Null(HighlightsMosaic.RankOf("", ladder));
+        Assert.Null(HighlightsMosaic.RankOf(null, ladder));
+        Assert.Null(HighlightsMosaic.RankOf("a", null));
+        // Ids are compared exactly: another player's id in another case is another player.
+        Assert.Null(HighlightsMosaic.RankOf("A", ladder));
+    }
 }

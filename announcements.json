@@ -25,6 +25,13 @@
   ],
   "announcements": [
     {
+      "id": "v110",
+      "title": "v1.1.0: a new Library, quick match and a redrawn multiplayer",
+      "body": "The Library and the Workshop are now one tab, built around each mod's cover. Quick match finds you a 1v1 and the game can enter the LAN room by itself. Rooms, the room window, tournaments, Ranking and Highlights are all redrawn.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.1.0.md",
+      "date": "2026-11-19"
+    },
+    {
       "id": "v1016",
       "title": "v1.0.16: competitive matches are recorded for everyone to watch",
       "body": "The recording of every competitive match is now uploaded when it ends, and the new Ranking › Matches page lists every match of the past year — search a player, filter by date or room, and download the recording straight into your Savegame folder. Rooms are also more reliable, and the launcher does less work in the background.",
