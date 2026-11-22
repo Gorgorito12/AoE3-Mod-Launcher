@@ -497,6 +497,36 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   go next to WoL's `age3y.exe`; that needed two fixes for WoL's DLL (it hooks the Host button and
   replaces the LAN dialog's vtable), see things-new `how-it-works.md`.
 
+  **THE HELPER IS ONE FILE OF ITS OWN SINCE 2026-11-20: `avifil32.dll`, with NO cfg. This SUPERSEDES
+  what the paragraph below says about `dinput8.dll`, "the two files" and the cfg lines; the consent,
+  the room card, the setup window, the elevated copy and the uninstall are unchanged.** Why: the mod
+  (WoL) is going to ship its own `dinput8.dll`, and that name and `engine-ext\engine-ext.cfg` are the
+  mod's. A patch bringing its own pair WITHOUT `lanAutoStart` switched the entry off and the launcher
+  could do nothing (`ForeignDll`). The new file (things-new target `LanHelper`, `src/lanhelper.cpp`)
+  is loaded because the exe imports `AVIFIL32.dll` (4 functions; not in KnownDLLs), forwards the 72
+  functions of the system's, and runs the SAME lanAutoStart steps from the game's window procedure
+  on a message it posts ten times a second: **it writes no byte of the game and does not hook
+  Direct3D**, the two things another DLL checks before patching, so it cannot collide. With no
+  `uhcLan*` argument it starts no thread. **It stands aside when a cfg of the folder turns
+  `lanAutoStart` on** (Startup\*.cfg or the engine-ext cfg), the same rule as the launcher's
+  `EnabledByMod` / `SupersededByMod`, so two never enter. Launcher side
+  (`LanHelperService`): `DllName` is `avifil32.dll`, nothing is written to any cfg, and
+  `Install`/`Remove` take the EARLIER helper away (`RemoveLegacy`): `dinput8.dll` only when its hash
+  is in `LegacySha256` (0.4.0, v1.1.0) and its cfg is not the mod's, plus our two marked lines; a
+  `dinput8.dll` with any other hash and the cfg it runs with are never touched. `Outdated` now also
+  means "ours, with the earlier pair still beside it"; `Missing` with the earlier pair whole still
+  enters (`LegacyStillEnters`) until the next room replaces it. That is how every v1.1.0 player
+  changes over, with no step of their own. **Measured in copies, one PC:** stock game and WoL with its
+  own `uhc.dll` host and join by Direct IP; WoL beside a things-new `dinput8.dll` with
+  `fastVertexFill` + `perfStats` + `multipleInstances` (3 applied, 0 failed) still enters; that
+  `dinput8.dll` with `lanAutoStart` on makes ONE entry and the helper's log says it stood aside; a
+  game opened by hand writes no log. **Not measured:** typing in the lobby chat with this file, and
+  two machines. Pinned by `LanHelperServiceTests`
+  (`THE_ONE_THAT_MATTERS_AModsDinput8WithoutTheKeyNoLongerBlocksTheHelper`,
+  `THE_ONE_THAT_MATTERS_TheEarlierHelperIsReplacedWhole`, which uses the real 0.4.0 file kept in
+  `Fixtures/`). ⚠ Testing it: the DLL repo's `rclick` / `type` / `rkey` are REAL input and land in
+  whatever window the user has in front; use them only when nobody is at the PC.
+
   **THE LAN HELPER: the launcher can install that pair itself, ONLY with the player's consent —
   `Services/Multiplayer/LanHelperService`, `Controls/MultiplayerTab.LanHelper.cs`.** The DLL is
   embedded (`Assets/LanHelper/dinput8.dll`, manifest resource, SHA pinned in `CurrentSha256`; its

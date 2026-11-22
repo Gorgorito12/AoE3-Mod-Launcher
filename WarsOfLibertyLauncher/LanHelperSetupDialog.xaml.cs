@@ -21,10 +21,10 @@ namespace WarsOfLibertyLauncher;
 /// <para>Two ways, in this order. The footer's primary is the launcher doing it: an ordinary copy
 /// when the folder is writable, or one administrator permission when Windows protects it — the
 /// launcher runs itself elevated for that single copy (<see cref="LanHelperElevated"/>) and does
-/// not restart. The card is the player doing it: save the two files, open the exact folder, copy
-/// them in, and Check, which reads the folder the way the room does.</para>
+/// not restart. The card is the player doing it: save the file, open the exact folder, copy
+/// it in, and Check, which reads the folder the way the room does.</para>
 ///
-/// <para>Nothing here installs over another tool's <c>dinput8.dll</c> or a mod that already ships
+/// <para>Nothing here installs over another tool's <c>avifil32.dll</c> or a mod that already ships
 /// the key: those states have no primary and no steps, only a sentence saying why.</para>
 /// </summary>
 public partial class LanHelperSetupDialog : BaseDialog
@@ -133,8 +133,7 @@ public partial class LanHelperSetupDialog : BaseDialog
         open.Margin = new Thickness(8, 0, 0, 0);
         buttons.Children.Add(open);
         AddStep(2, Strings.Get("LanSetupStep2"), buttons, path);
-        AddStep(3, Strings.Format("LanSetupStep3", LanHelperService.DllName, LanHelperService.CfgFolder,
-            Path.GetFileName(_exe), LanHelperService.CfgKey), null);
+        AddStep(3, Strings.Format("LanSetupStep3", LanHelperService.DllName, Path.GetFileName(_exe)), null);
         AddStep(4, Strings.Get("LanSetupStep4"), Button("LanSetupCheck", "LanSetupCheck", Check_Click));
     }
 
@@ -272,8 +271,7 @@ public partial class LanHelperSetupDialog : BaseDialog
         var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         var parent = Directory.Exists(desktop) ? desktop : AppPaths.DataDir;
         var folder = LanHelperService.ExportTo(parent,
-            Strings.Format("LanSetupReadme", _profile.DisplayName, _folder, LanHelperService.DllName,
-                LanHelperService.CfgFolder, LanHelperService.CfgKey),
+            Strings.Format("LanSetupReadme", _profile.DisplayName, _folder, LanHelperService.DllName),
             out var error);
         if (folder == null)
         {
@@ -308,15 +306,14 @@ public partial class LanHelperSetupDialog : BaseDialog
     {
         StatusRow.Visibility = Visibility.Collapsed;
         var state = ProbeNow();
-        if (state is LanHelperState.Installed or LanHelperState.EnabledByMod)
+        // Outdated: our file is there and enters; what is left of the earlier helper goes at the
+        // next room, or with the button above.
+        if (state is LanHelperState.Installed or LanHelperState.EnabledByMod or LanHelperState.Outdated)
         {
             Say(true, Strings.Format("LanSetupActive", _profile.DisplayName));
             Paint(null);
             return;
         }
-        var dll = File.Exists(Path.Combine(_folder, LanHelperService.DllName));
-        Say(false, Strings.Get(!dll ? "LanSetupMissingDll"
-            : state == LanHelperState.ForeignDll ? "LanSetupLeadForeign"
-            : "LanSetupMissingCfg"));
+        Say(false, Strings.Get(state == LanHelperState.ForeignDll ? "LanSetupLeadForeign" : "LanSetupMissingDll"));
     }
 }

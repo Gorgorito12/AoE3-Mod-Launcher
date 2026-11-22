@@ -15,7 +15,7 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// administrator takes from outside. The path must be absolute, canonical, free of quotes and
 /// control characters, and end in <c>.exe</c>; and the job itself is
 /// <see cref="LanHelperService.Install"/> / <see cref="LanHelperService.Remove"/>, which refuse
-/// an executable they do not know, another tool's <c>dinput8.dll</c> and a mod that ships the
+/// an executable they do not know, another tool's <c>avifil32.dll</c> and a mod that ships the
 /// key. The launcher re-checks the folder itself afterwards rather than trusting the exit code.</para>
 /// </summary>
 public static class LanHelperElevated

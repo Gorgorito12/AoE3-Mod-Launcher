@@ -40,7 +40,7 @@ public partial class MultiplayerTab
     /// <summary>What this launcher last told the room, so it is said once per change.</summary>
     private bool? _lanAutoSent;
 
-    /// <summary>The one-time question, naming the folder and the two files. Also what
+    /// <summary>The one-time question, naming the folder and the file. Also what
     /// <c>--preview-dialog=lanhelper</c> shows.</summary>
     internal static bool AskLanHelper(System.Windows.Window? owner, ModProfile profile, string folder) =>
         ThemedConfirmDialog.Ask(
@@ -50,7 +50,7 @@ public partial class MultiplayerTab
             Strings.Get("LanHelperAskYes"),
             Strings.Get("LanHelperAskNo"),
             detailLabel: Strings.Get("LanHelperAskDetailLabel"),
-            detail: $"{folder}\n  {LanHelperService.DllName}\n  {LanHelperService.CfgFolder}\\{LanHelperService.CfgName}",
+            detail: $"{folder}\n  {LanHelperService.DllName}",
             mod: profile);
 
     /// <summary>The executable the room's game launches from, as the launch resolves it.</summary>
@@ -68,10 +68,12 @@ public partial class MultiplayerTab
     private static RoomLanAvailability EntryFor(LanHelperState state, string? exe) => state switch
     {
         LanHelperState.Installed or LanHelperState.EnabledByMod or LanHelperState.SupersededByMod => RoomLanAvailability.Available,
-        // Our older build: it still enters while its cfg line is there; the next room updates it.
-        LanHelperState.Outdated when exe != null && LanAutoStartArgs.CfgEnablingLanAutoStart(Path.GetDirectoryName(exe)) != null
+        // Our file is there, an older build or beside the earlier helper: it enters; the next room tidies up.
+        LanHelperState.Outdated => RoomLanAvailability.Available,
+        // Only the earlier helper (dinput8.dll and its cfg line), whole: it still enters until it is replaced.
+        LanHelperState.Missing when exe != null && LanHelperService.LegacyStillEnters(Path.GetDirectoryName(exe))
             => RoomLanAvailability.Available,
-        LanHelperState.Missing or LanHelperState.Outdated => RoomLanAvailability.NotSetUp,
+        LanHelperState.Missing => RoomLanAvailability.NotSetUp,
         _ => exe == null ? RoomLanAvailability.Unknown : RoomLanAvailability.CannotSetUp,
     };
 

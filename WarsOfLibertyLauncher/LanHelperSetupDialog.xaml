@@ -4,7 +4,7 @@
                      xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
                      Width="540"
                      Tone="Caution">
-    <!-- The automatic entry to the LAN room, set up by hand: the two files, the exact folder,
+    <!-- The automatic entry to the LAN room, set up by hand: the file, the exact folder,
          and a check that it took. The footer's primary is the launcher doing it (as administrator
          when the folder is protected); the card is the player doing it. -->
     <StackPanel>

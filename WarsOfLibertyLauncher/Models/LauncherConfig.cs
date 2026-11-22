@@ -2169,7 +2169,7 @@ public class LauncherConfig
     public int LastRoomGameRules { get; set; }
 
     /// <summary>
-    /// Whether the launcher may put the LAN helper (<c>dinput8.dll</c> + <c>engine-ext\</c>) next
+    /// Whether the launcher may put the LAN helper (its own <c>avifil32.dll</c>) next
     /// to a game's executable, so the game enters the room's LAN game by itself:
     /// <see cref="Services.Multiplayer.LanHelperService"/>. <c>null</c> = never asked (the first
     /// room asks once), <c>true</c> = yes, <c>false</c> = no and never asked again. Nullable on

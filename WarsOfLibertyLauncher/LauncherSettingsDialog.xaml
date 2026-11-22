@@ -778,7 +778,7 @@
                                         <TextBlock x:Name="LanHelperStatus" Style="{StaticResource SetRowDesc}"
                                                    Foreground="{DynamicResource UiTextDim}" Margin="0,4,0,0"/>
                                         <!-- The same setup window a room offers: the launcher doing it, or
-                                             the two files and the exact folder to do it by hand. -->
+                                             the file and the exact folder to do it by hand. -->
                                         <Button x:Name="LanHelperManualButton" Style="{StaticResource MpLinkButton}"
                                                 HorizontalAlignment="Left" Margin="0,6,0,0"
                                                 Click="LanHelperManualButton_Click"/>

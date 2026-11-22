@@ -14266,16 +14266,20 @@ public partial class MultiplayerTab : UserControl
             var extraArgs = BuildMultiplayerLaunchArgs();
             DiagnosticLog.Write($"MultiplayerTab.LaunchActiveModGame: extraArgs='{extraArgs}'");
 
-            // Only a things-new DLL with lanAutoStart in its cfg acts on the LAN argument; every other
-            // install ignores it. Said here because a report that "it did not enter the room" is
-            // otherwise unreadable: the launcher's half always looks right.
-                // The folder the executable runs from, not the install's: the stock game's is bin\.
+            // Only the launcher's own helper (avifil32.dll), or a mod's things-new DLL with
+            // lanAutoStart in its cfg, acts on the LAN argument; every other install ignores it.
+            // Said here because a report that "it did not enter the room" is otherwise unreadable:
+            // the launcher's half always looks right.
+            // The folder the executable runs from, not the install's: the stock game's is bin\.
             var lanExe = RoomGameExe().Exe;
             var lanCfg = Services.Multiplayer.LanAutoStartArgs.CfgEnablingLanAutoStart(
                 lanExe != null ? System.IO.Path.GetDirectoryName(lanExe) : _config?.GetState(profile.Id).InstallPath);
+            var lanHelper = Services.Multiplayer.LanHelperService.Probe(lanExe);
             DiagnosticLog.Write(lanCfg != null
-                ? $"MultiplayerTab.LaunchActiveModGame: LAN auto-start enabled in {lanCfg}"
-                : "MultiplayerTab.LaunchActiveModGame: LAN auto-start - no lanAutoStart line in this install's Startup\\*.cfg or engine-ext\\engine-ext.cfg; the game will ignore the argument");
+                ? $"MultiplayerTab.LaunchActiveModGame: LAN auto-start enabled in {lanCfg} (helper: {lanHelper})"
+                : $"MultiplayerTab.LaunchActiveModGame: LAN auto-start - no cfg of this install turns lanAutoStart on; helper: {lanHelper}"
+                    + (lanHelper is Services.Multiplayer.LanHelperState.Installed or Services.Multiplayer.LanHelperState.Outdated
+                        ? "" : "; the game will ignore the argument"));
 
             // A competitive room needs the recording, and the lobby's Record Game box is the
             // HOST's game setting: the game opens the hosted lobby with the value the profile's
