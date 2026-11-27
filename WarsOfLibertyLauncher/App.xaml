@@ -36,6 +36,8 @@
                 <!-- The floating notices (design 105): their pictograms and button styles. Reads
                      Colors.xaml and Tokens.xaml only. -->
                 <ResourceDictionary Source="/Styles/Toasts.xaml"/>
+                <!-- The medals' pictograms (design 121). Geometry only, references nothing. -->
+                <ResourceDictionary Source="/Styles/Achievements.xaml"/>
                 <!-- The Library's styles, which the window's XAML reaches with StaticResource. -->
                 <ResourceDictionary Source="/Styles/Library.xaml"/>
                 <!-- The small dialogs (design 103): BasedOn the Window* styles in Library.xaml. -->

@@ -75,9 +75,7 @@ public partial class MultiplayerTab
                 break;
             default:
                 _lastBrowserList = RoomListDemoData.Rooms(now);
-                _roomsListAskedUtc = now;
                 RenderRoomRows(_lastBrowserList);
-                AddDemoRoomCards(_lastBrowserList, now);
                 break;
         }
         _roomIdsSeeded = true;
@@ -127,24 +125,6 @@ public partial class MultiplayerTab
         foreach (var (login, rating, status) in RoomListDemoData.Online)
             _globalOnlineUsers.Add(new OnlinePlayer("demo-" + login, login, null, status, rating, 80, null));
         RenderPlayersPanel();
-    }
-
-    /// <summary>Two of the sample rooms announced in the chat: one with a seat, one full, so the
-    /// card's two looks can be seen without a second account.</summary>
-    private void AddDemoRoomCards(IReadOnlyList<LobbySummary> rooms, DateTime now)
-    {
-        var picks = new List<LobbySummary>();
-        foreach (var wanted in new[] { RoomAction.Join, RoomAction.Full })
-            if (rooms.FirstOrDefault(r => !picks.Contains(r) && RoomActionRule.Decide(RoomFactsOf(r)) == wanted) is { } room)
-                picks.Add(room);
-        int minutes = picks.Count * 3;
-        foreach (var r in picks)
-        {
-            AppendGlobalChatRoomEvent(new RoomEventSnapshot(r.Id, r.Title, r.ModId, r.Host.Id,
-                string.IsNullOrEmpty(r.Host.DisplayName) ? r.Host.DiscordUsername : r.Host.DisplayName,
-                r.MaxPlayers, r.Competitive, now.AddMinutes(-minutes), r.GameRules));
-            minutes -= 3;
-        }
     }
 
     /// <summary>What a sample row's button would have done, said instead of done.</summary>

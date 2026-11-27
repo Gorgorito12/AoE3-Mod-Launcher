@@ -32,12 +32,15 @@ public class NotificationViewTests
         Assert.Equal(0, NotificationView.Unread(new[] { Item(kind) }));
     }
 
-    /// <summary>Ten of fourteen: the month's highlights joined the bell on the maintainer's request
-    /// (2026-11-10, "para que todos lo vean"), under Launcher, like the project's announcements.</summary>
+    /// <summary>Eleven of fifteen: the month's highlights joined the bell on the maintainer's request
+    /// (2026-11-10, "para que todos lo vean"), under Launcher, like the project's announcements; a
+    /// medal (design 121) joined it under Mods, since it is earned in one game.</summary>
     [Fact]
-    public void TenOfTheFourteenKindsRemain()
+    public void ElevenOfTheFifteenKindsRemain()
     {
-        Assert.Equal(10, Enum.GetValues<NotificationKind>().Count(NotificationView.BelongsInTheBell));
+        Assert.Equal(11, Enum.GetValues<NotificationKind>().Count(NotificationView.BelongsInTheBell));
+        Assert.True(NotificationView.BelongsInTheBell(NotificationKind.AchievementUnlocked));
+        Assert.True(NotificationView.Passes(NotificationFilter.Mods, NotificationKind.AchievementUnlocked));
         Assert.True(NotificationView.BelongsInTheBell(NotificationKind.MonthlyHighlights));
         Assert.True(NotificationView.Passes(NotificationFilter.Launcher, NotificationKind.MonthlyHighlights));
     }

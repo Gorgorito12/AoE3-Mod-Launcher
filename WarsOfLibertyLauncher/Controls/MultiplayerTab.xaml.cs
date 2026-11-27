@@ -1759,9 +1759,6 @@ public partial class MultiplayerTab : UserControl
         // The lobby has always solved this by re-running its own render (below); these three
         // had no equivalent.
         RefreshActiveSubtabStrings();
-        // The chat's "X opened a room" cards are live (their key carries the language), not
-        // history, so they follow the switch; without this they waited for the next rooms list.
-        RefreshRoomEventCards();
     }
 
     /// <summary>
@@ -4487,6 +4484,10 @@ public partial class MultiplayerTab : UserControl
             _ = ResumeInterruptedMatchAsync();
         }
 
+        // Medals earned while the launcher was closed come back as "unseen" (design 121): asked
+        // once a session, the same first signed-in pass.
+        MaybeCheckUnseenAchievements();
+
         // The account cluster, for exactly the same reason and therefore in exactly the
         // same place. It was pushed from a RenderBrowser() that only ran on the SIGNED-IN
         // branch of RenderRoomsTab — so signing out took the signed-out early return
@@ -5324,6 +5325,10 @@ public partial class MultiplayerTab : UserControl
 
             case ProfileSection.Civs:
                 RenderProfileCivilizations(ProfileBody);
+                break;
+
+            case ProfileSection.Achievements when AchievementsShown:
+                RenderProfileAchievements(ProfileBody);
                 break;
 
             default:
@@ -7663,7 +7668,7 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>Which section of the profile page is showing.</summary>
-    private enum ProfileSection { Overview, History, Civs, Decks, Games }
+    private enum ProfileSection { Overview, History, Civs, Decks, Games, Achievements }
 
     private ProfileSection _profileSection = ProfileSection.Overview;
 
@@ -10321,7 +10326,6 @@ public partial class MultiplayerTab : UserControl
                     RoomsListPanel.Children.Add(BuildRoomSkeletonRow());
             }
 
-            var askedUtc = DateTime.UtcNow;
             var list = await _session.Api.ListLobbiesAsync();
             _roomsLiveView = list.LiveView == true;
             // Only the FIRST one: the rooms list re-polls every few seconds, and a milestone per
@@ -10337,9 +10341,6 @@ public partial class MultiplayerTab : UserControl
             // for the current lobby) can read it without an extra
             // round-trip.
             _lastBrowserList = list.Lobbies as List<LobbySummary> ?? new List<LobbySummary>(list.Lobbies);
-            _roomsListAskedUtc = askedUtc;
-            // The chat's room cards follow their rooms: full, started or gone stop offering Join.
-            RefreshRoomEventCards();
 
             // Stamp the "last updated" label on every successful fetch — even a
             // quiet poll that skips the re-render still confirmed the list is
@@ -11742,6 +11743,10 @@ public partial class MultiplayerTab : UserControl
                         QueueRoomsRefreshFromAnnouncement();
                         OnQuickMatchListChanged();
                         break;
+                    case "achievement_unlocked":
+                        // Medals earned just now (design 121): the window celebrates them.
+                        HandleAchievementUnlockedFrame(e.Json);
+                        break;
                     case "match_rated":
                         HandleMatchRatedFrame(e.Json);
                         // One of the viewer's matches was decided late. A server that also sends
@@ -12035,14 +12040,9 @@ public partial class MultiplayerTab : UserControl
             hostUserId = host.TryGetProperty("userId", out var hu) ? (hu.GetString() ?? "") : "";
             hostLogin = host.TryGetProperty("login", out var hl) ? (hl.GetString() ?? "") : "";
         }
-        // The announcement is emitted by POST /lobbies, which inserts the row with one player in
-        // it; the card then follows the room through the rooms list (RefreshRoomEventCards).
-        var maxPlayers = lobby.TryGetProperty("maxPlayers", out var mp) && mp.TryGetInt32(out var mpv) ? mpv : 0;
-        var competitive = lobby.TryGetProperty("competitive", out var cp) && cp.ValueKind == JsonValueKind.True;
-        // Absent from an older server, which must stay "not stated" (no chip), never Standard.
-        int? rules = lobby.TryGetProperty("gameRules", out var gr) && gr.TryGetInt32(out var grv) ? grv : null;
+        // No card in the global chat any more (removed 2026-11-26): the toast, the tab's dot and
+        // the Rooms page already say a room opened.
         _onNewRoomFromWs?.Invoke(id, title, modId, hostUserId, hostLogin);
-        AppendGlobalChatRoomEvent(new RoomEventSnapshot(id, title, modId, hostUserId, hostLogin, maxPlayers, competitive, DateTime.UtcNow, rules));
         // A quick match waiting in this mod looks again soon: the newer of two waiting rooms moves.
         OnQuickMatchRoomAnnounced(modId, hostUserId);
     }

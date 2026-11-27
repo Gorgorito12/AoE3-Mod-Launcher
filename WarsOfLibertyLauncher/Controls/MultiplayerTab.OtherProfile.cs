@@ -240,6 +240,7 @@ public partial class MultiplayerTab
     {
         var ids = userIds?.ToList();
         _profileCache.MarkStale(ids);
+        foreach (var id in ids ?? new List<string>()) _achv.MarkStale(id);
         if (_profileOther is { } other && ids != null && ids.Contains(other.Id)
             && _profileWindow != null && _profileWindow.WindowState != WindowState.Minimized)
         {

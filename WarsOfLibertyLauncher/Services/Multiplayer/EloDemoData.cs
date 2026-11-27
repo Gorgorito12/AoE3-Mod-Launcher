@@ -43,6 +43,9 @@ internal enum EloPreviewScene
 
     /// <summary>55n: a points refund — the bell and the profile banner.</summary>
     Refund,
+
+    /// <summary>121a: the profile on its medals (Wars of Liberty's sample).</summary>
+    Achievements,
 }
 
 /// <summary>The sample player whose profile the preview opens, with everything the page reads.</summary>

@@ -183,6 +183,35 @@ public sealed class NotificationCenter
     /// arrives every session until the profile banner is dismissed — and persisted, so a restart
     /// does not ring it again.
     /// </summary>
+    /// <summary>
+    /// Medals earned (design 121), one entry for those of one game that arrive together. Deduped
+    /// per medal and persisted: the push and a profile read can both bring the same medal, and a
+    /// restart must not say it again. Returns false when every one was already said.
+    /// </summary>
+    public bool RaiseAchievements(string modId, IReadOnlyList<string> medalKeys, string title, string body)
+    {
+        var fresh = medalKeys
+            .Where(k => !string.IsNullOrWhiteSpace(k)
+                        && !_config.NotifiedAchievementKeys.Contains(k, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (fresh.Count == 0) return false;
+        _config.NotifiedAchievementKeys.AddRange(fresh);
+        if (_config.NotifiedAchievementKeys.Count > 500)
+            _config.NotifiedAchievementKeys.RemoveRange(0, _config.NotifiedAchievementKeys.Count - 500);
+
+        // No tray balloon: the medal has a notice of its own (design 121b/121d), and a balloon
+        // beside it would say the same thing twice.
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.AchievementUnlocked,
+            ModId = modId ?? "",
+            Title = title,
+            Body = body,
+            TargetId = modId ?? "",
+        }, balloon: false);
+    }
+
     /// <summary>Last month's highlights, once per month (the caller decides when, through
     /// <c>HighlightsNotice</c>; this only refuses a month already said).</summary>
     public bool RaiseMonthlyHighlights(string month, string title, string body)
@@ -548,7 +577,7 @@ public sealed class NotificationCenter
 
     // --------------------------------------------------------------- internals
 
-    private bool Add(NotificationItem item)
+    private bool Add(NotificationItem item, bool balloon = true)
     {
         Items.Insert(0, item);
         // Trim oldest beyond the cap. A preview item does not count and is never the one
@@ -563,7 +592,7 @@ public sealed class NotificationCenter
         Persist();
         ItemAdded?.Invoke(this, item);
         Changed?.Invoke(this, EventArgs.Empty);
-        ToastRequested?.Invoke(item.Title, item.Body);
+        if (balloon) ToastRequested?.Invoke(item.Title, item.Body);
         return true;
     }
 

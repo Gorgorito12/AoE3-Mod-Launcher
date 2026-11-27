@@ -2,11 +2,10 @@
 
     python -I tools/testbed/scenario_two_accounts.py [--keep-server]
 
-A local lobby server, three launchers (a hosts, b joins, c watches the global chat), and two
+A local lobby server, three launchers (a hosts, b joins, c, a third account), and two
 simulated games that leave real recordings behind, so everything after the game runs the
 production code: reading the recording, the host's report, the guest's confirmation, both
-civilizations, the result screen, the chat's room card going Join -> Full -> See match -> Closed,
-and the rematch. About ten minutes: a match shorter than three minutes is never reported.
+civilizations, the result screen and the rematch. About ten minutes: a match shorter than three minutes is never reported.
 
 Each step says ok or FAIL with what it looked for. Nothing leaves this machine (see the README's
 "Two accounts" section), and `safety check` runs at the end.
@@ -66,13 +65,6 @@ def wait_for(what, predicate, seconds):
     return None
 
 
-def card_state(lobby):
-    """What c's chat card for LOBBY says now, from its own log line: "Full" and "Closed" are text,
-    not buttons, so UI Automation cannot read them."""
-    states = re.findall(rf"Chat room card {lobby}: (\w+), (\w+(?: \w+)?)", log("c"))
-    return " ".join(states[-1]) if states else ""
-
-
 def play_match(recording, title):
     """a creates a ranked 1v1, b joins, both ready; returns the lobby id once both games ran."""
     testbed("fakegame", recording, "--slot", "1", account="a")
@@ -85,9 +77,7 @@ def play_match(recording, title):
     lobby = wait_for("room", lambda: (re.search(r"CreateRoom: lobby id (\w+) created", log("a")[before_a:]) or [None, None])[1], 20)
     if not check(f"{title}: a created a room", bool(lobby)):
         return None
-    check(f"{title}: c's chat card offers Join", wait_for("join", lambda: card_state(lobby).endswith("Join"), 15), card_state(lobby))
     uia("b", "invoke", "-Id", f"RoomAction:{lobby}")
-    check(f"{title}: c's chat card says Full once b is in", wait_for("full", lambda: card_state(lobby).endswith("Full"), 15), card_state(lobby))
 
     before_a, before_b = len(log("a")), len(log("b"))
     uia("a", "invoke", "-Id", "ReadyButton")
@@ -98,16 +88,12 @@ def play_match(recording, title):
     host_args = re.search(r"HARNESS BLOCKED launch game wol (.*)", log("a")[before_a:])
     check(f"{title}: the host of a ranked room passes Standard rules",
           bool(host_args) and "+uhcLanHost uhcLanRules=0" in host_args[1], host_args[1] if host_args else "")
-    check(f"{title}: c's chat card says See match", wait_for("ingame", lambda: card_state(lobby).endswith("SeeMatch"), 20),
-          card_state(lobby))
 
     print(f"...   {title}: waiting for the simulated games (190 s)")
     reported = wait_for("report", lambda: "TryReportMatchAsync: reported match" in log("a")[before_a:], 260)
     check(f"{title}: the host reported the match", reported)
     confirmed = wait_for("confirm", lambda: "TryConfirmMatchAsync: sent own reading" in log("b")[before_b:], 30)
     check(f"{title}: the guest sent its own reading", confirmed)
-    check(f"{title}: c's chat card says Closed", wait_for("closed", lambda: card_state(lobby).startswith("Closed"), 60),
-          card_state(lobby))
     # The points at stake (2026-11-18): each launcher logs the figures it showed at Start, and the
     # result card must show exactly the one that applied. Two new accounts have no rated game yet,
     # so nobody is being placed and the figures are shown.

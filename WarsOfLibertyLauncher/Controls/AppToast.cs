@@ -47,6 +47,8 @@ public static class AppToast
         Warn,
         /// <summary>Grey: something stopped, and that is all.</summary>
         Neutral,
+        /// <summary>Gold: an achievement unlocked (design 121d), and nothing else.</summary>
+        Gold,
     }
 
     /// <summary>The pictogram in the tile (or in a mod icon's badge): a stroke from Styles/Toasts.xaml.</summary>
@@ -56,7 +58,7 @@ public static class AppToast
     /// The class of a button. ONE coloured button per notice (<see cref="ButtonKinds"/>): blue when
     /// the notice asks you to act, green only for "Join", solid for everything else.
     /// </summary>
-    public enum ToastButton { Solid, Action, Join }
+    public enum ToastButton { Solid, Action, Join, Gold }
 
     /// <summary>One action button on a notice.</summary>
     /// <param name="KeepOpen">
@@ -95,7 +97,8 @@ public static class AppToast
         Services.ToastCause Cause = Services.ToastCause.News,
         ToastCrest? Crest = null,
         string? ModId = null,
-        bool Important = false);
+        bool Important = false,
+        Medal.Look? Medal = null);
 
     /// <summary>The team's shield (design 83l): its initials on the crest colour.</summary>
     public sealed record ToastCrest(string Initials);
@@ -110,6 +113,9 @@ public static class AppToast
     internal const double CardRadius = 12;
     internal const double TileSize = 36;
     internal const double TileRadius = 9;
+
+    /// <summary>An achievement's medal stands where the tile would (design 121d draws 54).</summary>
+    internal const double MedalTileSize = 54;
 
     /// <summary>The <c>Tag</c> of the close button and of the time bar, for the tests.</summary>
     internal const string ToastCloseTag = "ToastClose";
@@ -287,12 +293,21 @@ public static class AppToast
         {
             CornerRadius = new CornerRadius(CardRadius),
             BorderThickness = new Thickness(1),
-            BorderBrush = important ? Alpha(tone, .55) : Res("ToastRim"),
+            BorderBrush = important ? Alpha(tone, .55) : opts.Medal != null ? Alpha(tone, .5) : Res("ToastRim"),
             ClipToBounds = true,
         };
+        if (opts.Medal != null)
+        {
+            // An achievement (design 121d): warm gold fading into the navy, on both surfaces.
+            var gold = new LinearGradientBrush { StartPoint = new Point(0, 0.2), EndPoint = new Point(1, 0.8) };
+            gold.GradientStops.Add(new GradientStop(Color.FromArgb(0xF5, 60, 46, 16), 0));
+            gold.GradientStops.Add(new GradientStop(Color.FromArgb(0xF5, 18, 30, 50), 0.55));
+            gold.Freeze();
+            card.Background = gold;
+        }
         // The floating glass follows the transparency level (GlassTheme.FloatingKeys); the desktop
         // card is a window over anything, so it is solid.
-        card.SetResourceReference(Border.BackgroundProperty, desktop ? "ToastDesktopBg" : "LibraryMenuBg");
+        else card.SetResourceReference(Border.BackgroundProperty, desktop ? "ToastDesktopBg" : "LibraryMenuBg");
         shell.Children.Add(card);
 
         var inner = CardRadius - 1;
@@ -335,18 +350,40 @@ public static class AppToast
         if (desktop) body.Children.Add(BuildOwnerLine());
 
         var row = new Grid();
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(TileSize) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(opts.Medal != null ? MedalTileSize : TileSize) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+        // An achievement (121d) is one row: its button sits where the ✕ would, and there is no ✕.
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = opts.Medal != null ? GridLength.Auto : new GridLength(22) });
         body.Children.Add(row);
 
-        row.Children.Add(BuildTile(opts, tone, toneText));
+        if (opts.Medal is { } medal)
+        {
+            var coin = Controls.Medal.Build(medal, MedalTileSize);
+            coin.VerticalAlignment = VerticalAlignment.Center;
+            coin.Tag = "ToastTile";
+            row.Children.Add(coin);
+        }
+        else row.Children.Add(BuildTile(opts, tone, toneText));
 
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Top };
+        var text = new StackPanel { VerticalAlignment = opts.Medal != null ? VerticalAlignment.Center : VerticalAlignment.Top };
         Grid.SetColumn(text, 2);
         row.Children.Add(text);
+        if (opts.Medal != null && !string.IsNullOrWhiteSpace(opts.Subtitle))
+        {
+            // 121d: "ACHIEVEMENT UNLOCKED" in the tone's gold, over the medal's name.
+            var label = new TextBlock
+            {
+                Text = opts.Subtitle.ToUpper(Strings.Culture),
+                FontWeight = FontWeights.Bold,
+                Foreground = toneText,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 0, 0, 2),
+            };
+            label.SetResourceReference(TextBlock.FontSizeProperty, "ToastContextSize");
+            text.Children.Add(label);
+        }
         var title = new TextBlock
         {
             Text = opts.Title,
@@ -356,7 +393,7 @@ public static class AppToast
         };
         title.SetResourceReference(TextBlock.FontSizeProperty, "ToastTitleSize");
         text.Children.Add(title);
-        if (!string.IsNullOrWhiteSpace(opts.Subtitle))
+        if (opts.Medal == null && !string.IsNullOrWhiteSpace(opts.Subtitle))
         {
             var context = new TextBlock
             {
@@ -384,7 +421,7 @@ public static class AppToast
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 LineHeight = lineHeight,
-                MaxHeight = lineHeight * 3.5,
+                MaxHeight = lineHeight * (opts.Medal != null ? 2.5 : 3.5),
                 FontSize = size,
                 Margin = new Thickness(0, 2, 0, 0),
             };
@@ -402,7 +439,7 @@ public static class AppToast
         System.Windows.Automation.AutomationProperties.SetAutomationId(closeBtn, "ToastClose");
         closeBtn.Click += (_, _) => close();
         Grid.SetColumn(closeBtn, 4);
-        row.Children.Add(closeBtn);
+        if (opts.Medal == null) row.Children.Add(closeBtn);
 
         if (opts.Actions is { Count: > 0 })
         {
@@ -410,7 +447,8 @@ public static class AppToast
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 10, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = opts.Medal != null ? new Thickness(0) : new Thickness(0, 10, 0, 0),
             };
             foreach (var (action, kind) in ButtonOrder(opts.Actions))
             {
@@ -421,6 +459,7 @@ public static class AppToast
                     {
                         ToastButton.Action => "ToastButtonAction",
                         ToastButton.Join => "ToastButtonJoin",
+                        ToastButton.Gold => "ToastButtonGold",
                         _ => "ToastButtonSolid",
                     }),
                     Margin = new Thickness(8, 0, 0, 0),
@@ -438,7 +477,14 @@ public static class AppToast
                 };
                 buttons.Children.Add(btn);
             }
-            body.Children.Add(buttons);
+            if (opts.Medal != null)
+            {
+                // 121d: the button closes the row on the right, centred on it.
+                if (buttons.Children.Count > 0 && buttons.Children[0] is FrameworkElement first) first.Margin = new Thickness(0);
+                Grid.SetColumn(buttons, 4);
+                row.Children.Add(buttons);
+            }
+            else body.Children.Add(buttons);
         }
 
         // The time bar: 3 px along the bottom edge, clipped by the card's radius. Only on a card that

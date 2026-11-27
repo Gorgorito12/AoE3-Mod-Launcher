@@ -1735,6 +1735,13 @@
                     Click="LibraryShotNext_Click"/>
         </Grid>
 
+        <!-- An achievement's card (design 121b, MainWindow.Achievements.cs): over the whole window
+             below the title bar, under the toasts. Empty and collapsed until a medal arrives. -->
+        <Grid x:Name="CelebrationHost"
+              Grid.Row="0" Grid.RowSpan="3"
+              Margin="0,40,0,0"
+              Visibility="Collapsed"/>
+
         <StackPanel x:Name="ToastHost"
                     Grid.Row="0" Grid.RowSpan="3"
                     VerticalAlignment="Bottom"

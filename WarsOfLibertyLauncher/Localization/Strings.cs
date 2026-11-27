@@ -5593,14 +5593,6 @@ public static partial class Strings
         ["MpQuickReplyAnyone"] = new() { [LangEn] = "Anyone playing?", [LangEs] = "¿Alguien juega?" },
         ["MpQuickReplyGg"] = new() { [LangEn] = "gg", [LangEs] = "gg" },
         ["MpQuickReplyMinute"] = new() { [LangEn] = "1 min", [LangEs] = "1 min" },
-        // Room-opened card in the chat flow. {0} is the host's login.
-        ["MpChatRoomOpened"] = new()
-        {
-            [LangEn] = "{0} opened a room",
-            [LangEs] = "{0} abrió una sala",
-        },
-        ["MpChatRoomClosed"] = new() { [LangEn] = "Closed", [LangEs] = "Cerrada" },
-        ["MpChatRoomSeats"] = new() { [LangEn] = "{0}/{1}", [LangEs] = "{0}/{1}" },
         // Shown INSTEAD of the list when a search matches nothing. Without it an empty
         // panel reads as "there are no rooms" when they are only filtered out.
         ["MpRoomsNoMatches"] = new()
