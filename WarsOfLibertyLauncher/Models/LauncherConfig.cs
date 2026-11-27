@@ -694,6 +694,14 @@ public enum NotificationKind
     /// banner stays until "Got it". Never names the banned player.
     /// </summary>
     RatingRefund,
+
+    /// <summary>
+    /// A medal earned (design 121). Tied to the game it was earned in (the ModId), so it wears that
+    /// game's icon. Deduped per medal in <see cref="LauncherConfig.NotifiedAchievementKeys"/>: the
+    /// push and the "unseen" list of a profile read can both bring the same one. Clicking it opens
+    /// the player's own profile on its medals.
+    /// </summary>
+    AchievementUnlocked,
 }
 
 /// <summary>
@@ -2169,7 +2177,7 @@ public class LauncherConfig
     public int LastRoomGameRules { get; set; }
 
     /// <summary>
-    /// Whether the launcher may put the LAN helper (<c>dinput8.dll</c> + <c>engine-ext\</c>) next
+    /// Whether the launcher may put the LAN helper (its own <c>avifil32.dll</c>) next
     /// to a game's executable, so the game enters the room's LAN game by itself:
     /// <see cref="Services.Multiplayer.LanHelperService"/>. <c>null</c> = never asked (the first
     /// room asks once), <c>true</c> = yes, <c>false</c> = no and never asked again. Nullable on
@@ -2553,6 +2561,14 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("notifiedRefundIds")]
     public List<string> NotifiedRefundIds { get; set; } = new();
+
+    /// <summary>
+    /// Deduplicates the achievement bell (design 121): "mod|id|tier" of every medal already said.
+    /// The server pushes a medal once, but the profile's "unseen" list can carry the same one until
+    /// the launcher has marked it seen. Capped like <see cref="NotifiedRatedMatchIds"/>.
+    /// </summary>
+    [JsonPropertyName("notifiedAchievementKeys")]
+    public List<string> NotifiedAchievementKeys { get; set; } = new();
 
     /// <summary>The last month whose highlights the bell has announced ("2026-10"), or marked as seen
     /// with nothing to say. One notice per month and PC: see <c>HighlightsNotice</c>.</summary>

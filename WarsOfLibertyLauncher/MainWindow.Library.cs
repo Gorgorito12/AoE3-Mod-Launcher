@@ -97,6 +97,10 @@ public partial class MainWindow
             case "bell":
                 PreviewBell(variant);
                 break;
+            case "achievement":
+                // Design 121b (card), 121d (notice), and several at once.
+                PreviewAchievement(variant);
+                break;
             case "matchwatch":
                 PreviewMatchWatch(variant);
                 break;

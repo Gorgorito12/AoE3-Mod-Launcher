@@ -107,6 +107,35 @@
         </Style.Triggers>
     </Style>
 
+    <!-- Gold: ONLY an achievement's "View" (design 121d), the medals' gold with dark text. -->
+    <Style x:Key="ToastButtonGold" TargetType="Button" BasedOn="{StaticResource ToastButtonSolid}">
+        <!-- 121d: a short "View" beside the text, not a full-width footer button. -->
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Foreground" Value="#2B1F06"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Background">
+            <Setter.Value>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#F6DF9E" Offset="0"/>
+                    <GradientStop Color="#D2A54A" Offset="1"/>
+                </LinearGradientBrush>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background">
+                    <Setter.Value>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#FBEAB8" Offset="0"/>
+                            <GradientStop Color="#E0B65A" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- The close button: 22 x 22, radius 6, a drawn cross 7.5 across; white .10 under the pointer. -->
     <Style x:Key="ToastCloseButton" TargetType="Button">
         <Setter Property="Width" Value="22"/>

@@ -12,55 +12,73 @@ public enum LanHelperState
 {
     /// <summary>Not a game executable the helper knows: nothing is offered.</summary>
     Unsupported,
-    /// <summary>The mod already ships it (a cfg with <c>lanAutoStart</c> that is not ours): leave it alone.</summary>
+    /// <summary>The mod already does it (a cfg of its own with <c>lanAutoStart</c>): leave it alone.</summary>
     EnabledByMod,
     /// <summary>Supported, and nothing there: can be installed.</summary>
     Missing,
-    /// <summary>Our helper, current.</summary>
+    /// <summary>Our helper, current, and nothing of the earlier one left.</summary>
     Installed,
-    /// <summary>Our helper, an older build or without its cfg line: installing again brings it up to date.</summary>
+    /// <summary>Our helper, an older build, or with files of the earlier helper still beside it:
+    /// installing again brings it up to date.</summary>
     Outdated,
-    /// <summary>A <c>dinput8.dll</c> that is not ours sits there (another tool): never replaced.</summary>
+    /// <summary>An <c>avifil32.dll</c> that is not ours sits there (another tool): never replaced.</summary>
     ForeignDll,
-    /// <summary>Ours is there, but the mod now enables the key itself (a patch that shipped
-    /// things-new's DLL with the line): ours is taken out, or the key would run twice.</summary>
+    /// <summary>Ours is there, but the mod now enables the key itself: ours is taken out, or the
+    /// game would enter twice.</summary>
     SupersededByMod,
 }
 
 /// <summary>
-/// The optional helper that makes Age of Empires III enter the room's LAN game by itself: two
-/// files next to the game's executable, <c>dinput8.dll</c> (things-new's EngineExt, which the game
-/// loads on its own because it imports that name) and <c>engine-ext\engine-ext.cfg</c> with the
-/// line <c>lanAutoStart</c>. The launcher's arguments (<see cref="LanAutoStartArgs"/>) do nothing
-/// without it.
+/// The optional helper that makes Age of Empires III enter the room's LAN game by itself: ONE file
+/// next to the game's executable, <c>avifil32.dll</c>, the launcher's own build of things-new's
+/// lanAutoStart steps. The game loads it on its own because it imports that name. It has no cfg:
+/// it acts only on the launcher's arguments (<see cref="LanAutoStartArgs"/>), writes no byte of the
+/// game and hooks nothing, so it sits beside a mod's own <c>UHC.dll</c> and a mod's own
+/// <c>dinput8.dll</c> whatever cfg those bring.
+///
+/// <para><b>It replaced <c>dinput8.dll</c> plus two lines in <c>engine-ext\engine-ext.cfg</c></b>
+/// (launcher v1.1.0). That name and that cfg belong to the mod now: a mod's patch that ships its
+/// own pair without the key used to switch the entry off with nothing the launcher could do.
+/// <see cref="Install"/> and <see cref="Remove"/> take the earlier pair away, and only when it is
+/// provably the launcher's (<see cref="LegacySha256"/>, the marked cfg lines).</para>
 ///
 /// <para><b>Only with the player's consent</b> (<see cref="Models.LauncherConfig.LanHelperChoice"/>),
 /// because for the base game that folder is the player's own Age of Empires III — the one place the
 /// launcher otherwise never writes. It replaces no file of the game, and everything it adds it can
-/// take away: <see cref="Remove"/> deletes the DLL only when its hash is one the launcher shipped,
-/// and only its own lines of the cfg.</para>
+/// take away.</para>
 ///
 /// <para>The refusals are the point (<c>LanHelperServiceTests</c>): an executable it does not
-/// know, another tool's <c>dinput8.dll</c>, and a mod that already ships the key are all left
-/// exactly as they are.</para>
+/// know, another tool's <c>avifil32.dll</c>, a <c>dinput8.dll</c> that is not ours, and a mod that
+/// already turns the key on are all left exactly as they are.</para>
 /// </summary>
 public static class LanHelperService
 {
-    public const string DllName = "dinput8.dll";
-    public const string CfgFolder = "engine-ext";
-    public const string CfgName = "engine-ext.cfg";
-    private const string ResourceName = "LanHelper.dinput8.dll";
+    public const string DllName = "avifil32.dll";
+    /// <summary>The DLL's own log, next to the executable.</summary>
+    internal const string LogName = "lan-helper.log";
+    private const string ResourceName = "LanHelper.avifil32.dll";
 
-    /// <summary>The line that marks what the launcher added to a cfg, so removal takes only that.</summary>
+    // The earlier helper (launcher v1.1.0): things-new's dinput8.dll and its cfg.
+    internal const string LegacyDllName = "dinput8.dll";
+    internal const string CfgFolder = "engine-ext";
+    internal const string CfgName = "engine-ext.cfg";
+    /// <summary>The line that marked what the launcher added to that cfg, so removal takes only that.</summary>
     internal const string CfgMarker = "# Added by AoE3 Mod Launcher (Settings > Games). Remove it there.";
     internal const string CfgKey = "lanAutoStart";
 
     /// <summary>SHA-256 of the embedded DLL. A test holds it to the resource; update both together.</summary>
-    public const string CurrentSha256 = "d23dfa2678b51e4b1bcd286131712b639c0a78486eef3758c240b10d414ba718";
+    public const string CurrentSha256 = "a3ed4c6d58e8ced43bfff272663045bbd86d32459ae2f17be1ee1e4ac14b77d5";
 
-    /// <summary>Every build the launcher ever shipped, the current one first. Removal and update
-    /// recognise the DLL as ours by these; a hash outside the list is somebody else's file.</summary>
+    /// <summary>Every <c>avifil32.dll</c> the launcher ever shipped, the current one first. Removal
+    /// and update recognise the file as ours by these; a hash outside the list is somebody else's.</summary>
     internal static readonly IReadOnlyList<string> KnownSha256 = new[] { CurrentSha256 };
+
+    /// <summary>Every <c>dinput8.dll</c> the launcher shipped as the earlier helper (0.4.0, with
+    /// v1.1.0). Only a file with one of these hashes is ever deleted under that name.</summary>
+    internal static readonly IReadOnlyList<string> LegacySha256 = new[]
+    {
+        "d23dfa2678b51e4b1bcd286131712b639c0a78486eef3758c240b10d414ba718",
+    };
 
     // The Asian Dynasties build every supported executable is made from (PE TimeDateStamp), with
     // its entry point either stock or moved to the UHC loader stub. The DLL checks the same.
@@ -102,29 +120,36 @@ public static class LanHelperService
             return LanHelperState.Unsupported;
         var folder = Path.GetDirectoryName(exePath)!;
         var dll = Path.Combine(folder, DllName);
-        var enabledIn = LanAutoStartArgs.CfgEnablingLanAutoStart(folder);
-        var ourLines = CfgHasOurLines(folder);
-        // The key turned on by a Startup cfg is the mod's own DLL (things-new's UHC.dll) doing it.
-        var enabledByModDll = enabledIn != null &&
-            !string.Equals(enabledIn, Path.Combine(CfgFolder, CfgName), StringComparison.OrdinalIgnoreCase);
-        // The key in an engine-ext cfg without our marker is a pair the mod's patch shipped.
-        var modOwnsPair = enabledIn != null && !enabledByModDll && !ourLines;
+        var modEnables = ModEnablesKey(folder);
 
         if (!File.Exists(dll))
-            return enabledByModDll || modOwnsPair ? LanHelperState.EnabledByMod : LanHelperState.Missing;
+            return modEnables ? LanHelperState.EnabledByMod : LanHelperState.Missing;
 
         var hash = TryHash(dll);
         if (hash == null || !KnownSha256.Contains(hash, StringComparer.OrdinalIgnoreCase))
-            return enabledIn != null ? LanHelperState.EnabledByMod : LanHelperState.ForeignDll;
-        if (enabledByModDll) return LanHelperState.SupersededByMod;
-        // Same bytes as ours, but the patch's cfg: the mod's file now, not ours to update or remove.
-        if (modOwnsPair) return LanHelperState.EnabledByMod;
-        return ourLines && string.Equals(hash, CurrentSha256, StringComparison.OrdinalIgnoreCase)
+            return modEnables ? LanHelperState.EnabledByMod : LanHelperState.ForeignDll;
+        if (modEnables) return LanHelperState.SupersededByMod;
+        return string.Equals(hash, CurrentSha256, StringComparison.OrdinalIgnoreCase) && !HasLegacy(folder)
             ? LanHelperState.Installed
             : LanHelperState.Outdated;
     }
 
-    /// <summary>Whether the folder's engine-ext cfg carries the line the launcher writes.</summary>
+    /// <summary>
+    /// A cfg of the folder turns <c>lanAutoStart</c> on for a DLL of the mod: a Startup cfg (its
+    /// <c>UHC.dll</c>), or the engine-ext cfg read by a <c>dinput8.dll</c>. The earlier helper's own
+    /// pair is not the mod: our marked lines count only when a <c>dinput8.dll</c> that is not ours
+    /// reads them (a patch put its DLL over ours and runs with our lines).
+    /// </summary>
+    private static bool ModEnablesKey(string folder)
+    {
+        var enabledIn = LanAutoStartArgs.CfgEnablingLanAutoStart(folder);
+        if (enabledIn == null) return false;
+        if (!string.Equals(enabledIn, Path.Combine(CfgFolder, CfgName), StringComparison.OrdinalIgnoreCase))
+            return true;
+        return !CfgHasOurLines(folder) || ForeignLegacyDll(folder);
+    }
+
+    /// <summary>Whether the folder's engine-ext cfg carries the line the launcher used to write.</summary>
     private static bool CfgHasOurLines(string folder)
     {
         var cfg = Path.Combine(folder, CfgFolder, CfgName);
@@ -140,6 +165,36 @@ public static class LanHelperService
         return LanAutoStartArgs.CfgEnablesLanAutoStart(lines) && !lines.Any(l => l.Trim() == CfgMarker);
     }
 
+    /// <summary>A <c>dinput8.dll</c> is there and it is not one the launcher shipped.</summary>
+    private static bool ForeignLegacyDll(string folder)
+    {
+        var dll = Path.Combine(folder, LegacyDllName);
+        if (!File.Exists(dll)) return false;
+        var hash = TryHash(dll);
+        return hash == null || !LegacySha256.Contains(hash, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The earlier helper's <c>dinput8.dll</c>, provably ours: one of our hashes, and not
+    /// beside a cfg the mod wrote (a patch may ship a byte-identical DLL with its own cfg).</summary>
+    private static bool OurLegacyDll(string folder)
+    {
+        var dll = Path.Combine(folder, LegacyDllName);
+        if (!File.Exists(dll) || CfgBelongsToMod(folder)) return false;
+        var hash = TryHash(dll);
+        return hash != null && LegacySha256.Contains(hash, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Something of the earlier helper that <see cref="RemoveLegacy"/> would take away.</summary>
+    internal static bool HasLegacy(string folder) =>
+        OurLegacyDll(folder) || (CfgHasOurLines(folder) && !ForeignLegacyDll(folder));
+
+    /// <summary>
+    /// The earlier helper is whole and still makes the entry (its DLL and its marked line): what
+    /// the room says before <see cref="Install"/> has replaced it.
+    /// </summary>
+    internal static bool LegacyStillEnters(string? folder) =>
+        !string.IsNullOrWhiteSpace(folder) && OurLegacyDll(folder) && CfgHasOurLines(folder);
+
     private static string[] SafeReadLines(string path)
     {
         try { return File.ReadAllLines(path); }
@@ -147,9 +202,10 @@ public static class LanHelperService
     }
 
     /// <summary>
-    /// Puts the two files next to the executable. Only from <see cref="LanHelperState.Missing"/> or
-    /// <see cref="LanHelperState.Outdated"/>; anything else is refused. Returns null on success, or
-    /// why not (for the log; the caller words it for the player).
+    /// Puts the file next to the executable and takes the earlier helper away. Only from
+    /// <see cref="LanHelperState.Missing"/> or <see cref="LanHelperState.Outdated"/>; anything else
+    /// is refused. Returns null on success, or why not (for the log; the caller words it for the
+    /// player).
     /// </summary>
     public static string? Install(string exePath)
     {
@@ -166,18 +222,10 @@ public static class LanHelperService
             var staged = dll + ".aoe3ml-new";
             File.WriteAllBytes(staged, bytes);
             File.Move(staged, dll, overwrite: true);
-
-            var cfgDir = Path.Combine(folder, CfgFolder);
-            Directory.CreateDirectory(cfgDir);
-            var cfg = Path.Combine(cfgDir, CfgName);
-            var lines = File.Exists(cfg) ? File.ReadAllLines(cfg).ToList() : new List<string>();
-            if (!LanAutoStartArgs.CfgEnablesLanAutoStart(lines))
-            {
-                lines.Add(CfgMarker);
-                lines.Add(CfgKey);
-                File.WriteAllLines(cfg, lines, new UTF8Encoding(false));
-            }
-            DiagnosticLog.Write($"LanHelper: installed in {folder} ({DllName} {CurrentSha256[..8]}, {CfgFolder}\\{CfgName})");
+            // Once the new file is in place: the earlier pair would make the entry a second time
+            // (the new DLL stands aside while that cfg line is there).
+            RemoveLegacy(folder);
+            DiagnosticLog.Write($"LanHelper: installed in {folder} ({DllName} {CurrentSha256[..8]})");
             return null;
         }
         catch (Exception ex)
@@ -188,10 +236,9 @@ public static class LanHelperService
     }
 
     /// <summary>
-    /// Takes away what <see cref="Install"/> added to <paramref name="folder"/> and nothing else:
-    /// the DLL only when its hash is one of ours, our two lines of the cfg (the file when nothing
-    /// else is left in it), the DLL's own log, and the folder when it ends up empty. True when
-    /// nothing of ours is left there.
+    /// Takes away what the launcher added to <paramref name="folder"/> and nothing else: the DLL
+    /// only when its hash is one of ours, its log, and the earlier helper
+    /// (<see cref="RemoveLegacy"/>). True when nothing of ours is left there.
     /// </summary>
     public static bool Remove(string? folder)
     {
@@ -199,14 +246,8 @@ public static class LanHelperService
         if (HarnessMode.BlockOutsideSandbox($"remove LAN helper from {folder}", folder)) return false;
         try
         {
-            // A patch that shipped its own pair, even byte-identical to ours: nothing here is ours.
-            if (CfgBelongsToMod(folder))
-            {
-                DiagnosticLog.Write($"LanHelper: {folder} carries the mod's own {CfgFolder}\\{CfgName}; left alone");
-                return true;
-            }
             var dll = Path.Combine(folder, DllName);
-            var foreignDll = false;
+            var foreign = false;
             if (File.Exists(dll))
             {
                 var hash = TryHash(dll);
@@ -214,36 +255,13 @@ public static class LanHelperService
                     File.Delete(dll);
                 else
                 {
-                    foreignDll = true;
-                    DiagnosticLog.Write($"LanHelper: {dll} is not the launcher's file; it and its cfg are left alone");
+                    foreign = true;
+                    DiagnosticLog.Write($"LanHelper: {dll} is not the launcher's file; left alone");
                 }
             }
-
-            var cfgDir = Path.Combine(folder, CfgFolder);
-            var cfg = Path.Combine(cfgDir, CfgName);
-            // A mod's patch replaced our DLL with its own: the cfg now belongs to that DLL, and
-            // taking the key out of it could switch off the mod's own feature.
-            if (foreignDll) return true;
-            if (File.Exists(cfg))
-            {
-                var lines = File.ReadAllLines(cfg).ToList();
-                var marker = lines.FindIndex(l => l.Trim() == CfgMarker);
-                if (marker >= 0)
-                {
-                    // The marker and the key line it announces; a key line somebody else wrote stays.
-                    if (marker + 1 < lines.Count && lines[marker + 1].Trim() == CfgKey) lines.RemoveAt(marker + 1);
-                    lines.RemoveAt(marker);
-                    if (lines.All(string.IsNullOrWhiteSpace)) File.Delete(cfg);
-                    else File.WriteAllLines(cfg, lines, new UTF8Encoding(false));
-                }
-            }
-            if (Directory.Exists(cfgDir))
-            {
-                // The DLL's own log is ours too, once its cfg is gone.
-                var log = Path.Combine(cfgDir, "engine-ext.log");
-                if (!File.Exists(cfg) && File.Exists(log)) File.Delete(log);
-                if (!Directory.EnumerateFileSystemEntries(cfgDir).Any()) Directory.Delete(cfgDir);
-            }
+            var log = Path.Combine(folder, LogName);
+            if (!foreign && File.Exists(log)) File.Delete(log);
+            RemoveLegacy(folder);
             DiagnosticLog.Write($"LanHelper: removed from {folder}");
             return true;
         }
@@ -251,6 +269,63 @@ public static class LanHelperService
         {
             DiagnosticLog.Write($"LanHelper: removing from {folder} failed: {ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Takes away the earlier helper (v1.1.0) and nothing else: <c>dinput8.dll</c> only when its
+    /// hash is one the launcher shipped, our two marked lines of the engine-ext cfg (the file when
+    /// nothing else is left in it), that DLL's own log, and the folder when it ends up empty.
+    /// Throws what the file system throws; the callers report it.
+    /// </summary>
+    private static void RemoveLegacy(string folder)
+    {
+        // A patch that shipped its own pair, even byte-identical to ours: nothing here is ours.
+        if (CfgBelongsToMod(folder))
+        {
+            if (File.Exists(Path.Combine(folder, LegacyDllName)))
+                DiagnosticLog.Write($"LanHelper: {folder} carries the mod's own {CfgFolder}\\{CfgName}; left alone");
+            return;
+        }
+        var dll = Path.Combine(folder, LegacyDllName);
+        if (File.Exists(dll))
+        {
+            var hash = TryHash(dll);
+            if (hash != null && LegacySha256.Contains(hash, StringComparer.OrdinalIgnoreCase))
+            {
+                File.Delete(dll);
+                DiagnosticLog.Write($"LanHelper: the earlier helper's {LegacyDllName} removed from {folder}");
+            }
+            else
+            {
+                // A mod's patch put its own DLL there: the cfg now belongs to that DLL, and taking
+                // the key out of it could switch off the mod's own feature.
+                DiagnosticLog.Write($"LanHelper: {dll} is not the launcher's file; it and its cfg are left alone");
+                return;
+            }
+        }
+
+        var cfgDir = Path.Combine(folder, CfgFolder);
+        var cfg = Path.Combine(cfgDir, CfgName);
+        if (File.Exists(cfg))
+        {
+            var lines = File.ReadAllLines(cfg).ToList();
+            var marker = lines.FindIndex(l => l.Trim() == CfgMarker);
+            if (marker >= 0)
+            {
+                // The marker and the key line it announces; a key line somebody else wrote stays.
+                if (marker + 1 < lines.Count && lines[marker + 1].Trim() == CfgKey) lines.RemoveAt(marker + 1);
+                lines.RemoveAt(marker);
+                if (lines.All(string.IsNullOrWhiteSpace)) File.Delete(cfg);
+                else File.WriteAllLines(cfg, lines, new UTF8Encoding(false));
+            }
+        }
+        if (Directory.Exists(cfgDir))
+        {
+            // That DLL's own log is ours too, once its cfg is gone.
+            var log = Path.Combine(cfgDir, "engine-ext.log");
+            if (!File.Exists(cfg) && File.Exists(log)) File.Delete(log);
+            if (!Directory.EnumerateFileSystemEntries(cfgDir).Any()) Directory.Delete(cfgDir);
         }
     }
 
@@ -283,25 +358,29 @@ public static class LanHelperService
         return folders.ToList();
     }
 
-    /// <summary>Whether <paramref name="folder"/> still holds a <c>dinput8.dll</c> the launcher shipped.</summary>
+    /// <summary>Whether <paramref name="folder"/> still holds a file the launcher shipped: its
+    /// <c>avifil32.dll</c>, or the earlier helper's <c>dinput8.dll</c>.</summary>
     internal static bool HasOurDll(string? folder)
     {
         if (string.IsNullOrWhiteSpace(folder)) return false;
         var dll = Path.Combine(folder, DllName);
-        if (!File.Exists(dll)) return false;
-        var hash = TryHash(dll);
-        return hash != null && KnownSha256.Contains(hash, StringComparer.OrdinalIgnoreCase);
+        if (File.Exists(dll))
+        {
+            var hash = TryHash(dll);
+            if (hash != null && KnownSha256.Contains(hash, StringComparer.OrdinalIgnoreCase)) return true;
+        }
+        return OurLegacyDll(folder);
     }
 
     /// <summary>The folder <see cref="ExportTo"/> writes, inside the place the player chose.</summary>
     public const string ExportFolderName = "AoE3 LAN helper";
 
     /// <summary>
-    /// For the manual way: writes the same two files <see cref="Install"/> would put next to the
-    /// game, plus a short note, into <c>&lt;parent&gt;\AoE3 LAN helper\</c>, for the player to copy
-    /// by hand. The cfg carries the launcher's marker, so a copy made by hand is recognised as ours
-    /// (<see cref="Probe"/> says Installed) and switching the helper off removes it like any other.
-    /// Returns the folder written, or null with the reason in <paramref name="error"/>.
+    /// For the manual way: writes the file <see cref="Install"/> would put next to the game, plus a
+    /// short note, into <c>&lt;parent&gt;\AoE3 LAN helper\</c>, for the player to copy by hand. A
+    /// copy made by hand is recognised as ours by its hash (<see cref="Probe"/> says Installed) and
+    /// switching the helper off removes it like any other. Returns the folder written, or null with
+    /// the reason in <paramref name="error"/>.
     /// </summary>
     public static string? ExportTo(string parent, string readme, out string? error)
     {
@@ -309,17 +388,15 @@ public static class LanHelperService
         try
         {
             var folder = Path.Combine(parent, ExportFolderName);
-            var cfgDir = Path.Combine(folder, CfgFolder);
-            Directory.CreateDirectory(cfgDir);
+            Directory.CreateDirectory(folder);
             File.WriteAllBytes(Path.Combine(folder, DllName), ReadEmbeddedDll());
-            File.WriteAllLines(Path.Combine(cfgDir, CfgName), new[] { CfgMarker, CfgKey }, new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(folder, "README.txt"), readme, new UTF8Encoding(true));
-            DiagnosticLog.Write($"LanHelper: files saved for a manual copy in {folder}");
+            DiagnosticLog.Write($"LanHelper: file saved for a manual copy in {folder}");
             return folder;
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"LanHelper: saving the files for a manual copy in {parent} failed: {ex.Message}");
+            DiagnosticLog.Write($"LanHelper: saving the file for a manual copy in {parent} failed: {ex.Message}");
             error = ex.Message;
             return null;
         }

@@ -123,7 +123,7 @@ and recording-storage settings are emptied, and it runs on a throwaway database 
 python -I testbed.py server start --fresh       # Node 20 through npx (nothing installed), port 8799
 python -I testbed.py --as a token --name "El Taita"
 python -I testbed.py --as b token --name skibidi
-python -I testbed.py --as c token --name Miron   # a third account, to watch the chat's room card
+python -I testbed.py --as c token --name Miron   # a third account, watching from outside the room
 python -I testbed.py --as a launch --mp --half first --software
 python -I testbed.py --as b launch --mp --half second --software
 python -I testbed.py --as c launch --mp --half third --software

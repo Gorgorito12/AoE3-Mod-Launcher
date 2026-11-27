@@ -313,7 +313,7 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     /// normal disconnect path then drops it from the roster for everyone).
     /// </summary>
     /// <summary>What this launcher announces in its hello.</summary>
-    internal static readonly string[] HelloFeatures = { "room_teams", "matchmaking", "room_stake" };
+    internal static readonly string[] HelloFeatures = { "room_teams", "matchmaking", "room_stake", "achievements" };
 
     /// <summary>Puts the sender on team 1 or 2 (design 55h); null leaves the teams.</summary>
     public Task SendSetTeamAsync(int? team, CancellationToken ct = default) =>

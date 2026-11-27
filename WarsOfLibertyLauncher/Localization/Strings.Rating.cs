@@ -36,6 +36,8 @@ public static partial class Strings
         foreach (var kv in TournamentRoomTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in RoomsTable) Table.Add(kv.Key, kv.Value);
         foreach (var kv in RankingTable) Table.Add(kv.Key, kv.Value);
+        // Achievements (Strings.Achievements.cs), merged the same way.
+        foreach (var kv in AchievementsTable) Table.Add(kv.Key, kv.Value);
     }
 
     private static readonly Dictionary<string, Dictionary<string, string>> RatingTable = new()

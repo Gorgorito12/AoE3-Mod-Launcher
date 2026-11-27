@@ -84,7 +84,8 @@ public class AppToastTests
         {
             var shell = AppToast.Build(Card(actions: new[] { Act("Go", kind) }), () => { });
             var button = Walk(shell).OfType<Button>().Single(b => Equals(b.Tag, kind));
-            var fill = ((SolidColorBrush)button.Background).Color;
+            // The achievement's gold button is a gradient: whatever it is, it is not the green.
+            var fill = button.Background is SolidColorBrush solid ? solid.Color : default;
             Assert.Equal(kind == AppToast.ToastButton.Join, fill == green);
         }
         return 0;
@@ -140,7 +141,8 @@ public class AppToastTests
             var tile = Walk(shell).OfType<Grid>().Single(g => Equals(g.Tag, "ToastTile"));
             tileFills[tone] = ((SolidColorBrush)((Border)tile.Children[0]).Background).Color;
         }
-        Assert.Equal(4, tileFills.Values.Distinct().Count());
+        // Five tones, five tile colours: the achievements' gold (design 121d) is a tone of its own.
+        Assert.Equal(Enum.GetValues<AppToast.ToastTone>().Length, tileFills.Values.Distinct().Count());
         var neutral = tileFills[AppToast.ToastTone.Neutral];
         Assert.Equal(neutral.R, neutral.G);
         Assert.Equal(neutral.G, neutral.B);

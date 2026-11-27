@@ -97,6 +97,9 @@ public partial class MultiplayerTab
             case EloPreviewScene.Refund:
                 ShowPreviewProfile(refund: picked == EloPreviewScene.Refund);
                 break;
+            case EloPreviewScene.Achievements:
+                ShowProfileVariant("achievements");
+                break;
             case EloPreviewScene.Room1v1:
                 ShowSampleRoom(EloDemoData.Room1v1());
                 break;
@@ -140,6 +143,18 @@ public partial class MultiplayerTab
         if (_previewHistoryState != null) _profileSection = ProfileSection.History;
         // --demo-elo=profile:decks opens straight on the decks (2026-11-10).
         if (state == "decks") _profileSection = ProfileSection.Decks;
+        // Design 121a and 121c: the medals of Wars of Liberty, or of The Asian Dynasties; "-more" is
+        // Wars of Liberty with the medals added after the design (2026-11-26).
+        if (state is "achievements" or "achievements-tad" or "achievements-more")
+        {
+            _profileSection = ProfileSection.Achievements;
+            _achvPreview = state switch
+            {
+                "achievements-tad" => AchievementsDemoData.Tad(),
+                "achievements-more" => AchievementsDemoData.WolExtended(),
+                _ => AchievementsDemoData.Wol(),
+            };
+        }
         ShowDemoEloProfile(state switch
         {
             "nogames" => EloDemoData.ProfileNoGames(),
@@ -172,6 +187,8 @@ public partial class MultiplayerTab
         // Every section reads the history, so the preview has one in all of them.
         sample = sample with { History = EloDemoData.History() };
 
+        // The medals too: the sample's, under its name and in its section.
+        _achvPreview ??= AchievementsDemoData.Wol();
         // The decks are the player's own files; the preview brings its own.
         _mpDeckProfiles.Clear();
         _mpDeckProfiles.AddRange(EloDemoData.Decks());
@@ -209,6 +226,7 @@ public partial class MultiplayerTab
         ApplyDemoStats();
         _profileOther = null;
         _eloPreviewProfile = sample;
+        _achvPreview ??= AchievementsDemoData.Wol();
         _eloPreviewWantsHistory = false;
         _h2hShowsTeam = null;
         _h2hExpanded = false;

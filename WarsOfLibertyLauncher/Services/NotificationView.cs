@@ -31,9 +31,12 @@ public static class NotificationView
         NotificationKind.RoomCreated or NotificationKind.MatchRated
         or NotificationKind.SeasonEnded or NotificationKind.RatingRefund);
 
+    /// <remarks>A medal (design 121) is earned in ONE game, so it is filed under Mods and wears
+    /// that game's icon.</remarks>
     public static bool IsAboutAMod(NotificationKind kind) => kind is
         NotificationKind.UpdateAvailable or NotificationKind.UpdateFinished or NotificationKind.Installed
-        or NotificationKind.NewTranslation or NotificationKind.NewMod or NotificationKind.ModPatchPublished;
+        or NotificationKind.NewTranslation or NotificationKind.NewMod or NotificationKind.ModPatchPublished
+        or NotificationKind.AchievementUnlocked;
 
     /// <summary>
     /// The launcher's own notices (design 120): its new version and the project's news. They wear
@@ -55,7 +58,7 @@ public static class NotificationView
     {
         NotificationKind.UpdateFinished or NotificationKind.Installed => NotificationTone.Ok,
         NotificationKind.Connectivity => item.TargetId == "offline" ? NotificationTone.Error : NotificationTone.Ok,
-        NotificationKind.MonthlyHighlights => NotificationTone.Highlight,
+        NotificationKind.MonthlyHighlights or NotificationKind.AchievementUnlocked => NotificationTone.Highlight,
         _ => NotificationTone.Info,
     };
 

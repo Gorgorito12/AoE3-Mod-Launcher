@@ -619,6 +619,8 @@ public partial class MainWindow : Window
             // The quick match's search, in the title bar while it runs (MainWindow.QuickMatch.cs).
             setQuickMatchPill: SetQuickMatchPill);
         DiagnosticLog.Milestone("multiplayer tab attached");
+        // New medals (design 121): the bell and their celebration (MainWindow.Achievements.cs).
+        MultiplayerView.AchievementsUnlocked += OnAchievementsUnlocked;
         UpdateAccentResources(activeProfile);
         Controls.RankBadge.SetUserReducedEffects(_config.EffectsMode == "low");
 
@@ -3118,6 +3120,7 @@ public partial class MainWindow : Window
         NotificationKind.MatchRated => _bellGold,
         NotificationKind.RatingRefund => _bellGreen,
         NotificationKind.MonthlyHighlights => _bellGold,
+        NotificationKind.AchievementUnlocked => _bellGold,
 #pragma warning disable CS0618 // an item saved while seasons existed
         NotificationKind.SeasonEnded => _bellGold,
 #pragma warning restore CS0618
@@ -3168,7 +3171,7 @@ public partial class MainWindow : Window
     /// </summary>
     private static Services.SoundService.SoundKind SoundForNotification(NotificationKind kind) => kind switch
     {
-        NotificationKind.Installed or NotificationKind.UpdateFinished
+        NotificationKind.Installed or NotificationKind.UpdateFinished or NotificationKind.AchievementUnlocked
             => Services.SoundService.SoundKind.Success,
         _ => Services.SoundService.SoundKind.Notification,
     };
@@ -3309,6 +3312,19 @@ public partial class MainWindow : Window
                 else SwitchTopTab(TopTab.Multiplayer);
             }
             catch (Exception ex) { DiagnosticLog.Write($"Notification → refund failed: {ex.Message}"); }
+            return;
+        }
+
+        // A medal: the player's own profile, on the medals of the game it was earned in. Before the
+        // profile guard below: the game may have left the catalogue since, and the medal has not.
+        if (item.Kind == NotificationKind.AchievementUnlocked)
+        {
+            try
+            {
+                if (MultiplayerView.IsSignedIn) MultiplayerView.ShowAchievements(item.ModId);
+                else SwitchTopTab(TopTab.Multiplayer);
+            }
+            catch (Exception ex) { DiagnosticLog.Write($"Notification → achievements failed: {ex.Message}"); }
             return;
         }
 

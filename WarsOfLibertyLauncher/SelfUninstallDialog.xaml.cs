@@ -130,7 +130,7 @@ public partial class SelfUninstallDialog : Window
                     : Strings.Format("DlgSelfUninstallItemKeys", Count(_facts.LeftoverKeys)),
                 _elevated ? null : Strings.Get("DlgSelfUninstallKeysUac"), detailIsPath: false);
         // The one thing the launcher put inside a game folder. Named for what it is, so "your Age of
-        // Empires III is not touched" stays true: two files of ours come out, nothing of the game.
+        // Empires III is not touched" stays true: a file of ours comes out, nothing of the game.
         if (_facts.LanHelperFolders > 0)
             AddItem(_facts.LanHelperFolders == 1
                     ? Strings.Get("DlgSelfUninstallItemLanHelperOne")

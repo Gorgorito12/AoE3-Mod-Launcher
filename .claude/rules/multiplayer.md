@@ -497,6 +497,36 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   go next to WoL's `age3y.exe`; that needed two fixes for WoL's DLL (it hooks the Host button and
   replaces the LAN dialog's vtable), see things-new `how-it-works.md`.
 
+  **THE HELPER IS ONE FILE OF ITS OWN SINCE 2026-11-20: `avifil32.dll`, with NO cfg. This SUPERSEDES
+  what the paragraph below says about `dinput8.dll`, "the two files" and the cfg lines; the consent,
+  the room card, the setup window, the elevated copy and the uninstall are unchanged.** Why: the mod
+  (WoL) is going to ship its own `dinput8.dll`, and that name and `engine-ext\engine-ext.cfg` are the
+  mod's. A patch bringing its own pair WITHOUT `lanAutoStart` switched the entry off and the launcher
+  could do nothing (`ForeignDll`). The new file (things-new target `LanHelper`, `src/lanhelper.cpp`)
+  is loaded because the exe imports `AVIFIL32.dll` (4 functions; not in KnownDLLs), forwards the 72
+  functions of the system's, and runs the SAME lanAutoStart steps from the game's window procedure
+  on a message it posts ten times a second: **it writes no byte of the game and does not hook
+  Direct3D**, the two things another DLL checks before patching, so it cannot collide. With no
+  `uhcLan*` argument it starts no thread. **It stands aside when a cfg of the folder turns
+  `lanAutoStart` on** (Startup\*.cfg or the engine-ext cfg), the same rule as the launcher's
+  `EnabledByMod` / `SupersededByMod`, so two never enter. Launcher side
+  (`LanHelperService`): `DllName` is `avifil32.dll`, nothing is written to any cfg, and
+  `Install`/`Remove` take the EARLIER helper away (`RemoveLegacy`): `dinput8.dll` only when its hash
+  is in `LegacySha256` (0.4.0, v1.1.0) and its cfg is not the mod's, plus our two marked lines; a
+  `dinput8.dll` with any other hash and the cfg it runs with are never touched. `Outdated` now also
+  means "ours, with the earlier pair still beside it"; `Missing` with the earlier pair whole still
+  enters (`LegacyStillEnters`) until the next room replaces it. That is how every v1.1.0 player
+  changes over, with no step of their own. **Measured in copies, one PC:** stock game and WoL with its
+  own `uhc.dll` host and join by Direct IP; WoL beside a things-new `dinput8.dll` with
+  `fastVertexFill` + `perfStats` + `multipleInstances` (3 applied, 0 failed) still enters; that
+  `dinput8.dll` with `lanAutoStart` on makes ONE entry and the helper's log says it stood aside; a
+  game opened by hand writes no log. **Not measured:** typing in the lobby chat with this file, and
+  two machines. Pinned by `LanHelperServiceTests`
+  (`THE_ONE_THAT_MATTERS_AModsDinput8WithoutTheKeyNoLongerBlocksTheHelper`,
+  `THE_ONE_THAT_MATTERS_TheEarlierHelperIsReplacedWhole`, which uses the real 0.4.0 file kept in
+  `Fixtures/`). ⚠ Testing it: the DLL repo's `rclick` / `type` / `rkey` are REAL input and land in
+  whatever window the user has in front; use them only when nobody is at the PC.
+
   **THE LAN HELPER: the launcher can install that pair itself, ONLY with the player's consent —
   `Services/Multiplayer/LanHelperService`, `Controls/MultiplayerTab.LanHelper.cs`.** The DLL is
   embedded (`Assets/LanHelper/dinput8.dll`, manifest resource, SHA pinned in `CurrentSha256`; its
@@ -1022,20 +1052,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   stays. Verified live against a local server: an answering host, a silent one, a password room and
   a host without Radmin.
 
-- **THE GLOBAL CHAT'S "X OPENED A ROOM" CARD FOLLOWS ITS ROOM (2026-11-18,
-  `Controls/MultiplayerTab.RoomEvents.cs`, rule `Services/Multiplayer/RoomEventCard`).** It used to
-  be drawn once from `lobby_created` and offer Join for ever, full or gone. Now each card is kept
-  by lobby id and repainted (only when its key changes) whenever a rooms list is stored
-  (`RefreshRoomEventCards`, after `_lastBrowserList`): in the list it reads the Rooms page's own
-  `RoomActionRule` and `RoomChipsOf` (Join / Full plate / See match / View room / Install mod /
-  Check my copy); missing from a list ASKED after the announcement (`_roomsListAskedUtc`) it says
-  Closed; before any newer list it is the announcement as a room with its host inside
-  (`FromAnnouncement`). Layout: the mod's icon, "X opened a room" and the time; the room's name
-  and its seats; up to two chips and the action. Join still goes through `JoinByLobbyIdAsync`
-  (fresh lookup). `--demo-rooms=86a` adds two sample cards (open, full). **Seen live with the
-  two-account rig (2026-11-18): Join → Full the moment the guest entered → See match at the
-  countdown → Closed once the match was stored.** A card counts as content for the "no messages
-  yet" line (`UpdateGlobalChatEmptyHint` after adding it; the rig caught the line sitting under one).
+- **THE GLOBAL CHAT HAS NO "X OPENED A ROOM" CARD — REMOVED 2026-11-26, the maintainer's call.**
+  From design 1a it put a card in the chat for every `lobby_created`; on 2026-11-18 it was made to
+  follow its room (Join / Full / See match / Closed). In use it was redundant and mostly read
+  "Closed": the Rooms page already lists the room, and the toast and the tab's red dot already say
+  one opened. `MultiplayerTab.RoomEvents.cs`, `Services/Multiplayer/RoomEventCard` and their strings
+  are gone. `lobby_created` is still handled (`HandleLobbyCreatedFrame`): toast, dot, the rooms list
+  refreshing at once, and the quick match. **Don't bring the card back** without asking.
 
 - **ANOTHER PLAYER'S PROFILE, AND "SHOW MY ELO" (2026-11-18).** The profile window draws a
   SUBJECT: `Controls/MultiplayerTab.OtherProfile.cs` swaps his standing and history (from
@@ -1209,10 +1232,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `Enum.GetValues<Subtab>()` so the next page cannot be forgotten the same way, and
   `ALanguageChangeCostsNoRequest` pins the promise `RefreshActiveSubtabStrings` already made in
   prose and nothing checked.
-  **Three live pieces outside the subtabs follow it too (2026-11-19, found switching the language on
-  the running launcher):** the players tab title (always rewritten with the count, not only at 0), the
-  chat's room cards (`RefreshRoomEventCards`; their key already carried the language) and the nav's
-  "Sign in" (`MainWindow.ApplyLanguage`). Pinned by `TheChatsLiveCardsAndThePlayersTabFollowTheLanguage`.
+  **Two live pieces outside the subtabs follow it too (2026-11-19, found switching the language on
+  the running launcher):** the players tab title (always rewritten with the count, not only at 0) and the nav's
+  "Sign in" (`MainWindow.ApplyLanguage`). Pinned by `ThePlayersTabFollowsTheLanguage`.
   **What deliberately does NOT follow the language:** the global chat history. A system line is
   a record of something that happened, stamped with when; translating it later would be
   rewriting the past.
@@ -9129,3 +9151,65 @@ styles and tokens (`MpSecondaryButton`, an `MpAction` pill), there is no design 
   the rim are layers over the glass, so the rim goes from 1 to 1.5 without moving what is inside.
   With both accepted the button reads "Opening the room…" (`MmOpeningRoom`) until `mm_room_ready`
   closes the window. Pinned by `THE_ONE_THAT_MATTERS_ATileIsColouredByItsOwnAcceptance`.
+
+## LOGROS (design 121, `docs/design_logros`, 2026-11-22)
+
+- **MEDALS ARE THE SERVER'S; THE LAUNCHER ONLY DRAWS THEM.** `wol-launcher-lobby-node`
+  `src/achievements/` (migration 0036, `player_achievements`) evaluates a player after a match is
+  stored or changes (`noteMatchChanged`, batched 1 s after `notifyMatchesChanged`, never inside the
+  report) and when a tournament finishes; it answers `GET /users/:id/achievements?mod=` (a 404 is an
+  older server: the launcher hides the section, `AchievementsCache.Unsupported`) and
+  `POST /me/achievements/seen`, and pushes `achievement_unlocked` on the global socket ONLY to a
+  launcher whose hello announced the `achievements` feature (`LobbyWebSocket.HelloFeatures`).
+  The rules, all server-side and pinned there (`evaluate.test.ts`, `store.test.ts`): a medal belongs to
+  the GAME of the match's ROOM (one ladder, medals per game); casual matches count for the general
+  medals; a match counts from a launcher room, 3 min or more, roster intact, at most 3 wins a day
+  against the same rival, and a rated win the anti-farm halved or worse does not count; ELO medals
+  need a WIN of that game past placement; Promotion and On Top only on a ladder of 10 or more;
+  Champion and Organiser need 3 games played; a medal is never lost (only `achievements:revoke`);
+  a private rating hides the medals from others, and others never get the ELO figure; the history
+  backfill (`achievements:backfill --apply`) writes them already SEEN, so nobody gets 15 cards.
+- **Where a new medal shows is ONE pure rule, `AchievementCelebration.Decide`**: the centred card
+  (121b) only when the player is looking at the window, is in no room, search or match, and it is ONE
+  medal; the small notice (121d) otherwise or for several; NOTHING floating with a game open. The bell
+  always (`NotificationCenter.RaiseAchievements`, keyed `mod|id|tier`, deduped, **no tray balloon** —
+  `Add(..., balloon: false)`: the medal has its own notice). Medals that arrived with the launcher
+  closed come in `unseen` on the first own read (`MaybeCheckUnseenAchievements`) and are celebrated
+  then; every celebrated medal is marked seen on the server.
+- **The card's looping clocks (rays, sparks) are kept and STOPPED through their controller** when it
+  closes (`AchievementUnlockOverlay.LiveClocks` is the test's handle), paused while
+  `RankBadge.MayRunOn` says nobody can see them, capped at 30 fps, and not built at all with the
+  effects reduced. Its host is `MainWindow.CelebrationHost` (under the toasts, below the title bar).
+- **A tile never lies about a number**: a rating medal with no rating (placement, or withheld from
+  another player) is "Locked", never "0 / 1600"; its ring fills from 1500. A group's count counts
+  achievements (Promotion is one), the total counts medals (Promotion is five). An id this launcher
+  does not know shows the server's English name and condition. Pinned by `AchievementsTests`.
+- **Seeing it:** `--demo-elo=profile:achievements` / `profile:achievements-tad`,
+  `--preview-dialog=achievement:card|notice|several`, and `profile:achievements-more` for the
+  catalogue as the server has it now (below).
+- **THE CATALOGUE GREW PAST THE SHEET (2026-11-26): Wars of Liberty 59 achievements / 63 medals, TAD
+  48 / 52, every other mod 46 / 50 — before the feats below.** Added for every game: Field Marshal (500 played), Steadfast (30
+  distinct days), Invincible (10 in a row), Revenge (a 1v1 win right after losing to that player),
+  Cosmopolitan (100 opponents), All-Rounder (a win in 1v1, 2v2 and 3v3 — sides of equal size),
+  three quick-match ones (a room the QUEUE opened, `lobbies.matchmaking_match_id`), In the Bracket
+  (a tournament game actually played) and Finalist (the final round, played, of a finished
+  tournament; both finalists) — the tournament ones need the same 3 played games as Champion.
+  Wars of Liberty alone (`WOL_SET`): four continents that are its 48 civilizations exactly once
+  (steps to Citizen of the World) and a group of eight historical wars (`matchup_win`, either side).
+  TAD's `general` group now holds the personal medals and gained `formats` and `community`; no
+  stored row moved (rows carry the id, not the group). All of them reuse the 21 drawn icons, so an
+  older launcher draws them with the server's English. The sheets 121a/121c and their samples are
+  unchanged on purpose; `AchievementsDemoData.WolExtended` is printed from the server's
+  `catalog.ts`. **Adding a medal later needs `achievements:backfill --apply` right after the
+  deploy** — history after the migration is not born seen (backend `DEPLOY.md`).
+- **THE FEATS ARE PLATINUM, THE ONE METAL THE SHEET DOES NOT DRAW (2026-11-26).** Nine last medals per
+  game (group `feats`, enamel 7, metal `p`): Grandmaster 1900 in 1v1, Number One (`on_top` with
+  `places: 1`), Iron Streak (`rated_win_streak`: competitive 1v1 only, a casual match neither adds nor
+  breaks it), Centurion and Legion (100 rated wins), Emperor (250 wins), Virtuoso (100 with one civ),
+  Triple Crown (`champion` with `goal: 3`) and Living Legend (`collector`: three in four of the game's
+  OTHER medals, `collectorGoal`, counting the stored rows — `EvalInput.held` — because a medal is
+  never lost). Totals become 68 / 72, 57 / 61, 55 / 59. Launcher: `Medal.MetalOf("p")` (cyan and
+  lavender, never silver), `Medal.Enamels[7]` (dark steel), `AchievementsView.Legend(r)` adds
+  Platinum only when the game has one, and `AchievementUnlockOverlay.Accent` lights the card cold for
+  platinum. An older launcher draws `p` as bronze (the `MetalOf` fallback). Before deploying, check
+  the best 1v1 rating against 1900.

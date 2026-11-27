@@ -365,7 +365,7 @@ public sealed class NotificationPanel : Border
             NotificationKind.NewTranslation => MarkTranslation,
             NotificationKind.NewMod => MarkPlus,
             NotificationKind.Announcement => MarkInfo,
-            NotificationKind.MonthlyHighlights => MarkStar,
+            NotificationKind.MonthlyHighlights or NotificationKind.AchievementUnlocked => MarkStar,
             _ => tone == NotificationTone.Error ? MarkAlert : MarkCheck,
         };
         return new MarkDress(brush, fill, ink, Color.FromArgb(0x24, r, g, b), Color.FromArgb(0x66, r, g, b), path, path == MarkStar);

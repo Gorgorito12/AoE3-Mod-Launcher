@@ -32,7 +32,9 @@ SCREENS = [
   + [(f"tournaments-{s}", [f"--demo-tournaments={s}"]) for s in ("big32", "teams", "myroom", "waiting", "registration", "finished", "dialog")] \
   + [(f"elo-{s}", [f"--demo-elo={s}"]) for s in ("93a", "93b", "93c", "93d", "93e", "93f", "93g", "profile", "refund", "room1v1",
                                                   "roomteams", "countdown", "result", "history", "highlights", "rankingmatches",
-                                                  "profile:nogames", "profile:placing", "profile:inactive")] \
+                                                  "profile:nogames", "profile:placing", "profile:inactive",
+                                                  "profile:achievements", "profile:achievements-tad",
+                                                  "profile:achievements-more")] \
   + [(f"stats-{s}", [f"--demo-stats={s}"]) for s in ("full", "empty", "other")] \
   + [(f"room-{s}", [f"--demo-room={s}"]) for s in ("87a", "87b", "87c", "87d", "87e", "87f", "87g", "87h", "87i", "87j", "87k",
                                                     "87l", "87live", "87b-farm", "87b-hidden", "87b-private", "87nocity",
@@ -49,7 +51,8 @@ SCREENS = [
       "launcherupdate", "launcherupdate:link", "launcherupdate:busy", "settingsupdate",
       "radmin:offline", "radmin:loggedin", "radmin:connected", "radmin:steps",
       "publish:1", "publish:3", "publish:6", "installfolder", "updatepill:available", "updatepill:ready",
-      "bar:offline", "bar:outnet", "bar:account-room")] \
+      "bar:offline", "bar:outnet", "bar:account-room",
+      "achievement:card", "achievement:notice", "achievement:several")] \
   + [(f"toasts-{s}", [f"--preview-toasts={s}"]) for s in ("1", "2", "3")] \
   + [(f"antivirus-{s}", [f"--preview-antivirus={s}"]) for s in ("notice", "blocked", "notice-one")] \
   + [(f"uninstall-{s}", [f"--preview-uninstall={s}"]) for s in ("valid", "copy", "userdata", "overlay", "invalid", "base", "nothing")]

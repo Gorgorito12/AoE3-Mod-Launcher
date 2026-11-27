@@ -209,6 +209,9 @@ public partial class MultiplayerTab
             stack.Children.Add(pill);
         }
 
+        // ---- his three latest medals (design 121a)
+        if (BuildProfileLatestMedals() is { } medals) stack.Children.Add(medals);
+
         // ---- where the player stands
         string? status = ProfileStatusLine(out _);
         if (status != null)
@@ -259,17 +262,21 @@ public partial class MultiplayerTab
         var totals = ProfileSummaryView.Totals(_historyRows);
         int civs = CivStatsView.Rows(_historyRows).Count;
         int decks = _mpDeckProfiles.Sum(p => p.Decks.Count);
+        static string Shown(int n) => n > 0 ? n.ToString() : "";
 
         foreach (var (section, key, count) in new[]
                  {
-                     (ProfileSection.Overview, "MpProfileSectionOverview", 0),
-                     (ProfileSection.History, "MpSubtabHistory", totals.Played),
-                     (ProfileSection.Civs, "MpProfileSectionCivs", civs),
-                     (ProfileSection.Decks, "MpProfileSectionDecks", decks),
+                     (ProfileSection.Overview, "MpProfileSectionOverview", ""),
+                     (ProfileSection.History, "MpSubtabHistory", Shown(totals.Played)),
+                     (ProfileSection.Civs, "MpProfileSectionCivs", Shown(civs)),
+                     (ProfileSection.Decks, "MpProfileSectionDecks", Shown(decks)),
+                     (ProfileSection.Achievements, "AchvSection", AchievementsShown ? AchvRailCount() : ""),
                  })
         {
             // Decks are the viewer's own files: another player's page has no such section.
             if (_renderingOtherProfile && section == ProfileSection.Decks) continue;
+            // Medals exist only on a server that has them (design 121).
+            if (section == ProfileSection.Achievements && !AchievementsShown) continue;
             var inner = new Grid();
             inner.ColumnDefinitions.Add(new ColumnDefinition());
             inner.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -280,10 +287,10 @@ public partial class MultiplayerTab
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
             });
-            if (count > 0)
+            if (count.Length > 0)
             {
                 inner.Children.Add(WithColumn(
-                    StatsMono(count.ToString(), "StatsNoteSize", "StatsNote", FontWeights.Medium), 1));
+                    StatsMono(count, "StatsNoteSize", "StatsNote", FontWeights.Medium), 1));
             }
 
             var item = new Button

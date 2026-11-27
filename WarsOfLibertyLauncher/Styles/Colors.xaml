@@ -1278,6 +1278,9 @@
     <SolidColorBrush x:Key="ToastToneWarnText" Color="#F5BD76"/>
     <SolidColorBrush x:Key="ToastToneNeutral" Color="#8C9CB1"/>
     <SolidColorBrush x:Key="ToastToneNeutralText" Color="#C3D2E5"/>
+    <!-- Gold: an achievement unlocked (design 121d). The medals' own gold, used by that notice only. -->
+    <SolidColorBrush x:Key="ToastToneGold" Color="#E6C06A"/>
+    <SolidColorBrush x:Key="ToastToneGoldText" Color="#F3D995"/>
     <SolidColorBrush x:Key="ToastRim" Color="#21FFFFFF"/>                <!-- white .13 -->
     <SolidColorBrush x:Key="ToastEdgeLight" Color="#14FFFFFF"/>          <!-- white .08 -->
     <SolidColorBrush x:Key="ToastEdgeLightImportant" Color="#1AFFFFFF"/> <!-- white .10 -->

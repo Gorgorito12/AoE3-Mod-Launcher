@@ -337,6 +337,24 @@ public class LobbyApiClient : IDisposable
             new RefundsSeenRequest { RefundIds = refundIds.ToList() }, requireAuth: true, ct);
 
     /// <summary>
+    /// One game's medals for a player (design 121). Sent with the session when there is one: the
+    /// server only adds his unseen medals, and evaluates him first, when he asks for his OWN. A
+    /// server without achievements answers 404, which the caller reads as "no section".
+    /// </summary>
+    public Task<AchievementsResponse> GetAchievementsAsync(string userId, string? modId, CancellationToken ct = default)
+    {
+        var path = $"users/{Uri.EscapeDataString(userId)}/achievements";
+        if (!string.IsNullOrWhiteSpace(modId)) path += "?mod=" + Uri.EscapeDataString(modId!);
+        return GetAsync<AchievementsResponse>(path, requireAuth: false, ct);
+    }
+
+    /// <summary>The launcher showed these medals' celebration. Only ever the caller's own rows.</summary>
+    public Task<AchievementsSeenResponse> MarkAchievementsSeenAsync(IReadOnlyList<AchievementSeenItem> items,
+        CancellationToken ct = default)
+        => PostAsync<AchievementsSeenResponse>("me/achievements/seen",
+            new AchievementsSeenRequest { Items = items.ToList() }, requireAuth: true, ct);
+
+    /// <summary>
     /// BOTH ladders and the activity histogram, for the community strip and the Ranking
     /// subtab. Unauthenticated like the other standings calls, and re-asked at most once a
     /// minute — matching the server's own cache, so a refresh inside that window costs it

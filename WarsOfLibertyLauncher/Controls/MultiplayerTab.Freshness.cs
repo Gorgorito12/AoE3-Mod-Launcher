@@ -104,6 +104,8 @@ public partial class MultiplayerTab
             // number beside a result that changed it.
             _cachedStanding = null;
             _ = LoadStandingAsync();
+            // His medals may have moved with it (the push says so only for new ones).
+            if (_session?.CurrentUser?.Id is { } me) _achv.MarkStale(me);
         }
 
         // The profile is its own window and can be open over any tab, or with this one hidden.
